@@ -147,4 +147,79 @@ final class ProfileAbStudyTest {
                 "研究里应当至少出现一个 DP 判定不可行的场景（用来对照旧实现的「总能输出」）");
         assertTrue(dpWins + legacyWins + ties == feasible, "胜负计数必须覆盖全部可行场景");
     }
+
+    // ── 第二轮：模式感知 DP 能不能救「地面剖面不可行」的场景 ──────────
+
+    /**
+     * 「地面剖面不可行 ⇒ 看看模式感知 DP 能不能给出桥/隧道」。
+     *
+     * <h2>它要回答的问题</h2>
+     * <p>第一轮研究发现：每站抬 4 格的陡坡上，纯地面 DP 直接判定不可行，而旧 pass
+     * 会挖穿山体照样输出。那么 S4 的模式感知求解能不能在这里给出一个体面的答案？</p>
+     *
+     * <h2>预期与结论（实测见输出）</h2>
+     * <ul>
+     *   <li><b>+2 格/站</b>：隧道埋深每站只增加 1 格，40 站刚好在 48 格上限内
+     *       ⇒ 模式 DP 应当选隧道并成功；</li>
+     *   <li><b>+4 格/站</b>：隧道埋深每站增加 3 格，16 站就撞上 48 格上限
+     *       ⇒ <b>隧道也救不了</b>。这说明真正的问题不在剖面求解器，而在
+     *       <b>路线本身太陡</b> —— 该由盘山回头弯（MountainSwitchbackPlanner）在
+     *       路径层解决，而不是让剖面层去硬凑。</li>
+     * </ul>
+     *
+     * <p>把这条钉成测试，是为了避免以后有人看到「模式 DP 也失败」就以为 S4 没用 ——
+     * 它救的是「该架桥/打洞但被判成地面」的情况，不是「路线本身该改」的情况。</p>
+     */
+    @Test
+    void 模式感知DP在陡坡上的能力边界() {
+        ModeDpSolver.Settings s = new ModeDpSolver.Settings(
+                8, 4, 12, 48, 6, 5.0, 14.0, 3.0, 6.0, CostModel.Settings.defaults());
+
+        int n = 40;
+        int[] gentleSteep = new int[n];
+        for (int i = 0; i < n; i++) gentleSteep[i] = 64 + i * 2;
+        int[] hardSteep = new int[n];
+        for (int i = 0; i < n; i++) hardSteep[i] = 64 + i * 4;
+        int[] cliff = new int[n];
+        for (int i = 0; i < n; i++) cliff[i] = (i >= 18 && i <= 22) ? 76 : 64;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n  场景          | 纯地面 DP | 模式感知 DP                                        \n");
+        sb.append("  --------------|-----------|----------------------------------------------------\n");
+
+        boolean anyModeOnlyFeasible = false;
+        int modeInfeasible = 0;
+        for (var c : java.util.List.of(
+                new Object[]{"陡坡+2/站", gentleSteep},
+                new Object[]{"陡坡+4/站", hardSteep},
+                new Object[]{"断崖(12格跳)", cliff})) {
+            String name = (String) c[0];
+            int[] terrain = (int[]) c[1];
+            boolean groundOk = ProfileDpSource.solve(terrain, null, 24, 12, 1).isPresent();
+            Optional<ModeDpSolver.Solution> mode = ModeDpSolver.solve(terrain, 1, s, null);
+            String modeDesc;
+            if (mode.isEmpty()) {
+                modeDesc = "不可行";
+                modeInfeasible++;
+            } else {
+                ModeDpSolver.Solution sol = mode.get();
+                modeDesc = "地面" + sol.stationCount(ModeDpSolver.Mode.GROUND)
+                        + " 桥" + sol.stationCount(ModeDpSolver.Mode.BRIDGE)
+                        + "(" + sol.runCount(ModeDpSolver.Mode.BRIDGE) + "座)"
+                        + " 隧道" + sol.stationCount(ModeDpSolver.Mode.TUNNEL)
+                        + "(" + sol.runCount(ModeDpSolver.Mode.TUNNEL) + "条)"
+                        + " cost=" + String.format("%.0f", sol.totalCost());
+                if (!groundOk) anyModeOnlyFeasible = true;
+            }
+            sb.append(String.format("  %-13s | %-9s | %s%n",
+                    name, groundOk ? "可行" : "不可行", modeDesc));
+        }
+        System.out.println("[PROFILE-STUDY-MODE] 模式感知 DP 的能力边界" + sb);
+
+        assertTrue(anyModeOnlyFeasible,
+                "应当至少有一个场景是「纯地面不可行、模式感知可行」—— 否则 S4 没带来任何能力");
+        assertTrue(modeInfeasible >= 1,
+                "每站 +4 格这种极端坡度下模式感知也应当失败（隧道埋深追不上地形），"
+                        + "留给盘山回头弯在路径层解决");
+    }
 }
