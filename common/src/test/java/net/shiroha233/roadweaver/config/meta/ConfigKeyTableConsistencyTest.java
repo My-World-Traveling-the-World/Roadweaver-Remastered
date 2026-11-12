@@ -37,6 +37,8 @@ class ConfigKeyTableConsistencyTest {
     private static final Map<String, String> CONFIG_CLASSES = new LinkedHashMap<>();
 
     static {
+        CONFIG_CLASSES.put("pathfindingCost",
+                "net.shiroha233.roadweaver.config.sub.PathfindingCostConfig");
         CONFIG_CLASSES.put("planning",
                 "net.shiroha233.roadweaver.config.sub.PlanningConfig");
         CONFIG_CLASSES.put("bridge", "net.shiroha233.roadweaver.config.sub.BridgeConfig");

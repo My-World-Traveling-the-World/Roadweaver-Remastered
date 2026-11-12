@@ -22,11 +22,12 @@ import java.util.stream.Collectors;
  * </ol>
  *
  * <h2>渐进接入</h2>
- * <p>本仓共 243 个键。目前 {@link PlanningKeys}（60 个）与 {@link BridgeKeys}（17 个）
- * 已接入，合计 77 个；其余 166 个仍由旧的手写代码管理。
+ * <p>本仓共 243 个键。目前 {@link PathfindingCostKeys}（57 个）、{@link PlanningKeys}（60 个）
+ * 与 {@link BridgeKeys}（17 个）已接入，合计 134 个；其余 109 个仍由旧的手写代码管理。
  * {@code ConfigKeyTableConsistencyTest} 会在两边<b>双向</b>校验：
  * 已接入的配置类必须与表完全一致；未接入的暂时跳过。</p>
  *
+ * @see PathfindingCostKeys
  * @see PlanningKeys
  * @see BridgeKeys
  */
@@ -38,6 +39,7 @@ public final class ConfigKeyTable {
     private static final Map<String, List<ConfigKey>> BY_CONFIG = new LinkedHashMap<>();
 
     static {
+        BY_CONFIG.put("pathfindingCost", PathfindingCostKeys.ALL);
         BY_CONFIG.put("planning", PlanningKeys.ALL);
         BY_CONFIG.put("bridge", BridgeKeys.ALL);
     }
