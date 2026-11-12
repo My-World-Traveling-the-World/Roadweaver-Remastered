@@ -60,6 +60,10 @@ public final class FastMarchingSolver {
             throw new IllegalArgumentException(
                     "源点 (" + sourceX + "," + sourceZ + ") 不在可行区域内");
         }
+        if (!metric.isPassable(sourceX, sourceZ)) {
+            throw new IllegalArgumentException(
+                    "源点 (" + sourceX + "," + sourceZ + ") 是硬不可通行格");
+        }
 
         double[] t = new double[w * d];
         Arrays.fill(t, UNREACHABLE);
@@ -87,6 +91,11 @@ public final class FastMarchingSolver {
                 if (nix < 0 || nix >= w || niz < 0 || niz >= d) continue;
                 int nIndex = nix + niz * w;
                 if (frozen[nIndex]) continue;
+
+                // 硬不可通行的格子**不进队列**，而不是给一个很大的代价 ——
+                // 只有这样「不可达」才是真的不可达，拓扑层才能判断
+                // 「这个端点根本连不上」而不是看到一个天文数字假装连通。
+                if (!metric.isPassable(minX + nix, minZ + niz)) continue;
 
                 // **慢度必须取「正在求解的那一格」的，不能取「已冻结的那一格」的。**
                 //

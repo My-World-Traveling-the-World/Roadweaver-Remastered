@@ -113,6 +113,16 @@ public final class FinslerMetric {
                 + obstacleWeight * Math.max(0.0, obstacles.potential(x, z));
     }
 
+    /**
+     * 该点是否可通行（＝障碍场没把它标成绝对不可通行）。
+     *
+     * <p>求解器必须先问这个再看代价 —— 不可通行的格子<b>不进队列</b>，
+     * 而不是给一个很大的代价。这样「连通性」才是真的连通性。</p>
+     */
+    public boolean isPassable(int x, int z) {
+        return !obstacles.impassable(x, z);
+    }
+
     /** 坡罚权重。 */
     public double gradeWeight() { return gradeWeight; }
 
