@@ -1103,3 +1103,62 @@ List<RuntimeRange> stableRanges = RUNTIME_BRIDGES.compute(key, ...);   // ★ �
 - `SingleSourceOfTruthTest` 里那段描述已同步更正；
 - S2 剩下的热路径项只剩 `SegmentPaver.planGrade`（施工期重插值坡度），
   它才是真正等 S3 切默认后才能移除的那一个。
+
+---
+
+# ★ 第二轮自我更正：`SegmentPaver.planGrade` 也不是性能热点（2026-11-13）
+
+S2 台账里还剩它挂了「施工期重插值坡度」的标签。复核成本后同样要更正。
+
+## 实测它的真实成本
+
+`planGrade` 里那段「重插值」= `RoadHeightInterpolator.batchInterpolate`：
+
+```java
+private static final int LOCAL_SEGMENT_RADIUS = 2;     // ★ 每列只扫 5 段
+int searchStart = Math.max(0, anchor - LOCAL_SEGMENT_RADIUS);
+int searchEnd   = Math.min(n - 2, anchor + LOCAL_SEGMENT_RADIUS);
+```
+
+- 它是**纯函数**（只碰 `BlockPos` 与 `int[]`，不读世界）；
+- 每个断面列只扫 **5 个线段**、每个线段约 20 flops ⇒ **每段约 700 flops**；
+- 一个区块约 30 段 ⇒ **约 2 万 flops**。
+
+这个量级连噪音都算不上。**给它加缓存只会引入额外开销。**
+
+## 那 `planGrade` 真正的成本在哪
+
+在 `sampleTerrain`（逐列读世界）与 `prepareCulvertDeck`（判涵洞、可能改写剖面）——
+这两件事**必须**在区块生成时做，因为它们依赖那一刻的世界状态。
+
+## 结论：S2 没有剩余的性能热点
+
+| 热点 | 真实结论 |
+|---|---|
+| `BridgeRangeCalculator.compute` | ✅ 已迁出（按路缓存）|
+| `promoteRuntimeBridges` | ✅ 设计必需（O(窗口) 增量探测的安全网）|
+| `SegmentPaver.planGrade` | ✅ 不是热点（插值约 2 万 flops/区块；贵的是必须每区块做的世界采样）|
+
+**这意味着 S2 的价值从「性能」转向「结构」**：
+`BuildPlan` 的意义不再是省计算，而是让「判定」成为可单测、可对照的纯数据 ——
+而这正是 S3/S4 能安全切换的前提。诚实说明比留着一个好看的数字重要。
+
+---
+
+# S7 可执行切换清单（2026-11-13）
+
+已落盘 `docs/S7-SWITCH-CHECKLIST.md`：**照着做就行**的操作手册，含四级切换、
+每级的前置条件/要改的代码/验证命令/回滚方式，以及「三条不许做」。
+
+关键点：
+
+- **第 0 级（采集）已完成，只等你跑一次** —— 拿 `terrain-samples.tsv`，
+  通过标准是 `样本 >= 20 且 DP 土方合计 <= 旧`；
+- **第 1 级要写 100~150 行**：`ProfileSolverMode` 开关 + `computeTargetY` 分派；
+  并明确记下**已知风险** —— `ProfileDpSource` 目前不含结构边界锁定与端点共享高度，
+  切 `DP` 后端点高度会与旧行为不同，这可能是"看起来更差"的主因；
+- **第 2 级要写 200~300 行**：旧判定翻译成模式约束、解反向生成 spans、差异日志；
+- **第 3 级删除**按 S5 方法台账三级走，每步 `verify.ps1`；
+- **第 4 级**清死代码与注释。
+
+> 有了这份清单，数据到手后的切换**不需要再等我**。
