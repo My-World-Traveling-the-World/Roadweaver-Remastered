@@ -82,6 +82,8 @@ class ArchitectureGuardTest {
      *   <li>按职责分组的方法 → 拆成协作类（如「快照构建」/「避让查询」/「端点筛选」）</li>
      * </ul>
      */
+    // 2026-11-12：client.map.RoadMapScreen（1244 行，原唯一超限界面类）已拆到 999 行，
+    // 从此表移除。留这条注释是为了让「为什么界面类突然不在名单里」有据可查。
     private static final java.util.Set<String> BASELINE_OVER_1000 = java.util.Set.of(
             "pathlogic.structures.StructureAvoidanceService",
             "postprocess.RoadSnapService",
@@ -94,7 +96,6 @@ class ArchitectureGuardTest {
             "pathlogic.tunnel.RoadTunnelBuilder",
             "generation.RoadGenerationService",
             "pathlogic.grade.RoadGradePlanner",
-            "client.map.RoadMapScreen",
             "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler",
             "postprocess.PathPostProcessor"
@@ -102,6 +103,8 @@ class ArchitectureGuardTest {
 
     /** 基线：超过 800 行的类（2026-11-12）。只许从这里删，不许往这里加。 */
     private static final Set<String> BASELINE_LONG_CLASSES = Set.of(
+            // 999 行：2026-11-12 已从 1244 拆到千行以内，但仍超 800 行的门槛
+            "client.map.RoadMapScreen",
             "pathlogic.structures.StructureAvoidanceService",
             "postprocess.RoadSnapService",
             "planning.terrain.AccurateGradeRepairPlanner",
@@ -113,7 +116,6 @@ class ArchitectureGuardTest {
             "pathlogic.tunnel.RoadTunnelBuilder",
             "generation.RoadGenerationService",
             "pathlogic.grade.RoadGradePlanner",
-            "client.map.RoadMapScreen",
             "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler",
             "postprocess.PathPostProcessor",

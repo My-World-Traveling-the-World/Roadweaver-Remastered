@@ -1,25 +1,19 @@
 /* 文件职责：呈现道路地图并同步单机世界的有效地形图层。 */
 package net.shiroha233.roadweaver.client.map;
 
-import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.server.MinecraftServer;
 import net.shiroha233.roadweaver.client.map.data.ClientMapNotes;
-import net.shiroha233.roadweaver.client.map.data.MapDataCollector;
 import net.shiroha233.roadweaver.client.map.data.MapSnapshot;
 import net.shiroha233.roadweaver.client.map.data.MapSnapshotCache;
 import net.shiroha233.roadweaver.client.map.data.MapSnapshotPatch;
 import net.shiroha233.roadweaver.client.map.data.MapSnapshotStore;
-import net.shiroha233.roadweaver.client.map.data.MapAutomaticPlanningSamplingCache;
 import net.shiroha233.roadweaver.client.map.interaction.MapInteraction;
 import net.shiroha233.roadweaver.client.map.data.MapFilterState;
 import net.shiroha233.roadweaver.client.map.render.MapDockAction;
@@ -31,26 +25,18 @@ import net.shiroha233.roadweaver.client.map.render.MapRenderers;
 import net.shiroha233.roadweaver.client.map.render.MapStatusRenderer;
 import net.shiroha233.roadweaver.client.map.ui.ContextMenu;
 import net.shiroha233.roadweaver.client.map.ui.MapWorkspacePanel;
-import net.shiroha233.roadweaver.client.map.ui.NoteEditScreen;
-import net.shiroha233.roadweaver.client.map.ui.Rect;
-import net.shiroha233.roadweaver.client.map.ui.SimpleTextInputScreen;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.map.permission.MapAccessService;
 import net.shiroha233.roadweaver.network.ClientNetBridge;
 import net.shiroha233.roadweaver.map.search.MapSearchResult;
 import net.shiroha233.roadweaver.map.search.MapStructureSearchService;
 import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessionSnapshot;
-import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
-import net.shiroha233.roadweaver.planning.terrain.AutomaticPlanningSamplingActivities;
 import net.shiroha233.roadweaver.planning.terrain.AutomaticPlanningSamplingBounds;
-import net.shiroha233.roadweaver.util.ComputeService;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 import org.lwjgl.glfw.GLFW;
 
@@ -58,7 +44,6 @@ import org.lwjgl.glfw.GLFW;
  * 道路地图界面
  */
 public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
-    private static final int WORKSPACE_DOCK_GAP = 8;
     
     // 翻译键
     private static final Component MENU_TELEPORT = Component.translatable("gui.roadweaver.map.menu.teleport");
@@ -876,35 +861,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
      * 经 {@code server.execute(...)} 投递 —— 与施工提交同一模式。</p>
      */
     private void retryFailedPreloads() {
-        var mc = this.minecraft;
-        if (mc == null) {
-            return;
-        }
-        var server = mc.getSingleplayerServer();
-        if (server == null) {
-            return;
-        }
-        var level = server.overworld();
-        if (level == null) {
-            return;
-        }
-        final var route = routeEditor.state().route();
-        server.execute(() -> {
-            try {
-                int n = net.shiroha233.roadweaver.route.RouteBuildService
-                        .retryFailedPreloads(level, route);
-                // 重新跑一次预加载（只对当前编辑对象；其余的靠后续连接完成再触发）
-                if (route != null) {
-                    net.shiroha233.roadweaver.route.RouteBuildService
-                            .preloadRouteChunks(level, route);
-                }
-                org.slf4j.LoggerFactory.getLogger("roadweaver/route-build")
-                        .info("手绘路线预加载重试完成：{} 条路线", n);
-            } catch (Throwable t) {
-                org.slf4j.LoggerFactory.getLogger("roadweaver/route-build")
-                        .warn("手绘路线预加载重试失败", t);
-            }
-        });
+        MapPreloadRetry.retryFailed(this.minecraft, routeEditor.state().route());
     }
 
     @Override
@@ -920,17 +877,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         Minecraft mc = this.minecraft;
         if (mc == null) return;
         
-        BlockPos spawn = null;
-        MinecraftServer server = mc.getSingleplayerServer();
-        if (server != null) {
-            ServerLevel level = server.getLevel(Level.OVERWORLD);
-            if (level != null) {
-                spawn = level.getSharedSpawnPos();
-            }
-        }
-        if (spawn == null && mc.level != null) {
-            spawn = mc.level.getSharedSpawnPos();
-        }
+        BlockPos spawn = MapScreenQueries.resolveSpawn(mc);
         if (spawn == null) return;
         
         int contentW = mapW;
@@ -1018,66 +965,35 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
     }
 
     private void openContextMenuFor(BlockPos target, int x, int y) {
-        contextMenu.clearItems();
-        contextMenu.addItem(MENU_TELEPORT, () -> onTeleportTo(target));
-        contextMenu.addSeparator();
-        contextMenu.addItem(MENU_SET_ALIAS, () -> openAliasDialog(target));
-        contextMenu.addItem(MENU_EDIT_NOTE, () -> openNoteEditor(target));
-        contextMenu.open(x, y);
+        MapScreenDialogs.openContextMenu(contextMenu, x, y,
+                MENU_TELEPORT, MENU_SET_ALIAS, MENU_EDIT_NOTE,
+                () -> onTeleportTo(target),
+                () -> openAliasDialog(target),
+                () -> openNoteEditor(target));
     }
 
-    /** 打开别名设置对话框 */
     private void openAliasDialog(BlockPos target) {
-        if (this.minecraft == null) return;
-        String currentAlias = ClientMapNotes.getAlias(target);
-        this.minecraft.setScreen(new SimpleTextInputScreen(
-                DIALOG_ALIAS_TITLE,
-                currentAlias != null ? currentAlias : "",
-                alias -> ClientMapNotes.setAlias(target, alias),
-                this  // 返回地图界面
-        ));
+        MapScreenDialogs.openAliasEditor(this.minecraft, this, target, DIALOG_ALIAS_TITLE);
     }
 
-    /** 打开笔记编辑器（书与笔风格） */
     private void openNoteEditor(BlockPos target) {
-        if (this.minecraft == null) return;
-        this.minecraft.setScreen(new NoteEditScreen(target, this));
+        MapScreenDialogs.openNoteEditor(this.minecraft, this, target);
     }
 
     private boolean hasMapOpenPermission() {
-        Minecraft mc = this.minecraft;
-        if (mc == null) {
-            return true;
-        }
-        if (!ClientMapAccessGuard.isAllowedOrUnknown()) {
-            return false;
-        }
-        MinecraftServer server = mc.getSingleplayerServer();
-        if (server == null || mc.player == null) {
-            return true;
-        }
-        ServerPlayer serverPlayer = server.getPlayerList().getPlayer(mc.player.getUUID());
-        return serverPlayer == null || MapAccessService.canOpenMap(serverPlayer);
+        return MapOpenPermission.allows(this.minecraft);
     }
 
     private TerrainSamplingSessionSnapshot terrainSamplingSession(Minecraft minecraft) {
-        if (minecraft == null) return null;
-        ServerLevel level = MapViewportController.resolveSingleplayerLevel(minecraft);
-        if (level == null) return null;
-        return TerrainSamplingSessions.forLevel(level).snapshot();
+        return MapScreenQueries.terrainSamplingSession(minecraft);
     }
 
     private List<AutomaticPlanningSamplingBounds> activeAutomaticPlanningSamplingBounds(ServerLevel level) {
-        if (level != null) {
-            return AutomaticPlanningSamplingActivities.snapshot(level);
-        }
-        return MapAutomaticPlanningSamplingCache.snapshot(currentDimensionId);
+        return MapScreenQueries.automaticPlanningBounds(level, currentDimensionId);
     }
 
 
     private void denyMapAccessAndClose() {
-        ClientMapAccessGuard.notifyDenied(this.minecraft);
-        MapSnapshotCache.clearNow();
-        this.onClose();
+        MapOpenPermission.denyAndClose(this.minecraft, this::onClose);
     }
 }
