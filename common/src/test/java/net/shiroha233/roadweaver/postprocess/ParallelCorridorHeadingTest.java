@@ -56,12 +56,12 @@ public final class ParallelCorridorHeadingTest {
         RoadData straightPrimary = straightLine(216, 0.0D, 41L, 42L);
         RoadData straightTracking = straightLine(216, 6.0D, 43L, 44L);
         RoadData straightMerged =
-                RoadSnapService.connectSecondaryToPrimary(straightPrimary, straightTracking);
+                JunctionConnector.connectSecondaryToPrimary(straightPrimary, straightTracking);
         System.out.printf("control: straight merged=%s reused=%d%n",
                 straightMerged == null ? "null" : "ok",
                 straightMerged == null ? 0 : RoadSnapService.networkReuseStationCount(straightMerged));
 
-        RoadData merged = RoadSnapService.connectSecondaryToPrimary(primary, tracking);
+        RoadData merged = JunctionConnector.connectSecondaryToPrimary(primary, tracking);
         require(merged != null, "a road tracking the same bending corridor was dropped entirely");
         require(hasReuse(merged),
                 "a bending shared corridor produced no NETWORK_REUSE span");
@@ -74,7 +74,7 @@ public final class ParallelCorridorHeadingTest {
         // A road running perpendicular through the corridor crosses it at one
         // point; every sample disagrees on heading, so it must stay separate.
         RoadData crossing = crossingRoad(216, 60, 21L, 22L);
-        RoadData crossed = RoadSnapService.connectSecondaryToPrimary(primary, crossing);
+        RoadData crossed = JunctionConnector.connectSecondaryToPrimary(primary, crossing);
         require(crossed == null || RoadSnapService.networkReuseStationCount(crossed) < 100,
                 "a perpendicular crossing was merged as a shared corridor ("
                         + (crossed == null ? 0 : RoadSnapService.networkReuseStationCount(crossed))
@@ -84,7 +84,7 @@ public final class ParallelCorridorHeadingTest {
         // audit already asserts; repeated here on the bending corridor so the
         // widened outlier budget cannot adopt it.
         RoadData distant = bendingCorridor(216, 24.0D, 31L, 32L);
-        RoadData distantMerged = RoadSnapService.connectSecondaryToPrimary(primary, distant);
+        RoadData distantMerged = JunctionConnector.connectSecondaryToPrimary(primary, distant);
         require(distantMerged == null || RoadSnapService.networkReuseStationCount(distantMerged) < 100,
                 "a corridor 24 blocks away was merged as shared ("
                         + (distantMerged == null ? 0

@@ -40,7 +40,7 @@ public final class TunnelJunctionGradeSimulationTest {
                                 connectedSegments.get(12).middlePos(), SpanType.TUNNEL_JUNCTION)),
                 connectedY, 1L, 3L);
 
-        RoadData lowered = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(primary, connected);
+        RoadData lowered = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(primary, connected);
         require(lowered != primary, "high tunnel must receive an owner replacement");
         require(lowered.targetY().get(11) == 96, "junction must use the lower tunnel grade");
         require(lowered.targetY().get(6) == 97 && lowered.targetY().get(5) == 98,
@@ -63,7 +63,7 @@ public final class TunnelJunctionGradeSimulationTest {
     private static void testSurfaceToTunnelEndpointJunction() {
         RoadData surface = horizontalSurface(-20, 20, 100, 11L, 12L);
         RoadData tunnelBranch = verticalBranch(-20, 0, 96, 13L, 11L);
-        RoadData connected = RoadSnapService.connectSecondaryToPrimary(surface, tunnelBranch);
+        RoadData connected = JunctionConnector.connectSecondaryToPrimary(surface, tunnelBranch);
         require(connected != null, "surface-to-tunnel endpoint junction was rejected");
         require(hasSpan(connected, SpanType.TUNNEL_JUNCTION),
                 "surface-to-tunnel endpoint lost TUNNEL_JUNCTION metadata");
@@ -73,11 +73,11 @@ public final class TunnelJunctionGradeSimulationTest {
 
     private static void testExpandedGradeTJunction(RoadData primary, int branchY, int expectedDelta) {
         RoadData branch = verticalBranch(-20, 0, branchY, 30L + expectedDelta, 1L);
-        RoadData connected = RoadSnapService.connectSecondaryToPrimary(primary, branch);
+        RoadData connected = JunctionConnector.connectSecondaryToPrimary(primary, branch);
         require(connected != null, "expanded high/low T junction was rejected for delta " + expectedDelta);
         require(hasSpan(connected, SpanType.TUNNEL_JUNCTION),
                 "expanded T junction lost TUNNEL_JUNCTION metadata for delta " + expectedDelta);
-        RoadData lowered = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(primary, connected);
+        RoadData lowered = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(primary, connected);
         require(lowestNearCenter(lowered) == branchY,
                 "expanded T junction did not lower trunk for delta " + expectedDelta);
         assertLowBranchRemainsLow(connected, "expanded T junction delta " + expectedDelta, branchY);
@@ -90,11 +90,11 @@ public final class TunnelJunctionGradeSimulationTest {
 
     private static void testLowBranchTJunction(RoadData primary) {
         RoadData branch = verticalBranch(-20, 0, 96, 3L, 1L);
-        RoadData connected = RoadSnapService.connectSecondaryToPrimary(primary, branch);
+        RoadData connected = JunctionConnector.connectSecondaryToPrimary(primary, branch);
         require(connected != null, "high/low T junction was rejected");
         require(hasSpan(connected, SpanType.TUNNEL_JUNCTION),
                 "T junction lost TUNNEL_JUNCTION metadata");
-        RoadData loweredPrimary = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(primary, connected);
+        RoadData loweredPrimary = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(primary, connected);
         require(lowestNearCenter(loweredPrimary) == 96,
                 "T junction did not lower the high trunk at the crossing");
         assertLowBranchRemainsLow(connected, "T junction");
@@ -103,14 +103,14 @@ public final class TunnelJunctionGradeSimulationTest {
 
     private static void testLowBranchCrossJunction(RoadData primary) {
         RoadData north = verticalBranch(-20, 0, 96, 3L, 1L);
-        RoadData first = RoadSnapService.connectSecondaryToPrimary(primary, north);
+        RoadData first = JunctionConnector.connectSecondaryToPrimary(primary, north);
         require(first != null, "first branch of high/low cross junction was rejected");
-        RoadData loweredPrimary = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(primary, first);
+        RoadData loweredPrimary = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(primary, first);
         require(lowestNearCenter(loweredPrimary) == 96,
                 "first cross branch did not lower the high trunk at the crossing");
 
         RoadData south = verticalBranch(20, 0, 96, 4L, 1L);
-        RoadData second = RoadSnapService.connectSecondaryToPrimary(loweredPrimary, south);
+        RoadData second = JunctionConnector.connectSecondaryToPrimary(loweredPrimary, south);
         require(second != null, "second branch of high/low cross junction was rejected");
         require(hasSpan(first, SpanType.TUNNEL_JUNCTION)
                         && hasSpan(second, SpanType.TUNNEL_JUNCTION),

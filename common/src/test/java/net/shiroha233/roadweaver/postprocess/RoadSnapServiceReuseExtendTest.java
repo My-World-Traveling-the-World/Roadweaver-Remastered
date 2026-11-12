@@ -109,7 +109,7 @@ final class RoadSnapServiceReuseExtendTest {
     @Test
     void corridorRunPastTheJunctionIsMarkedReuseWithoutMovingStations() {
         RoadData candidate = withJunctionSpans(secondary(64, 9));
-        RoadData extended = RoadSnapService.extendSecondaryReuseAtJunction(primary(), candidate);
+        RoadData extended = JunctionConnector.extendSecondaryReuseAtJunction(primary(), candidate);
 
         assertEquals(candidate.roadSegmentList().size(), extended.roadSegmentList().size(),
                 "复用扩展只能加 span，不能动站点");
@@ -130,21 +130,21 @@ final class RoadSnapServiceReuseExtendTest {
     @Test
     void corridorRunWithDifferentHeightIsNotReused() {
         RoadData candidate = withJunctionSpans(secondary(70, 9));
-        assertSame(candidate, RoadSnapService.extendSecondaryReuseAtJunction(primary(), candidate),
+        assertSame(candidate, JunctionConnector.extendSecondaryReuseAtJunction(primary(), candidate),
                 "高差 6 格属于立交/上下层，不能当成同一条走廊复用");
     }
 
     @Test
     void shortCorridorRunIsNotReused() {
         RoadData candidate = withJunctionSpans(secondary(64, 2));
-        assertSame(candidate, RoadSnapService.extendSecondaryReuseAtJunction(primary(), candidate),
+        assertSame(candidate, JunctionConnector.extendSecondaryReuseAtJunction(primary(), candidate),
                 "只贴 2 站算擦边，不足以判定重复走廊");
     }
 
     @Test
     void roadWithoutExistingReuseSpanIsUntouched() {
         RoadData candidate = secondary(64, 9);
-        assertSame(candidate, RoadSnapService.extendSecondaryReuseAtJunction(primary(), candidate),
+        assertSame(candidate, JunctionConnector.extendSecondaryReuseAtJunction(primary(), candidate),
                 "没有已存在的复用段时不该凭空标注");
     }
 
@@ -155,7 +155,7 @@ final class RoadSnapServiceReuseExtendTest {
     @Test
     void sharedCorridorWithoutAnyReuseSpanGetsOneCreated() {
         RoadData candidate = secondary(64, 9);
-        RoadData created = RoadSnapService.createSecondaryReuseAtCorridor(primary(), candidate);
+        RoadData created = JunctionConnector.createSecondaryReuseAtCorridor(primary(), candidate);
 
         assertEquals(candidate.roadSegmentList().size(), created.roadSegmentList().size(),
                 "新建复用段只能加 span，不能动站点");
@@ -182,7 +182,7 @@ final class RoadSnapServiceReuseExtendTest {
             stations.add(new int[]{104 + i * 2, 70, -2 + i});
         }
         RoadData elevated = road(stations, null);
-        assertSame(elevated, RoadSnapService.createSecondaryReuseAtCorridor(primary(), elevated),
+        assertSame(elevated, JunctionConnector.createSecondaryReuseAtCorridor(primary(), elevated),
                 "整条路比 primary 高 6 格，属于上下层，不能当成同一条走廊复用");
     }
 }

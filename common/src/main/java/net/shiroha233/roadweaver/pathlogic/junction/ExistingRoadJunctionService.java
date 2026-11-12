@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.junction;
 
+import net.shiroha233.roadweaver.postprocess.JunctionConnector;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -235,7 +236,7 @@ public final class ExistingRoadJunctionService {
                             preReroute != null ? "pre-reroute" : "rerouted");
                     best = fallback;
                 } else if (result.donor() != null) {
-                    RoadData loweredDonor = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(result.donor(), best);
+                    RoadData loweredDonor = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(result.donor(), best);
                     if (loweredDonor != result.donor()) {
                         for (int j = 0; j < result.index(); j++) {
                             if (current.get(j) == result.donor() || current.get(j).equals(result.donor())) {
@@ -621,7 +622,7 @@ public final class ExistingRoadJunctionService {
                 //   两者几乎逐格重叠 —— 该 TUNNEL 在最终存档里仍在，复用被它盖住。
                 //   而 donor 5168200556913239270 在同一位置**确有**同类型 TUNNEL span，
                 //   即 ownerHasSameTypeSpanAt 条件成立，过一遍抑制就会把它删掉。
-                RoadData reused = RoadSnapService.createSecondaryReuseAtCorridor(
+                RoadData reused = JunctionConnector.createSecondaryReuseAtCorridor(
                         item.selection().donor(), secondary);
                 best = RoadSnapService.enforceNetworkReuseConstructionOwnership(
                         reused, item.selection().donor());
@@ -660,7 +661,7 @@ public final class ExistingRoadJunctionService {
                 RoadSnapService.deduplicateExactSpans(
                         PathSpanExtractor.refineRoadTunnels(best, level, cache)), selection.donor());
         if (selection.donor() != null) {
-            RoadData loweredDonor = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(selection.donor(), best);
+            RoadData loweredDonor = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(selection.donor(), best);
             if (loweredDonor != selection.donor()) {
                 RoadShardStorage.replaceRoad(level,
                         RoadShardStorage.computeFingerprint(selection.donor()), loweredDonor);
@@ -690,7 +691,7 @@ public final class ExistingRoadJunctionService {
         boolean hasPositiveReuseCandidate = bestReuse > 0;
         for (RoadData primary : candidates) {
             if (!plausibleDonor(primary, secondary, hasPositiveReuseCandidate)) continue;
-            RoadData connected = RoadSnapService.connectSecondaryToPrimary(primary, secondary);
+            RoadData connected = JunctionConnector.connectSecondaryToPrimary(primary, secondary);
             if (connected == null) {
                 connected = trimRoadDataToRoad(primary, secondary);
             }

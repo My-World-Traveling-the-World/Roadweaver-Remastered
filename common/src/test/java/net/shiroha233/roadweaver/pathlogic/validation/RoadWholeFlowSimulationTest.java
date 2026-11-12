@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+import net.shiroha233.roadweaver.postprocess.JunctionConnector;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
@@ -101,9 +102,9 @@ public final class RoadWholeFlowSimulationTest {
     private static void testCrossJunctionHeightUnification() {
         RoadData high = road(horizontalAt(67, -12, 12), List.of(), 101L, 202L);
         RoadData low = road(verticalAt(57, -12, 0), List.of(), 303L, 101L);
-        RoadData connected = RoadSnapService.connectSecondaryToPrimary(high, low);
+        RoadData connected = JunctionConnector.connectSecondaryToPrimary(high, low);
         require(connected != null, "high/low surface cross junction was rejected");
-        RoadData unified = RoadSnapService.lowerPrimaryTunnelGradeAtJunction(high, connected);
+        RoadData unified = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(high, connected);
         require(unified != null, "cross junction height unification returned null");
     }
 

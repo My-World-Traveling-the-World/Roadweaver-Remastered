@@ -55,7 +55,7 @@ public final class SavedEndpoint528SimulationTest {
 
         require(spawnToVillage.containsOwner(villageToSouth.ownerA2dKey()),
                 "saved routes do not share endpoint (528,-304)");
-        RoadData merged = RoadSnapService.connectSecondaryToPrimary(spawnToVillage, villageToSouth);
+        RoadData merged = JunctionConnector.connectSecondaryToPrimary(spawnToVillage, villageToSouth);
         require(merged != null, "0.8.155 could not connect the saved shared-endpoint route");
 
         int reuse = RoadSnapService.networkReuseStationCount(merged);
@@ -69,7 +69,7 @@ public final class SavedEndpoint528SimulationTest {
         // The third route reaches the same village from the opposite side. It
         // is a valid independent branch when it has no shared approach, so it
         // is intentionally not required to reuse the first corridor.
-        RoadData chained = RoadSnapService.connectSecondaryToPrimary(mountainToVillage, merged);
+        RoadData chained = JunctionConnector.connectSecondaryToPrimary(mountainToVillage, merged);
         System.out.println("SavedEndpoint528SimulationTest: thirdRouteReuse="
                 + (chained == null ? 0 : RoadSnapService.networkReuseStationCount(chained)));
         System.out.println("SavedEndpoint528SimulationTest: PASS");
