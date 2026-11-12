@@ -70,3 +70,73 @@ roadweaver       冻结（2c6547a / tag roadweaver-frozen-0.9.098）→ 只修 b
       │
       └──► roadweaver-next   全部新工作在这里
 ```
+
+---
+
+# 重制替换台账（机器受检）
+
+**这份台账由 `LegacyLedgerTest` 逐行解析并校验**，不是给人看的装饰。
+
+## 铁律（用户 2026-11-13 拍板）
+
+> **先重制，后删除。** 重制期间旧实现原地保留、打标记、进台账；全部域做完后再照台账逐条核实删除。
+
+**原因**：重制期间旧代码是承重的（`BandPathfinder` 出完中心线，高度/桥隧/施工全靠它们）。
+边重制边删 ⇒ 中间任何一域没做完，整个 mod 就不可运行，出问题也没有可对照的基线。
+
+## 删除判定（4 条全满足才许删）
+
+| # | 条件 | 怎么核 |
+|---|---|---|
+| 1 | 该域新实现有独立测试且全绿 | 测试报告 |
+| 2 | 旧类**零外部引用** | **全模块**扫描（common + fabric + api + api-fabric）+ JSON |
+| 3 | 无运行时反射 / JSON 依赖 | 类名 grep + `mixins.json` / `fabric.mod.json` |
+| 4 | 删完回归仍全绿 | 跑一遍套件 |
+
+> 第 2 条的「全模块」是踩坑换来的：`StructureKeys` 被 common 里 11 处引用、
+> `RoadBeardifierAccess` 只在 `fabric` 模块的 mixin 里被引用 —— 只看 common 会误判成死代码。
+
+## 台账（改这里必须同时改代码，否则测试失败）
+
+<!-- LEDGER:BEGIN -->
+LEDGER|1|纵断面与坡度|pathlogic/grade|profile|TODO|3543
+LEDGER|2|桥隧判定|pathlogic/tunnel|span|TODO|2918
+LEDGER|3|桥体与施工|pathlogic/bridge|construction|TODO|4085
+LEDGER|4|路口与合并|pathlogic/junction|roadnet|TODO|1877
+LEDGER|5|几何后处理|postprocess|geometry|TODO|5615
+LEDGER|6|结构避让|pathlogic/structures|avoidance|TODO|6291
+LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
+<!-- LEDGER:END -->
+
+字段：`批号|域|旧实现包(相对 net.shiroha233.roadweaver)|新实现包|状态|旧代码行数`
+
+> 新实现包名刻意避开仓库里已有包的语义，否则「新实现包已存在」的判断会失真：
+> · 路口/合并叫 `roadnet` 而不是 `network`（`network` 已是模组网络层）
+> · 几何后处理叫 `geometry` 而不是 `band`（`band` 已是弹性带内核，是它的依赖不是替代物）
+>
+> 这两条都是 `LegacyLedgerTest` 上线当天抓到的真问题 —— 守卫第一次跑就逮到两个重名。
+
+状态取值：`TODO` 未开始 / `IN_PROGRESS` 重制中 / `DONE` 已完成（此时新实现包必须存在，且旧实现包内每个文件必须带 `待删（批N）` 标记）。
+
+## 旧实现的标记规范
+
+每个待删旧类的**文件职责头**写成：
+
+```java
+/* 文件职责：<做什么> —— 旧实现。
+ * ⚠ 已被 <新实现> 取代，待删（批N）。
+ *   删除条件：<测试名> 全绿 + 本类零外部引用 + 回归全绿。
+ */
+@Deprecated(forRemoval = true)
+```
+
+拉取当前全部待删文件：
+
+```
+rg "待删（批" common/src/main/java
+```
+
+## 单文件体积约束（口径已改）
+
+`ArchitectureGuardTest` 的行数上限按**有效代码行**统计 —— **注释与空行不计**（用户 2026-11-13 要求）。
+所以「写完整中文注释」和「守住文件体积」不再互相打架。

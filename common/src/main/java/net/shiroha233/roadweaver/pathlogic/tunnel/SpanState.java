@@ -1,4 +1,4 @@
-/* 文件职责：隧道 span 的决策缓存 —— 记住「这段桥/隧道建过、批过还是拒过」。 */
+/* 文件职责：隧道 span 的状态与决策类型 —— SpanState（每段的状态容器）与 Decision（未决/批准/拒绝）。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
 import net.minecraft.world.level.block.Blocks;
@@ -37,12 +37,8 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.PortalSafetyRules.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.ScenicDomeBuilder.*;
-
-// 仍留在同包其它类里的常量与工具。
 import static net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder.*;
-import static net.shiroha233.roadweaver.pathlogic.tunnel.PortalSafetyRules.*;
-import static net.shiroha233.roadweaver.pathlogic.tunnel.ScenicDomeBuilder.*;
-import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*;
+
 
 /**
  * span 决策缓存。
@@ -57,8 +53,14 @@ import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*
  * 于是同一段路在一个 chunk 建、在另一个 chunk 不建 ⇒ 断洞。
  * 缓存把「结论」钉死成一次。</p>
  *
- * <p>本类是从 1521 行的 {@code RoadTunnelBuilder} 里<b>纯搬迁</b>出来的，
- * 字段与判据一字未改（含缩进）。</p>
+ * <h2>★ 为什么文件名是 SpanState 而不是 SpanStateStore</h2>
+ * <p>本文件装的是<b>两个包私有类型</b>：{@link SpanState}（每段的状态容器）与
+ * {@code Decision}（未决/批准/拒绝）。二者都从 1524 行的 {@code RoadTunnelBuilder}
+ * 里原样切出，外部代码引用的是内层名 {@code SpanState}，不是文件名。
+ * 文件名曾误写成 {@code SpanStateStore}（那次误命名导致「零引用扫描」永远扫不到本文件，
+ * 差点被当成死代码删掉），2026-11-13 已改正。</p>
+ *
+ * <p>字段与判据一字未改（含缩进）。</p>
  */
 enum Decision { UNKNOWN, APPROVED, REJECTED }
 
