@@ -25,6 +25,7 @@ import net.shiroha233.roadweaver.decoration.base.Decoration;
 import net.shiroha233.roadweaver.decoration.system.DecorationExecutor;
 import net.shiroha233.roadweaver.decoration.system.DecorationPlanner;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
+import net.shiroha233.roadweaver.pathlogic.construction.BuildFrame;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlanner;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlannerNew;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
@@ -401,9 +402,12 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         }
         boolean[] completed = {true};
 
-        List<BlockPos> middlePositions = segments.stream().map(RoadSegmentPlacement::middlePos).toList();
-        BridgeRangeCalculator.RangeResult plannedBridgeResult =
-                BridgeRangeCalculator.compute(middlePositions, data.spans(), cfg);
+        // 中心线与规划期桥范围对同一条路恒定不变（compute 是纯函数、RoadData 不可变），
+        // 按「内容指纹 + 配置」缓存一次，避免每个区块都 O(站数) 重扫全条路。
+        // copyForUser() 会深拷贝掩码 —— 区块生成会就地改掩码，共享同一份数组会串味。
+        BuildFrame.Frames buildFrame = BuildFrame.of(roadFingerprint, segments, data.spans(), cfg);
+        List<BlockPos> middlePositions = buildFrame.middlePositions();
+        BridgeRangeCalculator.RangeResult plannedBridgeResult = buildFrame.copyForUser();
         BridgeRangeCalculator.RangeResult res = RoadConstructionSafety.promoteRuntimeBridges(
                 world, currentChunk, data, middlePositions, plannedBridgeResult);
         boolean[] isBridge = res.isBridge();

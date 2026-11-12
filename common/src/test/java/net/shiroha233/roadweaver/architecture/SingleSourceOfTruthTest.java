@@ -139,4 +139,41 @@ public final class SingleSourceOfTruthTest {
         assertTrue(problems.isEmpty(),
                 "单一行性被破坏（重算热点只许减少不许新增）：\n  " + String.join("\n  ", problems));
     }
+
+    // ── 施工热路径专项 ────────────────────────────────────────
+
+    /**
+     * 施工热路径（{@code PathFeature}，每个区块都跑）不许<b>直接</b>重算全路。
+     *
+     * <h2>为什么单开一条，而不是靠上面的文件计数</h2>
+     * <p>上面按「触发文件数」统计，看不见「从每区块一次变成每条路一次」这种改进 ——
+     * 把调用挪进缓存类之后，文件数甚至不变（PathFeature 不调了，缓存类开始调）。
+     * 所以 S2 的验收必须单独钉：<b>热路径文件里不许出现这些全路扫描</b>。</p>
+     *
+     * <h2>当前状态</h2>
+     * <ul>
+     *   <li>{@code BridgeRangeCalculator.compute(} —— <b>已迁出</b>，改走 {@code BuildFrame}
+     *       （内容指纹缓存，每条路算一次）；</li>
+     *   <li>{@code promoteRuntimeBridges(} —— 仍在。它依赖运行期水位与当前区块，
+     *       属于「按区块合法的工作」，S2 的后续目标是把它在判定期一次性考虑进去；</li>
+     *   <li>{@code SegmentPaver.planGrade(} —— 仍在，属于 S3 切默认后才能移除的那批。</li>
+     * </ul>
+     */
+    @Test
+    void 施工热路径不许直接重算全路() throws IOException {
+        Assumptions.assumeTrue(repoRoot != null, "找不到源码根，跳过");
+        Path feature = srcRoot.resolve("net/shiroha233/roadweaver/pathlogic/PathFeature.java");
+        assertTrue(Files.isRegularFile(feature), "找不到施工热路径文件：" + feature);
+        String src = Files.readString(feature, StandardCharsets.UTF_8);
+
+        assertTrue(!src.contains("BridgeRangeCalculator.compute("),
+                "施工热路径又开始直接算全路桥范围了（每个区块 O(站数)）。"
+                        + "请改走 BuildFrame.of(...)，它是按内容指纹缓存的。");
+
+        // 已迁出的调用应当真的存在于缓存类里（否则是「删了调用、功能也没了」）
+        Path frame = srcRoot.resolve("net/shiroha233/roadweaver/pathlogic/construction/BuildFrame.java");
+        assertTrue(Files.isRegularFile(frame), "缺 BuildFrame 缓存类：" + frame);
+        assertTrue(Files.readString(frame, StandardCharsets.UTF_8).contains("BridgeRangeCalculator.compute("),
+                "BuildFrame 里没有 BridgeRangeCalculator.compute( —— 缓存成了空壳");
+    }
 }
