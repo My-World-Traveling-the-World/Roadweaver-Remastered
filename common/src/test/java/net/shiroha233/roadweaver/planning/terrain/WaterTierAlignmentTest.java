@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 0.9.034：把 R-03「计价档与建造档错位」这条缺陷的**边界**钉住。
@@ -33,7 +34,7 @@ final class WaterTierAlignmentTest {
     private static final double NARROW_PER = 20.0D;
 
     private static double cost(int run, int depth) {
-        return AccurateGradeRepairPlanner.waterCrossingCost(run, depth, WIDE_BASE, WIDE_PER,
+        return WaterCostModel.waterCrossingCost(run, depth, WIDE_BASE, WIDE_PER,
                 CULVERT_PER, CULVERT_MAX_STATIONS, CULVERT_MAX_DEPTH, NARROW_MAX_WIDTH, NARROW_PER);
     }
 

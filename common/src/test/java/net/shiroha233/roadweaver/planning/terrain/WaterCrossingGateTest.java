@@ -28,7 +28,7 @@ final class WaterCrossingGateTest {
     private static final double NARROW_PER = 20.0D;
 
     private static double cost(int run, int depth) {
-        return AccurateGradeRepairPlanner.waterCrossingCost(run, depth, WIDE_BASE, WIDE_PER,
+        return WaterCostModel.waterCrossingCost(run, depth, WIDE_BASE, WIDE_PER,
                 CULVERT_PER, CULVERT_MAX_STATIONS, CULVERT_MAX_DEPTH,
                 NARROW_MAX_WIDTH, NARROW_PER);
     }
@@ -68,7 +68,7 @@ final class WaterCrossingGateTest {
     void disablingNarrowTierRestoresTwoTierBehaviour() {
         // narrowMaxWidth = 0 ⇒ 无窄水档，语义等同 0.9.010
         assertEquals(WIDE_BASE + WIDE_PER * 10,
-                AccurateGradeRepairPlanner.waterCrossingCost(10, 1, WIDE_BASE, WIDE_PER,
+                WaterCostModel.waterCrossingCost(10, 1, WIDE_BASE, WIDE_PER,
                         CULVERT_PER, CULVERT_MAX_STATIONS, CULVERT_MAX_DEPTH, 0, NARROW_PER),
                 1e-9);
     }
@@ -121,13 +121,13 @@ final class WaterCrossingGateTest {
     void landDetourCapUsesTheLooserOfDirectAndExistingCorridor() {
         // 直走廊：直连 100、原路 100、1.6 倍 ⇒ 160
         assertEquals(160.0D,
-                AccurateGradeRepairPlanner.landDetourCap(100.0D, 100.0D, 1.6D), 1e-9);
+                WaterCostModel.landDetourCap(100.0D, 100.0D, 1.6D), 1e-9);
         // 之字形走廊：直连仍是 100，但原路已 300 长 ⇒ 上限必须放宽到 315
         assertEquals(315.0D,
-                AccurateGradeRepairPlanner.landDetourCap(100.0D, 300.0D, 1.6D), 1e-9);
-        assertTrue(AccurateGradeRepairPlanner.landDetourCap(100.0D, 300.0D, 1.6D) >= 300.0D);
+                WaterCostModel.landDetourCap(100.0D, 300.0D, 1.6D), 1e-9);
+        assertTrue(WaterCostModel.landDetourCap(100.0D, 300.0D, 1.6D) >= 300.0D);
         // 退化窗口：直连接近 0 时不再无条件接受任意陆路（8 格下限 ⇒ 12.8）
         assertEquals(12.8D,
-                AccurateGradeRepairPlanner.landDetourCap(0.5D, 0.5D, 1.6D), 1e-9);
+                WaterCostModel.landDetourCap(0.5D, 0.5D, 1.6D), 1e-9);
     }
 }

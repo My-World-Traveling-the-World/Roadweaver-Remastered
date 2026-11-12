@@ -41,6 +41,9 @@ import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.planningCollisionBox;
 import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;
 import static net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair.*;
+import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
+import static net.shiroha233.roadweaver.planning.terrain.RepairAcceptance.*;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 冲突检测：结构 / 湖 / 河。

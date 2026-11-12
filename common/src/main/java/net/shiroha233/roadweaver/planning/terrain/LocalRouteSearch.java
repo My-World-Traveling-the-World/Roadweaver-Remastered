@@ -39,6 +39,9 @@ import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlan
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
 import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;
 import static net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair.*;
+import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
+import static net.shiroha233.roadweaver.planning.terrain.RepairAcceptance.*;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 局部窗口 A* 重路由。

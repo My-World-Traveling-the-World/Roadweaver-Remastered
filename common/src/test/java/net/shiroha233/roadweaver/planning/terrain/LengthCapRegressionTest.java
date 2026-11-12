@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 0.9.059（③）：局部修复 A* 的长度上界 = {@code max(直连 × 1.6, 原走廊长 × 1.05)}。
@@ -24,16 +25,16 @@ final class LengthCapRegressionTest {
     @Test
     void threeDetourSamplesAtRealChord() {
         // 原走廊就是直连（最保守的假设：没有可借用的既有绕行）
-        double cap = AccurateGradeRepairPlanner.lengthCapFor(CHORD, CHORD);
+        double cap = SearchBudgetPolicy.lengthCapFor(CHORD, CHORD);
         assertEquals(CHORD * 1.6D, cap, 1.0E-6D);
 
         // detour 1.0 —— 接受
-        assertTrue(AccurateGradeRepairPlanner.withinLengthCap(CHORD, CHORD, CHORD));
+        assertTrue(SearchBudgetPolicy.withinLengthCap(CHORD, CHORD, CHORD));
         // detour 1.6 —— 接受（正好压在上界上）
-        assertTrue(AccurateGradeRepairPlanner.withinLengthCap(CHORD, CHORD, CHORD * 1.6D));
+        assertTrue(SearchBudgetPolicy.withinLengthCap(CHORD, CHORD, CHORD * 1.6D));
         // detour 3.63 —— 拒绝（真机 3826 格 = 1053 × 3.6334）
         assertEquals(3.6334D, 3826.0D / CHORD, 5.0E-4D);
-        assertFalse(AccurateGradeRepairPlanner.withinLengthCap(CHORD, CHORD, 3826.0D));
+        assertFalse(SearchBudgetPolicy.withinLengthCap(CHORD, CHORD, 3826.0D));
     }
 
     @Test
@@ -41,29 +42,29 @@ final class LengthCapRegressionTest {
         // 原走廊本身已经是 5 倍弦长的之字路：新界 = max(160, 525) = 525，旧界会是 1500
         double chord = 100.0D;
         double original = 500.0D;
-        assertEquals(525.0D, AccurateGradeRepairPlanner.lengthCapFor(chord, original), 1.0E-6D);
-        assertTrue(AccurateGradeRepairPlanner.withinLengthCap(chord, original, 520.0D));
-        assertFalse(AccurateGradeRepairPlanner.withinLengthCap(chord, original, 530.0D));
+        assertEquals(525.0D, SearchBudgetPolicy.lengthCapFor(chord, original), 1.0E-6D);
+        assertTrue(SearchBudgetPolicy.withinLengthCap(chord, original, 520.0D));
+        assertFalse(SearchBudgetPolicy.withinLengthCap(chord, original, 530.0D));
         // 旧口径（3 × 原走廊长 = 1500）会接受 1000 格，新口径不会
-        assertFalse(AccurateGradeRepairPlanner.withinLengthCap(chord, original, 1000.0D));
+        assertFalse(SearchBudgetPolicy.withinLengthCap(chord, original, 1000.0D));
     }
 
     @Test
     void capIsNeverTighterThanFactorTimesChord() {
         // 只要弦长占主导，上界就恒为 1.6 × 弦 —— 这是"detour ≤ 1.6 结果不变"的依据
-        assertEquals(1.6D, AccurateGradeRepairPlanner.LENGTH_CAP_DETOUR_FACTOR, 1.0E-12D);
+        assertEquals(1.6D, SearchBudgetPolicy.LENGTH_CAP_DETOUR_FACTOR, 1.0E-12D);
         for (double chord : new double[]{8.0D, 32.0D, 256.0D, 1053.0D, 4096.0D}) {
-            double cap = AccurateGradeRepairPlanner.lengthCapFor(chord, chord);
+            double cap = SearchBudgetPolicy.lengthCapFor(chord, chord);
             assertTrue(cap >= chord * 1.6D - 1.0E-9D, "cap 必须 >= 1.6 × 弦");
-            assertTrue(AccurateGradeRepairPlanner.withinLengthCap(chord, chord, chord * 1.6D));
+            assertTrue(SearchBudgetPolicy.withinLengthCap(chord, chord, chord * 1.6D));
         }
     }
 
     @Test
     void degenerateInputsDoNotProduceAcceptingCap() {
         // 零长度走线不接受；弦/原长为 0 时上界仍有 map 到 8 的下限（landDetourCap 的老约定）
-        assertFalse(AccurateGradeRepairPlanner.withinLengthCap(0.0D, 0.0D, 0.0D));
-        assertFalse(AccurateGradeRepairPlanner.withinLengthCap(0.0D, 0.0D, -1.0D));
-        assertEquals(8.0D * 1.6D, AccurateGradeRepairPlanner.lengthCapFor(0.0D, 0.0D), 1.0E-9D);
+        assertFalse(SearchBudgetPolicy.withinLengthCap(0.0D, 0.0D, 0.0D));
+        assertFalse(SearchBudgetPolicy.withinLengthCap(0.0D, 0.0D, -1.0D));
+        assertEquals(8.0D * 1.6D, SearchBudgetPolicy.lengthCapFor(0.0D, 0.0D), 1.0E-9D);
     }
 }

@@ -42,6 +42,9 @@ import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.planningCollisionBox;
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.describePlanningCollision;
+import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
+import static net.shiroha233.roadweaver.planning.terrain.RepairAcceptance.*;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 结构相交修复。

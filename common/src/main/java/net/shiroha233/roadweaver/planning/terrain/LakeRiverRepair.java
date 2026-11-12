@@ -40,6 +40,9 @@ import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
 import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner.*;
 import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
+import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
+import static net.shiroha233.roadweaver.planning.terrain.RepairAcceptance.*;
+import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
 /**
  * 湖 / 河相交修复。
