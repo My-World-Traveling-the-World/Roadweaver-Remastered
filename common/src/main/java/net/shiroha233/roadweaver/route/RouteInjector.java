@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;
+import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -17,7 +18,7 @@ import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
  *   RoadGenerationService.generateTask(level, connection)
  *     → Road.generateRoad()
  *        → PlannedPathCache.find(level, connection, mode, cfg)   ← 查缓存
- *            命中 → RoadPathCalculator.calculateFromPlannedPath(...)  ← 不搜索，只后处理
+ *            命中 → PathFinalizeOps.calculateFromPlannedPath(...)  ← 不搜索，只后处理
  *            未命中 → calculateAStarRoadPathDetailed(...)             ← A* 搜索
  * </pre>
  *

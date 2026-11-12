@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
+import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -512,7 +513,7 @@ public final class AccurateGradeRepairPlanner {
      * reuse the completed future. Local repair calls this once per detour
      * radius and lake cycle; without the cache every repeat re-ran the
      * circle's structure discovery. Mirrors the path-based dedup in
-     * RoadPathCalculator.refreshPlanningSnapshot.
+     * PathFinalizeOps.refreshPlanningSnapshot.
      */
     record CircleSnapshotEntry(long centerKey, int radius,
                                        java.util.concurrent.CompletableFuture<Void> future) {}

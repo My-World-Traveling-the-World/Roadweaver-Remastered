@@ -85,7 +85,6 @@ class ArchitectureGuardTest {
     // 2026-11-12：client.map.RoadMapScreen（1244 行，原唯一超限界面类）已拆到 999 行，
     // 从此表移除。留这条注释是为了让「为什么界面类突然不在名单里」有据可查。
     private static final java.util.Set<String> BASELINE_OVER_1000 = java.util.Set.of(
-            "pathlogic.pathcalc.RoadPathCalculator"
     );
 
     /** 基线：超过 800 行的类（2026-11-12）。只许从这里删，不许往这里加。 */

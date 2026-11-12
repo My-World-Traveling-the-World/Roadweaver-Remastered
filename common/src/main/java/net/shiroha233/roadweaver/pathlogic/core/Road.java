@@ -2,6 +2,8 @@
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.pathlogic.pathcalc.PathMetricsOps;
+import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
 import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
@@ -141,10 +143,10 @@ public final class Road {
         try {
             PathCalculationResult pathResult;
             if (planned.isPresent()) {
-                pathResult = RoadPathCalculator.calculateFromPlannedPath(
+                pathResult = PathFinalizeOps.calculateFromPlannedPath(
                         planned.get(), width, level, cache, genConfig, connection);
             } else {
-                pathResult = RoadPathCalculator.calculateAStarRoadPathDetailed(
+                pathResult = PathMetricsOps.calculateAStarRoadPathDetailed(
                         rawStart, rawEnd, width, level, maxSteps, cache, genConfig);
             }
 
@@ -647,7 +649,7 @@ public final class Road {
                                     StreamsReflowingCompat.SamplingSession streams) {
         if (road == null || road.hasProtectedGap() || road.spans().stream().anyMatch(
                 span -> span != null && span.type() == SpanType.NETWORK_REUSE)) return road;
-        List<RoadSegmentPlacement> rebuilt = RoadPathCalculator.repairRiverRouteSegments(
+        List<RoadSegmentPlacement> rebuilt = PathFinalizeOps.repairRiverRouteSegments(
                 road.roadSegmentList(), road.width(), level, cache, genConfig, connection);
         if (rebuilt == null || rebuilt == road.roadSegmentList()
                 || rebuilt.equals(road.roadSegmentList())) return road;
