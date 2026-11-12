@@ -169,3 +169,32 @@ rg "待删（批" common/src/main/java
 → `S5 后处理降级为缝合器` → `S6 避让 + UI 接线` → `S7 删旧 + 补守卫`
 
 > **S1 必须先做**：不立中间表示就换算法 = 在流沙上盖楼。
+
+---
+
+# S1 进度：RoadSpec 已立（2026-11-13）
+
+`spec/RoadSpec` 是「一条路的唯一权威表示」：中心线 + 剖面 + 区间，**且区间带站索引**。
+
+## 它解决的两件事
+
+1. **三套事实从此有一个校验点**：剖面长度必须等于站数、区间必须能唯一解析到站、
+   区间之间不许重叠 —— 任何一条不满足就 `SpecViolationException`，带精确上下文。
+2. **消灭「BlockPos 反查站索引」这一整类 bug**：`RoadSpan` 只存 BlockPos、没有站索引，
+   任何需要知道「这段桥覆盖第几站」的代码都得反查，而路网合并会重建站序列 ⇒
+   Y 漂一格整座桥被静默丢掉（0.9.036 的 `bridgeShareCandidates=0`）。
+   现在构造时一次性解析，同 XZ 多候选直接失败而不是任选一个。
+
+## 配套守卫 G4：SingleSourceOfTruthTest
+
+统计重算热点的**调用点数量**，只许减少不许新增（基线
+`common/src/test/resources/architecture/recompute-sites-baseline.txt`）：
+
+| 热点 | 当前 |
+|---|---|
+| `extractSpans(` 区间提取 | 9 |
+| `computeTargetY(` 剖面计算 | 8 |
+| `refineTunnelSpans(` 隧道区间细化 | 10 |
+| `repairFinalHeightConflict(` 高度冲突修复 | 6 |
+
+每把一处改成读 `RoadSpec`，就把基线数字改小；归零即说明该热点已收敛到单一来源。

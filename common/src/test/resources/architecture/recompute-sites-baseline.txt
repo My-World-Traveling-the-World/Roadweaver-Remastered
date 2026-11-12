@@ -1,0 +1,8 @@
+# 重算热点基线（ratchet：只许减少，不许新增）
+# 格式：符号<TAB>上限    # 说明
+# 生成：2026-11-13（守卫 G4）
+extractSpans(	9    # 区间提取
+computeTargetY(	8    # 剖面计算
+refineTunnelSpans(	10    # 隧道区间细化
+computeBridgeRanges(	0    # 桥范围计算
+repairFinalHeightConflict(	6    # 高度冲突修复

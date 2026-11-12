@@ -117,7 +117,18 @@ public final class DeadCodeGuardTest {
             texts.put(p, t);
             corpus.append(t).append('\n');
         }
-        String all = corpus + resourceCorpus();
+        // 测试源码也算「活着」的引用：被测试用到的类不是死代码。
+        StringBuilder testCorpus = new StringBuilder();
+        for (String m : MODULES) {
+            Path d = repoRoot.resolve(m).resolve("src").resolve("test").resolve("java");
+            if (!Files.isDirectory(d)) continue;
+            try (Stream<Path> s = Files.walk(d)) {
+                for (Path p : s.filter(x -> x.toString().endsWith(".java")).toList()) {
+                    testCorpus.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
+                }
+            }
+        }
+        String all = corpus.toString() + testCorpus + resourceCorpus();
 
         Set<String> current = new LinkedHashSet<>();
         for (var e : texts.entrySet()) {

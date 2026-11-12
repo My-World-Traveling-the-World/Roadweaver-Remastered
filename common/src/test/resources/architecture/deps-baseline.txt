@@ -159,3 +159,4 @@ worldgen -> config    1
 worldgen -> core    10
 worldgen -> pathlogic    1
 worldgen -> persistence    4
+spec -> core    4
