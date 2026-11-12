@@ -84,7 +84,7 @@ final class RoadSnapServiceTailTrimTest {
         }
         RoadData withSpans = road(stations, spans);
 
-        RoadData trimmed = RoadSnapService.trimSecondaryTailAtJunction(primary, withSpans, "spatial-end");
+        RoadData trimmed = JunctionTrimOps.trimSecondaryTailAtJunction(primary, withSpans, "spatial-end");
         assertNotNull(trimmed, "the pressing tail must be trimmed");
         // Junction = first tail station on the primary (index 16): keep 0..16.
         assertEquals(17, trimmed.roadSegmentList().size(), "keep up to the junction station");
@@ -125,7 +125,7 @@ final class RoadSnapServiceTailTrimTest {
         stations.add(new int[]{212, 64, 212});
         stations.add(new int[]{216, 64, 216});
         RoadData detached = road(stations, null);
-        assertNull(RoadSnapService.trimSecondaryTailAtJunction(primary(), detached, "spatial-end"));
+        assertNull(JunctionTrimOps.trimSecondaryTailAtJunction(primary(), detached, "spatial-end"));
     }
 
     @Test
@@ -140,7 +140,7 @@ final class RoadSnapServiceTailTrimTest {
         spans.add(new RoadSpan(candidate.roadSegmentList().get(17).middlePos(),
                 candidate.roadSegmentList().get(18).middlePos(), SpanType.NETWORK_REUSE));
         RoadData withReuse = road(stations, spans);
-        assertNull(RoadSnapService.trimSecondaryTailAtJunction(primary(), withReuse, "shared-endpoint"));
+        assertNull(JunctionTrimOps.trimSecondaryTailAtJunction(primary(), withReuse, "shared-endpoint"));
     }
 
     @Test
@@ -154,13 +154,13 @@ final class RoadSnapServiceTailTrimTest {
         stations.add(new int[]{3, 64, 0});
         stations.add(new int[]{1, 64, 0});
         RoadData shortTail = road(stations, null);
-        assertNull(RoadSnapService.trimSecondaryTailAtJunction(primary(), shortTail, "endpoint-corridor"));
+        assertNull(JunctionTrimOps.trimSecondaryTailAtJunction(primary(), shortTail, "endpoint-corridor"));
     }
 
     @Test
     void reuseCorridorModesAreNeverTailTrimmed() {
         RoadData candidate = secondaryWithTail(8, 0);
-        assertNull(RoadSnapService.trimSecondaryTailAtJunction(primary(), candidate, "parallel-overlap"));
-        assertNull(RoadSnapService.trimSecondaryTailAtJunction(primary(), candidate, "two-junctions"));
+        assertNull(JunctionTrimOps.trimSecondaryTailAtJunction(primary(), candidate, "parallel-overlap"));
+        assertNull(JunctionTrimOps.trimSecondaryTailAtJunction(primary(), candidate, "two-junctions"));
     }
 }

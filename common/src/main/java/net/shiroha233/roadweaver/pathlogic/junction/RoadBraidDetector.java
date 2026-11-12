@@ -13,6 +13,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
+import net.shiroha233.roadweaver.postprocess.EndpointConnectOps;
 
 /**
  * 全批次两两「并排重叠」预检（0.9.018，真机缺陷 D2 平行双桥）。

@@ -11,6 +11,7 @@ import java.util.List;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadWaterValidator;
+import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
 /**
  * 涵洞（C1-①）：窄水道的路不填成坝、也不留缺口，而是把路面抬到水面之上，让水从路下继续流。

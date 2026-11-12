@@ -24,12 +24,12 @@ public final class ParallelCorridorReuseAuditTest {
 
         RoadData mergedEight = JunctionConnector.connectSecondaryToPrimary(primary, offsetEight);
         require(hasReuse(mergedEight), "8-block parallel corridor was not reused");
-        require(RoadSnapService.networkReuseStationCount(mergedEight) >= 50,
+        require(JunctionTrimOps.networkReuseStationCount(mergedEight) >= 50,
                 "8-block parallel corridor fell back to a short endpoint snap");
 
         RoadData mergedTwelve = JunctionConnector.connectSecondaryToPrimary(primary, offsetTwelve);
         require(hasReuse(mergedTwelve), "12-block parallel corridor was not reused");
-        require(RoadSnapService.networkReuseStationCount(mergedTwelve) >= 50,
+        require(JunctionTrimOps.networkReuseStationCount(mergedTwelve) >= 50,
                 "12-block parallel corridor fell back to a short endpoint snap");
 
         RoadData protectedGap = lineWithGap(80, 8, 9L, 10L, 28, 40);

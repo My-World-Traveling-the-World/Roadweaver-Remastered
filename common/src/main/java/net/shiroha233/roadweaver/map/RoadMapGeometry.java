@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
 /** Read-only geometry view used by the map and overlay paths. */
 public final class RoadMapGeometry {

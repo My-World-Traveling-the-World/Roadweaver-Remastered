@@ -120,8 +120,8 @@ final class RoadSnapServiceReuseExtendTest {
         assertEquals(candidate.roadSegmentList().get(9).middlePos(), added.start());
         assertEquals(candidate.roadSegmentList().get(17).middlePos(), added.end());
 
-        assertTrue(RoadSnapService.networkReuseStationCount(extended)
-                        > RoadSnapService.networkReuseStationCount(candidate),
+        assertTrue(JunctionTrimOps.networkReuseStationCount(extended)
+                        > JunctionTrimOps.networkReuseStationCount(candidate),
                 "复用站点数必须增加");
         assertFalse(RoadSnapService.spanMaskView(extended, SpanType.NETWORK_REUSE)[18],
                 "远离 primary 的站点不得被标成复用");
@@ -163,7 +163,7 @@ final class RoadSnapServiceReuseExtendTest {
         RoadSpan span = reuseSpan(created, 0);
         assertTrue(span != null, "整段贴走廊的路线必须被标成 NETWORK_REUSE");
         assertEquals(candidate.roadSegmentList().get(0).middlePos(), span.start());
-        assertTrue(RoadSnapService.networkReuseStationCount(created) >= 9,
+        assertTrue(JunctionTrimOps.networkReuseStationCount(created) >= 9,
                 "复用站点数必须覆盖走廊段");
     }
 

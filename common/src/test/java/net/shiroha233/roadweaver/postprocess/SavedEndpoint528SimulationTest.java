@@ -58,7 +58,7 @@ public final class SavedEndpoint528SimulationTest {
         RoadData merged = JunctionConnector.connectSecondaryToPrimary(spawnToVillage, villageToSouth);
         require(merged != null, "0.8.155 could not connect the saved shared-endpoint route");
 
-        int reuse = RoadSnapService.networkReuseStationCount(merged);
+        int reuse = JunctionTrimOps.networkReuseStationCount(merged);
         int parallel = longestNonReusedParallelRun(spawnToVillage, merged);
         System.out.println("SavedEndpoint528SimulationTest: reuseStations=" + reuse
                 + " longestParallelRun=" + parallel
@@ -71,7 +71,7 @@ public final class SavedEndpoint528SimulationTest {
         // is intentionally not required to reuse the first corridor.
         RoadData chained = JunctionConnector.connectSecondaryToPrimary(mountainToVillage, merged);
         System.out.println("SavedEndpoint528SimulationTest: thirdRouteReuse="
-                + (chained == null ? 0 : RoadSnapService.networkReuseStationCount(chained)));
+                + (chained == null ? 0 : JunctionTrimOps.networkReuseStationCount(chained)));
         System.out.println("SavedEndpoint528SimulationTest: PASS");
     }
 

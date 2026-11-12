@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlanner;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
+import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
 /** Final safety gate preventing ordinary road construction inside surface water. */
 public final class FinalRoadWaterValidator {

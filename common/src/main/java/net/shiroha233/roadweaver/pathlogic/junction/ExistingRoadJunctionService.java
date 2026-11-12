@@ -42,6 +42,7 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareService;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
+import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
 /** Reuses a completed road when a new road reaches its already-connected network. */
 public final class ExistingRoadJunctionService {
@@ -687,7 +688,7 @@ public final class ExistingRoadJunctionService {
         RoadData donor = null;
         double originalCost = constructionLength(secondary);
         double bestCost = Double.POSITIVE_INFINITY;
-        int bestReuse = RoadSnapService.networkReuseStationCount(secondary);
+        int bestReuse = JunctionTrimOps.networkReuseStationCount(secondary);
         boolean hasPositiveReuseCandidate = bestReuse > 0;
         for (RoadData primary : candidates) {
             if (!plausibleDonor(primary, secondary, hasPositiveReuseCandidate)) continue;
@@ -698,7 +699,7 @@ public final class ExistingRoadJunctionService {
             if (!isAcceptableCandidate(secondary, connected, originalCost)) continue;
 
             double candidateCost = constructionLength(connected);
-            int candidateReuse = RoadSnapService.networkReuseStationCount(connected);
+            int candidateReuse = JunctionTrimOps.networkReuseStationCount(connected);
             if (candidateReuse > 0) {
                 hasPositiveReuseCandidate = true;
             }

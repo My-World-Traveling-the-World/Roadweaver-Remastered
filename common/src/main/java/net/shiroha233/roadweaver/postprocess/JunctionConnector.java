@@ -40,6 +40,7 @@ import static net.shiroha233.roadweaver.postprocess.EndpointApproachConnector.*;
 import static net.shiroha233.roadweaver.postprocess.RoadSnapService.*;
 import static net.shiroha233.roadweaver.postprocess.NetworkReuseMerger.*;
 import static net.shiroha233.roadweaver.postprocess.EndpointApproachConnector.*;
+import static net.shiroha233.roadweaver.postprocess.JunctionTrimOps.*;
 
 /**
  * 副线接入主线。

@@ -14,7 +14,7 @@ import net.shiroha233.roadweaver.core.constants.PathfindingConstants;
  * 一次寻路的硬禁行区（0.9.018，D2 平行双桥「方案 C：后者整体改道」）。
  *
  * <p>真机缺陷 D2：两条路在同一段走廊里并排各修一座桥，中间只隔几格，地图上是
- * 「平行双桥」。根因是麻花（braid）判定只在 {@code RoadSnapService.tryConnect}
+ * 「平行双桥」。根因是麻花（braid）判定只在 {@code JunctionTrimOps.tryConnect}
  * 里跑，而那条路径的前提是「后一条路的端点贴上了前一条路」；两条各走各的、
  * 全程互不贴靠的平行路根本走不到那段判定，于是各修各的桥。</p>
  *

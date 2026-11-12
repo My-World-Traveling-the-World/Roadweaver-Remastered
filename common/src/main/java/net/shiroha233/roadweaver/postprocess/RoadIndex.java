@@ -36,6 +36,7 @@ import java.util.concurrent.CompletableFuture;
 
 // 仍留在 RoadSnapService 里的常量与工具（包内可见）。
 import static net.shiroha233.roadweaver.postprocess.RoadSnapService.*;
+import static net.shiroha233.roadweaver.postprocess.JunctionTrimOps.*;
 
 /**
  * 既有路网的索引。

@@ -59,15 +59,15 @@ public final class ParallelCorridorHeadingTest {
                 JunctionConnector.connectSecondaryToPrimary(straightPrimary, straightTracking);
         System.out.printf("control: straight merged=%s reused=%d%n",
                 straightMerged == null ? "null" : "ok",
-                straightMerged == null ? 0 : RoadSnapService.networkReuseStationCount(straightMerged));
+                straightMerged == null ? 0 : JunctionTrimOps.networkReuseStationCount(straightMerged));
 
         RoadData merged = JunctionConnector.connectSecondaryToPrimary(primary, tracking);
         require(merged != null, "a road tracking the same bending corridor was dropped entirely");
         require(hasReuse(merged),
                 "a bending shared corridor produced no NETWORK_REUSE span");
-        require(RoadSnapService.networkReuseStationCount(merged) >= 100,
+        require(JunctionTrimOps.networkReuseStationCount(merged) >= 100,
                 "a bending shared corridor reused only "
-                        + RoadSnapService.networkReuseStationCount(merged)
+                        + JunctionTrimOps.networkReuseStationCount(merged)
                         + " stations instead of the shared stretch");
 
         // --- The relaxation must not glue separate roads together -----------
@@ -75,9 +75,9 @@ public final class ParallelCorridorHeadingTest {
         // point; every sample disagrees on heading, so it must stay separate.
         RoadData crossing = crossingRoad(216, 60, 21L, 22L);
         RoadData crossed = JunctionConnector.connectSecondaryToPrimary(primary, crossing);
-        require(crossed == null || RoadSnapService.networkReuseStationCount(crossed) < 100,
+        require(crossed == null || JunctionTrimOps.networkReuseStationCount(crossed) < 100,
                 "a perpendicular crossing was merged as a shared corridor ("
-                        + (crossed == null ? 0 : RoadSnapService.networkReuseStationCount(crossed))
+                        + (crossed == null ? 0 : JunctionTrimOps.networkReuseStationCount(crossed))
                         + " stations)");
 
         // A parallel road far enough away is still independent, as the straight
@@ -85,16 +85,16 @@ public final class ParallelCorridorHeadingTest {
         // widened outlier budget cannot adopt it.
         RoadData distant = bendingCorridor(216, 24.0D, 31L, 32L);
         RoadData distantMerged = JunctionConnector.connectSecondaryToPrimary(primary, distant);
-        require(distantMerged == null || RoadSnapService.networkReuseStationCount(distantMerged) < 100,
+        require(distantMerged == null || JunctionTrimOps.networkReuseStationCount(distantMerged) < 100,
                 "a corridor 24 blocks away was merged as shared ("
                         + (distantMerged == null ? 0
-                        : RoadSnapService.networkReuseStationCount(distantMerged)) + " stations)");
+                        : JunctionTrimOps.networkReuseStationCount(distantMerged)) + " stations)");
 
         System.out.printf("parallel corridor heading test: stations=%d  reusedStations=%d  "
                         + "crossingReused=%d  distantReused=%d%n",
-                216, RoadSnapService.networkReuseStationCount(merged),
-                crossed == null ? 0 : RoadSnapService.networkReuseStationCount(crossed),
-                distantMerged == null ? 0 : RoadSnapService.networkReuseStationCount(distantMerged));
+                216, JunctionTrimOps.networkReuseStationCount(merged),
+                crossed == null ? 0 : JunctionTrimOps.networkReuseStationCount(crossed),
+                distantMerged == null ? 0 : JunctionTrimOps.networkReuseStationCount(distantMerged));
         System.out.println("parallel corridor heading test OK");
     }
 
