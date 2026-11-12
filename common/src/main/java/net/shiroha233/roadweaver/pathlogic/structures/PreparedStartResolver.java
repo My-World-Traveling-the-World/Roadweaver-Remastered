@@ -1,6 +1,7 @@
 /* 文件职责：把结构起点解析成「已准备」的方块盒 —— 只解析与缓存，不做避让判定。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;

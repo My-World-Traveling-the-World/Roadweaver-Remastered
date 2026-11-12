@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -222,7 +223,7 @@ final class MountainSwitchbackPlanner {
                 if (StructureAvoidanceService.shouldAvoidPlanning(nextPos)
                         || PathfindingHelper.edgeIntersectsPlanningObstacle(
                         new BlockPos(current.x(), currentHeight, current.z()), nextPos,
-                        StructureAvoidanceService.planningRoadRadius(), step)) continue;
+                        planningRoadRadius(), step)) continue;
                 double nextCost = current.cost() + movementCost(current, nextX, nextZ,
                         currentHeight, nextHeight, direction, start, goal, terrain, config, step);
                 StateKey key = new StateKey(nextX, nextZ, direction);

@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.structures.precompute;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.resources.ResourceLocation;

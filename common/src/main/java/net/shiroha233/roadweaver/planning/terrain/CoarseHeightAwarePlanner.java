@@ -1,6 +1,7 @@
 /* 文件职责：粗规划阶段的 3D 高度感知候选寻路。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -105,7 +106,7 @@ final class CoarseHeightAwarePlanner {
                     // detours, but a corridor with no alternative remains
                     // routable and lets the local repair/gap fallback decide.
                     double obstaclePenalty = PathfindingHelper.edgeIntersectsPlanningObstacle(
-                            currentPos, nextPos, StructureAvoidanceService.planningRoadRadius(), step)
+                            currentPos, nextPos, planningRoadRadius(), step)
                             ? PathfindingConstants.PLANNING_OBSTACLE_COST : 0.0D;
 
                     PathTerrainField.SampleBundle sample = terrain.sampleBundle(nextX, nextZ);

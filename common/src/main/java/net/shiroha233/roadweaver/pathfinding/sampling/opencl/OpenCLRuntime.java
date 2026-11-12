@@ -1,6 +1,7 @@
 /* 文件职责：管理可复用的 OpenCL 设备会话、kernel 资源与串行提交边界。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

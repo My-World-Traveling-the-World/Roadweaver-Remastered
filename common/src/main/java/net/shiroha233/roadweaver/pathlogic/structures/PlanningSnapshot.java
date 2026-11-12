@@ -1,6 +1,8 @@
 /* 文件职责：结构避让的规划快照 —— 哪些结构盒会挡路、哪些端点归属者要豁免。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
@@ -26,10 +28,8 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.CONSTRUCTION_BELOW;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.ENDPOINT_REPLACEMENT_MATCH_BLOCKS;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS;
-import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.clusterBoxes;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.containsHorizontal;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.intersectsPlanningBand;
-import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.isVerifiedBuilding;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.isVillageStructure;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.horizontalDistanceSquared;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.encapsulate;

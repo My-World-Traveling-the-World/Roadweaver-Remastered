@@ -1,6 +1,7 @@
 /* 文件职责：把新三层内核接成旧链的 Pathfinder —— 这是 AB 开关真正生效的地方。 */
 package net.shiroha233.roadweaver.bridge;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -108,7 +109,7 @@ public final class BandPathfinder implements Pathfinder {
                 int x = minX + ix * step;
                 int z = minZ + iz * step;
                 int y = heights[index];
-                blocked[index] = StructureAvoidanceService.blocksPlanningObstacle(
+                blocked[index] = blocksPlanningObstacle(
                         new BlockPos(x, y, z), clearance);
             }
         }

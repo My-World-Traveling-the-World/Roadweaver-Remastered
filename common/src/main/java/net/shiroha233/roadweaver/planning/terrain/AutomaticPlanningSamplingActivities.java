@@ -1,6 +1,7 @@
 /* 文件职责：维护各世界自动规划期间的活动采样范围。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;

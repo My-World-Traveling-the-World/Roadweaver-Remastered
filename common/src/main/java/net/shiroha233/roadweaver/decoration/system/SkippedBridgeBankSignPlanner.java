@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.decoration.system;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.WorldGenLevel;
@@ -48,7 +49,7 @@ public final class SkippedBridgeBankSignPlanner {
                 ? placePos.offset(ortho.getX() * sideOffset, 0, ortho.getZ() * sideOffset)
                 : placePos.offset(-ortho.getX() * sideOffset, 0, -ortho.getZ() * sideOffset);
 
-        if (StructureAvoidanceService.shouldAvoid(world, shifted)) return;
+        if (shouldAvoid(world, shifted)) return;
         out.add(new SeaQuestionSignDecoration(shifted, ortho, world, isStart));
     }
 }

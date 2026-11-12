@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;

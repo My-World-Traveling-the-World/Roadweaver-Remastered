@@ -1,6 +1,7 @@
 /* 文件职责：把现有避让判据采样成势场 —— 判据一字不改，只换表达形式。 */
 package net.shiroha233.roadweaver.bridge;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -128,7 +129,7 @@ public final class AvoidanceObstacleField {
                                                      int width, int depth,
                                                      int clearance, double falloff) {
         return sample(terrain, minX, minZ, width, depth, clearance, falloff,
-                (x, y, z) -> StructureAvoidanceService.blocksPlanningObstacle(
+                (x, y, z) -> blocksPlanningObstacle(
                         new BlockPos(x, y, z), clearance));
     }
 

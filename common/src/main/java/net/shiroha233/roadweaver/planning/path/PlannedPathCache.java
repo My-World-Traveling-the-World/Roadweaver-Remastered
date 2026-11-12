@@ -1,6 +1,7 @@
 /* 文件职责：提供待生成路径的内存前台缓存，并协调文件持久层。 */
 package net.shiroha233.roadweaver.planning.path;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;

@@ -1,6 +1,7 @@
 /* 文件职责：实现基于地形场读取的势场普通道路寻路。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -130,15 +131,15 @@ public final class PotentialFieldPathfinder implements Pathfinder {
                     // 村庄群盒」这一档**从未生效过**，路可以穿过建筑、只付一点软罚；
                     // 且 RawPathSearch 的「硬拦失败→降级重搜」两遍结果必然相同，
                     // 等于每条失败路线白跑一整轮 A*。
-                    if (StructureAvoidanceService.buildingObstacleMode()
+                    if (buildingObstacleMode()
                             != StructureAvoidanceService.BuildingObstacleMode.PENALTY
-                            && StructureAvoidanceService.blocksPlanningObstacle(
-                            np, StructureAvoidanceService.planningRoadRadius())) continue;
+                            && blocksPlanningObstacle(
+                            np, planningRoadRadius())) continue;
                     if (HugeTreeReservation.isReserved(level, np)
                             || StructureAvoidanceService.shouldAvoidPlanning(
-                            np, StructureAvoidanceService.planningRoadRadius())
+                            np, planningRoadRadius())
                             || edgeIntersectsPlanningObstacle(
-                            current.pos, np, StructureAvoidanceService.planningRoadRadius(), d)) continue;
+                            current.pos, np, planningRoadRadius(), d)) continue;
                     if (closed.contains(np)) continue;
 
                     double moveCost = computeMoveCost(

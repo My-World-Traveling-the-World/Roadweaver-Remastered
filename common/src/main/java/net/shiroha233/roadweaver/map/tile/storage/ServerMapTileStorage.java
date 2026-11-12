@@ -1,6 +1,7 @@
 /* 文件职责：提供服务端地图瓦片的分层路径查询、存在性判断、PNG 写入与旧目录迁移入口。 */
 package net.shiroha233.roadweaver.map.tile.storage;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.map.tile.core.MapTileCoord;
 import net.shiroha233.roadweaver.map.tile.core.MapTileLayer;

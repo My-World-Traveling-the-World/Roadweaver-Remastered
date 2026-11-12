@@ -1,6 +1,7 @@
 /* 文件职责：实现普通道路的世界生成入口。 */
 package net.shiroha233.roadweaver.pathlogic;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import com.mojang.serialization.Codec;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -141,7 +142,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             }
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    StructureAvoidanceService.prepareConstructionChunk(
+                    prepareConstructionChunk(
                             world, new ChunkPos(currentChunk.x + dx, currentChunk.z + dz));
                 }
             }

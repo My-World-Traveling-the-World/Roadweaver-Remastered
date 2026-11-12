@@ -1,6 +1,7 @@
 /* 文件职责：记录开局道路预热的阶段与进度，使崩溃/蓝屏后能从未完成处续接。 */
 package net.shiroha233.roadweaver.persistence.files;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import org.slf4j.Logger;

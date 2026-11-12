@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

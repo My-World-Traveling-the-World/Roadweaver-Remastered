@@ -1,6 +1,7 @@
 /* 文件职责：铺设道路段的基础路面。 */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -205,8 +206,8 @@ public final class SegmentPaver {
             for (int i = 0; i < positions.size(); i++) {
                 BlockPos widthBlock = positions.get(i);
                 BlockPos surface = new BlockPos(widthBlock.getX(), heights[i], widthBlock.getZ());
-                if (StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, surface, road)
-                        || StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, surface.below(), road)) {
+                if (isVerifiedPreparedStructureBlock(world, surface, road)
+                        || isVerifiedPreparedStructureBlock(world, surface.below(), road)) {
                     continue;
                 }
                 AboveColumnClearer.ClearanceCheck clearance = AboveColumnClearer.checkAboveColumn(

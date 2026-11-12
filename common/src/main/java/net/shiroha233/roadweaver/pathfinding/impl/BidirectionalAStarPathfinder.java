@@ -1,6 +1,7 @@
 /* 文件职责：实现基于地形场读取的双向 A* 普通道路寻路。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -134,15 +135,15 @@ public final class BidirectionalAStarPathfinder implements Pathfinder {
             // placement.  Reject them here so the route bends around a normal
             // huge tree instead of becoming a construction-time road gap.
             // 0.9.020：硬障碍口径统一（同 PotentialFieldPathfinder 的说明）。
-            if (StructureAvoidanceService.buildingObstacleMode()
+            if (buildingObstacleMode()
                     != StructureAvoidanceService.BuildingObstacleMode.PENALTY
-                    && StructureAvoidanceService.blocksPlanningObstacle(
-                    np, StructureAvoidanceService.planningRoadRadius())) continue;
+                    && blocksPlanningObstacle(
+                    np, planningRoadRadius())) continue;
             if (HugeTreeReservation.isReserved(level, np)
                     || StructureAvoidanceService.shouldAvoidPlanning(
-                    np, StructureAvoidanceService.planningRoadRadius())
+                    np, planningRoadRadius())
                     || edgeIntersectsPlanningObstacle(
-                    current.pos, np, StructureAvoidanceService.planningRoadRadius(), d)) continue;
+                    current.pos, np, planningRoadRadius(), d)) continue;
             if (closedThis.contains(np)) continue;
 
             double tentativeG = current.g + computeMoveCost(current.pos, np, nxz, off, d,

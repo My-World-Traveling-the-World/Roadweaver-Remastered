@@ -1,6 +1,7 @@
 /* 文件职责：提供道路 ChunkPos 分片存储的稳定门面，隔离调用方与具体文件实现。 */
 package net.shiroha233.roadweaver.persistence.sharded;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;

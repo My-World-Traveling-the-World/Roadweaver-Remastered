@@ -1,6 +1,7 @@
 /* 文件职责：生成单条道路并协调精确地形路径、跨度与附属结构。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -579,7 +580,7 @@ public final class Road {
             }
             long persistedFingerprint = 0L;
             if (persistImmediately) {
-                StructureAvoidanceService.markRoadCorridorPrepared(segments);
+                markRoadCorridorPrepared(segments);
             }
             if (!RoadLifecycle.allowsWrites() || ConnectionDeletionService.shouldAbort(level, connection)) return null;
             if (persistImmediately) {

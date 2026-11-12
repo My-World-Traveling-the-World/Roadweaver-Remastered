@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.resources.ResourceLocation;
 import net.shiroha233.roadweaver.config.ConfigService;
 import org.junit.jupiter.api.AfterEach;

@@ -1,6 +1,7 @@
 /* 文件职责：保存 AUTO 档按地形占比解析出的"路线级倾向"，仅影响该条路线。 */
 package net.shiroha233.roadweaver.planning;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.core.model.StructureConnection;

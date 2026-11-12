@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.generation;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -68,7 +69,7 @@ public final class ConnectionDeletionService {
         }
         provider.setStructureConnections(level, retained);
         PlannedPathCache.discard(level, target);
-        StructureAvoidanceService.discardPlanningSnapshot(level, target);
+        discardPlanningSnapshot(level, target);
         // 审计 P1-4 附带项：玩家删除连接时，同步清掉手绘路线的登记项，
         // 否则 RouteBuildRegistry 里会留一条「指向已删连接」的僵尸记录，
         // 进度统计（countForRoute）也会把已删的算进去。

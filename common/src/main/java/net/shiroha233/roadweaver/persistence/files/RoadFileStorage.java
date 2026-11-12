@@ -1,6 +1,7 @@
 /* 文件职责：按世界路径路由道路 ChunkPos 存储，并保留旧文件存储门面的对外语义。 */
 package net.shiroha233.roadweaver.persistence.files;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;

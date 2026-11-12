@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -640,12 +641,12 @@ public final class AccurateGradeRepairPlanner {
                         (conflictPos.getX() + conflictEnd.getX()) / 2,
                         (conflictPos.getY() + conflictEnd.getY()) / 2,
                         (conflictPos.getZ() + conflictEnd.getZ()) / 2);
-                conflictDetail = StructureAvoidanceService.describePlanningCollision(conflictPos, conflictEnd);
+                conflictDetail = describePlanningCollision(conflictPos, conflictEnd);
                 // The 100-block value is only the terrain sampling/search
                 // radius. Building collision remains limited to the actual
                 // road body width so nearby but non-touching structures do
                 // not incorrectly block a valid edge-grazing detour.
-                BoundingBox conflictBox = StructureAvoidanceService.planningCollisionBox(
+                BoundingBox conflictBox = planningCollisionBox(
                         conflictPos, collisionClearance);
 
                 accepted = false;
@@ -800,7 +801,7 @@ public final class AccurateGradeRepairPlanner {
             BlockPos from = candidate.get(Math.max(0, structure.start()));
             BlockPos to = candidate.get(Math.max(0, Math.min(candidate.size() - 1, structure.end())));
             return "structure edge=" + structure.start() + ".." + structure.end() + " "
-                    + StructureAvoidanceService.describePlanningCollision(from, to);
+                    + describePlanningCollision(from, to);
         }
         double originalLength = routeLength(original);
         double candidateLength = routeLength(candidate);
@@ -2245,7 +2246,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
                 // Task 1: physical road-body radius, voxel-accurate — the
                 // legacy 10-block ahead-clearance rejected valid edge-grazing
                 // corridors that never touch the structure.
-                StructureAvoidanceService.planningRoadRadius());
+                planningRoadRadius());
         if (structure != null) {
             BlockPos from = candidate.get(Math.max(0, structure.start()));
             BlockPos to = candidate.get(Math.max(0, Math.min(candidate.size() - 1, structure.end())));
@@ -2334,7 +2335,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         int end = Math.min(path.size() - 1, first.end());
         BoundingBox cluster = null;
         for (int index = start; index <= end; index++) {
-            BoundingBox box = StructureAvoidanceService.planningCollisionBox(
+            BoundingBox box = planningCollisionBox(
                     path.get(index), Math.max(0, structureClearance));
             if (box != null) cluster = cluster == null ? box : cluster.encapsulate(box);
         }
@@ -2349,7 +2350,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
             for (int index = start; index < path.size(); index++) {
                 BlockPos point = path.get(index);
                 BoundingBox box = point == null ? null
-                        : StructureAvoidanceService.planningCollisionBox(point, Math.max(0, structureClearance));
+                        : planningCollisionBox(point, Math.max(0, structureClearance));
                 // A path point being inside the current search rectangle is
                 // not evidence of another building. Extend only for a real
                 // collision box whose expanded footprint touches this cluster.

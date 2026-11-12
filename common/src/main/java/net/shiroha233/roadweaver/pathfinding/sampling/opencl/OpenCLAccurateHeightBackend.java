@@ -1,6 +1,7 @@
 /* 文件职责：执行 OpenCL 精确高度批次、逐程序校验与可选的严格 GPU-only 调用。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;

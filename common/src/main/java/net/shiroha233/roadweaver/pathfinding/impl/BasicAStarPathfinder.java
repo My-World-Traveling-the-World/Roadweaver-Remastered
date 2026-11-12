@@ -1,6 +1,7 @@
 /* 文件职责：实现基于地形场读取的基础 A* 普通道路寻路。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -105,13 +106,13 @@ public final class BasicAStarPathfinder implements Pathfinder {
                     // failing outright; the local building repair and the gap
                     // fallback handle the residual crossing.
                     double obstaclePenalty = 0.0D;
-                    int obstacleRadius = StructureAvoidanceService.planningRoadRadius();
+                    int obstacleRadius = planningRoadRadius();
                     // 硬障碍模式：已验证建筑（含村庄群盒）不可穿过。调用方
                     // （RawPathSearch）在搜索失败时会自动降级回高代价模式重搜，
                     // 所以这里直接 continue 不会让路线无解。
-                    if (StructureAvoidanceService.buildingObstacleMode()
+                    if (buildingObstacleMode()
                             != StructureAvoidanceService.BuildingObstacleMode.PENALTY
-                            && StructureAvoidanceService.blocksPlanningObstacle(np, obstacleRadius)) {
+                            && blocksPlanningObstacle(np, obstacleRadius)) {
                         continue;
                     }
                     if (StructureAvoidanceService.shouldAvoidPlanning(np, obstacleRadius)) {

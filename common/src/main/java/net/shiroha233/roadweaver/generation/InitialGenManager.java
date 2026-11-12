@@ -1,6 +1,8 @@
 /* 文件职责：协调首次世界加载时的道路规划、生成、进度与持久化。 */
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.minecraft.world.level.Level;
@@ -448,7 +450,7 @@ public final class InitialGenManager {
             // B 阶段：规划快照已就绪（planRectAsync 已为 incoming 连接准备），在规划波次
             // 开始之前过滤"村庄 V ↔ V 结构盒内的未知端点"连接。被过滤的连接不进规划、
             // 不进施工、不进局部修复；安全阀触发时整体放弃并只打告警。
-            StructureAvoidanceService.EndpointFilterOutcome endpointFilter =
+            EndpointFilterOutcome endpointFilter =
                     StructureAvoidanceService.filterUnknownEndpointInsideVillage(level, roadTasks);
             if (endpointFilter.filteredCount() > 0) {
                 roadTasks = endpointFilter.kept();
@@ -1898,7 +1900,7 @@ public final class InitialGenManager {
                         return new FinalRoadWork(ownerKey(connectedRoad), null);
                     }
                 }
-                StructureAvoidanceService.markRoadCorridorPrepared(road.roadSegmentList());
+                markRoadCorridorPrepared(road.roadSegmentList());
                 try {
                     RandomSource random = RandomSource.create(level.getSeed()
                             ^ RoadShardStorage.computeFingerprint(road));

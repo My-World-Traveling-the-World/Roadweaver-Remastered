@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.minecraft.world.level.ChunkPos;
@@ -277,8 +278,8 @@ public final class RoadConstructionSafety {
             // A decoded structure block is a construction gap, not a route
             // failure.  Leave the whole column untouched and let neighboring
             // columns continue paving.
-            if (StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, roadBlock, road)
-                    || StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, construction, road)) {
+            if (isVerifiedPreparedStructureBlock(world, roadBlock, road)
+                    || isVerifiedPreparedStructureBlock(world, construction, road)) {
                 continue;
             }
             if (isProtectedPreparedBlock(world, roadBlock, road)) {
@@ -299,7 +300,7 @@ public final class RoadConstructionSafety {
                 }
                 for (int y = target; y < original; y++) {
                     BlockPos volume = new BlockPos(column.getX(), y, column.getZ());
-                    if (StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, volume, road)) {
+                    if (isVerifiedPreparedStructureBlock(world, volume, road)) {
                         continue;
                     }
                     if (isProtectedPreparedBlock(world, volume, road)) {
@@ -313,7 +314,7 @@ public final class RoadConstructionSafety {
                 }
                 for (int y = original; y < target; y++) {
                     BlockPos volume = new BlockPos(column.getX(), y, column.getZ());
-                    if (StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, volume, road)) {
+                    if (isVerifiedPreparedStructureBlock(world, volume, road)) {
                         continue;
                     }
                     BlockState state = world.getBlockState(volume);
@@ -528,7 +529,7 @@ public final class RoadConstructionSafety {
     }
 
     public static boolean isProtectedConstructionColumn(WorldGenLevel world, BlockPos pos, RoadData road) {
-        return isProtectedColumn(world, pos) || StructureAvoidanceService.shouldAvoidConstruction(world, pos, road);
+        return isProtectedColumn(world, pos) || shouldAvoidConstruction(world, pos, road);
     }
 
     /** Exact bridge/template protection without the legacy vertical structure band. */
@@ -537,7 +538,7 @@ public final class RoadConstructionSafety {
         return HugeTreeReservation.isReserved(world.getLevel(), pos)
                 || isSanctuary(world, new ChunkPos(pos))
                 || isProtectedState(world.getBlockState(pos))
-                || StructureAvoidanceService.shouldAvoidPreparedExact(world, pos, road);
+                || shouldAvoidPreparedExact(world, pos, road);
     }
 
     /** Exact block-volume protection using only the planning snapshot. */
@@ -551,7 +552,7 @@ public final class RoadConstructionSafety {
         if (world == null || pos == null) return true;
         return HugeTreeReservation.isReserved(world.getLevel(), pos)
                 || isSanctuary(world, new ChunkPos(pos))
-                || StructureAvoidanceService.shouldAvoidPreparedExact(world, pos, road);
+                || shouldAvoidPreparedExact(world, pos, road);
     }
 
     /**
@@ -572,7 +573,7 @@ public final class RoadConstructionSafety {
         if (world == null || pos == null) return true;
         if (pos.getY() >= columnTerrainY && HugeTreeReservation.isReserved(world.getLevel(), pos)) return true;
         if (isSanctuary(world, new ChunkPos(pos))) return true;
-        if (StructureAvoidanceService.shouldAvoidPreparedExact(world, pos, road)) return true;
+        if (shouldAvoidPreparedExact(world, pos, road)) return true;
         return isProtectedState(state);
     }
 
@@ -612,7 +613,7 @@ public final class RoadConstructionSafety {
                 || isProtectedState(world.getBlockState(pos))) {
             return false;
         }
-        return StructureAvoidanceService.shouldAvoidPreparedExact(world, pos, road);
+        return shouldAvoidPreparedExact(world, pos, road);
     }
 
     /** Final generated water state; safe for bridge and retaining-wall construction checks. */
@@ -725,7 +726,7 @@ public final class RoadConstructionSafety {
         for (int y = fromY; y <= toY; y++) {
             BlockPos pos = new BlockPos(column.getX(), y, column.getZ());
             if (isProtectedState(world.getBlockState(pos))
-                    || StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, pos, road)) return;
+                    || isVerifiedPreparedStructureBlock(world, pos, road)) return;
         }
         for (int y = fromY; y <= toY; y++) world.setBlock(new BlockPos(column.getX(), y, column.getZ()), Blocks.AIR.defaultBlockState(), 3);
         AboveColumnClearer.clearUnsupportedSurfaceClutter(
@@ -742,7 +743,7 @@ public final class RoadConstructionSafety {
         for (int y = fromY; y < targetY; y++) {
             BlockPos pos = new BlockPos(column.getX(), y, column.getZ());
             if (isWaterState(world.getBlockState(pos))
-                    || StructureAvoidanceService.isVerifiedPreparedStructureBlock(world, pos, road)) return;
+                    || isVerifiedPreparedStructureBlock(world, pos, road)) return;
         }
         for (int y = fromY; y < targetY; y++) {
             BlockPos pos = new BlockPos(column.getX(), y, column.getZ());

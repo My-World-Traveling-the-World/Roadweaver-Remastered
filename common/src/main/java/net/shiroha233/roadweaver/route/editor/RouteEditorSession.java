@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.route.editor;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

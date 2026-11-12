@@ -1,6 +1,7 @@
 /* 文件职责：组织普通道路的精确量化寻路与最终路径段生成。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
@@ -1094,9 +1095,9 @@ public final class RoadPathCalculator {
                 finalPath, width, level, cache, terrain, accurate, connection);
         DetailedRoadGenerationStats.recordSegmentBuild(System.nanoTime() - segmentBuildStartedAt);
         if (connection != null && segments != null) {
-            segments = StructureAvoidanceService.stopAtEndpointBuilding(level, connection, segments);
+            segments = stopAtEndpointBuilding(level, connection, segments);
             if (segments == null) return PathCalculationResult.failure();
-            segments = StructureAvoidanceService.stopAtVillageBuilding(level, connection, segments);
+            segments = stopAtVillageBuilding(level, connection, segments);
             if (segments == null) return PathCalculationResult.failure();
         }
         InitialGenerationProgressTracker.advanceCurrentRoadTask(760, "road_construction_height");
@@ -1142,9 +1143,9 @@ public final class RoadPathCalculator {
                         repairedConstruction, width, level, cache, null, accurate, connection);
                 DetailedRoadGenerationStats.recordSegmentBuild(System.nanoTime() - segmentBuildStartedAt);
                 if (connection != null && segments != null) {
-                    segments = StructureAvoidanceService.stopAtEndpointBuilding(level, connection, segments);
+                    segments = stopAtEndpointBuilding(level, connection, segments);
                     if (segments == null) return PathCalculationResult.failure();
-                    segments = StructureAvoidanceService.stopAtVillageBuilding(level, connection, segments);
+                    segments = stopAtVillageBuilding(level, connection, segments);
                     if (segments == null) return PathCalculationResult.failure();
                 }
             }

@@ -1,6 +1,7 @@
 /* 文件职责：维护按世界隔离的地形采样会话注册表。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;

@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

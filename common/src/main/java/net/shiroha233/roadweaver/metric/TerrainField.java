@@ -1,6 +1,7 @@
 /* 文件职责：度量层对「地形」的唯一依赖 —— 高度与坡度；不含任何采样实现。 */
 package net.shiroha233.roadweaver.metric;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 /**
  * 地形场（度量层的输入端口）。
  *

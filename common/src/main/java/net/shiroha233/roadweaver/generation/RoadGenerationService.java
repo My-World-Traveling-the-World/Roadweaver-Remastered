@@ -1,6 +1,7 @@
 /* 文件职责：调度道路生成任务并维护规划路径缓存生命周期。 */
 package net.shiroha233.roadweaver.generation;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -140,7 +141,7 @@ public final class RoadGenerationService {
         runtimePausedForDimension = false;
         PlannedPathCache.clearAll();
         CoarseTerrainTileCache.clearAll();
-        StructureAvoidanceService.clearAll();
+        clearAll();
         RoadPlanningReadinessIndex.clearRuntime();
         ConnectionDeletionService.clearRuntime();
         RoadPathCalculator.clearRuntimeHints();
@@ -187,7 +188,7 @@ public final class RoadGenerationService {
         RoadPlanningService.resetAll();
         PlannedPathCache.clearAll();
         CoarseTerrainTileCache.clearAll();
-        StructureAvoidanceService.clearAll();
+        clearAll();
         RoadPlanningReadinessIndex.clearRuntime();
         ConnectionDeletionService.clearRuntime();
         RoadPathCalculator.clearRuntimeHints();
@@ -506,7 +507,7 @@ public final class RoadGenerationService {
                     return new GenerationAttempt(endpointReuse, reused);
                 }
                 PlannedPathCache.discard(level, endpointReuse);
-                StructureAvoidanceService.discardPlanningSnapshot(level, endpointReuse);
+                discardPlanningSnapshot(level, endpointReuse);
                 LOGGER.warn("RoadWeaver existing-road endpoint reuse failed; retaining original connection: "
                                 + "{} -> {}",
                         connection.from(), connection.to());
@@ -540,7 +541,7 @@ public final class RoadGenerationService {
                 return new GenerationAttempt(connection, primary);
             }
             PlannedPathCache.discard(level, connection);
-            StructureAvoidanceService.discardPlanningSnapshot(level, connection);
+            discardPlanningSnapshot(level, connection);
 
             LOGGER.warn("RoadWeaver original connection failed at configured precision step={} before topology fallback: {} -> {}",
                     configuredStep, connection.from(), connection.to());
@@ -566,7 +567,7 @@ public final class RoadGenerationService {
                         attempt + 1, candidates.size(), connection.from(), connection.to(),
                         replacement.from(), replacement.to());
                 PlannedPathCache.discard(level, replacement);
-                StructureAvoidanceService.discardPlanningSnapshot(level, replacement);
+                discardPlanningSnapshot(level, replacement);
                 GenerationOutcome outcome = generateTaskInternal(
                         level, replacement, persistImmediately, configuredStep);
                 if (outcome.success()) {

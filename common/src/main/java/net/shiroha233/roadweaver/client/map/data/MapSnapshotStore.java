@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.client.map.data;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.client.map.MapLoadPhase;
 import net.shiroha233.roadweaver.client.map.MapViewportController;

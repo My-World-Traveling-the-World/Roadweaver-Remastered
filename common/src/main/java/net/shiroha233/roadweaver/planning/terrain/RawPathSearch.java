@@ -1,6 +1,7 @@
 /* 文件职责：统一使用量化地形场执行道路原始路径搜索。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
@@ -272,7 +273,7 @@ final class RawPathSearch {
                     - terrain.height(previous.getX(), previous.getZ()));
             maxGrade = Math.max(maxGrade, rise / horizontal);
             if (PathfindingHelper.edgeIntersectsPlanningObstacle(
-                    previous, current, StructureAvoidanceService.planningRoadRadius(), step)) {
+                    previous, current, planningRoadRadius(), step)) {
                 conflicts++;
             }
         }
@@ -295,7 +296,7 @@ final class RawPathSearch {
                                                               PathTerrainField terrain) {
         PathResult hard;
         try (StructureAvoidanceService.BuildingObstacleScope ignored =
-                     StructureAvoidanceService.withBuildingObstacleMode(
+                     withBuildingObstacleMode(
                              StructureAvoidanceService.BuildingObstacleMode.HARD_BUILDINGS_AND_CLUSTERS)) {
             hard = pathfinder.findRawPath(start, end, level, config.aStarMaxSteps(), cache, terrain, config);
         }
@@ -358,7 +359,7 @@ final class RawPathSearch {
                                                        PathTerrainField terrain,
                                                        int step) {
         if (path == null || path.size() < 2) return false;
-        int radius = StructureAvoidanceService.planningRoadRadius();
+        int radius = planningRoadRadius();
         for (int i = 1; i < path.size(); i++) {
             BlockPos previous = path.get(i - 1);
             BlockPos current = path.get(i);

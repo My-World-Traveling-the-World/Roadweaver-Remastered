@@ -1,6 +1,7 @@
 /* 文件职责：保护缺口与过村判定 —— 判断「这里的碰撞是不是端点豁免造成的」。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSets;

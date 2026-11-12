@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Locale;

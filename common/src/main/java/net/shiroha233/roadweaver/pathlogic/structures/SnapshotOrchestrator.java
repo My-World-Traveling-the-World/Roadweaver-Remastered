@@ -71,7 +71,6 @@ import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluat
 
 // 仍留在其它同包类里的常量与工具（包内可见），静态导入后方法体不用改 —— 纯搬迁。
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.*;
-import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 
 /**
  * 规划快照编排器。

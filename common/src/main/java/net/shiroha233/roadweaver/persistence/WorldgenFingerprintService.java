@@ -1,6 +1,7 @@
 /* 文件职责：计算可复用的世界生成持久化指纹。 */
 package net.shiroha233.roadweaver.persistence;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import java.io.ByteArrayOutputStream;
