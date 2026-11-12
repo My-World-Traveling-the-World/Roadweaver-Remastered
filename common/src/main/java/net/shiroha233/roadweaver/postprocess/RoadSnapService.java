@@ -40,58 +40,58 @@ public final class RoadSnapService {
     private RoadSnapService() {
     }
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    private static final int SNAP_THRESHOLD = RoadConstants.ROAD_SNAP_THRESHOLD;
-    private static final double MAX_SNAP_CONSTRUCTION_OVERHEAD =
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final int SNAP_THRESHOLD = RoadConstants.ROAD_SNAP_THRESHOLD;
+    static final double MAX_SNAP_CONSTRUCTION_OVERHEAD =
             Math.ceil(RoadConstants.ROAD_SNAP_THRESHOLD * Math.sqrt(2.0D));
-    private static final int SPLIT_THRESHOLD = RoadConstants.ROAD_SNAP_SPLIT_THRESHOLD;
-    private static final int MIN_RUN = RoadConstants.ROAD_SNAP_MIN_RUN_LENGTH;
-    private static final int GRID_SHIFT = RoadConstants.ROAD_SNAP_GRID_SHIFT;
-    private static final int GRID_CELL_SIZE = 1 << GRID_SHIFT;
-    private static final int GRID_SEARCH_RADIUS = Math.max(1,
+    static final int SPLIT_THRESHOLD = RoadConstants.ROAD_SNAP_SPLIT_THRESHOLD;
+    static final int MIN_RUN = RoadConstants.ROAD_SNAP_MIN_RUN_LENGTH;
+    static final int GRID_SHIFT = RoadConstants.ROAD_SNAP_GRID_SHIFT;
+    static final int GRID_CELL_SIZE = 1 << GRID_SHIFT;
+    static final int GRID_SEARCH_RADIUS = Math.max(1,
             (SNAP_THRESHOLD + GRID_CELL_SIZE - 1) / GRID_CELL_SIZE);
-    private static final int ENDPOINT_RUN_MAX_OFFSET = 12;
-    private static final int MAX_TARGET_INDEX_STEP = 4;
-    private static final int MAX_REPEATED_TARGETS = 2;
-    private static final int JUNCTION_ANCHOR_SEGMENTS = 10;
-    private static final int MAX_TUNNEL_JUNCTION_ANCHOR_SEGMENTS = 64;
+    static final int ENDPOINT_RUN_MAX_OFFSET = 12;
+    static final int MAX_TARGET_INDEX_STEP = 4;
+    static final int MAX_REPEATED_TARGETS = 2;
+    static final int JUNCTION_ANCHOR_SEGMENTS = 10;
+    static final int MAX_TUNNEL_JUNCTION_ANCHOR_SEGMENTS = 64;
     /** Maximum vertical offset accepted before a tunnel junction is graded. */
-    private static final int MAX_TUNNEL_JUNCTION_GRADE_DELTA = 8;
+    static final int MAX_TUNNEL_JUNCTION_GRADE_DELTA = 8;
     /** A close parallel approach may receive a real short connector before reuse. */
-    private static final int MAX_APPROACH_CONNECTOR_DISTANCE = SNAP_THRESHOLD;
+    static final int MAX_APPROACH_CONNECTOR_DISTANCE = SNAP_THRESHOLD;
     /** A long, nearly parallel run is a shared corridor, not two roads. */
-    private static final int OVERLAP_MERGE_MIN_RUN = 6;
+    static final int OVERLAP_MERGE_MIN_RUN = 6;
     /** A building gap or grade transition can split one physical corridor into
      * several valid reuse windows. Keep the pass bounded while allowing the
      * later road to absorb each independent window.
      * T-17 预算:这是每对道路共享走廊扩展的窗口上限;配合
      * {@link #CONSTRUCTION_LENGTH_MIN_IMPROVEMENT} 的"施工长度必须严格缩短"
      * 门控,正常长路合并通常 1-2 个窗口即收敛,8 只是病态重复的硬上限。 */
-    private static final int MAX_REUSE_WINDOWS_PER_PAIR = 8;
+    static final int MAX_REUSE_WINDOWS_PER_PAIR = 8;
     /** T-17:续窗必须带来的最小施工长度缩短(块)。低于该值的改进视为
      * 去重/取整噪声,立即停止扩展——这是"constructionLength 几乎不缩短仍
      * 完整重算"的直接止血点。取 1.0 块:一个真实复用窗口吸收 ≥
      * PHYSICAL_REUSE_MIN_RUN(4)个站点,正常合并的缩短量远大于该阈值。 */
-    private static final double CONSTRUCTION_LENGTH_MIN_IMPROVEMENT = 1.0D;
+    static final double CONSTRUCTION_LENGTH_MIN_IMPROVEMENT = 1.0D;
     // A merged middle corridor may start with a short real connector.  Keep
     // its lateral reach equal to the existing safe snap reach rather than
     // rejecting visibly parallel roads merely because their centres differ by
     // more than one road width.
-    private static final int OVERLAP_MERGE_MAX_DISTANCE = SNAP_THRESHOLD;
-    private static final double OVERLAP_MERGE_MIN_DIRECTION_DOT = 0.75D;
+    static final int OVERLAP_MERGE_MAX_DISTANCE = SNAP_THRESHOLD;
+    static final double OVERLAP_MERGE_MIN_DIRECTION_DOT = 0.75D;
     /**
      * 0.8.369 (T2b): a long shared corridor bends, so its heading is sampled at
      * several stations and accepted on a majority vote. One midpoint sample made
      * a 216-station overlap fail the parallel test and kept the braid.
      */
-    private static final int PARALLEL_CORRIDOR_HEADING_SAMPLES = 5;
+    static final int PARALLEL_CORRIDOR_HEADING_SAMPLES = 5;
     /**
      * 0.8.369 (T2b): fraction of stations allowed to fall outside the merge
      * distance before the whole run is rejected. A single outlier used to drop
      * an entire overlap; a genuine crossing still fails, because there almost
      * every station is out of range.
      */
-    private static final double PARALLEL_CORRIDOR_OUTLIER_FRACTION = 0.1D;
+    static final double PARALLEL_CORRIDOR_OUTLIER_FRACTION = 0.1D;
     /**
      * 0.8.369 (T2b): how close the two runs' lengths must be before their
      * stations are put in correspondence. Superseded in 0.8.370 by pairing
@@ -99,16 +99,16 @@ public final class RoadSnapService {
      * length-ratio gate because every station is matched to the primary station
      * it actually sits closest to.
      */
-    private static final double PARALLEL_CORRIDOR_MIN_LENGTH_RATIO = 0.6D;
-    private static final long SNAP_DIST2 = (long) SNAP_THRESHOLD * SNAP_THRESHOLD;
-    private static final long SPLIT_DIST2 = (long) SPLIT_THRESHOLD * SPLIT_THRESHOLD;
+    static final double PARALLEL_CORRIDOR_MIN_LENGTH_RATIO = 0.6D;
+    static final long SNAP_DIST2 = (long) SNAP_THRESHOLD * SNAP_THRESHOLD;
+    static final long SPLIT_DIST2 = (long) SPLIT_THRESHOLD * SPLIT_THRESHOLD;
     /** Generous reach so a pair that could still connect is never skipped. The
      *  real snap reach is ~24 blocks (grid radius + road width); we reject only
      *  roads whose bounding boxes are clearly farther apart than that. */
-    private static final int SPATIAL_REJECT_MARGIN = SNAP_THRESHOLD * 4;
-    private static final Object RECONCILIATION_LOCK = new Object();
+    static final int SPATIAL_REJECT_MARGIN = SNAP_THRESHOLD * 4;
+    static final Object RECONCILIATION_LOCK = new Object();
     /** Only reconciliation passes slower than this are logged at INFO. */
-    private static final long SNAP_TIMING_LOG_MS = 250L;
+    static final long SNAP_TIMING_LOG_MS = 250L;
 
     public static void snapAllRoads(ServerLevel level, int minX, int minZ, int maxX, int maxZ) {
         if (level == null) return;
@@ -181,7 +181,7 @@ public final class RoadSnapService {
                 }, ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS));
     }
 
-    private static void snapRoadList(ServerLevel level, List<RoadData> roads) {
+    static void snapRoadList(ServerLevel level, List<RoadData> roads) {
         long snapStartedAt = System.nanoTime();
         long[] fingerprints = new long[roads.size()];
         for (int i = 0; i < roads.size(); i++) {
@@ -317,7 +317,7 @@ public final class RoadSnapService {
 
     /** Runtime reconciliation runs once per completed road, so only a slow pass
      *  is worth an INFO line; the rest stays at debug level. */
-    private static void logSnapTiming(int roads, int replaced, long elapsedMs) {
+    static void logSnapTiming(int roads, int replaced, long elapsedMs) {
         if (elapsedMs < SNAP_TIMING_LOG_MS) {
             LOGGER.debug("RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
                     roads, replaced, elapsedMs);
@@ -363,11 +363,11 @@ public final class RoadSnapService {
     }
 
     /** 0.8.324：交汇锚点之后仍贴在 primary 走廊上的站点，允许的最大切比雪夫距离。 */
-    private static final int REUSE_EXTEND_TOLERANCE = 2;
+    static final int REUSE_EXTEND_TOLERANCE = 2;
     /** 0.8.324：至少这么多连续站才算"一整段重复走廊"，避免误吞单站擦边。 */
-    private static final int REUSE_EXTEND_MIN_RUN = 3;
+    static final int REUSE_EXTEND_MIN_RUN = 3;
     /** 0.8.324：只复用同一路面高度（targetY 差）的走廊，立交/隧道（高差大）自动排除。 */
-    private static final int REUSE_EXTEND_MAX_HEIGHT_DELTA = 1;
+    static final int REUSE_EXTEND_MAX_HEIGHT_DELTA = 1;
 
     /**
      * 0.8.324：交汇锚点<b>之后</b> secondary 仍有一整段贴在 primary 走廊上的复用扩展。
@@ -488,7 +488,7 @@ public final class RoadSnapService {
     }
 
     /** 该站是否落在 primary 走廊内（切比雪夫 ≤ 容差）且路面高度一致。 */
-    private static boolean matchesPrimaryCorridor(Map<Long, Integer> primaryHeights,
+    static boolean matchesPrimaryCorridor(Map<Long, Integer> primaryHeights,
                                                   BlockPos pos, int targetY) {
         for (int dx = -REUSE_EXTEND_TOLERANCE; dx <= REUSE_EXTEND_TOLERANCE; dx++) {
             for (int dz = -REUSE_EXTEND_TOLERANCE; dz <= REUSE_EXTEND_TOLERANCE; dz++) {
@@ -600,7 +600,7 @@ public final class RoadSnapService {
     /** Performs one safe reuse replacement. The public wrapper may invoke it
      * again to absorb a later corridor window after a protected building gap
      * or a locally smoothed height transition. */
-    private static RoadData connectSecondaryToPrimaryOnce(RoadData primary, RoadData secondary) {
+    static RoadData connectSecondaryToPrimaryOnce(RoadData primary, RoadData secondary) {
         boolean[] primarySpecial = junctionBlockedSpanMask(primary);
         // Special spans may be part of the shared approach from the common
         // owner. They are valid continuity evidence even though the actual
@@ -624,7 +624,7 @@ public final class RoadSnapService {
     /** Keeps building-gap metadata when a detoured secondary route is replaced
      * by the donor corridor. Physical bridge and crossing spans are excluded;
      * they must be regenerated only from the final geometry. */
-    private static RoadData carryCompatibleNonPhysicalSpans(RoadData source, RoadData target) {
+    static RoadData carryCompatibleNonPhysicalSpans(RoadData source, RoadData target) {
         if (source == null || target == null || source.spans() == null || source.spans().isEmpty()) return target;
         List<RoadSegmentPlacement> retained = target.roadSegmentList();
         List<RoadSpan> spans = new ArrayList<>(target.spans() == null ? List.of() : target.spans());
@@ -645,7 +645,7 @@ public final class RoadSnapService {
                 target.roadSegmentList(), spans, target.targetY(), target.ownerA2dKey(), target.ownerB2dKey());
     }
 
-    private static BlockPos nearestWithin(BlockPos target, List<RoadSegmentPlacement> retained, int maxDistance) {
+    static BlockPos nearestWithin(BlockPos target, List<RoadSegmentPlacement> retained, int maxDistance) {
         BlockPos best = null;
         long bestDist = (long) maxDistance * maxDistance;
         for (RoadSegmentPlacement segment : retained) {
@@ -776,7 +776,7 @@ public final class RoadSnapService {
         return lowered;
     }
 
-    private static Set<Long> junctionEndpointKeys(RoadData road) {
+    static Set<Long> junctionEndpointKeys(RoadData road) {
         Set<Long> result = new HashSet<>();
         if (road == null || road.spans() == null) return result;
         for (RoadSpan span : road.spans()) {
@@ -788,7 +788,7 @@ public final class RoadSnapService {
         return result;
     }
 
-    private static void smoothJunctionBoundary(List<Integer> targetY,
+    static void smoothJunctionBoundary(List<Integer> targetY,
                                                int boundary,
                                                int direction,
                                                int transitionSegments) {
@@ -810,14 +810,14 @@ public final class RoadSnapService {
         }
     }
 
-    private static List<Integer> repairLocalHeightJoinsCopy(List<Integer> values) {
+    static List<Integer> repairLocalHeightJoinsCopy(List<Integer> values) {
         if (values == null || values.size() < 2) return values == null ? List.of() : List.copyOf(values);
         List<Integer> result = new ArrayList<>(values);
         repairLocalHeightJoins(result);
         return List.copyOf(result);
     }
 
-    private static void smoothTunnelBoundary(List<Integer> targetY, RoadData road,
+    static void smoothTunnelBoundary(List<Integer> targetY, RoadData road,
                                              int boundary, int direction,
                                              int transitionSegments) {
         if (boundary < 0 || boundary >= targetY.size()) return;
@@ -835,7 +835,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static boolean preferReuseCandidate(RoadData candidate, RoadData existing) {
+    static boolean preferReuseCandidate(RoadData candidate, RoadData existing) {
         if (candidate == null) return false;
         if (existing == null) return true;
         int candidateReuse = networkReuseStationCount(candidate);
@@ -844,7 +844,7 @@ public final class RoadSnapService {
         return ordinaryConstructionLength(candidate) < ordinaryConstructionLength(existing);
     }
 
-    private static List<Integer> repairTunnelGradeJoins(RoadData road, List<Integer> targetY) {
+    static List<Integer> repairTunnelGradeJoins(RoadData road, List<Integer> targetY) {
         List<Integer> repaired = new ArrayList<>(targetY);
         for (int i = 1; i < repaired.size(); i++) {
             if (!isIndexInSpan(road, i - 1, SpanType.TUNNEL)
@@ -960,14 +960,14 @@ public final class RoadSnapService {
                 road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    private static boolean isSecondaryConstructionSpan(RoadSpan span) {
+    static boolean isSecondaryConstructionSpan(RoadSpan span) {
         if (span == null || span.type() == null) return false;
         return span.type() == SpanType.BRIDGE
                 || span.type() == SpanType.TUNNEL
                 || span.type() == SpanType.ROAD_CROSSING;
     }
 
-    private static boolean intersectsReuse(RoadSpan span, Map<Long, Integer> indices, boolean[] reused) {
+    static boolean intersectsReuse(RoadSpan span, Map<Long, Integer> indices, boolean[] reused) {
         if (span == null || span.start() == null || span.end() == null) return false;
         Integer start = indices.get(xzKey(span.start()));
         Integer end = indices.get(xzKey(span.end()));
@@ -978,7 +978,7 @@ public final class RoadSnapService {
         return false;
     }
 
-    private static RoadData tryConnect(RoadData primary,
+    static RoadData tryConnect(RoadData primary,
                                        SegmentGrid primaryGrid,
                                        boolean[] primarySpecial,
                                        RoadData secondary) {
@@ -1057,7 +1057,7 @@ public final class RoadSnapService {
     }
 
     /** 0.8.319：头部裁剪的重合容差（格）。真机共享端点那对相差 1~2 格。 */
-    private static final int HEAD_TRIM_TOLERANCE = 2;
+    static final int HEAD_TRIM_TOLERANCE = 2;
 
     /**
      * 0.8.319：共享端点合并后，secondary 的<b>头部</b>仍可能有一整段贴在 primary
@@ -1147,7 +1147,7 @@ public final class RoadSnapService {
     }
 
     /** 头部重合判定：{@code (x,z)} 在 primary 任一站点 {@value #HEAD_TRIM_TOLERANCE} 格内。 */
-    private static boolean nearPrimaryStation(Set<Long> primaryStations, int x, int z) {
+    static boolean nearPrimaryStation(Set<Long> primaryStations, int x, int z) {
         for (int dx = -HEAD_TRIM_TOLERANCE; dx <= HEAD_TRIM_TOLERANCE; dx++) {
             for (int dz = -HEAD_TRIM_TOLERANCE; dz <= HEAD_TRIM_TOLERANCE; dz++) {
                 if (primaryStations.contains(xzKey(new BlockPos(x + dx, 0, z + dz)))) return true;
@@ -1157,7 +1157,7 @@ public final class RoadSnapService {
     }
 
     /** Modes whose junction is an endpoint attachment; reuse-corridor modes keep their tails. */
-    private static boolean isEndpointAttachmentMode(String mode) {
+    static boolean isEndpointAttachmentMode(String mode) {
         return "spatial-start".equals(mode) || "spatial-end".equals(mode)
                 || "shared-endpoint".equals(mode) || "endpoint-corridor".equals(mode);
     }
@@ -1255,7 +1255,7 @@ public final class RoadSnapService {
         return trimmed;
     }
 
-    private static void addConnectionOption(List<ConnectionOption> options,
+    static void addConnectionOption(List<ConnectionOption> options,
                                             String mode,
                                             RoadData candidate,
                                             RoadData secondary) {
@@ -1286,7 +1286,7 @@ public final class RoadSnapService {
      * |roadY delta| plus a short anchor window is what produces the visible
      * step at the intersection.
      */
-    private static void logJunctionConnection(RoadData primary, RoadData secondary,
+    static void logJunctionConnection(RoadData primary, RoadData secondary,
                                               JunctionCandidate junction,
                                               boolean sharedAtStart) {
         if (primary == null || secondary == null || junction == null) return;
@@ -1314,7 +1314,7 @@ public final class RoadSnapService {
                 priY, secY, Math.abs(priY - secY), sharedAtStart ? "start" : "end");
     }
 
-    private static double ordinaryConstructionLength(RoadData road) {
+    static double ordinaryConstructionLength(RoadData road) {
         if (road == null || road.roadSegmentList() == null) return Double.POSITIVE_INFINITY;
         boolean[] reused = spanMask(road, SpanType.NETWORK_REUSE);
         double length = 0.0D;
@@ -1336,7 +1336,7 @@ public final class RoadSnapService {
     }
 
     /** P0-post B2: delegates to the per-road cached mask; read-only. */
-    private static boolean[] spanMask(RoadData road, SpanType type) {
+    static boolean[] spanMask(RoadData road, SpanType type) {
         if (road == null || type == null) return new boolean[0];
         return roadIndex(road).spanMask(type);
     }
@@ -1348,7 +1348,7 @@ public final class RoadSnapService {
      * secondary corridor creates the wide two-material road this service is
      * intended to prevent.
      */
-    private static RoadData tryAbsorbEndpointCorridor(RoadData primary,
+    static RoadData tryAbsorbEndpointCorridor(RoadData primary,
                                                       RoadData secondary,
                                                       int[] targets,
                                                       List<int[]> runs) {
@@ -1437,7 +1437,7 @@ public final class RoadSnapService {
                 secondary.ownerA2dKey(), secondary.ownerB2dKey());
     }
 
-    private static boolean endpointCorridorBoundaryCompatible(RoadData primary,
+    static boolean endpointCorridorBoundaryCompatible(RoadData primary,
                                                                int primaryIndex,
                                                                boolean[] primaryBlocked,
                                                                RoadData secondary,
@@ -1466,7 +1466,7 @@ public final class RoadSnapService {
                 && !isSpecial(secondaryBlocked, secondaryIndex);
     }
 
-    private static boolean monotonicTargetRun(int[] targets, int from, int to, int step) {
+    static boolean monotonicTargetRun(int[] targets, int from, int to, int step) {
         if (step == 0) return false;
         int previous = targets[from];
         if (previous < 0) return false;
@@ -1478,7 +1478,7 @@ public final class RoadSnapService {
         return true;
     }
 
-    private static boolean corridorCoverageCompatible(RoadData primary,
+    static boolean corridorCoverageCompatible(RoadData primary,
                                                       int primaryFrom,
                                                       int primaryTo,
                                                       RoadData secondary) {
@@ -1498,12 +1498,12 @@ public final class RoadSnapService {
         return total > 0 && near * 10 >= total * 9;
     }
 
-    private static boolean sameCenter(BlockPos first, BlockPos second) {
+    static boolean sameCenter(BlockPos first, BlockPos second) {
         return first != null && second != null
                 && first.getX() == second.getX() && first.getZ() == second.getZ();
     }
 
-    private static List<RoadSpan> filterSecondarySpansOutsideRange(RoadData secondary,
+    static List<RoadSpan> filterSecondarySpansOutsideRange(RoadData secondary,
                                                                     int replacedFrom,
                                                                     int replacedTo,
                                                                     List<RoadSegmentPlacement> retained) {
@@ -1533,7 +1533,7 @@ public final class RoadSnapService {
         return spans;
     }
 
-    private static RoadData tryReuseBetweenTwoApproaches(RoadData primary,
+    static RoadData tryReuseBetweenTwoApproaches(RoadData primary,
                                                           RoadData secondary,
                                                           int[] targets,
                                                           List<int[]> runs) {
@@ -1601,7 +1601,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static ApproachBoundary findApproachBoundary(RoadData primary,
+    static ApproachBoundary findApproachBoundary(RoadData primary,
                                                           boolean[] primaryBlocked,
                                                           RoadData secondary,
                                                           int[] targets,
@@ -1619,7 +1619,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static void addJunctionMarker(List<RoadSpan> spans,
+    static void addJunctionMarker(List<RoadSpan> spans,
                                           List<RoadSegmentPlacement> segments,
                                           int from,
                                           int to,
@@ -1639,7 +1639,7 @@ public final class RoadSnapService {
      * planning-stage form of the blue-point case: the later route enters the
      * owner road, follows its exact segments, then leaves at the second point.
      */
-    private static RoadData tryReuseBetweenTwoJunctions(RoadData primary,
+    static RoadData tryReuseBetweenTwoJunctions(RoadData primary,
                                                         RoadData secondary,
                                                         int[] targets,
                                                         List<int[]> runs) {
@@ -1699,7 +1699,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static boolean stableContactRun(int[] targets, int[] run, int step) {
+    static boolean stableContactRun(int[] targets, int[] run, int step) {
         if (run == null || run.length < 2 || run[1] - run[0] + 1 < OVERLAP_MERGE_MIN_RUN) return false;
         if (step == 0) return false;
         int previous = -1;
@@ -1712,7 +1712,7 @@ public final class RoadSnapService {
         return true;
     }
 
-    private static boolean boundaryOnlySpecial(boolean[] blocked, int from, int to) {
+    static boolean boundaryOnlySpecial(boolean[] blocked, int from, int to) {
         for (int i = from + 1; i < to; i++) if (blocked[i]) return false;
         return true;
     }
@@ -1732,7 +1732,7 @@ public final class RoadSnapService {
      * final guard, so this change can only accept merges the old code rejected
      * and never rejects one it accepted.</p>
      */
-    private static RoadData tryMergeOverlappingRun(RoadData primary,
+    static RoadData tryMergeOverlappingRun(RoadData primary,
                                                    RoadData secondary,
                                                    int[] targets,
                                                    List<int[]> runs) {
@@ -1875,7 +1875,7 @@ public final class RoadSnapService {
      * be. One real run with these lines identifies it. Nothing here changes any
      * decision.
      */
-    private static void logOverlapReject(String reason,
+    static void logOverlapReject(String reason,
                                          RoadData primary,
                                          RoadData secondary,
                                          int from,
@@ -1891,7 +1891,7 @@ public final class RoadSnapService {
                 from, to, primaryFrom, primaryTo);
     }
 
-    private static boolean junctionNear(RoadData primary, RoadData secondary, int[] targets, int secondaryIndex) {
+    static boolean junctionNear(RoadData primary, RoadData secondary, int[] targets, int secondaryIndex) {
         if (secondaryIndex < 0 || secondaryIndex >= targets.length) return false;
         int primaryIndex = targets[secondaryIndex];
         if (primaryIndex < 0 || primaryIndex >= primary.roadSegmentList().size()) return false;
@@ -1937,7 +1937,7 @@ public final class RoadSnapService {
      *       agreed — a spatial correspondence error, not a geometry mismatch.</li>
      * </ol>
      */
-    private static boolean parallelCorridor(RoadData secondaryRoad, int from, int to,
+    static boolean parallelCorridor(RoadData secondaryRoad, int from, int to,
                                             RoadData primaryRoad, int pFrom, int pTo,
                                             int[] targets) {
         List<RoadSegmentPlacement> secondary = secondaryRoad.roadSegmentList();
@@ -2014,7 +2014,7 @@ public final class RoadSnapService {
      * 优先用 markSnapTargets 的真实最近邻结果；缺失时退化为所在 run 内的等比例位置，
      * 保证边界站仍有定义（run 的两端来自 corridorBoundaryNear，本身就是合法的映射）。
      */
-    private static int mappedTarget(int[] targets, int secondaryIndex, int pFrom, int pTo) {
+    static int mappedTarget(int[] targets, int secondaryIndex, int pFrom, int pTo) {
         if (targets != null && secondaryIndex >= 0 && secondaryIndex < targets.length) {
             int mapped = targets[secondaryIndex];
             if (mapped >= 0) return mapped;
@@ -2032,7 +2032,7 @@ public final class RoadSnapService {
      * 区间（近平行危险区）时，该 run 是麻花。点积 < minDot（正交）或 > nearParallelDot
      * （明确平行、parallelCorridor 会合并）都不算麻花。</p>
      */
-    private static boolean detectsBraid(RoadData primary, RoadData secondary,
+    static boolean detectsBraid(RoadData primary, RoadData secondary,
                                         int[] targets, List<int[]> runs) {
         if (primary == null || secondary == null || targets == null || runs == null || runs.isEmpty()) {
             return false;
@@ -2071,7 +2071,7 @@ public final class RoadSnapService {
         return false;
     }
 
-    private static boolean rangeHasSpecial(boolean[] mask, int from, int to) {
+    static boolean rangeHasSpecial(boolean[] mask, int from, int to) {
         if (mask == null) return false;
         for (int i = Math.max(0, from); i <= Math.min(mask.length - 1, to); i++) if (mask[i]) return true;
         return false;
@@ -2093,7 +2093,7 @@ public final class RoadSnapService {
      * so the result is the <em>longest</em> clean stretch, not merely the
      * first one.</p>
      */
-    private static int[] longestUnblockedSubRun(int from, int to, int[] targets,
+    static int[] longestUnblockedSubRun(int from, int to, int[] targets,
                                                 boolean[] priBlocked, boolean[] secBlocked) {
         int bestStart = -1;
         int bestEnd = -1;
@@ -2136,7 +2136,7 @@ public final class RoadSnapService {
         return new int[]{bestStart, bestEnd};
     }
 
-    private static void appendRange(RoadData road, int from, int to,
+    static void appendRange(RoadData road, int from, int to,
                                     List<RoadSegmentPlacement> segments, List<Integer> targetY) {
         int start = Math.max(0, from);
         int end = Math.min(road.roadSegmentList().size(), to);
@@ -2146,7 +2146,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static void appendDirected(RoadData road, int from, int to,
+    static void appendDirected(RoadData road, int from, int to,
                                        List<RoadSegmentPlacement> segments, List<Integer> targetY) {
         int step = from <= to ? 1 : -1;
         for (int i = from; ; i += step) {
@@ -2156,7 +2156,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static void removeConsecutiveDuplicateCenters(List<RoadSegmentPlacement> segments,
+    static void removeConsecutiveDuplicateCenters(List<RoadSegmentPlacement> segments,
                                                           List<Integer> targetY) {
         for (int i = segments.size() - 1; i > 0; i--) {
             BlockPos previous = segments.get(i - 1).middlePos();
@@ -2169,7 +2169,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static boolean validMergedSequence(List<RoadSegmentPlacement> segments, List<Integer> targetY) {
+    static boolean validMergedSequence(List<RoadSegmentPlacement> segments, List<Integer> targetY) {
         if (segments.size() < MIN_RUN || segments.size() != targetY.size()) return false;
         repairLocalHeightJoins(targetY);
         int heightStepExceptions = 0;
@@ -2184,7 +2184,7 @@ public final class RoadSnapService {
         return true;
     }
 
-    private static boolean corridorBoundaryNear(RoadData primary, RoadData secondary,
+    static boolean corridorBoundaryNear(RoadData primary, RoadData secondary,
                                                 int[] targets, int secondaryIndex) {
         if (secondaryIndex < 0 || secondaryIndex >= targets.length) return false;
         int primaryIndex = targets[secondaryIndex];
@@ -2203,7 +2203,7 @@ public final class RoadSnapService {
      * join before rejecting the whole candidate; larger terrain jumps remain
      * the responsibility of the grade-repair planner.
      */
-    private static void repairLocalHeightJoins(List<Integer> targetY) {
+    static void repairLocalHeightJoins(List<Integer> targetY) {
         if (targetY == null || targetY.size() < 2) return;
         for (int i = 1; i < targetY.size(); i++) {
             Integer previous = targetY.get(i - 1);
@@ -2228,7 +2228,7 @@ public final class RoadSnapService {
      * whether anything changed; the caller re-validates and discards the merge
      * when the result still fails.</p>
      */
-    private static boolean lowerToward(List<Integer> targetY, int anchorIndex, int step, int seatY) {
+    static boolean lowerToward(List<Integer> targetY, int anchorIndex, int step, int seatY) {
         if (targetY == null || step == 0) return false;
         boolean changed = false;
         for (int distance = 1, index = anchorIndex + step;
@@ -2245,14 +2245,14 @@ public final class RoadSnapService {
         return changed;
     }
 
-    private static void addJunctionAnchor(List<RoadSpan> spans, List<RoadSegmentPlacement> segments, int a, int b) {
+    static void addJunctionAnchor(List<RoadSpan> spans, List<RoadSegmentPlacement> segments, int a, int b) {
         if (a < 0 || b < 0 || a >= segments.size() || b >= segments.size()) return;
         BlockPos first = segments.get(a).middlePos();
         BlockPos second = segments.get(b).middlePos();
         if (first != null && second != null) spans.add(new RoadSpan(first, second, SpanType.JUNCTION_ANCHOR));
     }
 
-    private static void addNetworkReuse(List<RoadSpan> spans, List<RoadSegmentPlacement> segments, int a, int b) {
+    static void addNetworkReuse(List<RoadSpan> spans, List<RoadSegmentPlacement> segments, int a, int b) {
         if (a < 0 || b < 0 || a >= segments.size() || b >= segments.size() || a == b) return;
         BlockPos first = segments.get(a).middlePos();
         BlockPos second = segments.get(b).middlePos();
@@ -2267,7 +2267,7 @@ public final class RoadSnapService {
      * validator accepts the merged road.  NETWORK_REUSE is also not a hard
      * barrier; it is evidence that this corridor already has a reusable owner.
      */
-    private static boolean[] mergeBlockedSpanMask(RoadData road) {
+    static boolean[] mergeBlockedSpanMask(RoadData road) {
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
         boolean[] blocked = new boolean[segments.size()];
         if (road.spans() == null || road.spans().isEmpty()) return blocked;
@@ -2287,7 +2287,7 @@ public final class RoadSnapService {
         return blocked;
     }
 
-    private static RoadData tryConnectEndpoint(RoadData primary,
+    static RoadData tryConnectEndpoint(RoadData primary,
                                                boolean[] primarySpecial,
                                                RoadData secondary,
                                                boolean[] secondarySpecial,
@@ -2473,7 +2473,7 @@ public final class RoadSnapService {
         return connected;
     }
 
-    private static JunctionCandidate findSharedEndpointApproach(RoadData primary,
+    static JunctionCandidate findSharedEndpointApproach(RoadData primary,
                                                                  boolean[] primarySpecial,
                                                                  RoadData secondary,
                                                                  boolean[] secondarySpecial,
@@ -2525,7 +2525,7 @@ public final class RoadSnapService {
      * same endpoint/special-span guards but permits a bounded tunnel portal
      * transition.
      */
-    private static JunctionCandidate findSurfaceTunnelEndpointApproach(
+    static JunctionCandidate findSurfaceTunnelEndpointApproach(
             RoadData primary,
             boolean[] primarySpecial,
             RoadData secondary,
@@ -2574,7 +2574,7 @@ public final class RoadSnapService {
      * has a large Y mismatch. It is deliberately limited to the endpoint
      * approach and never admits bridge/crossing/protected stations.
      */
-    private static JunctionCandidate findHeightTransitionEndpointApproach(
+    static JunctionCandidate findHeightTransitionEndpointApproach(
             RoadData primary,
             boolean[] primarySpecial,
             RoadData secondary,
@@ -2617,7 +2617,7 @@ public final class RoadSnapService {
         return best;
     }
 
-    private static boolean safeBoundaryIgnoringGrade(RoadData primary, int primaryIndex,
+    static boolean safeBoundaryIgnoringGrade(RoadData primary, int primaryIndex,
                                                       RoadData secondary, int secondaryIndex) {
         RoadSegmentPlacement a = primary.roadSegmentList().get(primaryIndex);
         RoadSegmentPlacement b = secondary.roadSegmentList().get(secondaryIndex);
@@ -2632,7 +2632,7 @@ public final class RoadSnapService {
         return distance <= MAX_APPROACH_CONNECTOR_DISTANCE;
     }
 
-    private static void alignSecondaryGradeToAnchor(List<Integer> targetY,
+    static void alignSecondaryGradeToAnchor(List<Integer> targetY,
                                                      int anchorFrom,
                                                      int anchorTo,
                                                      boolean sharedAtStart) {
@@ -2664,7 +2664,7 @@ public final class RoadSnapService {
      * stacked above one another. The transition is limited to the junction
      * window and changes by at most one block per station.
      */
-    private static void alignJunctionToLowerTunnelGrade(List<Integer> targetY,
+    static void alignJunctionToLowerTunnelGrade(List<Integer> targetY,
                                                          int anchorFrom,
                                                          int anchorTo,
                                                          boolean sharedAtStart,
@@ -2683,7 +2683,7 @@ public final class RoadSnapService {
         repairLocalHeightJoins(targetY);
     }
 
-    private static void smoothGradeSide(List<Integer> targetY, int start,
+    static void smoothGradeSide(List<Integer> targetY, int start,
                                         int direction, int lower, int limit) {
         int previous = start;
         for (int distance = 1, index = start + direction;
@@ -2698,7 +2698,7 @@ public final class RoadSnapService {
     }
 
 
-    private static Boolean targetIndicesIncrease(int[] targets, int[] run) {
+    static Boolean targetIndicesIncrease(int[] targets, int[] run) {
         if (targets == null || run == null || run.length < 2) return null;
         int previous = -1;
         for (int i = Math.max(0, run[0]); i <= Math.min(targets.length - 1, run[1]); i++) {
@@ -2710,7 +2710,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static JunctionCandidate findSafeJunction(RoadData primary,
+    static JunctionCandidate findSafeJunction(RoadData primary,
                                                        boolean[] primarySpecial,
                                                        RoadData secondary,
                                                        boolean[] secondarySpecial,
@@ -2738,7 +2738,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static int findSafePrimaryIndex(RoadData primary,
+    static int findSafePrimaryIndex(RoadData primary,
                                             boolean[] primarySpecial,
                                             RoadData secondary,
                                             int secondaryIndex,
@@ -2771,7 +2771,7 @@ public final class RoadSnapService {
         return bestIndex;
     }
 
-    private static boolean safeBoundary(RoadData primary,
+    static boolean safeBoundary(RoadData primary,
                                         int primaryIndex,
                                         RoadData secondary,
                                         int secondaryIndex) {
@@ -2802,7 +2802,7 @@ public final class RoadSnapService {
      * only after {@link #safeBoundary} has proven a close, grade-compatible
      * ordinary-road join; bridge and water spans were excluded before that.
      */
-    private static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
+    static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
                                                     List<Integer> targetY,
                                                     int width,
                                                     RoadSegmentPlacement destination,
@@ -2810,7 +2810,7 @@ public final class RoadSnapService {
         return appendApproachConnector(output, targetY, width, destination, destinationY, false);
     }
 
-    private static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
+    static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
                                                     List<Integer> targetY,
                                                     int width,
                                                     RoadSegmentPlacement destination,
@@ -2820,7 +2820,7 @@ public final class RoadSnapService {
                 tunnelGradeTransition, MAX_TUNNEL_JUNCTION_GRADE_DELTA);
     }
 
-    private static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
+    static boolean appendApproachConnector(List<RoadSegmentPlacement> output,
                                                     List<Integer> targetY,
                                                     int width,
                                                     RoadSegmentPlacement destination,
@@ -2864,7 +2864,7 @@ public final class RoadSnapService {
         return true;
     }
 
-    private static List<BlockPos> connectorFootprint(BlockPos center, int dx, int dz, int width) {
+    static List<BlockPos> connectorFootprint(BlockPos center, int dx, int dz, int width) {
         int laneWidth = Math.max(1, width);
         double length = Math.hypot(dx, dz);
         if (length < 1.0D) return List.of(new BlockPos(center.getX(), 0, center.getZ()));
@@ -2882,7 +2882,7 @@ public final class RoadSnapService {
         return List.copyOf(footprint);
     }
 
-    private static boolean footprintsConnect(RoadSegmentPlacement first, RoadSegmentPlacement second) {
+    static boolean footprintsConnect(RoadSegmentPlacement first, RoadSegmentPlacement second) {
         Set<Long> firstColumns = footprintColumns(first);
         Set<Long> secondColumns = footprintColumns(second);
         if (firstColumns.isEmpty() || secondColumns.isEmpty()) return false;
@@ -2908,7 +2908,7 @@ public final class RoadSnapService {
         return false;
     }
 
-    private static Set<Long> footprintColumns(RoadSegmentPlacement segment) {
+    static Set<Long> footprintColumns(RoadSegmentPlacement segment) {
         Set<Long> columns = new LinkedHashSet<>();
         if (segment == null || segment.middlePos() == null) return columns;
         columns.add(posKey(segment.middlePos().getX(), segment.middlePos().getZ()));
@@ -2920,7 +2920,7 @@ public final class RoadSnapService {
         return columns;
     }
 
-    private static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
+    static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
                                               List<Integer> primaryTargetY,
                                               boolean[] primarySpecial,
                                               int targetIndex,
@@ -2930,7 +2930,7 @@ public final class RoadSnapService {
                 targetIndex, increasingTargets, sharedAtStart, JUNCTION_ANCHOR_SEGMENTS);
     }
 
-    private static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
+    static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
                                               List<Integer> primaryTargetY,
                                               boolean[] primarySpecial,
                                               int targetIndex,
@@ -2947,7 +2947,7 @@ public final class RoadSnapService {
                 targetIndex, -preferredStep, sharedAtStart, anchorSegments);
     }
 
-    private static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
+    static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
                                               List<Integer> primaryTargetY,
                                               boolean[] primarySpecial,
                                               int targetIndex,
@@ -2957,7 +2957,7 @@ public final class RoadSnapService {
                 targetIndex, outputStep, sharedAtStart, JUNCTION_ANCHOR_SEGMENTS);
     }
 
-    private static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
+    static AnchorPlan buildAnchorPlan(List<RoadSegmentPlacement> primarySegments,
                                               List<Integer> primaryTargetY,
                                               boolean[] primarySpecial,
                                               int targetIndex,
@@ -2990,7 +2990,7 @@ public final class RoadSnapService {
         return new AnchorPlan(List.copyOf(segments), List.copyOf(targetY));
     }
 
-    private static void appendSecondaryRange(RoadData secondary,
+    static void appendSecondaryRange(RoadData secondary,
                                              int fromInclusive,
                                              int toExclusive,
                                              List<RoadSegmentPlacement> segments,
@@ -3003,7 +3003,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static boolean validateJunctionGeometry(List<RoadSegmentPlacement> segments,
+    static boolean validateJunctionGeometry(List<RoadSegmentPlacement> segments,
                                                     List<Integer> targetY,
                                                     int anchorFrom,
                                                     int anchorTo,
@@ -3033,17 +3033,17 @@ public final class RoadSnapService {
         return true;
     }
 
-    private static int targetAt(RoadData road, int index) {
+    static int targetAt(RoadData road, int index) {
         List<Integer> targetY = road.targetY();
         if (targetY != null && index >= 0 && index < targetY.size()) return targetY.get(index);
         return road.roadSegmentList().get(index).middlePos().getY();
     }
 
-    private static boolean isUsable(RoadData road) {
+    static boolean isUsable(RoadData road) {
         return road != null && road.roadSegmentList() != null && road.roadSegmentList().size() >= MIN_RUN;
     }
 
-    private static int[] selectEndpointRun(List<int[]> runs, int size, boolean sharedAtStart) {
+    static int[] selectEndpointRun(List<int[]> runs, int size, boolean sharedAtStart) {
         if (runs == null || runs.isEmpty() || size <= 0) return null;
         if (sharedAtStart) {
             for (int[] run : runs) {
@@ -3058,7 +3058,7 @@ public final class RoadSnapService {
         return null;
     }
 
-    private static int[] stableEndpointRun(int[] targets,
+    static int[] stableEndpointRun(int[] targets,
                                            int[] run,
                                            boolean increasing,
                                            boolean sharedAtStart) {
@@ -3093,7 +3093,7 @@ public final class RoadSnapService {
         return end - start + 1 >= MIN_RUN ? new int[]{start, end} : null;
     }
 
-    private static int[] markSnapTargets(RoadData primaryRoad,
+    static int[] markSnapTargets(RoadData primaryRoad,
                                          RoadData secondaryRoad,
                                          List<RoadSegmentPlacement> secondarySegments,
                                          List<RoadSegmentPlacement> primarySegments,
@@ -3134,11 +3134,11 @@ public final class RoadSnapService {
         return snapTarget;
     }
 
-    private static boolean isSpecial(boolean[] mask, int index) {
+    static boolean isSpecial(boolean[] mask, int index) {
         return mask != null && index >= 0 && index < mask.length && mask[index];
     }
 
-    private static boolean directionCompatible(List<RoadSegmentPlacement> first, int firstIndex,
+    static boolean directionCompatible(List<RoadSegmentPlacement> first, int firstIndex,
                                                List<RoadSegmentPlacement> second, int secondIndex) {
         double[] firstDirection = segmentDirection(first, firstIndex);
         double[] secondDirection = segmentDirection(second, secondIndex);
@@ -3152,7 +3152,7 @@ public final class RoadSnapService {
      * Used when the two ranges differ too much in length to pair stations
      * individually — the overall travel direction is still meaningful there.
      */
-    private static double[] chordDirection(List<RoadSegmentPlacement> segments, int from, int to) {
+    static double[] chordDirection(List<RoadSegmentPlacement> segments, int from, int to) {
         if (segments == null || from < 0 || to >= segments.size() || from >= to) return null;
         RoadSegmentPlacement a = segments.get(from);
         RoadSegmentPlacement b = segments.get(to);
@@ -3163,7 +3163,7 @@ public final class RoadSnapService {
         return length < 1.0D ? null : new double[]{dx / length, dz / length};
     }
 
-    private static double[] segmentDirection(List<RoadSegmentPlacement> segments, int index) {
+    static double[] segmentDirection(List<RoadSegmentPlacement> segments, int index) {
         int previous = Math.max(0, index - 2);
         int next = Math.min(segments.size() - 1, index + 2);
         if (previous == next) return null;
@@ -3176,7 +3176,7 @@ public final class RoadSnapService {
         return new double[]{dx / length, dz / length};
     }
 
-    private static List<int[]> extractRuns(int[] snapTarget, int size) {
+    static List<int[]> extractRuns(int[] snapTarget, int size) {
         List<int[]> runs = new ArrayList<>();
         int runStart = -1;
         for (int i = 0; i < size; i++) {
@@ -3191,7 +3191,7 @@ public final class RoadSnapService {
         return runs;
     }
 
-    private static List<int[]> extractJunctionRuns(RoadData primary,
+    static List<int[]> extractJunctionRuns(RoadData primary,
                                                    RoadData secondary,
                                                    int[] targets) {
         List<int[]> runs = new ArrayList<>();
@@ -3225,10 +3225,10 @@ public final class RoadSnapService {
      * {@code snapRoadList} reuses that primary for every later secondary; the
      * grid is therefore built O(k) times per pass instead of O(k^2 * W).
      */
-    private static final ThreadLocal<IdentityHashMap<RoadData, SegmentGrid>> GRID_CACHE =
+    static final ThreadLocal<IdentityHashMap<RoadData, SegmentGrid>> GRID_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
 
-    private static SegmentGrid buildGrid(RoadData road, boolean[] excluded) {
+    static SegmentGrid buildGrid(RoadData road, boolean[] excluded) {
         if (excluded != null) return buildGridUncached(road, excluded);
         IdentityHashMap<RoadData, SegmentGrid> cache = GRID_CACHE.get();
         SegmentGrid cached = cache.get(road);
@@ -3239,7 +3239,7 @@ public final class RoadSnapService {
         return built;
     }
 
-    private static SegmentGrid buildGridUncached(RoadData road, boolean[] excluded) {
+    static SegmentGrid buildGridUncached(RoadData road, boolean[] excluded) {
         SegmentGrid grid = new SegmentGrid();
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
         if (segments == null) return grid;
@@ -3253,7 +3253,7 @@ public final class RoadSnapService {
         return grid;
     }
 
-    private static boolean[] specialSpanMask(RoadData road) {
+    static boolean[] specialSpanMask(RoadData road) {
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
         boolean[] special = new boolean[segments.size()];
         if (road.spans() == null || road.spans().isEmpty()) return special;
@@ -3282,7 +3282,7 @@ public final class RoadSnapService {
      * existing reuse runs remain continuous evidence for a middle corridor.
      * The actual junction index is still checked separately by
      * {@link #isSafeJunctionIndex(RoadData, int)}. */
-    private static boolean[] junctionBlockedSpanMask(RoadData road) {
+    static boolean[] junctionBlockedSpanMask(RoadData road) {
         if (road == null) return new boolean[0];
         // P0-1: reuse the per-road derived masks instead of rebuilding the
         // xz->index map and rescanning every span on each call.
@@ -3293,7 +3293,7 @@ public final class RoadSnapService {
         return blocked;
     }
 
-    private static List<RoadSpan> filterSpansByRetainedSegments(List<RoadSpan> spans,
+    static List<RoadSpan> filterSpansByRetainedSegments(List<RoadSpan> spans,
                                                                  List<RoadSegmentPlacement> retainedSegments) {
         if (spans == null || spans.isEmpty()) return List.of();
         Set<Long> retained = new HashSet<>();
@@ -3318,11 +3318,11 @@ public final class RoadSnapService {
      * that seven times per station, which made a single road pair O(S^2) in the
      * segment count.
      */
-    private static final int ROAD_INDEX_CACHE_CAP = 512;
-    private static final ThreadLocal<IdentityHashMap<RoadData, RoadIndex>> ROAD_INDEX_CACHE =
+    static final int ROAD_INDEX_CACHE_CAP = 512;
+    static final ThreadLocal<IdentityHashMap<RoadData, RoadIndex>> ROAD_INDEX_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
 
-    private static RoadIndex roadIndex(RoadData road) {
+    static RoadIndex roadIndex(RoadData road) {
         IdentityHashMap<RoadData, RoadIndex> cache = ROAD_INDEX_CACHE.get();
         RoadIndex view = cache.get(road);
         if (view == null) {
@@ -3333,53 +3333,13 @@ public final class RoadSnapService {
         return view;
     }
 
-    private static final class RoadIndex {
-        private final int segmentCount;
-        private final Map<Long, Integer> xzToIndex;
-        private final List<RoadSpan> spans;
-        private final Map<SpanType, boolean[]> masks = new EnumMap<>(SpanType.class);
 
-        RoadIndex(RoadData road) {
-            List<RoadSegmentPlacement> segments = road.roadSegmentList();
-            this.segmentCount = segments.size();
-            this.spans = road.spans();
-            Map<Long, Integer> indices = new HashMap<>(Math.max(16, segmentCount * 2));
-            for (int i = 0; i < segmentCount; i++) {
-                RoadSegmentPlacement segment = segments.get(i);
-                if (segment != null && segment.middlePos() != null) indices.put(xzKey(segment.middlePos()), i);
-            }
-            this.xzToIndex = indices;
-        }
-
-        /** Union of every span of {@code type}, materialised once per type. */
-        boolean[] spanMask(SpanType type) {
-            boolean[] cached = masks.get(type);
-            if (cached != null) return cached;
-            boolean[] mask = new boolean[segmentCount];
-            for (RoadSpan span : spans) {
-                if (span == null || span.type() != type) continue;
-                if (span.start() == null || span.end() == null) continue;
-                Integer start = xzToIndex.get(xzKey(span.start()));
-                Integer end = xzToIndex.get(xzKey(span.end()));
-                if (start == null || end == null) continue;
-                for (int i = Math.min(start, end); i <= Math.max(start, end); i++) mask[i] = true;
-            }
-            masks.put(type, mask);
-            return mask;
-        }
-
-        boolean inSpan(int index, SpanType type) {
-            if (index < 0 || index >= segmentCount) return false;
-            return spanMask(type)[index];
-        }
-    }
-
-    private static boolean isIndexInSpan(RoadData road, int index, SpanType type) {
+    static boolean isIndexInSpan(RoadData road, int index, SpanType type) {
         if (road == null || type == null) return false;
         return roadIndex(road).inSpan(index, type);
     }
 
-    private static boolean isTunnelJunctionPair(RoadData first, int firstIndex,
+    static boolean isTunnelJunctionPair(RoadData first, int firstIndex,
                                                  RoadData second, int secondIndex) {
         return (isIndexInSpan(first, firstIndex, SpanType.TUNNEL)
                 || isIndexInSpan(first, firstIndex, SpanType.TUNNEL_JUNCTION))
@@ -3387,7 +3347,7 @@ public final class RoadSnapService {
                 || isIndexInSpan(second, secondIndex, SpanType.TUNNEL_JUNCTION));
     }
 
-    private static boolean isTunnelGradeTransitionPair(RoadData first, int firstIndex,
+    static boolean isTunnelGradeTransitionPair(RoadData first, int firstIndex,
                                                          RoadData second, int secondIndex) {
         return isTunnelJunctionPair(first, firstIndex, second, secondIndex)
                 || isIndexInSpan(first, firstIndex, SpanType.TUNNEL)
@@ -3396,12 +3356,12 @@ public final class RoadSnapService {
                 || isIndexInSpan(second, secondIndex, SpanType.TUNNEL_JUNCTION);
     }
 
-    private static boolean isTunnelAt(RoadData road, int index) {
+    static boolean isTunnelAt(RoadData road, int index) {
         return road != null && (isIndexInSpan(road, index, SpanType.TUNNEL)
                 || isIndexInSpan(road, index, SpanType.TUNNEL_JUNCTION));
     }
 
-    private static boolean isTunnelBoundaryNear(RoadData road, int index) {
+    static boolean isTunnelBoundaryNear(RoadData road, int index) {
         if (!isTunnelAt(road, index) || road.spans() == null) return false;
         Map<Long, Integer> indices = new HashMap<>();
         for (int i = 0; i < road.roadSegmentList().size(); i++) {
@@ -3425,7 +3385,7 @@ public final class RoadSnapService {
      * requires.  The cap keeps malformed data from turning one junction into
      * an unbounded rewrite of the tunnel.
      */
-    private static int requiredTunnelAnchorSegments(int primaryY, int secondaryY) {
+    static int requiredTunnelAnchorSegments(int primaryY, int secondaryY) {
         int delta = Math.abs(primaryY - secondaryY);
         return Math.min(MAX_TUNNEL_JUNCTION_ANCHOR_SEGMENTS,
                 Math.max(JUNCTION_ANCHOR_SEGMENTS, delta + 2));
@@ -3436,14 +3396,14 @@ public final class RoadSnapService {
      * as its anchor.  Ordinary roads continue to use the horizontal-distance
      * rule and never call this method.
      */
-    private static int tunnelGradeLimit(RoadData first, int firstIndex,
+    static int tunnelGradeLimit(RoadData first, int firstIndex,
                                          RoadData second, int secondIndex) {
         int delta = Math.abs(targetAt(first, firstIndex) - targetAt(second, secondIndex));
         return Math.min(MAX_TUNNEL_JUNCTION_ANCHOR_SEGMENTS,
                 Math.max(MAX_TUNNEL_JUNCTION_GRADE_DELTA, delta));
     }
 
-    private static boolean gradeCompatibleAtJunction(RoadData first, int firstIndex,
+    static boolean gradeCompatibleAtJunction(RoadData first, int firstIndex,
                                                       RoadData second, int secondIndex,
                                                       int horizontalDistance) {
         int delta = Math.abs(targetAt(first, firstIndex) - targetAt(second, secondIndex));
@@ -3454,7 +3414,7 @@ public final class RoadSnapService {
         return delta <= horizontalDistance;
     }
 
-    private static boolean isSafeJunctionIndex(RoadData road, int index) {
+    static boolean isSafeJunctionIndex(RoadData road, int index) {
         if (road == null || index < 0 || index >= road.roadSegmentList().size()) return false;
         if (isIndexInSpan(road, index, SpanType.BRIDGE)
                 || isIndexInSpan(road, index, SpanType.ROAD_CROSSING)
@@ -3478,7 +3438,7 @@ public final class RoadSnapService {
         return false;
     }
 
-    private static void addSpansForRetainedSegments(List<RoadSpan> target,
+    static void addSpansForRetainedSegments(List<RoadSpan> target,
                                                     List<RoadSpan> source,
                                                     List<RoadSegmentPlacement> retainedSegments) {
         if (target == null || source == null || source.isEmpty() || retainedSegments == null) return;
@@ -3497,7 +3457,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static void addClippedOwnerSpans(List<RoadSpan> target,
+    static void addClippedOwnerSpans(List<RoadSpan> target,
                                              RoadData owner,
                                              int ownerFrom,
                                              int ownerTo,
@@ -3532,7 +3492,7 @@ public final class RoadSnapService {
         }
     }
 
-    private static BlockPos nearestRetained(BlockPos target,
+    static BlockPos nearestRetained(BlockPos target,
                                              List<RoadSegmentPlacement> retained,
                                              Set<Long> retainedKeys) {
         if (target == null) return null;
@@ -3550,33 +3510,33 @@ public final class RoadSnapService {
         return best;
     }
 
-    private static long posKey(int x, int z) {
+    static long posKey(int x, int z) {
         return ((long) x << 32) | (z & 0xffffffffL);
     }
 
-    private static long gridKey(int x, int z) {
+    static long gridKey(int x, int z) {
         return ((long) x << 32) | (z & 0xffffffffL);
     }
 
-    private static long dist2XZ(BlockPos first, BlockPos second) {
+    static long dist2XZ(BlockPos first, BlockPos second) {
         long dx = (long) first.getX() - second.getX();
         long dz = (long) first.getZ() - second.getZ();
         return dx * dx + dz * dz;
     }
 
-    private record JunctionCandidate(int secondaryIndex, int primaryIndex) {
+    record JunctionCandidate(int secondaryIndex, int primaryIndex) {
     }
 
-    private record ApproachBoundary(int secondaryIndex, int primaryIndex) {
+    record ApproachBoundary(int secondaryIndex, int primaryIndex) {
     }
 
-    private record AnchorPlan(List<RoadSegmentPlacement> segments, List<Integer> targetY) {
+    record AnchorPlan(List<RoadSegmentPlacement> segments, List<Integer> targetY) {
     }
 
-    private record NearestResult(int index, long dist2) {
+    record NearestResult(int index, long dist2) {
     }
 
-    private record ConnectionOption(String mode,
+    record ConnectionOption(String mode,
                                     RoadData road,
                                     double constructionLength,
                                     int reuseStations) {
@@ -3592,44 +3552,13 @@ public final class RoadSnapService {
         }
     }
 
-    private static final class SegmentGrid {
-        private final Map<Long, List<IndexedPos>> cells = new HashMap<>();
 
-        void add(long key, int segmentIndex, BlockPos pos) {
-            cells.computeIfAbsent(key, ignored -> new ArrayList<>()).add(new IndexedPos(segmentIndex, pos));
-        }
-
-        NearestResult findNearest(BlockPos target) {
-            int gridX = target.getX() >> GRID_SHIFT;
-            int gridZ = target.getZ() >> GRID_SHIFT;
-            int bestIndex = -1;
-            long bestDistance = Long.MAX_VALUE;
-            for (int dx = -GRID_SEARCH_RADIUS; dx <= GRID_SEARCH_RADIUS; dx++) {
-                for (int dz = -GRID_SEARCH_RADIUS; dz <= GRID_SEARCH_RADIUS; dz++) {
-                    List<IndexedPos> cell = cells.get(gridKey(gridX + dx, gridZ + dz));
-                    if (cell == null) continue;
-                    for (IndexedPos indexed : cell) {
-                        long distance = dist2XZ(target, indexed.pos());
-                        if (distance < bestDistance) {
-                            bestDistance = distance;
-                            bestIndex = indexed.index();
-                        }
-                    }
-                }
-            }
-            return bestIndex >= 0 ? new NearestResult(bestIndex, bestDistance) : null;
-        }
-
-        private record IndexedPos(int index, BlockPos pos) {
-        }
-    }
-
-    private static boolean segmentsOverlap2D(int ax1, int az1, int ax2, int az2, int bx1, int bz1, int bx2, int bz2) {
+    static boolean segmentsOverlap2D(int ax1, int az1, int ax2, int az2, int bx1, int bz1, int bx2, int bz2) {
         return Math.min(ax1, ax2) <= Math.max(bx1, bx2) && Math.max(ax1, ax2) >= Math.min(bx1, bx2)
                 && Math.min(az1, az2) <= Math.max(bz1, bz2) && Math.max(az1, az2) >= Math.min(bz1, bz2);
     }
 
-    private static boolean ownerHasSameTypeSpanAt(RoadData owner, RoadSpan secondary) {
+    static boolean ownerHasSameTypeSpanAt(RoadData owner, RoadSpan secondary) {
         if (owner == null || owner.spans() == null || secondary == null
                 || secondary.start() == null || secondary.end() == null) return false;
         int secondaryStart = secondary.start().getX();
@@ -3646,7 +3575,7 @@ public final class RoadSnapService {
         return false;
     }
 
-    private static long xzKey(BlockPos pos) {
+    static long xzKey(BlockPos pos) {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
@@ -3656,7 +3585,7 @@ public final class RoadSnapService {
      * {@link RoadData} is deeply immutable, so one box per instance is enough —
      * this removes the O(n^2 * S) term from the initial network merge.
      */
-    private static final ThreadLocal<IdentityHashMap<RoadData, RoadBounds>> BOUNDS_CACHE =
+    static final ThreadLocal<IdentityHashMap<RoadData, RoadBounds>> BOUNDS_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
 
     /** Public accessor used by the junction donor pre-filter. */
