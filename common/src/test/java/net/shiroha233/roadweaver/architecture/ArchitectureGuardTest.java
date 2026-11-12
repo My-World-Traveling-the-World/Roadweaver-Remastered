@@ -90,7 +90,6 @@ class ArchitectureGuardTest {
             "pathlogic.pathcalc.RoadPathCalculator",
             "pathlogic.core.Road",
             "generation.RoadGenerationService",
-            "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler"
     );
 
