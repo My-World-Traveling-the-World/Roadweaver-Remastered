@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureOwnerKey;
 import net.shiroha233.roadweaver.pathlogic.structures.OwnedStructureBox;
 import net.minecraft.core.BlockPos;
@@ -53,7 +55,7 @@ public final class FinalRoadStructureValidator {
         if (level == null || road == null || cache == null) {
             return ValidationResult.failure("missing-final-validation-input", null);
         }
-        StructureAvoidanceService.PlanningSnapshot snapshot = connection == null
+        PlanningSnapshot snapshot = connection == null
                 ? StructureAvoidanceService.requirePlanningSnapshot(level, road)
                 : StructureAvoidanceService.requirePlanningSnapshot(level, connection);
         prefetchMissingValidationColumns(level, road, cache);
@@ -161,11 +163,11 @@ public final class FinalRoadStructureValidator {
         }
     }
 
-    static ValidationResult validate(StructureAvoidanceService.PlanningSnapshot snapshot,
+    static ValidationResult validate(PlanningSnapshot snapshot,
                                      RoadData road,
                                      RoadConstructionVolumePlanner.Context context) {
-        if (snapshot == null || snapshot == StructureAvoidanceService.PlanningSnapshot.EMPTY) {
-            throw new StructureAvoidanceService.PlanningSnapshotUnavailableException(
+        if (snapshot == null || snapshot == PlanningSnapshot.EMPTY) {
+            throw new PlanningSnapshotUnavailableException(
                     "Final road validation requires a complete structure snapshot");
         }
         AtomicReference<Collision> collision = new AtomicReference<>();

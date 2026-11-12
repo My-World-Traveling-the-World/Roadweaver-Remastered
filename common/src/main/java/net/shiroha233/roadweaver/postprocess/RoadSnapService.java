@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.postprocess;
 
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.MinecraftServer;
@@ -278,7 +280,7 @@ public final class RoadSnapService {
                     structureValidation =
                             net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator.validate(
                                     level, current[i], refinementCache, streams);
-                } catch (net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.PlanningSnapshotUnavailableException unavailable) {
+                } catch (net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException unavailable) {
                     LOGGER.warn("RoadWeaver skipped post-load road snap because its exact structure snapshot is unavailable "
                                     + "owners={} -> {} reason={}",
                             current[i].ownerA2dKey(), current[i].ownerB2dKey(), unavailable.getMessage());

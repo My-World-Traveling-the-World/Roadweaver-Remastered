@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.junction;
 
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -627,7 +629,7 @@ public final class ExistingRoadJunctionService {
                 best = refinedHeight;
             }
             return new MergeResult(item.index(), secondary, best, item.selection().donor());
-        } catch (StructureAvoidanceService.PlanningSnapshotUnavailableException unavailable) {
+        } catch (PlanningSnapshotUnavailableException unavailable) {
             LOGGER.warn("RoadWeaver retained original road because parallel junction structure snapshot is unavailable owners={} -> {} reason={}",
                     secondary.ownerA2dKey(), secondary.ownerB2dKey(), unavailable.getMessage());
             return new MergeResult(item.index(), secondary, secondary, item.selection().donor());

@@ -102,12 +102,12 @@ public final class StructureAvoidanceService {
      * separate verified pieces. Keep the endpoint protection group bounded so
      * those pieces do not become ordinary mid-route obstacles.
      */
-    private static final int ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS = 96;
+    static final int ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS = 96;
     private static final int ENDPOINT_PROTECTED_GAP_RADIUS_BLOCKS = 32;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    private static final int CONSTRUCTION_BELOW = 2;
-    private static final int CONSTRUCTION_ABOVE = 6;
+    static final int CONSTRUCTION_BELOW = 2;
+    static final int CONSTRUCTION_ABOVE = 6;
     /**
      * T-35: 过路村庄掩码的 Y 相交窗口下方容忍。村庄聚合盒的 minY 是最低建筑
      * 底部,不是村庄地面;山坡村庄的空地比最低建筑低可达十余格。道路穿过这些
@@ -134,7 +134,7 @@ public final class StructureAvoidanceService {
     /** Preserve the old cached world area after reducing prediction tiles from 64x64 to 16x16. */
     private static final int OBSTACLE_TILE_CACHE_CAPACITY = 8192;
     /** Maximum displacement between a selected structure origin and its actual replacement start. */
-    private static final int ENDPOINT_REPLACEMENT_MATCH_BLOCKS = 24;
+    static final int ENDPOINT_REPLACEMENT_MATCH_BLOCKS = 24;
     /**
      * A generated template piece can sit several blocks inside the selected
      * structure origin. Keep this local and require a unique verified owner;
@@ -270,7 +270,7 @@ public final class StructureAvoidanceService {
         return owned != null && "template-blocks".equals(owned.occupancyKind());
     }
 
-    private static boolean isVerifiedBuilding(OwnedStructureBox owned) {
+    static boolean isVerifiedBuilding(OwnedStructureBox owned) {
         return owned != null && "template-blocks".equals(owned.occupancyKind());
     }
 
@@ -1330,7 +1330,7 @@ public final class StructureAvoidanceService {
             CLUSTER_BOX_CACHE = ThreadLocal.withInitial(IdentityHashMap::new);
 
     /** 按 snapshot 缓存的"村庄群聚合盒"。快照不可变，所以按实例缓存永不失效。 */
-    private static Map<StructureOwnerKey, BoundingBox> clusterBoxes(PlanningSnapshot snapshot) {
+    static Map<StructureOwnerKey, BoundingBox> clusterBoxes(PlanningSnapshot snapshot) {
         if (snapshot == null) return Map.of();
         IdentityHashMap<PlanningSnapshot, Map<StructureOwnerKey, BoundingBox>> cache = CLUSTER_BOX_CACHE.get();
         Map<StructureOwnerKey, BoundingBox> cached = cache.get(snapshot);
@@ -1829,11 +1829,6 @@ public final class StructureAvoidanceService {
                 && !snapshot.ownsEndpoint(owner);
     }
 
-    public static final class PlanningSnapshotUnavailableException extends RuntimeException {
-        public PlanningSnapshotUnavailableException(String message) {
-            super(message);
-        }
-    }
 
     private static Map<RouteKey, PathCorridorPlan> buildPathCorridors(
             ServerLevel level,
@@ -3325,7 +3320,7 @@ public final class StructureAvoidanceService {
         return new StructureOwnerKey(startChunkKey, structureId);
     }
 
-    private static BoundingBox encapsulate(BoundingBox left, BoundingBox right) {
+    static BoundingBox encapsulate(BoundingBox left, BoundingBox right) {
         return new BoundingBox(
                 Math.min(left.minX(), right.minX()),
                 Math.min(left.minY(), right.minY()),
@@ -3335,13 +3330,13 @@ public final class StructureAvoidanceService {
                 Math.max(left.maxZ(), right.maxZ()));
     }
 
-    private static boolean containsHorizontal(BoundingBox box, BlockPos pos) {
+    static boolean containsHorizontal(BoundingBox box, BlockPos pos) {
         return box != null && pos != null
                 && pos.getX() >= box.minX() && pos.getX() <= box.maxX()
                 && pos.getZ() >= box.minZ() && pos.getZ() <= box.maxZ();
     }
 
-    private static String endpointStructureFamily(String structureId) {
+    static String endpointStructureFamily(String structureId) {
         if (structureId == null || structureId.isBlank()) return "";
         int namespace = structureId.indexOf(':');
         String path = namespace >= 0 ? structureId.substring(namespace + 1) : structureId;
@@ -3349,11 +3344,11 @@ public final class StructureAvoidanceService {
         return separator >= 0 ? path.substring(separator + 1) : path;
     }
 
-    private static boolean isVillageStructure(String structureId) {
+    static boolean isVillageStructure(String structureId) {
         return structureId != null && structureId.toLowerCase(java.util.Locale.ROOT).contains("village");
     }
 
-    private static long horizontalDistanceSquared(BoundingBox box, BlockPos pos) {
+    static long horizontalDistanceSquared(BoundingBox box, BlockPos pos) {
         if (box == null || pos == null) return Long.MAX_VALUE;
         long dx = pos.getX() < box.minX() ? (long) box.minX() - pos.getX()
                 : pos.getX() > box.maxX() ? (long) pos.getX() - box.maxX() : 0L;
@@ -3362,7 +3357,7 @@ public final class StructureAvoidanceService {
         return dx * dx + dz * dz;
     }
 
-    private static long horizontalDistanceSquared(BlockPos left, BlockPos right) {
+    static long horizontalDistanceSquared(BlockPos left, BlockPos right) {
         if (left == null || right == null) return Long.MAX_VALUE;
         long dx = (long) left.getX() - right.getX();
         long dz = (long) left.getZ() - right.getZ();
@@ -3389,10 +3384,10 @@ public final class StructureAvoidanceService {
     record RuntimePreloadKey(String dimension, long seed, long chunkKey) {
     }
 
-    private record ManualStartReference(Structure structure, long chunkKey) {
+    record ManualStartReference(Structure structure, long chunkKey) {
     }
 
-    private record ManualStartBatch(
+    record ManualStartBatch(
             List<ManualStartReference> references,
             List<CompletableFuture<net.minecraft.server.level.ChunkResult<ChunkAccess>>> futures) {
     }
@@ -3400,7 +3395,7 @@ public final class StructureAvoidanceService {
     record ObstacleTileKey(String dimension, long seed, int tileX, int tileZ) {
     }
 
-    private record RoutePredictionBounds(StructureConnection connection,
+    record RoutePredictionBounds(StructureConnection connection,
                                          int minChunkX,
                                          int maxChunkX,
                                          int minChunkZ,
@@ -3412,737 +3407,23 @@ public final class StructureAvoidanceService {
                                          long reachSquared) {
     }
 
-    private record RouteStartPlan(StructureConnection connection,
+    record RouteStartPlan(StructureConnection connection,
                                   Set<PreparedStartKey> starts,
                                   Set<Long> coveredCandidateChunks) {
     }
 
-    private record PathCorridorPlan(StructureConnection connection,
+    record PathCorridorPlan(StructureConnection connection,
                                     List<BlockPos> path,
                                     Set<Long> pathChunks,
                                     LongSet candidateChunks) {
     }
 
-    private record SnapshotPreparation(Map<RouteKey, RouteStartPlan> routePlans,
+    record SnapshotPreparation(Map<RouteKey, RouteStartPlan> routePlans,
                                        List<PreparedStartKey> uniqueStarts) {
     }
 
-    public static record PlanningSnapshot(Set<OwnedStructureBox> boxes,
-                                     Map<Long, List<OwnedStructureBox>> boxesByChunk,
-                                     Set<StructureOwnerKey> endpointOwners,
-                                     Set<StructureOwnerKey> forcedVerticalOwners,
-                                     Set<PreparedStartKey> resolvedStarts,
-                                     LongSet coveredCandidateChunks,
-                                     int roadRadius) {
-        public static final PlanningSnapshot EMPTY = new PlanningSnapshot(
-                Set.of(), Map.of(), Set.of(), Set.of(), Set.of(), LongSets.emptySet(), 0);
 
-        static PlanningSnapshot forRoute(StructureConnection connection, Collection<OwnedStructureBox> boxes) {
-            return forRoute(connection, boxes, Set.of());
-        }
-
-        static PlanningSnapshot forRoute(StructureConnection connection,
-                                         Collection<OwnedStructureBox> boxes,
-                                         Collection<PreparedStartKey> resolvedStarts) {
-            return forRoute(connection, boxes, resolvedStarts, Set.of());
-        }
-
-        static PlanningSnapshot forRoute(StructureConnection connection,
-                                         Collection<OwnedStructureBox> boxes,
-                                         Collection<PreparedStartKey> resolvedStarts,
-                                         Collection<Long> coveredCandidateChunks) {
-            return forRoute(connection, boxes, resolvedStarts, coveredCandidateChunks, null);
-        }
-
-        static PlanningSnapshot forRoute(StructureConnection connection,
-                                         Collection<OwnedStructureBox> boxes,
-                                         Collection<PreparedStartKey> resolvedStarts,
-                                         Collection<Long> coveredCandidateChunks,
-                                         Collection<StructureOwnerKey> explicitEndpointOwners) {
-            int roadWidth = Math.max(1, ConfigService.get().roadAppearance().roadWidth());
-            // Match the rasterized road footprint. The construction planner
-            // covers ceil(width / 2) columns from the centerline, including
-            // the far edge of even-width roads.
-            int roadRadius = Math.max(0, (int) Math.ceil(roadWidth / 2.0D));
-            Set<PreparedStartKey> immutableStarts = resolvedStarts == null || resolvedStarts.isEmpty()
-                    ? Set.of()
-                    : Set.copyOf(resolvedStarts);
-            LongSet immutableCoveredChunks;
-            if (coveredCandidateChunks == null || coveredCandidateChunks.isEmpty()) {
-                immutableCoveredChunks = LongSets.emptySet();
-            } else {
-                immutableCoveredChunks = LongSets.unmodifiable(new LongOpenHashSet(coveredCandidateChunks));
-            }
-            Set<StructureOwnerKey> immutableEndpointOwners = explicitEndpointOwners == null
-                    ? null
-                    : explicitEndpointOwners.isEmpty() ? Set.of() : Set.copyOf(explicitEndpointOwners);
-            if (boxes == null || boxes.isEmpty()) {
-                return new PlanningSnapshot(
-                        Set.of(), Map.of(), immutableEndpointOwners == null ? Set.of() : immutableEndpointOwners,
-                        Set.of(), immutableStarts, immutableCoveredChunks, roadRadius);
-            }
-            Set<OwnedStructureBox> immutableBoxes = Set.copyOf(boxes);
-            Set<StructureOwnerKey> endpointOwners = immutableEndpointOwners == null
-                    ? findEndpointOwners(connection, immutableBoxes)
-                    : immutableEndpointOwners;
-            endpointOwners = expandEndpointVillageOwners(connection, immutableBoxes, endpointOwners);
-            Map<Long, List<OwnedStructureBox>> mutable = new HashMap<>();
-            for (OwnedStructureBox owned : immutableBoxes) {
-                if (owned == null || owned.box() == null) continue;
-                BoundingBox box = owned.box();
-                for (int cx = (box.minX() - roadRadius) >> 4;
-                     cx <= (box.maxX() + roadRadius) >> 4; cx++) {
-                    for (int cz = (box.minZ() - roadRadius) >> 4;
-                         cz <= (box.maxZ() + roadRadius) >> 4; cz++) {
-                        mutable.computeIfAbsent(ChunkPos.asLong(cx, cz), ignored -> new ArrayList<>()).add(owned);
-                    }
-                }
-            }
-            Map<Long, List<OwnedStructureBox>> immutable = new HashMap<>();
-            for (Map.Entry<Long, List<OwnedStructureBox>> entry : mutable.entrySet()) {
-                immutable.put(entry.getKey(), List.copyOf(entry.getValue()));
-            }
-            return new PlanningSnapshot(
-                    immutableBoxes, Map.copyOf(immutable), endpointOwners, Set.of(), immutableStarts,
-                    immutableCoveredChunks, roadRadius);
-        }
-
-        static PlanningSnapshot merge(StructureConnection connection,
-                                       PlanningSnapshot previous,
-                                       Collection<OwnedStructureBox> added,
-                                       Collection<PreparedStartKey> addedStarts,
-                                       Collection<Long> addedCoveredChunks) {
-            return merge(connection, previous, added, addedStarts, addedCoveredChunks, null);
-        }
-
-        static PlanningSnapshot merge(StructureConnection connection,
-                                       PlanningSnapshot previous,
-                                       Collection<OwnedStructureBox> added,
-                                       Collection<PreparedStartKey> addedStarts,
-                                       Collection<Long> addedCoveredChunks,
-                                       Collection<StructureOwnerKey> explicitEndpointOwners) {
-            if (previous == null || previous == EMPTY || previous.boxes().isEmpty()) {
-                Set<PreparedStartKey> starts = new HashSet<>();
-                if (previous != null) starts.addAll(previous.resolvedStarts());
-                if (addedStarts != null) starts.addAll(addedStarts);
-                LongSet coveredChunks = new LongOpenHashSet();
-                if (previous != null) coveredChunks.addAll(previous.coveredCandidateChunks());
-                if (addedCoveredChunks != null) {
-                    for (long chunk : addedCoveredChunks) coveredChunks.add(chunk);
-                }
-                PlanningSnapshot created = forRoute(
-                        connection, added, starts, coveredChunks, explicitEndpointOwners);
-                if (previous != null && !previous.forcedVerticalOwners().isEmpty()) {
-                    return created.withForcedVerticalOwners(previous.forcedVerticalOwners());
-                }
-                return created;
-            }
-            boolean boxesUnchanged = added == null || added.isEmpty() || previous.boxes().containsAll(added);
-            boolean startsUnchanged = addedStarts == null || addedStarts.isEmpty()
-                    || previous.resolvedStarts().containsAll(addedStarts);
-            boolean coveredChunksUnchanged = addedCoveredChunks == null || addedCoveredChunks.isEmpty()
-                    || previous.coveredCandidateChunks().containsAll(addedCoveredChunks);
-            boolean endpointOwnersUnchanged = explicitEndpointOwners == null
-                    || previous.endpointOwners().equals(Set.copyOf(explicitEndpointOwners));
-            if (boxesUnchanged && startsUnchanged && coveredChunksUnchanged && endpointOwnersUnchanged) {
-                return previous;
-            }
-            Set<OwnedStructureBox> merged = new HashSet<>(previous.boxes());
-            if (added != null) merged.addAll(added);
-            Set<PreparedStartKey> mergedStarts = new HashSet<>(previous.resolvedStarts());
-            if (addedStarts != null) mergedStarts.addAll(addedStarts);
-            LongSet mergedCoveredChunks = new LongOpenHashSet(previous.coveredCandidateChunks());
-            if (addedCoveredChunks != null) {
-                for (long chunk : addedCoveredChunks) mergedCoveredChunks.add(chunk);
-            }
-            PlanningSnapshot result = forRoute(
-                    connection, merged, mergedStarts, mergedCoveredChunks, explicitEndpointOwners);
-            return result.withForcedVerticalOwners(previous.forcedVerticalOwners());
-        }
-
-        boolean blocks(BlockPos pos) {
-            return blocks(pos, roadRadius);
-        }
-
-        boolean blocksFootprint(BlockPos pos) {
-            return blocks(pos, 0);
-        }
-
-        /**
-         * Endpoint structures are excluded from ordinary avoidance so a road
-         * can reach them. Endpoint trimming needs the opposite query: only a
-         * decoded real building inside an endpoint structure should stop the
-         * final approach.
-         */
-        boolean blocksEndpointBuildingFootprint(BlockPos pos) {
-            if (pos == null) return false;
-            int minY = pos.getY() - CONSTRUCTION_BELOW;
-            int maxY = pos.getY() + CONSTRUCTION_ABOVE;
-            return findEndpointBuildingCollision(pos.getX(), pos.getZ(), minY, maxY, 0) != null;
-        }
-
-        boolean blocksSegmentFootprint(RoadSegmentPlacement segment) {
-            if (segment == null) return false;
-            BlockPos center = segment.middlePos();
-            if (segment.positions() != null && !segment.positions().isEmpty()) {
-                for (BlockPos footprint : segment.positions()) {
-                    if (footprint == null) continue;
-                    BlockPos constructionPos = center == null
-                            ? footprint
-                            : new BlockPos(footprint.getX(), center.getY(), footprint.getZ());
-                    if (blocksFootprint(constructionPos)) return true;
-                }
-                return false;
-            }
-            return center != null && blocks(center);
-        }
-
-        boolean blocksEndpointBuildingSegmentFootprint(RoadSegmentPlacement segment) {
-            if (segment == null) return false;
-            BlockPos center = segment.middlePos();
-            if (segment.positions() != null && !segment.positions().isEmpty()) {
-                for (BlockPos footprint : segment.positions()) {
-                    if (footprint == null) continue;
-                    BlockPos constructionPos = center == null
-                            ? footprint
-                            : new BlockPos(footprint.getX(), center.getY(), footprint.getZ());
-                    if (blocksEndpointBuildingFootprint(constructionPos)) return true;
-                }
-                return false;
-            }
-            return center != null && blocksEndpointBuildingFootprint(center);
-        }
-
-        boolean hasUnresolvedSegmentFootprint(RoadSegmentPlacement segment) {
-            if (segment == null) return false;
-            BlockPos center = segment.middlePos();
-            if (segment.positions() != null && !segment.positions().isEmpty()) {
-                for (BlockPos footprint : segment.positions()) {
-                    if (footprint == null) continue;
-                    BlockPos constructionPos = center == null
-                            ? footprint
-                            : new BlockPos(footprint.getX(), center.getY(), footprint.getZ());
-                    if (hasUnresolvedBlock(constructionPos)) return true;
-                }
-                return false;
-            }
-            return center != null && hasUnresolvedBlock(center);
-        }
-
-        boolean hasUnresolvedBlock(BlockPos pos) {
-            if (pos == null) return false;
-            int minY = pos.getY() - CONSTRUCTION_BELOW;
-            int maxY = pos.getY() + CONSTRUCTION_ABOVE;
-            OwnedStructureBox owned = findCollision(pos.getX(), pos.getZ(), minY, maxY, 0);
-            return owned != null && "fallback-box".equals(owned.occupancyKind());
-        }
-
-        private boolean blocks(BlockPos pos, int horizontalRadius) {
-            if (pos == null) return false;
-            int minY = pos.getY() - CONSTRUCTION_BELOW;
-            int maxY = pos.getY() + CONSTRUCTION_ABOVE;
-            return findBuildingCollision(pos.getX(), pos.getZ(), minY, maxY, horizontalRadius) != null;
-        }
-
-        /** 村庄群聚合盒判定（端点结构豁免）。 */
-        boolean blocksCluster(int x, int z, int minY, int maxY, int horizontalRadius) {
-            Map<StructureOwnerKey, BoundingBox> clusters = clusterBoxes(this);
-            if (clusters.isEmpty()) return false;
-            int radius = Math.max(0, horizontalRadius);
-            for (BoundingBox box : clusters.values()) {
-                if (box.maxX() < x - radius || box.minX() > x + radius) continue;
-                if (box.maxZ() < z - radius || box.minZ() > z + radius) continue;
-                if (box.maxY() < minY || box.minY() > maxY) continue;
-                return true;
-            }
-            return false;
-        }
-
-        public OwnedStructureBox findCollision(int x, int z, int minY, int maxY) {
-            return findCollision(x, z, minY, maxY, 0);
-        }
-
-        public OwnedStructureBox findFallingCapCollision(int x, int z, int minY, int maxY) {
-            if (boxesByChunk.isEmpty() || minY > maxY) return null;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return null;
-            for (int y = minY; y <= maxY; y++) {
-                boolean solidStop = false;
-                for (OwnedStructureBox owned : candidates) {
-                    if (owned == null) continue;
-                    FallingCapOccupancy occupancy = owned.fallingCapOccupancyAt(x, y, z);
-                    if (ownsEndpoint(owned.owner())) {
-                        // Endpoint structures are allowed to be modified, but
-                        // an untouched solid voxel still physically stops the
-                        // runtime falling-column scan.
-                        solidStop |= occupancy == FallingCapOccupancy.SOLID;
-                        continue;
-                    }
-                    if (occupancy == FallingCapOccupancy.REMOVABLE) return owned;
-                    solidStop |= occupancy == FallingCapOccupancy.SOLID;
-                }
-                if (solidStop) return null;
-                if (y == Integer.MAX_VALUE) break;
-            }
-            return null;
-        }
-
-        private OwnedStructureBox findCollision(int x, int z, int minY, int maxY, int horizontalRadius) {
-            if (boxesByChunk.isEmpty()) return null;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return null;
-            for (OwnedStructureBox owned : candidates) {
-                if (owned == null || ownsEndpoint(owned.owner())) continue;
-                if (forcedVerticalOwners.contains(owned.owner())) {
-                    // A forced-vertical obstacle blocks every band that can
-                    // reach its box. A band entirely below the box floor (an
-                    // underground tunnel passing under a surface structure)
-                    // only has to clear the foundation, which the ordinary
-                    // band-overlap test already guarantees; it must not be
-                    // hard-rerouted by the footprint (task 6).
-                    BoundingBox box = owned.box();
-                    if (box != null && maxY >= box.minY()
-                            && owned.intersects(x, z, box.minY(), box.maxY(), horizontalRadius)) {
-                        return owned;
-                    }
-                } else if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)) {
-                    return owned;
-                }
-            }
-            return null;
-        }
-
-        private OwnedStructureBox findBuildingCollision(int x, int z, int minY, int maxY,
-                                                         int horizontalRadius) {
-            if (boxesByChunk.isEmpty()) return null;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return null;
-            for (OwnedStructureBox owned : candidates) {
-                if (!isVerifiedBuilding(owned) || ownsEndpoint(owned.owner())) continue;
-                if (forcedVerticalOwners.contains(owned.owner())) {
-                    // Same underground-pass rule as findCollision: a band lying
-                    // entirely below the structure floor is judged by the
-                    // ordinary band overlap, not by the full footprint.
-                    BoundingBox box = owned.box();
-                    if (box != null && maxY >= box.minY()
-                            && owned.intersects(x, z, box.minY(), box.maxY(), horizontalRadius)) return owned;
-                } else if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)) {
-                    return owned;
-                }
-            }
-            return null;
-        }
-
-        private OwnedStructureBox findEndpointBuildingCollision(int x, int z, int minY, int maxY,
-                                                                 int horizontalRadius) {
-            if (boxesByChunk.isEmpty()) return null;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return null;
-            for (OwnedStructureBox owned : candidates) {
-                if (!isVerifiedBuilding(owned) || !ownsEndpoint(owned.owner())) continue;
-                if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)) return owned;
-            }
-            return null;
-        }
-
-        boolean ownsEndpoint(StructureOwnerKey owner) {
-            return owner != null && endpointOwners.contains(owner);
-        }
-
-        /**
-         * 端点 XZ 是否落在快照里任意结构（含建筑片）盒的 XZ 范围内。
-         * 供规划前过滤使用：不涉及 Y 与施工高度带，只回答"这个坐标是不是
-         * 处在某个已解析结构的水平范围里"。
-         */
-        boolean insideAnyStructureBox(int x, int z) {
-            if (boxesByChunk.isEmpty()) return false;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return false;
-            for (OwnedStructureBox owned : candidates) {
-                if (owned == null || owned.box() == null) continue;
-                if (insideXZ(owned.box(), x, z)) return true;
-            }
-            return false;
-        }
-
-        /**
-         * 端点 XZ 所属的村庄 owner（聚合该村庄全部建筑片盒后判定 XZ 包含）。
-         * 同一点落在多个村庄聚合盒内时返回 null（歧义，不参与过滤）。
-         */
-        StructureOwnerKey villageOwnerAt(int x, int z) {
-            if (boxesByChunk.isEmpty()) return null;
-            List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
-            if (candidates == null || candidates.isEmpty()) return null;
-            Map<StructureOwnerKey, BoundingBox> aggregate = new HashMap<>();
-            for (OwnedStructureBox owned : candidates) {
-                if (owned == null || owned.owner() == null || owned.box() == null) continue;
-                if (!isVillageStructure(owned.owner().structureId())) continue;
-                aggregate.merge(owned.owner(), owned.box(), StructureAvoidanceService::encapsulate);
-            }
-            StructureOwnerKey unique = null;
-            for (Map.Entry<StructureOwnerKey, BoundingBox> entry : aggregate.entrySet()) {
-                if (!insideXZ(entry.getValue(), x, z)) continue;
-                if (unique != null && !unique.equals(entry.getKey())) return null;
-                unique = entry.getKey();
-            }
-            return unique;
-        }
-
-        String describeCollision(BlockPos pos) {
-            if (pos == null) return "position=null";
-            int minY = pos.getY() - CONSTRUCTION_BELOW;
-            int maxY = pos.getY() + CONSTRUCTION_ABOVE;
-            OwnedStructureBox owned = findCollision(pos.getX(), pos.getZ(), minY, maxY, roadRadius);
-            if (owned == null) {
-                return "position=" + pos + " collision=none endpointOwners=" + endpointOwners.size();
-            }
-            BoundingBox box = owned.box();
-            String boxText = box == null ? "null" : "["
-                    + box.minX() + "," + box.minY() + "," + box.minZ() + " -> "
-                    + box.maxX() + "," + box.maxY() + "," + box.maxZ() + "]";
-            return "position=" + pos + " band=" + minY + ".." + maxY
-                    + " owner=" + owned.owner() + " box=" + boxText
-                    + " occupancy=" + owned.occupancyKind()
-                    + " endpointOwner=" + ownsEndpoint(owned.owner());
-        }
-
-        String describeCollision(BlockPos from, BlockPos to) {
-            if (from == null || to == null) return "edge=" + from + " -> " + to;
-            double distance = Math.hypot(to.getX() - from.getX(), to.getZ() - from.getZ());
-            int samples = Math.max(1, (int) Math.ceil(distance));
-            for (int i = 0; i <= samples; i++) {
-                double t = i / (double) samples;
-                BlockPos sample = new BlockPos(
-                        (int) Math.round(from.getX() + (to.getX() - from.getX()) * t),
-                        (int) Math.round(from.getY() + (to.getY() - from.getY()) * t),
-                        (int) Math.round(from.getZ() + (to.getZ() - from.getZ()) * t));
-                int minY = sample.getY() - CONSTRUCTION_BELOW;
-                int maxY = sample.getY() + CONSTRUCTION_ABOVE;
-                if (findCollision(sample.getX(), sample.getZ(), minY, maxY, roadRadius) != null) {
-                    return "edge=" + from + " -> " + to + " " + describeCollision(sample);
-                }
-            }
-            return "edge=" + from + " -> " + to + " collision=none endpointOwners=" + endpointOwners.size();
-        }
-
-        List<RoadSegmentPlacement> stopAtVillageBuilding(StructureConnection connection,
-                                                         List<RoadSegmentPlacement> segments) {
-            if (connection == null || segments == null || segments.size() < 3
-                    || endpointOwners.isEmpty() || boxes.isEmpty()) return segments;
-            BlockPos firstCenter = segments.getFirst().middlePos();
-            BlockPos lastCenter = segments.getLast().middlePos();
-            List<OwnedStructureBox> firstVillage = endpointVillageBoxes(
-                    closestEndpoint(connection, firstCenter, true));
-            List<OwnedStructureBox> lastVillage = endpointVillageBoxes(
-                    closestEndpoint(connection, lastCenter, false));
-
-            // Land each end at the structure-boundary interaction point: the
-            // first station that exits the village's aggregate bounding box.
-            // This stops the road at the village edge instead of running to its
-            // centre (which drove tunnels into the mountain and flattened the
-            // terrain inside the village).
-            int first = firstOutsideVillageBox(segments, firstVillage, true);
-            int last = firstOutsideVillageBox(segments, lastVillage, false);
-            VillageBuildingCollision firstCollision = null;
-            VillageBuildingCollision lastCollision = null;
-            // Prefer landing at the structure boundary. Only fall back to the
-            // first real building when the road never leaves the boundary box.
-            if (first < 0) {
-                firstCollision = firstVillageBuildingCollision(
-                        segments, 0, 1, firstVillage);
-                first = firstCollision == null ? 0 : firstCollision.segmentIndex() + 1;
-            }
-            if (last < 0) {
-                lastCollision = firstVillageBuildingCollision(
-                        segments, segments.size() - 1, -1, lastVillage);
-                last = lastCollision == null
-                        ? segments.size() - 1 : lastCollision.segmentIndex() - 1;
-            }
-
-            if (first == 0 && last == segments.size() - 1) return segments;
-            if (first < 0 || last >= segments.size() || last - first + 1 < 2) {
-                LOGGER.warn("RoadWeaver village building approach left no safe road connection={}->{} "
-                                + "firstCollision={} lastCollision={}",
-                        connection.from(), connection.to(), firstCollision, lastCollision);
-                return null;
-            }
-            List<RoadSegmentPlacement> clipped = List.copyOf(segments.subList(first, last + 1));
-            LOGGER.info("RoadWeaver landed at structure boundary connection={}->{} segments={} -> {} "
-                            + "first={} last={} firstBuildingCollision={} lastBuildingCollision={}",
-                    connection.from(), connection.to(), segments.size(), clipped.size(),
-                    first, last, firstCollision, lastCollision);
-            return clipped;
-        }
-
-        private int firstOutsideVillageBox(List<RoadSegmentPlacement> segments,
-                                           List<OwnedStructureBox> village,
-                                           boolean fromStart) {
-            if (segments == null || village == null || village.isEmpty()) return -1;
-            BoundingBox box = aggregateStructureBox(village);
-            if (box == null) return -1;
-            if (fromStart) {
-                for (int i = 0; i < segments.size(); i++) {
-                    BlockPos pos = segments.get(i).middlePos();
-                    if (pos != null && !insideXZ(box, pos.getX(), pos.getZ())) return i;
-                }
-            } else {
-                for (int i = segments.size() - 1; i >= 0; i--) {
-                    BlockPos pos = segments.get(i).middlePos();
-                    if (pos != null && !insideXZ(box, pos.getX(), pos.getZ())) return i;
-                }
-            }
-            return -1;
-        }
-
-        private static boolean insideXZ(BoundingBox box, int x, int z) {
-            return box != null && x >= box.minX() && x <= box.maxX()
-                    && z >= box.minZ() && z <= box.maxZ();
-        }
-
-        /**
-         * T-23: 过路村庄聚合盒掩码。对每个"非端点 + 村庄类"owner 求聚合盒,
-         * 站点 XZ 落入盒内且施工高度带([y-CONSTRUCTION_BELOW, y+CONSTRUCTION_ABOVE])
-         * 与盒 Y 范围相交时标记为真 —— 即道路施工体积真正触及村庄 aggregated
-         * 边界时才产生缺口,低空/深埋穿越不受影响。端点村庄(endpointOwners)
-         * 被显式排除:它们由 stopAtVillageBuilding 的着陆逻辑处理,避免把真正
-         * 的村庄端点裁剪掉(requirement 5)。
-         */
-        private boolean[] passThroughVillageGapMask(List<BlockPos> points) {
-            boolean[] mask = new boolean[points == null ? 0 : points.size()];
-            try {
-                if (!ConfigService.get().planning().passThroughVillageClipping()) return mask;
-            } catch (Throwable ignored) {
-                return mask;
-            }
-            Map<StructureOwnerKey, BoundingBox> passThrough = passThroughVillageBoxes();
-            if (passThrough.isEmpty()) return mask;
-            // 按用户口径：只要道路中心线在 XZ 上穿过"非端点村庄"的聚合包围盒，
-            // 就按该盒把路裁开（站点落为保护缺口），不再要求施工高度带与盒 Y 相交。
-            // 之前的 Y 判定会放过"从村子上/下方掠过"的路线，而剖面调整（坡度/洞口
-            // 规划）之后它们又会落进建筑盒，只能等结构修复事后补救、绕不开就留断口。
-            int clipped = 0;
-            for (int i = 0; i < mask.length; i++) {
-                BlockPos point = points.get(i);
-                if (point == null) continue;
-                for (BoundingBox box : passThrough.values()) {
-                    if (insideXZ(box, point.getX(), point.getZ())) {
-                        mask[i] = true;
-                        clipped++;
-                        break;
-                    }
-                }
-            }
-            if (clipped > 0) {
-                LOGGER.info("RoadWeaver pass-through village clip: stations={}/{} villageBoxes={}",
-                        clipped, mask.length, passThrough.size());
-            }
-            return mask;
-        }
-
-        private Map<StructureOwnerKey, BoundingBox> passThroughVillageBoxes() {
-            Map<StructureOwnerKey, BoundingBox> aggregate = new HashMap<>();
-            for (OwnedStructureBox owned : boxes) {
-                if (owned == null || owned.owner() == null || owned.box() == null
-                        || endpointOwners.contains(owned.owner())
-                        || !isVillageStructure(owned.owner().structureId())) continue;
-                aggregate.merge(owned.owner(), owned.box(), StructureAvoidanceService::encapsulate);
-            }
-            return aggregate;
-        }
-
-        private static BoundingBox aggregateStructureBox(List<OwnedStructureBox> village) {
-            if (village == null || village.isEmpty()) return null;
-            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-            int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-            for (OwnedStructureBox owned : village) {
-                if (owned == null || owned.box() == null) continue;
-                BoundingBox b = owned.box();
-                minX = Math.min(minX, b.minX()); minY = Math.min(minY, b.minY()); minZ = Math.min(minZ, b.minZ());
-                maxX = Math.max(maxX, b.maxX()); maxY = Math.max(maxY, b.maxY()); maxZ = Math.max(maxZ, b.maxZ());
-            }
-            if (minX == Integer.MAX_VALUE) return null;
-            return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
-        }
-
-        private List<OwnedStructureBox> endpointVillageBoxes(BlockPos endpoint) {
-            if (endpoint == null) return List.of();
-            Map<StructureOwnerKey, BoundingBox> aggregate = new HashMap<>();
-            for (OwnedStructureBox owned : boxes) {
-                if (owned == null || owned.owner() == null || owned.box() == null
-                        || !endpointOwners.contains(owned.owner())
-                        || !isVillageStructure(owned.owner().structureId())) continue;
-                aggregate.merge(owned.owner(), owned.box(), StructureAvoidanceService::encapsulate);
-            }
-            long maximumDistanceSquared = (long) ENDPOINT_REPLACEMENT_MATCH_BLOCKS
-                    * ENDPOINT_REPLACEMENT_MATCH_BLOCKS;
-            long nearestDistance = Long.MAX_VALUE;
-            Set<StructureOwnerKey> nearestOwners = new HashSet<>();
-            for (Map.Entry<StructureOwnerKey, BoundingBox> entry : aggregate.entrySet()) {
-                long distance = StructureAvoidanceService.horizontalDistanceSquared(entry.getValue(), endpoint);
-                if (distance > maximumDistanceSquared) continue;
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestOwners.clear();
-                    nearestOwners.add(entry.getKey());
-                } else if (distance == nearestDistance) {
-                    nearestOwners.add(entry.getKey());
-                }
-            }
-            if (nearestOwners.isEmpty()) return List.of();
-            List<OwnedStructureBox> selected = new ArrayList<>();
-            for (OwnedStructureBox owned : boxes) {
-                if (owned != null && nearestOwners.contains(owned.owner())) selected.add(owned);
-            }
-            return List.copyOf(selected);
-        }
-
-        private static BlockPos closestEndpoint(StructureConnection connection,
-                                                BlockPos position,
-                                                boolean preferFrom) {
-            if (connection == null || position == null) return null;
-            long fromDistance = horizontalDistanceSquared(connection.from(), position);
-            long toDistance = horizontalDistanceSquared(connection.to(), position);
-            if (fromDistance == toDistance) return preferFrom ? connection.from() : connection.to();
-            return fromDistance < toDistance ? connection.from() : connection.to();
-        }
-
-        private static long horizontalDistanceSquared(BlockPos left, BlockPos right) {
-            if (left == null || right == null) return Long.MAX_VALUE;
-            long dx = (long) left.getX() - right.getX();
-            long dz = (long) left.getZ() - right.getZ();
-            return dx * dx + dz * dz;
-        }
-
-        private static VillageBuildingCollision firstVillageBuildingCollision(
-                List<RoadSegmentPlacement> segments,
-                int start,
-                int step,
-                List<OwnedStructureBox> village) {
-            if (segments == null || village == null || village.isEmpty() || step == 0) return null;
-            for (int index = start; index >= 0 && index < segments.size(); index += step) {
-                RoadSegmentPlacement segment = segments.get(index);
-                if (segment == null || segment.middlePos() == null || segment.positions() == null) continue;
-                int minY = segment.middlePos().getY() + 1;
-                int maxY = segment.middlePos().getY() + CONSTRUCTION_ABOVE;
-                for (BlockPos position : segment.positions()) {
-                    if (position == null) continue;
-                    for (OwnedStructureBox owned : village) {
-                        if (owned != null && owned.intersectsSolid(
-                                position.getX(), position.getZ(), minY, maxY)) {
-                            return new VillageBuildingCollision(index, position, owned.owner(), owned.box());
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        private record VillageBuildingCollision(int segmentIndex,
-                                                BlockPos position,
-                                                StructureOwnerKey owner,
-                                                BoundingBox box) {
-        }
-
-        PlanningSnapshot forceVerticalOwner(StructureOwnerKey owner) {
-            if (owner == null || ownsEndpoint(owner) || forcedVerticalOwners.contains(owner)) return this;
-            Set<StructureOwnerKey> forced = new HashSet<>(forcedVerticalOwners);
-            forced.add(owner);
-            return withForcedVerticalOwners(forced);
-        }
-
-        private PlanningSnapshot withForcedVerticalOwners(Collection<StructureOwnerKey> owners) {
-            Set<StructureOwnerKey> forced = owners == null || owners.isEmpty() ? Set.of() : Set.copyOf(owners);
-            return new PlanningSnapshot(boxes, boxesByChunk, endpointOwners, forced,
-                    resolvedStarts, coveredCandidateChunks, roadRadius);
-        }
-
-        PlanningSnapshot withAdditionalRoadRadius(int additionalRoadRadius) {
-            if (additionalRoadRadius <= 0 || this == EMPTY) return this;
-            int expandedRadius = roadRadius + additionalRoadRadius;
-            if (expandedRadius == roadRadius) return this;
-            Map<Long, List<OwnedStructureBox>> mutable = new HashMap<>();
-            for (OwnedStructureBox owned : boxes) {
-                if (owned == null || owned.box() == null) continue;
-                BoundingBox box = owned.box();
-                for (int cx = (box.minX() - expandedRadius) >> 4;
-                     cx <= (box.maxX() + expandedRadius) >> 4; cx++) {
-                    for (int cz = (box.minZ() - expandedRadius) >> 4;
-                         cz <= (box.maxZ() + expandedRadius) >> 4; cz++) {
-                        mutable.computeIfAbsent(ChunkPos.asLong(cx, cz), ignored -> new ArrayList<>()).add(owned);
-                    }
-                }
-            }
-            Map<Long, List<OwnedStructureBox>> expandedByChunk = new HashMap<>();
-            for (Map.Entry<Long, List<OwnedStructureBox>> entry : mutable.entrySet()) {
-                expandedByChunk.put(entry.getKey(), List.copyOf(entry.getValue()));
-            }
-            return new PlanningSnapshot(boxes, Map.copyOf(expandedByChunk), endpointOwners,
-                    forcedVerticalOwners, resolvedStarts, coveredCandidateChunks, expandedRadius);
-        }
-
-        private static Set<StructureOwnerKey> findEndpointOwners(
-                StructureConnection connection, Collection<OwnedStructureBox> boxes) {
-            if (connection == null || boxes == null || boxes.isEmpty()) return Set.of();
-            Map<StructureOwnerKey, BoundingBox> aggregate = new HashMap<>();
-            for (OwnedStructureBox owned : boxes) {
-                if (owned == null || owned.owner() == null || owned.box() == null) continue;
-                aggregate.merge(owned.owner(), owned.box(), StructureAvoidanceService::encapsulate);
-            }
-            Set<StructureOwnerKey> owners = new HashSet<>();
-            for (Map.Entry<StructureOwnerKey, BoundingBox> entry : aggregate.entrySet()) {
-                if (containsHorizontal(entry.getValue(), connection.from())
-                        || containsHorizontal(entry.getValue(), connection.to())) {
-                    owners.add(entry.getKey());
-                }
-            }
-            return Set.copyOf(owners);
-        }
-
-        private static Set<StructureOwnerKey> expandEndpointVillageOwners(
-                StructureConnection connection,
-                Collection<OwnedStructureBox> boxes,
-                Collection<StructureOwnerKey> current) {
-            Set<StructureOwnerKey> expanded = new HashSet<>();
-            if (current != null) expanded.addAll(current);
-            if (connection == null || boxes == null || boxes.isEmpty() || expanded.isEmpty()) {
-                return Set.copyOf(expanded);
-            }
-            // 端点村庄的家族名集合。Lithostitched 替换会把同一村庄拆成多个
-            // owner(如 ctov:medium/village_dark_forest -> ctov:small/village_dark_forest),
-            // 但这些拆分片的 family 相同;必须只聚合同 family 的村庄建筑片。
-            // 旧实现按"距任一端点 <= 96 格"无条件聚合,会把两个相距 73 格但
-            // 完全独立的村庄(如 biomeswevegone:village/salem 与
-            // ctov:medium/village_dark_forest)误当成同一端点村庄群,导致过路村庄
-            // 被豁免、道路整片切穿(T-35)。
-            Set<String> endpointVillageFamilies = new HashSet<>();
-            for (StructureOwnerKey owner : expanded) {
-                if (owner != null && isVillageStructure(owner.structureId())) {
-                    endpointVillageFamilies.add(endpointStructureFamily(owner.structureId()));
-                }
-            }
-            if (endpointVillageFamilies.isEmpty()) return Set.copyOf(expanded);
-            long radiusSquared = (long) ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS
-                    * ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS;
-            for (OwnedStructureBox owned : boxes) {
-                if (owned == null || owned.owner() == null || owned.box() == null
-                        || !isVerifiedBuilding(owned)
-                        || !isVillageStructure(owned.owner().structureId())) continue;
-                // 只聚合与端点村庄同 family 的建筑片,相邻独立村庄保持为过路障碍。
-                if (!endpointVillageFamilies.contains(
-                        endpointStructureFamily(owned.owner().structureId()))) continue;
-                long fromDistance = StructureAvoidanceService.horizontalDistanceSquared(
-                        owned.box(), connection.from());
-                long toDistance = StructureAvoidanceService.horizontalDistanceSquared(
-                        owned.box(), connection.to());
-                if (Math.min(fromDistance, toDistance) <= radiusSquared) {
-                    expanded.add(owned.owner());
-                }
-            }
-            return Set.copyOf(expanded);
-        }
-    }
-
-    private static void requestMainThreadPreload(ServerLevel level, int cx, int cz, long key) {
+    static void requestMainThreadPreload(ServerLevel level, int cx, int cz, long key) {
         StructureAvoidanceCache.CHUNK_BBOX_CACHE.putIfAbsent(key, ChunkEntry.UNREADY);
         RuntimePreloadKey preloadKey = new RuntimePreloadKey(
                 level.dimension().location().toString(), level.getSeed(), key);
@@ -4250,7 +3531,7 @@ public final class StructureAvoidanceService {
         return owned != null && owned.intersects(x, z, minY, maxY, 0);
     }
 
-    private static boolean intersectsPlanningBand(OwnedStructureBox owned,
+    static boolean intersectsPlanningBand(OwnedStructureBox owned,
                                                   int x,
                                                   int z,
                                                   int minY,

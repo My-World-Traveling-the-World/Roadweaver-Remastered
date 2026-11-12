@@ -32,7 +32,7 @@ public final class StructureAvoidanceCache {
     /** CHUNK_BBOX_CACHE 的 LRU 容量。 */
     static final int CACHE_CAPACITY = 8192;
 
-    static final ConcurrentMap<RouteKey, StructureAvoidanceService.PlanningSnapshot> PLANNING_SNAPSHOTS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<RouteKey, PlanningSnapshot> PLANNING_SNAPSHOTS = new ConcurrentHashMap<>();
     static final ConcurrentMap<RouteKey, Set<StructureOwnerKey>> ROUTE_ENDPOINT_OWNERS = new ConcurrentHashMap<>();
     static final ConcurrentMap<PreparedStartKey, List<OwnedStructureBox>> PREPARED_START_BOXES = new ConcurrentHashMap<>();
     static final ConcurrentMap<PreparedStartKey, List<OwnedStructureBox>> STARTUP_PINNED_START_BOXES = new ConcurrentHashMap<>();
@@ -47,7 +47,7 @@ public final class StructureAvoidanceCache {
     static final ConcurrentLinkedQueue<RouteKey> PLANNING_SNAPSHOT_ORDER = new ConcurrentLinkedQueue<>();
     static final ConcurrentLinkedQueue<PreparedStartKey> PREPARED_START_ORDER = new ConcurrentLinkedQueue<>();
     static final ConcurrentLinkedQueue<StructureAvoidanceService.ObstacleTileKey> OBSTACLE_TILE_ORDER = new ConcurrentLinkedQueue<>();
-    static final ThreadLocal<StructureAvoidanceService.PlanningSnapshot> ACTIVE_PLANNING_SNAPSHOT = new ThreadLocal<>();
+    static final ThreadLocal<PlanningSnapshot> ACTIVE_PLANNING_SNAPSHOT = new ThreadLocal<>();
     static final ThreadLocal<WorldgenRandom> STRUCTURE_SELECTION_RANDOM =
             ThreadLocal.withInitial(() -> new WorldgenRandom(new LegacyRandomSource(0L)));
     static final Map<Long, StructureAvoidanceService.ChunkEntry> CHUNK_BBOX_CACHE = Collections.synchronizedMap(

@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
@@ -177,7 +179,7 @@ public final class RoadConstructionVolumePlanner {
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return RoadConstructionSafety.terrainHeight(level, x, z);
             }
-            throw new StructureAvoidanceService.PlanningSnapshotUnavailableException(
+            throw new PlanningSnapshotUnavailableException(
                     "final validation accurate terrain sample is unavailable at " + x + "," + z);
         }
 
@@ -187,7 +189,7 @@ public final class RoadConstructionVolumePlanner {
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
             }
-            throw new StructureAvoidanceService.PlanningSnapshotUnavailableException(
+            throw new PlanningSnapshotUnavailableException(
                     "final validation world-surface sample is unavailable at " + x + "," + z);
         }
 
@@ -197,7 +199,7 @@ public final class RoadConstructionVolumePlanner {
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG, x, z);
             }
-            throw new StructureAvoidanceService.PlanningSnapshotUnavailableException(
+            throw new PlanningSnapshotUnavailableException(
                     "final validation ocean-floor sample is unavailable at " + x + "," + z);
         }
     }
