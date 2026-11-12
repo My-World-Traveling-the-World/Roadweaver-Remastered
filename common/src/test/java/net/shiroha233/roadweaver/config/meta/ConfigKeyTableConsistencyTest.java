@@ -37,6 +37,8 @@ class ConfigKeyTableConsistencyTest {
     private static final Map<String, String> CONFIG_CLASSES = new LinkedHashMap<>();
 
     static {
+        CONFIG_CLASSES.put("planning",
+                "net.shiroha233.roadweaver.config.sub.PlanningConfig");
         CONFIG_CLASSES.put("bridge", "net.shiroha233.roadweaver.config.sub.BridgeConfig");
     }
 
@@ -195,6 +197,11 @@ class ConfigKeyTableConsistencyTest {
         if (actual == null || expected == null) return actual == expected;
         if (actual instanceof Number a && expected instanceof Number b) {
             return a.doubleValue() == b.doubleValue();
+        }
+        // 枚举：配置类里是枚举常量，元数据表里存的是名字字符串。
+        // 这与实际落盘口径一致 —— GSON 序列化枚举写的就是 name()。
+        if (actual instanceof Enum<?> constant) {
+            return constant.name().equals(String.valueOf(expected));
         }
         return actual.equals(expected);
     }
