@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
+import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 
 /**
  * Final bounded route repair using accurate terrain heights. The coarse
@@ -41,48 +42,48 @@ import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
  * impossible one-block grade or a cliff-sized 12-block rise/drop.
  */
 public final class AccurateGradeRepairPlanner {
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
 
     /**
      * 0.9.069（D-11a）：上一趟 searchLocalRoute 是否因**预算耗尽**（open 非空但状态数/墙钟
      * 到上限）退出，而不是 open 空（真无解）。ThreadLocal：搜索都在同一线程内同步完成。
      * 用于闸门区分「陆路真不通」与「陆路没搜完」——后者绝不能 fail-open 去架桥。
      */
-    private static final ThreadLocal<Boolean> LAST_SEARCH_BUDGET_EXHAUSTED = new ThreadLocal<>();
-    private static final int LOCAL_WINDOW_BLOCKS = 12;
+    static final ThreadLocal<Boolean> LAST_SEARCH_BUDGET_EXHAUSTED = new ThreadLocal<>();
+    static final int LOCAL_WINDOW_BLOCKS = 12;
     /** Height anomalies are repaired in one explicit local 50-block window. */
-    private static final int HEIGHT_REPAIR_CONTEXT_BLOCKS = 50;
-    private static final int SEARCH_MARGIN_BLOCKS = 80;
-    private static final int STRUCTURE_CONTEXT_BLOCKS = 96;
-    private static final int STRUCTURE_SEARCH_MARGIN_BLOCKS = 192;
-    private static final int STRUCTURE_AHEAD_CLEARANCE_BLOCKS = 10;
+    static final int HEIGHT_REPAIR_CONTEXT_BLOCKS = 50;
+    static final int SEARCH_MARGIN_BLOCKS = 80;
+    static final int STRUCTURE_CONTEXT_BLOCKS = 96;
+    static final int STRUCTURE_SEARCH_MARGIN_BLOCKS = 192;
+    static final int STRUCTURE_AHEAD_CLEARANCE_BLOCKS = 10;
     /** Used only when a caller has no world-height context. Runtime repair uses the world minimum. */
-    private static final int DEFAULT_TUNNEL_DEPTH_BLOCKS = 12;
-    private static final int LAKE_CONTEXT_BLOCKS = 96;
-    private static final int LAKE_SHORE_PROBE_BLOCKS = 8;
-    private static final int LAKE_REROUTE_CLEARANCE_BLOCKS = 10;
+    static final int DEFAULT_TUNNEL_DEPTH_BLOCKS = 12;
+    static final int LAKE_CONTEXT_BLOCKS = 96;
+    static final int LAKE_SHORE_PROBE_BLOCKS = 8;
+    static final int LAKE_REROUTE_CLEARANCE_BLOCKS = 10;
     /** Lake banks may be lightly leveled, but must not be cut into visible trenches. */
-    private static final int MAX_LAKE_SHORE_CUT_DEPTH = 2;
-    private static final int MAX_LAKE_SHORE_FILL_DEPTH = 2;
-    private static final int MAX_LOCAL_REPAIRS = 4;
+    static final int MAX_LAKE_SHORE_CUT_DEPTH = 2;
+    static final int MAX_LAKE_SHORE_FILL_DEPTH = 2;
+    static final int MAX_LOCAL_REPAIRS = 4;
     /** One bounded local reroute for a grade anomaly that survives normal repair. */
-    private static final int HEIGHT_ANOMALY_DETOUR_BLOCKS = 50;
+    static final int HEIGHT_ANOMALY_DETOUR_BLOCKS = 50;
     /** A tier may fix each local conflict once; successful fixes remain fixed. */
-    private static final int MAX_STRUCTURE_REPAIRS = 8;
+    static final int MAX_STRUCTURE_REPAIRS = 8;
     /**
      * A chain of nearby buildings must not turn a local 10/20/50-block detour
      * into an endpoint-to-endpoint search. Later buildings are repaired by the
      * next pass after the preceding local repair has been committed.
      */
-    private static final int MAX_STRUCTURE_CLUSTER_SPAN_BLOCKS = 192;
-    private static final int MAX_LAKE_REPAIRS = 8;
-    private static final int MAX_RIVER_REPAIRS = 8;
+    static final int MAX_STRUCTURE_CLUSTER_SPAN_BLOCKS = 192;
+    static final int MAX_LAKE_REPAIRS = 8;
+    static final int MAX_RIVER_REPAIRS = 8;
     /** Dry stations tolerated between two wet runs of one crossing group. */
-    private static final int RIVER_RUN_MERGE_MAX_DRY_STATIONS = 12;
-    private static final int MAX_EXPANDED_STATES = 90_000;
-    private static final int MAX_TUNNEL_EXPANDED_STATES = 240_000;
+    static final int RIVER_RUN_MERGE_MAX_DRY_STATIONS = 12;
+    static final int MAX_EXPANDED_STATES = 90_000;
+    static final int MAX_TUNNEL_EXPANDED_STATES = 240_000;
     /** Exact building repair is intentionally local; it must not stall a whole road. */
-    private static final int MAX_EXACT_BUILDING_EXPANDED_STATES = 24_000;
+    static final int MAX_EXACT_BUILDING_EXPANDED_STATES = 24_000;
     /**
      * 0.9.001：单个局部修坡窗口 A* 的墙钟预算兜底值（20 秒）。
      *
@@ -92,9 +93,9 @@ public final class AccurateGradeRepairPlanner {
      * 改配置即生效，不用重编），本常量只在该配置读不出来时兜底，保证任何情况下
      * 这条 A* 都有墙钟上界。</p>
      */
-    private static final long DEFAULT_LOCAL_SEARCH_BUDGET_NANOS = 20_000_000_000L;
-    private static final double MAX_ROUTE_LENGTH_MULTIPLIER = 3.0D;
-    private static final int[][] DIRECTIONS = {
+    static final long DEFAULT_LOCAL_SEARCH_BUDGET_NANOS = 20_000_000_000L;
+    static final double MAX_ROUTE_LENGTH_MULTIPLIER = 3.0D;
+    static final int[][] DIRECTIONS = {
             {1, 0}, {-1, 0}, {0, 1}, {0, -1},
             {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
     };
@@ -104,7 +105,7 @@ public final class AccurateGradeRepairPlanner {
      *  0 = auto); the old fixed 4-thread pool left road workers blocked in
      *  future.get() while most cores idled. Auto never exceeds the CPU count,
      *  so the pool cannot oversubscribe the machine. */
-    private static final ExecutorService GRADE_REPAIR_POOL = Executors.newFixedThreadPool(
+    static final ExecutorService GRADE_REPAIR_POOL = Executors.newFixedThreadPool(
             resolvedGradeRepairParallelism(),
             runnable -> {
                 Thread thread = new Thread(runnable, "RoadWeaver-GradeRepair");
@@ -113,7 +114,7 @@ public final class AccurateGradeRepairPlanner {
             });
 
     /** Resolved once at class init: read the configured parallelism (0 = auto). */
-    private static int resolvedGradeRepairParallelism() {
+    static int resolvedGradeRepairParallelism() {
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
         int configured;
         try {
@@ -248,7 +249,7 @@ public final class AccurateGradeRepairPlanner {
     }
 
     /** Computes the local step=1 repair for one non-overlapping grade window. */
-    private static GradePlan computeGradePlan(ServerLevel level,
+    static GradePlan computeGradePlan(ServerLevel level,
                                               AccurateHeightSampler sampler,
                                               PathfindingCostConfig fine,
                                               StructureConnection connection,
@@ -307,7 +308,7 @@ public final class AccurateGradeRepairPlanner {
      * 窗口内的纯纵向修复：保持每一站的 XZ 不变，只按最优坡度剖面（分层 DAG 最短路）
      * 重算 Y。复杂度 {@code O(n·H²)}，比逐窗口 2D A* 便宜几个数量级；上坡与下坡同样处理。
      */
-    private static List<BlockPos> solveGradeProfileWindow(List<BlockPos> original,
+    static List<BlockPos> solveGradeProfileWindow(List<BlockPos> original,
                                                           AccurateHeightSampler sampler) {
         if (original == null || original.size() < 4 || sampler == null) {
             return original;
@@ -328,11 +329,11 @@ public final class AccurateGradeRepairPlanner {
         return result;
     }
 
-    private record GradePlan(int startIndex, int endIndex, List<BlockPos> candidate) {
+    record GradePlan(int startIndex, int endIndex, List<BlockPos> candidate) {
     }
 
     /** 0.9.062（④）：{@code [REPAIR-NULL]} 累计次数（只读观测 + 单测断言）。 */
-    private static final java.util.concurrent.atomic.AtomicLong REPAIR_NULL_SEEN =
+    static final java.util.concurrent.atomic.AtomicLong REPAIR_NULL_SEEN =
             new java.util.concurrent.atomic.AtomicLong();
 
     /** 0.9.062（④）：{@code [REPAIR-NULL]} 的累计次数。 */
@@ -354,7 +355,7 @@ public final class AccurateGradeRepairPlanner {
     }
 
     /** 0.9.062（④）：{@code [REPAIR-NULL]} 的窗口标签。 */
-    private static String windowLabel(int startIndex, int endIndex) {
+    static String windowLabel(int startIndex, int endIndex) {
         return "grade:" + startIndex + "-" + endIndex;
     }
 
@@ -467,7 +468,7 @@ public final class AccurateGradeRepairPlanner {
         return path;
     }
 
-    private static int heightAnomalyDetourMaxBlocks() {
+    static int heightAnomalyDetourMaxBlocks() {
         try {
             return ConfigService.get().planning().heightAnomalyDetourMaxBlocks();
         } catch (Throwable ignored) {
@@ -552,7 +553,7 @@ public final class AccurateGradeRepairPlanner {
                 rejectedCenter == null ? null : "unresolved");
     }
 
-    private static List<BlockPos> repairStructureIntersections(List<BlockPos> accuratePath,
+    static List<BlockPos> repairStructureIntersections(List<BlockPos> accuratePath,
                                                                 ServerLevel level,
                                                                 AccurateHeightSampler sampler,
                                                                 PathfindingCostConfig config,
@@ -563,7 +564,7 @@ public final class AccurateGradeRepairPlanner {
                 localDetourBlocks, structureClearance, null, null);
     }
 
-    private static List<BlockPos> repairStructureIntersections(List<BlockPos> accuratePath,
+    static List<BlockPos> repairStructureIntersections(List<BlockPos> accuratePath,
                                                                 ServerLevel level,
                                                                 AccurateHeightSampler sampler,
                                                                 PathfindingCostConfig config,
@@ -785,7 +786,7 @@ public final class AccurateGradeRepairPlanner {
         return List.copyOf(working);
     }
 
-    private static String describeStructureCandidateFailure(List<BlockPos> original,
+    static String describeStructureCandidateFailure(List<BlockPos> original,
                                                             List<BlockPos> candidate,
                                                             int structureClearance) {
         if (candidate == null) return "no_path";
@@ -818,7 +819,7 @@ public final class AccurateGradeRepairPlanner {
      * route can be found.  The caller has already bounded the input to the
      * height-repair window; only Y values are changed here.
      */
-    private static List<BlockPos> forceSmoothHeightWindow(List<BlockPos> original) {
+    static List<BlockPos> forceSmoothHeightWindow(List<BlockPos> original) {
         if (original == null || original.size() < 3) return null;
         int size = original.size();
         double[] distances = new double[size];
@@ -865,7 +866,7 @@ public final class AccurateGradeRepairPlanner {
         return result;
     }
 
-    private static int clamp(int value, int min, int max) {
+    static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
@@ -878,7 +879,7 @@ public final class AccurateGradeRepairPlanner {
      * 投影到坡度限制(保留首尾 Y 以维持与原路径的接缝)，平滑后无违反则
      * 采用；否则保持原候选，不改变原有拒绝语义。
      */
-    private static List<BlockPos> smoothCandidateGrade(List<BlockPos> candidate) {
+    static List<BlockPos> smoothCandidateGrade(List<BlockPos> candidate) {
         if (candidate == null || candidate.size() < 3) return candidate;
         if (findFirstViolation(candidate) == null) return candidate;
         List<BlockPos> smoothed = forceSmoothHeightWindow(candidate);
@@ -886,7 +887,7 @@ public final class AccurateGradeRepairPlanner {
         return findFirstViolation(smoothed) == null ? smoothed : candidate;
     }
 
-    private static int roadBodyRadius() {
+    static int roadBodyRadius() {
         int width = Math.max(1, ConfigService.get().roadAppearance().roadWidth());
         // PathPostProcessor rasterizes the complete width around the centerline.
         // Use the ceiling of the half-width so the far edge of even-width roads
@@ -1050,7 +1051,7 @@ public final class AccurateGradeRepairPlanner {
         return List.copyOf(working);
     }
 
-    private static BlockPos conflictCenter(List<BlockPos> path, Violation conflict) {
+    static BlockPos conflictCenter(List<BlockPos> path, Violation conflict) {
         if (path == null || conflict == null || path.isEmpty()) return null;
         int start = Math.max(0, Math.min(path.size() - 1, conflict.start()));
         int end = Math.max(0, Math.min(path.size() - 1, conflict.end()));
@@ -1071,14 +1072,14 @@ public final class AccurateGradeRepairPlanner {
      * circle's structure discovery. Mirrors the path-based dedup in
      * RoadPathCalculator.refreshPlanningSnapshot.
      */
-    private record CircleSnapshotEntry(long centerKey, int radius,
+    record CircleSnapshotEntry(long centerKey, int radius,
                                        java.util.concurrent.CompletableFuture<Void> future) {}
 
-    private static final java.util.concurrent.ConcurrentHashMap<net.shiroha233.roadweaver.planning.path.PlannedPathKey, CircleSnapshotEntry>
+    static final java.util.concurrent.ConcurrentHashMap<net.shiroha233.roadweaver.planning.path.PlannedPathKey, CircleSnapshotEntry>
             CIRCLE_SNAPSHOT_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Generous bound on one snapshot-prediction wait (10× the sampling wait, 5s..120s). */
-    private static long snapshotWaitTimeoutMs() {
+    static long snapshotWaitTimeoutMs() {
         try {
             long samplingTimeoutMs = Math.max(100, Math.min(30_000,
                     ConfigService.get().planning().samplingInFlightTimeoutMs()));
@@ -1088,7 +1089,7 @@ public final class AccurateGradeRepairPlanner {
         }
     }
 
-    private static void awaitLocalStructureCircle(ServerLevel level,
+    static void awaitLocalStructureCircle(ServerLevel level,
                                                    StructureConnection connection,
                                                    BlockPos center,
                                                    int radius) {
@@ -1138,7 +1139,7 @@ public final class AccurateGradeRepairPlanner {
     }
 
     /** True when the cached completed snapshot circle covers the requested one. */
-    private static boolean circleCoveredBy(CircleSnapshotEntry cached,
+    static boolean circleCoveredBy(CircleSnapshotEntry cached,
                                            BlockPos center,
                                            int radius) {
         long dx = BlockPos.getX(cached.centerKey()) - center.getX();
@@ -1193,11 +1194,11 @@ public final class AccurateGradeRepairPlanner {
                 path, Math.max(1, roadWidth), lakes, sampler::surfaceHeight) != null;
     }
 
-    private static int localWindowRise() {
+    static int localWindowRise() {
         return ConfigService.get().planning().heightTunnelThresholdBlocks();
     }
 
-    private static boolean riverRepairBypassPrecheck() {
+    static boolean riverRepairBypassPrecheck() {
         try {
             return ConfigService.get().planning().riverRepairBypassPrecheck();
         } catch (Throwable ignored) {
@@ -1214,7 +1215,7 @@ public final class AccurateGradeRepairPlanner {
      *
      * <p>只做判定，不改变任何路径：跳过的是本来就会失败的那次搜索。</p>
      */
-    private static boolean channelSeparatesWindow(Bounds bounds, RiverLookup channels) {
+    static boolean channelSeparatesWindow(Bounds bounds, RiverLookup channels) {
         int spanX = bounds.maxX() - bounds.minX();
         int spanZ = bounds.maxZ() - bounds.minZ();
         if (spanX <= 0 || spanZ <= 0) return false;
@@ -1240,11 +1241,11 @@ public final class AccurateGradeRepairPlanner {
         return wet * 10 >= size * 9;
     }
 
-    private static int heightRepairContextBlocks() {
+    static int heightRepairContextBlocks() {
         return ConfigService.get().planning().heightRepairContextBlocks();
     }
 
-    private static int tunnelDepthBlocks() {
+    static int tunnelDepthBlocks() {
         return ConfigService.get().planning().tunnelDepthBlocks();
     }
 
@@ -1258,7 +1259,7 @@ public final class AccurateGradeRepairPlanner {
      *       主动规划成坡道/隧道。</li>
      * </ul>
      */
-    private static void logGradeDiagnostics(List<BlockPos> path, Violation violation,
+    static void logGradeDiagnostics(List<BlockPos> path, Violation violation,
                                             AccurateHeightSampler sampler) {
         if (path == null || violation == null || sampler == null) return;
         int start = Math.max(0, violation.start() - 2);
@@ -1333,479 +1334,6 @@ public final class AccurateGradeRepairPlanner {
         return null;
     }
 
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config) {
-        return findLocalRoute(original, sampler, config, SEARCH_MARGIN_BLOCKS, EdgeObstacle.NONE,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, EdgeObstacle.NONE,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step, false, 0,
-                null, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step,
-                allowTunnel, structureClearance, null, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance,
-                                                  BoundingBox conflictBox) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step,
-                allowTunnel, structureClearance, conflictBox, Integer.MIN_VALUE);
-    }
-
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance,
-                                                  BoundingBox conflictBox,
-                                                  int tunnelFloorY) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step,
-                allowTunnel, structureClearance, conflictBox, tunnelFloorY, null);
-    }
-
-    /** Local 3D route search bounded by a circular conflict-centered radius. */
-    private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance,
-                                                  BoundingBox conflictBox,
-                                                  int tunnelFloorY,
-                                                  BlockPos conflictCenter) {
-        return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step,
-                allowTunnel, structureClearance, conflictBox, tunnelFloorY, conflictCenter, false);
-    }
-
-    /**
-     * 0.8.326：{@code localStructureDetour=true} 时给隧道搜索用"普通搜索预算"
-     * （{@link #repairWindowStateLimit()}，默认 9 万，可配置）而不是 24 万的
-     * 放大上限。真机 20260909 16.15 存档 {@code (288,-256)->(880,208)} 的局部修复
-     * 重生成阶段，三次结构绕行的 tunnel 搜索各花 20~29 秒且全部 {@code no_path}，
-     * 白烧约 74 秒/局（该阶段总耗时 91 秒）。
-     */
-    /**
-     * 0.9.050（D-10）：走廊附近有没有"湿列"。
-     *
-     * <p>只有为真时陆路闸门那一趟 A* 才有意义 —— 无水时它的结果与放开水面完全等价
-     * （这是 0.9.011 自己写在注释里的论断）。逐站采样走 {@code sampler} 缓存，
-     * 代价 O(站数)，远小于一整趟 A*（单次预算上限 20,000 ms）。</p>
-     */
-    private static boolean corridorTouchesWater(List<BlockPos> original, AccurateHeightSampler sampler) {
-        if (original == null || original.size() < 2 || sampler == null) return true;   // 判不了一律跑，宁慢勿错
-        List<BlockPos> requests = new ArrayList<>(original.size());
-        for (BlockPos pos : original) {
-            if (pos != null) requests.add(pos);
-        }
-        if (requests.isEmpty()) return true;
-        Map<Long, AccurateHeightSample> samples = sampler.samplePositions(requests);
-        for (BlockPos pos : requests) {
-            if (isWetColumn(samples.get(AccurateHeightSample.key(pos.getX(), pos.getZ())))) return true;
-        }
-        return false;
-    }
-private static List<BlockPos> findLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance,
-                                                  BoundingBox conflictBox,
-                                                  int tunnelFloorY,
-                                                  BlockPos conflictCenter,
-                                                  boolean localStructureDetour) {
-        // 0.9.011：陆路闸门。先只走陆路（湿列整列禁行）；只要绕行长度不超过直连距离的
-        // landDetourFactor 倍，就直接采用它 —— 这就是「河边走没事，只有实在绕行太远才架桥」。
-        // 没有水的时候这一趟的结果与放开水面完全相同，所以不产生额外的搜索代价。
-        double gateFactor = 1.6D;
-        try {
-            gateFactor = Math.max(0.0D, Math.min(10.0D,
-                    ConfigService.get().planning().landDetourFactor()));
-        } catch (Throwable ignored) { }
-        if (gateFactor > 0.0D && corridorTouchesWater(original, sampler)) {
-            // 0.9.050（D-10）：只在走廊附近确实有水时才跑这一趟。
-            // 上面那段注释自己写着「没有水的时候这一趟的结果与放开水面完全相同，所以不产生
-            // 额外的搜索代价」—— 但代码里是无条件跑的，等于每个干窗口白跑一整趟 A*。
-            // 真机证据：一局 24 次判定累计 pass1Ms = 116,822 ms，其中绝大多数窗口本来就无水。
-            long gateStartedAt = System.nanoTime();
-            LAST_SEARCH_BUDGET_EXHAUSTED.set(false);
-            List<BlockPos> land = searchLocalRoute(original, sampler, config, searchMarginBlocks,
-                    obstacle, step, allowTunnel, structureClearance, conflictBox, tunnelFloorY,
-                    conflictCenter, localStructureDetour, true);
-            double direct = horizontalDistance(original.get(0), original.get(original.size() - 1));
-            // 基准取两支的较松者，缺一不可：
-            //  ① 相对直连距离 —— 「绕行」的直观含义，direct 给 8 格下限防退化窗口；
-            //  ② 不比原走廊更长（×1.05 容差）—— findLocalRoute 是**局部修复**，原走廊本身
-            //     可能就是之字形（长度约 3× 直连）。只看直连会把「完美的陆路修复」误判成
-            //     「绕太远」，于是又放开水面、桥照样冒出来，这次改动就白做了。
-            double landCap = landDetourCap(direct, routeLength(original), gateFactor);
-            long gateNanos = System.nanoTime() - gateStartedAt;
-            String verdict;
-            double landLength = -1.0D;
-            if (land == null) {
-                if (Boolean.TRUE.equals(LAST_SEARCH_BUDGET_EXHAUSTED.get())) {
-                    // 0.9.069（D-11a）：陆路是「没搜完」（预算耗尽），不是「真不通」。
-                    // 放开水域会 fail-open 到架桥（慢机/预算小的时候尤其爱乱架桥）。
-                    // 这里直接返回 null，让上层 keepCandidateOnNull 保留原走廊。
-                    recordWaterGateDiag("budget-exhausted", -1.0D, direct, gateFactor, gateNanos);
-                    return null;
-                }
-                verdict = "no-land-route";
-            } else {
-                landLength = routeLength(land);
-// 0.9.054（D-15）：把竖向爬升折算进比较，两边用**同一个系数** ——
-                // 爬升相近时结果恒等于原来的纯水平比较，只有「陆路要爬的崖明显多于原走廊」
-                // 才会被拒。这样既堵住「爬 25 格崖换 4 格水平」的漏洞，又不改常态行为。
-                double landMetric = landLength + routeClimb(land) * VERTICAL_EQUIV_BLOCKS;
-                double landCapMetric = landCap + routeClimb(original) * VERTICAL_EQUIV_BLOCKS;
-                if (landMetric <= landCapMetric) {
-                    recordWaterGateDiag("land", landLength, direct, gateFactor, gateNanos);
-                    return land;
-                }
-                verdict = "detour-too-long";
-            }
-            recordWaterGateDiag(verdict, landLength, direct, gateFactor, gateNanos);
-        }
-        return searchLocalRoute(original, sampler, config, searchMarginBlocks, obstacle, step,
-                allowTunnel, structureClearance, conflictBox, tunnelFloorY, conflictCenter,
-                localStructureDetour, false);
-    }
-
-    /** 0.9.011：单趟 A* 本体。{@code wetBlocked=true} 时湿列整列禁行，供陆路闸门使用。 */
-    private static List<BlockPos> searchLocalRoute(List<BlockPos> original,
-                                                  AccurateHeightSampler sampler,
-                                                  PathfindingCostConfig config,
-                                                  int searchMarginBlocks,
-                                                  EdgeObstacle obstacle,
-                                                  int step,
-                                                  boolean allowTunnel,
-                                                  int structureClearance,
-                                                  BoundingBox conflictBox,
-                                                  int tunnelFloorY,
-                                                  BlockPos conflictCenter,
-                                                  boolean localStructureDetour,
-                                                  boolean wetBlocked) {
-        step = Math.max(1, step);
-        LAST_LOCAL_SEARCH_DIAG.remove();
-        BlockPos start = original.get(0);
-        BlockPos goal = original.get(original.size() - 1);
-        int radius = Math.max(step, searchMarginBlocks);
-        Bounds bounds = conflictCenter == null
-                ? Bounds.around(original, radius, step, conflictBox)
-                : Bounds.aroundConflict(conflictCenter, radius, step, start, goal, conflictBox);
-        Collection<BlockPos> requests = conflictCenter == null
-                ? bounds.positions(step)
-                : bounds.positionsWithinRadius(step, conflictCenter, radius);
-        if (conflictCenter != null) {
-            // The local detour must always have usable entry and exit samples.
-            // They may lie just outside the circle after grid snapping, but
-            // remain part of the original local corridor and must not make a
-            // valid red-style bypass fail before A* starts.
-            Map<Long, BlockPos> requestMap = new LinkedHashMap<>();
-            for (BlockPos request : requests) {
-                requestMap.put(key(request.getX(), request.getZ()), request);
-            }
-            if (bounds.contains(start.getX(), start.getZ())) {
-                requestMap.put(key(start.getX(), start.getZ()), start);
-            }
-            if (bounds.contains(goal.getX(), goal.getZ())) {
-                requestMap.put(key(goal.getX(), goal.getZ()), goal);
-            }
-            requests = requestMap.values();
-        }
-        if (requests.isEmpty()) return null;
-        int expandedStateLimit = expandedStateLimit(requests.size(), allowTunnel, step, localStructureDetour);
-        long searchStartedAt = System.nanoTime();
-        // 0.9.001：状态数预算之外再加一条墙钟预算。只靠 expandedStateLimit 时，
-        // 跨 90 格深谷这种窗口每次都把 90 000 展开跑满、空转 95 秒以上再返回无解
-        // （真机 road_grade_search 卡顿主因，三波重试各跑一次）。两者谁先到谁生效。
-        long searchDeadlineNanos = searchStartedAt + repairWindowBudgetNanos();
-        if (wetBlocked) {
-            // 0.9.014：陆路闸门这一趟只负责回答「陆路到底通不通」，不该跑满全预算。
-            // 真机实测（低挡位一局）：24 次判定累计 pass1Ms=116,822，其中 12 次
-            // verdict=no-land-route 全部把预算跑满才失败（最慢单次 20 s）；而那一局的
-            // 最终道路几何与不设闸门时逐字节一致（两局 slice 计数器都是
-            // bridge=348 tunnel=45）⇒ 这 117 秒是纯亏。
-            // 砍到 1/4：失败的判定 4 倍快地放手；成功的那些 landLen 只有 100~300 格，
-            // 本来就用不到预算的零头，路径结果不变。
-            // 0.9.051（D-11）：原来这里各套了一个下限 Math.max(2_000, …) / Math.max(50_000_000L, …)，
-            // 但它们**永远不可能生效**：
-            //   · expandedStateLimit 的下限是 repairWindowStateLimit() 里的 20_000 ⇒ /4 = 5_000 > 2_000；
-            //   · repairWindowBudgetNanos() 的下限是 1_000 ms = 1e9 ns ⇒ /4 = 2.5e8 ns > 5e7 ns。
-            // 删掉两个死下限，真实有效下限写在这里：**5 000 个展开状态 / 250 ms**。
-            expandedStateLimit = expandedStateLimit / 4;
-            searchDeadlineNanos = searchStartedAt + repairWindowBudgetNanos() / 4L;
-        }
-        // 0.9.009 / 0.9.011：临河与过水代价参数（每搜索读一次配置，不在展开循环里读）
-        double waterBase = 200.0D;
-        double waterPerStation = 150.0D;
-        double riverPenalty = 8.0D;
-        int riverRadius = 5;
-        double culvertPerStation = 2.0D;
-        int narrowWaterMax = 20;
-        double narrowWaterPer = 20.0D;
-        double wideBase = 600.0D;
-        double widePer = 80.0D;
-        boolean waterGate = true;
-        try {
-            var plan = ConfigService.get().planning();
-// 0.9.051（D-18）：这两个键（baseWaterPenalty / perStationWaterPenalty）在
-            // **闸门开启（默认）时完全不参与计价** —— 它们只在 :1515 的 !waterGate 分支里
-            // 被赋回 wideBase/widePer。也就是说配置界面里改它们，默认态下没有任何效果。
-            waterBase = Math.max(0.0D, Math.min(100_000.0D, plan.baseWaterPenalty()));
-            waterPerStation = Math.max(0.0D, Math.min(100_000.0D, plan.perStationWaterPenalty()));
-            riverPenalty = Math.max(0.0D, Math.min(100_000.0D, plan.riverProximityPenalty()));
-            riverRadius = Math.max(0, Math.min(32, plan.riverProximityRadius()));
-            culvertPerStation = Math.max(0.0D, Math.min(100.0D, plan.culvertCostPerStation()));
-            narrowWaterMax = Math.max(0, Math.min(256, plan.narrowWaterMaxWidth()));
-            narrowWaterPer = Math.max(0.0D, Math.min(100_000.0D, plan.narrowWaterPerStation()));
-            wideBase = Math.max(0.0D, Math.min(100_000.0D, plan.wideWaterBase()));
-            widePer = Math.max(0.0D, Math.min(100_000.0D, plan.wideWaterPerStation()));
-            waterGate = plan.landDetourFactor() > 0.0D;
-        } catch (Throwable ignored) { }
-        // 闸门关闭 ⇒ 完整回到 0.9.010 口径：宽水用 base/per，窄水档不启用。
-        if (!waterGate) {
-            wideBase = waterBase;
-            widePer = waterPerStation;
-            narrowWaterMax = 0;
-        }
-        int culvertMaxStations = 6;
-        int culvertMaxWaterDepth = 2;
-        try {
-            var look = ConfigService.get().roadAppearance();
-culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
-            // 0.9.052（D-13）：culvertEnabled=false 时**施工端不建涵洞**（Road.java:353 才读它），
-            // 但寻路这一侧从来没读过这个开关 —— 于是 ≤6 站浅水仍按涵洞价（2/站）定价，
-            // A* 认为"直接过很便宜"就选穿越，施工阶段却铺普通路面、或被 FinalRoadWaterValidator 打回。
-            // 把档位宽度置 0 即彻底关掉涵洞档，价格自然落到窄水/宽水，选线与施工口径重新一致。
-            if (!look.culvertEnabled()) {
-                culvertMaxStations = 0;
-            }
-            culvertMaxWaterDepth = Math.max(1, Math.min(4, look.culvertMaxWaterDepth()));
-        } catch (Throwable ignored) { }
-        // R7（0.9.003，0.9.059 收紧）：长度上界可证明剪枝。
-        // 旧界 max(原走廊长+200, 原走廊长×3.0) 比真机那条 3.63 倍绕行还松，等于没剪；
-        // 现在换成 max(直连×1.6, 原走廊长×1.05)（见 lengthCapFor 的等价性/剪枝安全性说明）。
-        // 任何经过某节点的解，其**返回路径长度**下界为 g_len + hypot(到目标) - 两端网格吸附偏差，
-        // 一旦该下界已超过上界，这个解必然被拒 ⇒ 剪掉不改变"≤ cap 的解"的结果集。
-        double chord = chordLength(original);
-        double originalLength = routeLength(original);
-        // 0.9.062（①）：factor / cap 要等窗口网格采完之后才能定 —— steep 判据要用那张网格的高度。
-        double lengthBound;
-        // 两端偏差各 <= step*sqrt(2)，取 4*step (> 2.83*step) 做安全余量。
-        double lengthSlack = 4.0D * step;
-        boolean lengthBoundPrune = lengthBoundPruneEnabled();
-        int prunedByLength = 0;
-        Map<Long, AccurateHeightSample> samples = sampler.samplePositions(requests);
-        Map<Long, Integer> heights = new HashMap<>(samples.size() * 2);
-        for (BlockPos request : requests) {
-            AccurateHeightSample sample = samples.get(AccurateHeightSample.key(request.getX(), request.getZ()));
-            if (sample != null) {
-                heights.put(key(request.getX(), request.getZ()), sampler.surfaceHeight(sample));
-            }
-        }
-        // 0.9.062（①）：策略感知的长度界。判据只读上面这张**已经采过**的窗口网格（heights map），
-        // 不发起任何新的地形查询；弦被圆心窗口截断时采不到足够的点 ⇒ steep=false ⇒ 仍是 1.6。
-        boolean steepChord = steepLengthCapEnabled()
-                && chordIsSteep(chordProfile(heights, start, goal, bounds.minX(), bounds.minZ(), step),
-                chordSampleSpacing(start, goal, step));
-        double lengthFactor = detourFactorFor(steepChord);
-        lengthBound = lengthCapFor(chord, originalLength, steepChord);
-        // 0.9.009：窗口内一次性建「到最近湿列」的距离场（两遍 chamfer，O(窗口面积)），
-        // 之后每次邻居展开只做一次数组读 —— 不做逐邻居查河，expanded 不会因此上涨。
-        int[] riverDistanceField = riverPenalty > 0.0D && riverRadius > 0
-                ? buildRiverDistanceField(bounds, step, samples) : null;
-        int riverDistanceGridW = riverDistanceField == null ? 0
-                : (bounds.maxX() - bounds.minX()) / step + 1;
-
-        int startX = nearestGrid(start.getX(), bounds.minX(), step);
-        int startZ = nearestGrid(start.getZ(), bounds.minZ(), step);
-        int goalX = nearestGrid(goal.getX(), bounds.minX(), step);
-        int goalZ = nearestGrid(goal.getZ(), bounds.minZ(), step);
-        Integer startY = heights.get(key(startX, startZ));
-        Integer goalY = heights.get(key(goalX, goalZ));
-        if (startY == null || goalY == null) return null;
-
-        PriorityQueue<Node> open = new PriorityQueue<>(Comparator.comparingDouble(Node::score));
-        Map<StateKey, Double> best = new HashMap<>();
-        Node first = new Node(startX, startY, startZ, -1, 0.0D, 0.0D, 0,
-                heuristic(startX, startZ, goalX, goalZ), null);
-        open.add(first);
-        best.put(first.key(), 0.0D);
-        int expanded = 0;
-        while (!open.isEmpty() && expanded < expandedStateLimit
-                && System.nanoTime() < searchDeadlineNanos) {
-            Node current = open.poll();
-            Double known = best.get(current.key());
-            if (known == null || current.cost() > known + 0.0001D) continue;
-            if (current.x() == goalX && current.z() == goalZ) {
-                List<BlockPos> route = reconstruct(current);
-                route.set(0, start);
-                route.set(route.size() - 1, goal);
-                recordLocalSearchDiag(expanded, expandedStateLimit, allowTunnel,
-                        localStructureDetour, searchStartedAt, true, false, prunedByLength);
-                // 0.9.059（③）：长度上界诊断（cap 与这条路的实际长度、弦长同框）。
-                // 0.9.062（①）：steep/factor 是这一趟真正用的那两个数。
-                recordLengthCapDiag(lengthBound, lengthFactor, steepChord, chord, originalLength,
-                        routeLength(route), prunedByLength, expanded, true);
-                return route;
-            }
-            expanded++;
-            if ((expanded & 2047) == 0) {
-                // 0.9.001：原循环体内完全没有中断检查 —— 建路 worker 被取消后这条 A*
-                // 仍会跑满 90 000 次展开（真机 95 秒）。语义与同文件
-                // prepareLocalStructureCircle 的处理一致：立刻转成 CancellationException。
-                if (Thread.currentThread().isInterrupted()) {
-                    recordLocalSearchDiag(expanded, expandedStateLimit, allowTunnel,
-                            localStructureDetour, searchStartedAt, false, false, prunedByLength);
-                    throw new java.util.concurrent.CancellationException(
-                            "interrupted during local grade repair search");
-                }
-                InitialGenerationProgressTracker.advanceCurrentRoadTask(
-                        240 + (int) Math.min(280L, expanded * 280L / expandedStateLimit),
-                        "road_grade_search");
-            }
-            for (int direction = 0; direction < DIRECTIONS.length; direction++) {
-                int nextX = current.x() + DIRECTIONS[direction][0] * step;
-                int nextZ = current.z() + DIRECTIONS[direction][1] * step;
-                if (!bounds.contains(nextX, nextZ)) continue;
-                if (conflictCenter != null
-                        && horizontalDistanceSquared(nextX, nextZ, conflictCenter.getX(), conflictCenter.getZ())
-                        > (long) radius * radius) continue;
-                Integer terrainY = heights.get(key(nextX, nextZ));
-                if (terrainY == null) continue;
-                // 0.9.011：陆路闸门那一趟把湿列整列禁行。端点例外 —— 它们本来就在岸上，
-                // 而且后面会被强制吸附到 startY / goalY。
-                if (wetBlocked
-                        && !(nextX == goalX && nextZ == goalZ)
-                        && !(nextX == startX && nextZ == startZ)
-                        && isWetColumn(samples.get(AccurateHeightSample.key(nextX, nextZ)))) {
-                    continue;
-                }
-                int[] candidateYs = allowTunnel
-                        ? tunnelHeights(terrainY, step, tunnelFloorY) : new int[]{terrainY};
-                for (int nextY : candidateYs) {
-                    if (nextX == goalX && nextZ == goalZ) nextY = goalY;
-                    if (nextX == startX && nextZ == startZ) nextY = startY;
-                double horizontal = Math.hypot(nextX - current.x(), nextZ - current.z());
-                int rise = Math.abs(nextY - current.y());
-                if (rise > Math.floor(horizontal)) continue;
-                // R7：长度上界剪枝放在最贵的 edgeIntersectsProtected / obstacle.blocked 之前，
-                // 只用一个已算好的启发值做比较。能到这里说明垂直与网格都已通过。
-                double remaining = heuristic(nextX, nextZ, goalX, goalZ);
-                double nextLength = current.length() + horizontal;
-                if (lengthBoundPrune && nextLength + remaining - lengthSlack > lengthBound) {
-                    prunedByLength++;
-                    continue;
-                }
-                BlockPos currentPos = new BlockPos(current.x(), current.y(), current.z());
-                BlockPos nextPos = new BlockPos(nextX, nextY, nextZ);
-                if (edgeIntersectsProtected(currentPos, nextPos,
-                        Math.max(0, structureClearance))
-                        || obstacle.blocked(currentPos, nextPos)) continue;
-
-                double grade = rise / Math.max(1.0D, horizontal);
-                AccurateHeightSample nextSample = samples.get(AccurateHeightSample.key(nextX, nextZ));
-                boolean wet = isWetColumn(nextSample);
-                // (b) 过河代价按「连续水站数」递增，替换原来的固定 1200：3 步 650 / 50 步 7700。
-                int nextWetRun = wet ? current.wetRun() + 1 : 0;
-                // 过河总价 T(run)：run <= culvertMaxStations 且水深 <= culvertMaxWaterDepth 时
-                // = run × culvertCostPerStation（3 站 6、6 站 12）；否则 = base + per × run
-                // （7 站 1250、10 站 1700、50 站 7700）。A* 是增量代价，所以按 T 的「边际」收费：
-                // 第 k 个湿步收 T(k) - T(k-1) ⇒ 跨过涵洞上限那一步会一次性补上断崖差额。
-                int wetDepth = wet
-                        ? Math.max(0, nextSample.worldSurfaceWg() - nextSample.oceanFloorWg())
-                        : 0;
-                double waterPenalty = 0.0D;
-                if (wet) {
-                    double total = waterCrossingCost(nextWetRun, wetDepth, wideBase, widePer,
-                            culvertPerStation, culvertMaxStations, culvertMaxWaterDepth,
-                            narrowWaterMax, narrowWaterPer, step);
-                    double previous = nextWetRun > 1
-                            ? waterCrossingCost(nextWetRun - 1, wetDepth, wideBase, widePer,
-                                    culvertPerStation, culvertMaxStations, culvertMaxWaterDepth,
-                                    narrowWaterMax, narrowWaterPer, step)
-                            : 0.0D;
-                    waterPenalty = Math.max(0.0D, total - previous);
-                }
-                // (a) 临河距离惩罚：距最近湿列越近越贵，在水里加满；O(1) 查距离场。
-                double riverCost = riverProximityCost(
-                        riverDistanceBlocks(riverDistanceField, riverDistanceGridW, bounds, step,
-                                nextX, nextZ),
-                        riverPenalty, riverRadius);
-                double turnPenalty = current.direction() < 0 || current.direction() == direction ? 0.0D : 4.0D;
-                double tunnelPenalty = Math.max(0, terrainY - nextY) * 2.5D;
-                double nextCost = current.cost() + horizontal + rise * 8.0D + tunnelPenalty
-                        + grade * grade * 90.0D + waterPenalty + riverCost + turnPenalty;
-                StateKey state = new StateKey(nextX, nextY, nextZ, direction);
-                Double old = best.get(state);
-                if (old != null && old <= nextCost) continue;
-                Node next = new Node(nextX, nextY, nextZ, direction, nextCost, nextLength,
-                        nextWetRun, nextCost + remaining, current);
-                best.put(state, nextCost);
-                open.add(next);
-                }
-            }
-        }
-        // 退出 A* 的三条路径：open 空（确实到不了）、状态数预算耗尽、墙钟预算耗尽。
-        // 后两者语义完全相同（一律返回 null，走既有「无解」兜底），只在诊断串里区分，
-        // 便于真机验收「预算真的兜住了」而不是又跑满一遍。
-        boolean budgetExhausted = expanded < expandedStateLimit && !open.isEmpty();
-        LAST_SEARCH_BUDGET_EXHAUSTED.set(budgetExhausted);
-        recordLocalSearchDiag(expanded, expandedStateLimit, allowTunnel,
-                localStructureDetour, searchStartedAt, false, budgetExhausted, prunedByLength);
-        recordLengthCapDiag(lengthBound, lengthFactor, steepChord, chord, originalLength, -1.0D,
-                prunedByLength, expanded, false);
-        return null;
-    }
-
     /**
      * 0.9.059（③）：{@code [PLAN-LENGTH-CAP]} 诊断行。
      *
@@ -1821,7 +1349,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * <p>0.9.062（①）：把当次**真正用的** {@code steep} 与 {@code factor} 一起打出来。
      * 没有这两个字段，验收时无法区分"界放宽了但没剪到"和"界根本没放宽"。</p>
      */
-    private static void recordLengthCapDiag(double cap, double factor, boolean steep,
+    static void recordLengthCapDiag(double cap, double factor, boolean steep,
                                             double chord, double originalLength,
                                             double pathLength, int prunedNodes, int expanded,
                                             boolean found) {
@@ -1844,12 +1372,12 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         }
     }
 
-    private static String fmt1(double value) {
+    static String fmt1(double value) {
         return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 
     /** 0.8.326：局部搜索诊断（纯观测）。最后一次局部 A* 的展开数/预算/耗时。 */
-    private static final ThreadLocal<String> LAST_LOCAL_SEARCH_DIAG = new ThreadLocal<>();
+    static final ThreadLocal<String> LAST_LOCAL_SEARCH_DIAG = new ThreadLocal<>();
 
     /**
      * 0.8.327：局部结构绕行的隧道下界深度。
@@ -1860,15 +1388,15 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 绕建筑不需要挖到基岩，限制在冲突点下方 {@value #LOCAL_DETOUR_TUNNEL_DEPTH} 格内即可，
      * 垂直层数降到约 13 层。</p>
      */
-    private static final int LOCAL_DETOUR_TUNNEL_DEPTH = 24;
+    static final int LOCAL_DETOUR_TUNNEL_DEPTH = 24;
 
-    private static int localDetourTunnelFloor(ServerLevel level, BlockPos center) {
+    static int localDetourTunnelFloor(ServerLevel level, BlockPos center) {
         int worldFloor = level == null ? 0 : level.getMinBuildHeight();
         int localFloor = (center == null ? 0 : center.getY()) - LOCAL_DETOUR_TUNNEL_DEPTH;
         return Math.max(worldFloor, localFloor);
     }
 
-    private static void recordLocalSearchDiag(int expanded, int limit, boolean tunnel,
+    static void recordLocalSearchDiag(int expanded, int limit, boolean tunnel,
                                                boolean localDetour, long startedAt,
                                                boolean found, boolean budgetExhausted,
                                                int prunedByLength) {
@@ -1893,7 +1421,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 保留常量本身是为了让"当年为什么取最松一档"这段推理不丢。</p>
      */
     @SuppressWarnings("unused")
-    private static final double LOCAL_REPAIR_ACCEPT_SLACK_BLOCKS = 200.0D;
+    static final double LOCAL_REPAIR_ACCEPT_SLACK_BLOCKS = 200.0D;
 
     /**
      * 0.9.059（③）：长度上界的绕行系数。与 {@code PlanningConfig.landDetourFactor} 的
@@ -1929,10 +1457,10 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     static final int STEEP_CHORD_MAX_SAMPLES = 256;
 
     /** 0.9.059（③）：{@code [PLAN-LENGTH-CAP]} 出现次数（节流用）。 */
-    private static final java.util.concurrent.atomic.AtomicLong LENGTH_CAP_SEEN =
+    static final java.util.concurrent.atomic.AtomicLong LENGTH_CAP_SEEN =
             new java.util.concurrent.atomic.AtomicLong();
     /** 0.9.059（③）：被长度上界剪掉的邻居节点累计数（只读观测）。 */
-    private static final java.util.concurrent.atomic.AtomicLong LENGTH_CAP_PRUNED =
+    static final java.util.concurrent.atomic.AtomicLong LENGTH_CAP_PRUNED =
             new java.util.concurrent.atomic.AtomicLong();
 
     /**
@@ -1945,7 +1473,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * <b>"绕行不得超过直连的 1.6 倍；原走廊本身已经很长时，再给它 5% 的余量"</b>，
      * 与 {@link #landDetourCap(double, double, double)}（陆路闸门，factor 默认 1.6）同一口径。</p>
      */
-    private static double lengthBoundFor(List<BlockPos> original) {
+    static double lengthBoundFor(List<BlockPos> original) {
         return lengthCapFor(chordLength(original), routeLength(original));
     }
 
@@ -2024,7 +1552,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 0.9.062（①）：弦的采样点数（按网格步长 {@code step} 走完整条弦）。
      * 超过 {@link #STEEP_CHORD_MAX_SAMPLES} 时截断 —— 只是查表，截断只为兜底。
      */
-    private static int chordSamples(double chord, int step) {
+    static int chordSamples(double chord, int step) {
         if (!(chord > 0.0D) || step < 1) return 0;
         return Math.max(0, Math.min((int) Math.round(chord / step), STEEP_CHORD_MAX_SAMPLES));
     }
@@ -2109,7 +1637,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** R7：可回退开关（PlanningConfig.gradeRepairLengthBoundPrune，默认 true）。 */
-    private static boolean lengthBoundPruneEnabled() {
+    static boolean lengthBoundPruneEnabled() {
         try {
             return ConfigService.get().planning().gradeRepairLengthBoundPrune();
         } catch (Throwable ignored) {
@@ -2126,17 +1654,17 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      *    于是出现"连接 A 的湖搜索数值印在连接 B 的结构候选行里"的跨连接错配。
      * 现在每条分支在自己的出口各消费一次，诊断归属于产生它的那次搜索。</p>
      */
-    private static void logLocalSearchDiag(String stage) {
+    static void logLocalSearchDiag(String stage) {
         LOGGER.info("RoadWeaver local search diag stage={} {}", stage, consumeLocalSearchDiag());
     }
 
-    private static String consumeLocalSearchDiag() {
+    static String consumeLocalSearchDiag() {
         String diag = LAST_LOCAL_SEARCH_DIAG.get();
         LAST_LOCAL_SEARCH_DIAG.remove();
         return diag == null ? "diag=none" : diag;
     }
 
-    private static int[] tunnelHeights(int terrainY, int horizontalStep, int tunnelFloorY) {
+    static int[] tunnelHeights(int terrainY, int horizontalStep, int tunnelFloorY) {
         int verticalStep = Math.max(1, Math.min(2, horizontalStep));
         int depth = tunnelFloorY == Integer.MIN_VALUE
                 ? tunnelDepthBlocks()
@@ -2147,11 +1675,11 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return result;
     }
 
-    private static int expandedStateLimit(int sampledColumns, boolean allowTunnel, int horizontalStep) {
+    static int expandedStateLimit(int sampledColumns, boolean allowTunnel, int horizontalStep) {
         return expandedStateLimit(sampledColumns, allowTunnel, horizontalStep, false);
     }
 
-    private static int expandedStateLimit(int sampledColumns, boolean allowTunnel, int horizontalStep,
+    static int expandedStateLimit(int sampledColumns, boolean allowTunnel, int horizontalStep,
                                           boolean localStructureDetour) {
         // Base ceiling is configurable (PlanningConfig.gradeRepairWindowStateLimit,
         // default 90_000 = the historical hard-coded value) so slower machines
@@ -2171,7 +1699,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return horizontalStep == 1 ? Math.min(MAX_EXACT_BUILDING_EXPANDED_STATES, limit) : limit;
     }
 
-    private static int repairWindowStateLimit() {
+    static int repairWindowStateLimit() {
         try {
             return Math.max(20_000, Math.min(500_000,
                     ConfigService.get().planning().gradeRepairWindowStateLimit()));
@@ -2187,7 +1715,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 退回 {@link #DEFAULT_LOCAL_SEARCH_BUDGET_NANOS}。刻意不做成静态缓存 ——
      * 配置热改（界面/配置文件）要在下一次窗口生效，且单次读开销远低于一次 A* 展开。</p>
      */
-    private static long repairWindowBudgetNanos() {
+    static long repairWindowBudgetNanos() {
         try {
             return Math.max(1_000L, Math.min(600_000L,
                     ConfigService.get().planning().gradeRepairWindowBudgetMillis())) * 1_000_000L;
@@ -2196,18 +1724,18 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         }
     }
 
-    private static boolean isAccepted(List<BlockPos> original, List<BlockPos> candidate) {
+    static boolean isAccepted(List<BlockPos> original, List<BlockPos> candidate) {
         if (candidate == null || candidate.size() < 2 || findFirstViolation(candidate) != null) return false;
         double originalLength = routeLength(original);
         return routeLength(candidate) <= Math.max(originalLength + 32.0D,
                 originalLength * MAX_ROUTE_LENGTH_MULTIPLIER);
     }
 
-    private static boolean isStructureRepairAccepted(List<BlockPos> original, List<BlockPos> candidate) {
+    static boolean isStructureRepairAccepted(List<BlockPos> original, List<BlockPos> candidate) {
         return isStructureRepairAccepted(original, candidate, STRUCTURE_AHEAD_CLEARANCE_BLOCKS);
     }
 
-    private static boolean isStructureRepairAccepted(List<BlockPos> original, List<BlockPos> candidate,
+    static boolean isStructureRepairAccepted(List<BlockPos> original, List<BlockPos> candidate,
                                                       int structureClearance) {
         if (candidate == null || candidate.size() < 2
                 || findFirstViolation(candidate) != null
@@ -2221,7 +1749,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
                 originalLength * MAX_ROUTE_LENGTH_MULTIPLIER);
     }
 
-    private static boolean isLakeRepairAccepted(List<BlockPos> original,
+    static boolean isLakeRepairAccepted(List<BlockPos> original,
                                                  List<BlockPos> candidate,
                                                  int roadWidth,
                                                  LakeLookup lakes,
@@ -2300,11 +1828,11 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return findFirstMaskConflict(path, expanded);
     }
 
-    private static Violation findFirstStructureConflict(List<BlockPos> path) {
+    static Violation findFirstStructureConflict(List<BlockPos> path) {
         return findFirstStructureConflict(path, STRUCTURE_AHEAD_CLEARANCE_BLOCKS);
     }
 
-    private static Violation findFirstStructureConflict(List<BlockPos> path, int structureClearance) {
+    static Violation findFirstStructureConflict(List<BlockPos> path, int structureClearance) {
         if (path == null || path.isEmpty()) return null;
         int clearance = Math.max(0, structureClearance);
         if (StructureAvoidanceService.shouldAvoidPlanning(path.get(0), clearance)) {
@@ -2326,7 +1854,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * prevents a successful detour around one building from being immediately
      * pulled back into another building a few blocks later.
      */
-    private static Violation expandNearbyStructureCluster(List<BlockPos> path,
+    static Violation expandNearbyStructureCluster(List<BlockPos> path,
                                                            Violation first,
                                                            int structureClearance,
                                                            int localDetourBlocks) {
@@ -2376,7 +1904,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
                 routeHorizontalLength(path, start, end));
     }
 
-    private static double routeHorizontalLength(List<BlockPos> path, int from, int to) {
+    static double routeHorizontalLength(List<BlockPos> path, int from, int to) {
         double distance = 0.0D;
         for (int i = Math.max(1, from + 1); i <= to && i < path.size(); i++) {
             distance += horizontalDistance(path.get(i - 1), path.get(i));
@@ -2391,7 +1919,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * where grid snapping leaves the first entry/exit unusable. None of these
      * windows can grow beyond the caller's local repair radius.
      */
-    private static List<RepairSlice> structureRepairSlices(List<BlockPos> path,
+    static List<RepairSlice> structureRepairSlices(List<BlockPos> path,
                                                              Violation conflict,
                                                              BlockPos center,
                                                              int contextBlocks) {
@@ -2416,7 +1944,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return List.copyOf(unique.values());
     }
 
-    private static void addRepairSlice(Map<Long, RepairSlice> unique,
+    static void addRepairSlice(Map<Long, RepairSlice> unique,
                                        List<BlockPos> path,
                                        int conflictStart,
                                        int conflictEnd,
@@ -2434,7 +1962,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         unique.putIfAbsent(key, new RepairSlice(start, end, slice, center));
     }
 
-    private static int nearestIndexBefore(List<BlockPos> path, int from,
+    static int nearestIndexBefore(List<BlockPos> path, int from,
                                           BlockPos center, int maxDistance) {
         int best = -1;
         double bestDistance = Double.MAX_VALUE;
@@ -2455,7 +1983,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return best;
     }
 
-    private static int nearestIndexAfter(List<BlockPos> path, int from,
+    static int nearestIndexAfter(List<BlockPos> path, int from,
                                          BlockPos center, int maxDistance) {
         int best = -1;
         double bestDistance = Double.MAX_VALUE;
@@ -2473,7 +2001,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return best;
     }
 
-    private static boolean sameHorizontalPath(List<BlockPos> first, List<BlockPos> second) {
+    static boolean sameHorizontalPath(List<BlockPos> first, List<BlockPos> second) {
         if (first == null || second == null || first.size() != second.size()) return false;
         for (int i = 0; i < first.size(); i++) {
             BlockPos a = first.get(i);
@@ -2483,7 +2011,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return true;
     }
 
-    private static boolean sameFullPath(List<BlockPos> first, List<BlockPos> second) {
+    static boolean sameFullPath(List<BlockPos> first, List<BlockPos> second) {
         if (first == null || second == null || first.size() != second.size()) return false;
         for (int i = 0; i < first.size(); i++) {
             if (!first.get(i).equals(second.get(i))) return false;
@@ -2549,7 +2077,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
                 horizontalDistance(path.get(start), path.get(end)));
     }
 
-    private static boolean isRiverRepairAccepted(List<BlockPos> original,
+    static boolean isRiverRepairAccepted(List<BlockPos> original,
                                                   List<BlockPos> candidate,
                                                   int roadWidth,
                                                   RiverLookup channels) {
@@ -2561,7 +2089,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
                 originalLength * MAX_ROUTE_LENGTH_MULTIPLIER);
     }
 
-    private static boolean edgeIntersectsRiver(BlockPos from,
+    static boolean edgeIntersectsRiver(BlockPos from,
                                                 BlockPos to,
                                                 int roadWidth,
                                                 RiverLookup channels) {
@@ -2585,7 +2113,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static boolean pointIntersectsRiver(BlockPos point,
+    static boolean pointIntersectsRiver(BlockPos point,
                                                  int roadWidth,
                                                  RiverLookup channels) {
         int halfWidth = Math.max(0, roadWidth / 2);
@@ -2597,7 +2125,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static Violation findFirstUnstableLakeShoreConflict(List<BlockPos> path,
+    static Violation findFirstUnstableLakeShoreConflict(List<BlockPos> path,
                                                                  int roadWidth,
                                                                  LakeLookup lakes,
                                                                  HeightLookup terrain) {
@@ -2614,7 +2142,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return null;
     }
 
-    private static boolean edgeIntersectsLake(BlockPos from,
+    static boolean edgeIntersectsLake(BlockPos from,
                                               BlockPos to,
                                               int roadWidth,
                                               LakeLookup lakes) {
@@ -2638,7 +2166,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static Violation findFirstMaskConflict(List<BlockPos> path, LakeLookup mask) {
+    static Violation findFirstMaskConflict(List<BlockPos> path, LakeLookup mask) {
         if (path == null || path.isEmpty() || mask == null) return null;
         if (mask.isLake(path.getFirst().getX(), path.getFirst().getZ())) {
             return new Violation(0, 0, 0, 0.0D);
@@ -2655,7 +2183,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return null;
     }
 
-    private static boolean edgeIntersectsMask(BlockPos from,
+    static boolean edgeIntersectsMask(BlockPos from,
                                               BlockPos to,
                                               LakeLookup mask) {
         double horizontal = horizontalDistance(from, to);
@@ -2669,7 +2197,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static LakeLookup expandedLakeLookup(LakeLookup lakes,
+    static LakeLookup expandedLakeLookup(LakeLookup lakes,
                                                  int roadWidth,
                                                  int clearanceBlocks,
                                                  Map<Long, Boolean> cache) {
@@ -2684,7 +2212,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         });
     }
 
-    private static boolean edgeIntersectsUnstableLakeShore(BlockPos from,
+    static boolean edgeIntersectsUnstableLakeShore(BlockPos from,
                                                             BlockPos to,
                                                             int roadWidth,
                                                             LakeLookup lakes,
@@ -2724,7 +2252,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static boolean pointIntersectsLake(BlockPos point,
+    static boolean pointIntersectsLake(BlockPos point,
                                                int roadWidth,
                                                LakeLookup lakes) {
         int halfWidth = Math.max(0, roadWidth / 2);
@@ -2736,11 +2264,11 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static boolean edgeIntersectsProtected(BlockPos from, BlockPos to) {
+    static boolean edgeIntersectsProtected(BlockPos from, BlockPos to) {
         return edgeIntersectsProtected(from, to, 0);
     }
 
-    private static boolean edgeIntersectsProtected(BlockPos from, BlockPos to, int horizontalClearance) {
+    static boolean edgeIntersectsProtected(BlockPos from, BlockPos to, int horizontalClearance) {
         double horizontal = horizontalDistance(from, to);
         int samples = Math.max(1, (int) Math.ceil(horizontal));
         for (int i = 0; i <= samples; i++) {
@@ -2754,7 +2282,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return false;
     }
 
-    private static int walkContextStart(List<BlockPos> path, int index, double blocks) {
+    static int walkContextStart(List<BlockPos> path, int index, double blocks) {
         double distance = 0.0D;
         int result = Math.max(0, index);
         while (result > 0 && distance < blocks) {
@@ -2770,7 +2298,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * is rerouted as a single bounded detour. The window never grows beyond
      * {@code maxStations} past the starting index.
      */
-    private static int extendWindowAcrossNearbyWetRuns(List<BlockPos> path,
+    static int extendWindowAcrossNearbyWetRuns(List<BlockPos> path,
                                                        int from,
                                                        int direction,
                                                        RiverLookup channels,
@@ -2797,7 +2325,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return result;
     }
 
-    private static int walkContextEnd(List<BlockPos> path, int index, double blocks) {
+    static int walkContextEnd(List<BlockPos> path, int index, double blocks) {
         double distance = 0.0D;
         int result = Math.min(path.size() - 1, index);
         while (result + 1 < path.size() && distance < blocks) {
@@ -2807,7 +2335,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return result;
     }
 
-    private static List<BlockPos> reconstruct(Node goal) {
+    static List<BlockPos> reconstruct(Node goal) {
         List<BlockPos> result = new ArrayList<>();
         for (Node node = goal; node != null; node = node.parent()) {
             result.add(new BlockPos(node.x(), node.y(), node.z()));
@@ -2817,7 +2345,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** 0.9.009：该列是否"水里"（水面高于河床）。 */
-    private static boolean isWetColumn(AccurateHeightSample sample) {
+    static boolean isWetColumn(AccurateHeightSample sample) {
         // 0.9.045（D-8）：恢复「水深 > 1 才算湿」。
         //
         // 0.9.009（cb800f5）把这里从 depth > 1 放宽成 depth >= 1，后果三条，第二条致命：
@@ -2890,14 +2418,14 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** 0.9.011：陆路闸门判定计数（只读观测）。 */
-    private static final java.util.concurrent.atomic.AtomicLong WATER_GATE_SEEN =
+    static final java.util.concurrent.atomic.AtomicLong WATER_GATE_SEEN =
             new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong WATER_GATE_LAND =
+    static final java.util.concurrent.atomic.AtomicLong WATER_GATE_LAND =
             new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong WATER_GATE_CROSS =
+    static final java.util.concurrent.atomic.AtomicLong WATER_GATE_CROSS =
             new java.util.concurrent.atomic.AtomicLong();
     /** 闸门第一趟（湿列禁行）累计耗时。它是这版唯一可能让修复变贵的地方，必须看得见。 */
-    private static final java.util.concurrent.atomic.AtomicLong WATER_GATE_PASS1_NANOS =
+    static final java.util.concurrent.atomic.AtomicLong WATER_GATE_PASS1_NANOS =
             new java.util.concurrent.atomic.AtomicLong();
 
     /**
@@ -2905,7 +2433,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 带累计 land / cross 计数（一局就能看出「桥到底还建不建」）与
      * 第一趟累计耗时 {@code pass1Ms}（判断这版是否让道路修复变慢的硬指标）。
      */
-    private static void recordWaterGateDiag(String verdict, double landLength, double direct,
+    static void recordWaterGateDiag(String verdict, double landLength, double direct,
                                             double factor, long gateNanos) {
         if ("land".equals(verdict)) {
             WATER_GATE_LAND.incrementAndGet();
@@ -2930,7 +2458,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** 0.9.009：临河距离惩罚。d<=0（在水里）加满；d<=radius 线性衰减；否则 0。 */
-    private static double riverProximityCost(int distanceBlocks, double penalty, int radius) {
+    static double riverProximityCost(int distanceBlocks, double penalty, int radius) {
         if (penalty <= 0.0D || radius <= 0) return 0.0D;
         if (distanceBlocks <= 0) return penalty;
         if (distanceBlocks > radius) return 0.0D;
@@ -2942,7 +2470,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 湿列来自已采样的 {@code samples}（worldSurfaceWg > oceanFloorWg），不需要任何额外世界查询。
      * 网格太大（> 2M 格）时返回 null ⇒ 退化为"无临河惩罚"，绝不为了这个惩罚把内存打爆。
      */
-    private static int[] buildRiverDistanceField(Bounds bounds, int step,
+    static int[] buildRiverDistanceField(Bounds bounds, int step,
                                                  Map<Long, AccurateHeightSample> samples) {
         if (bounds == null || samples == null || samples.isEmpty()) return null;
         int gridW = (bounds.maxX() - bounds.minX()) / step + 1;
@@ -2984,7 +2512,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** 0.9.009：查距离场，返回格数（步数 × step）；越界或未建场返回 Integer.MAX_VALUE（=无惩罚）。 */
-    private static int riverDistanceBlocks(int[] field, int gridW, Bounds bounds, int step, int x, int z) {
+    static int riverDistanceBlocks(int[] field, int gridW, Bounds bounds, int step, int x, int z) {
         if (field == null || gridW <= 0) return Integer.MAX_VALUE;
         int gx = (x - bounds.minX()) / step;
         int gz = (z - bounds.minZ()) / step;
@@ -2995,11 +2523,11 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
         return steps >= (1 << 20) ? Integer.MAX_VALUE : steps * step;
     }
 
-    private static double heuristic(int x, int z, int goalX, int goalZ) {
+    static double heuristic(int x, int z, int goalX, int goalZ) {
         return Math.hypot(goalX - x, goalZ - z);
     }
 
-    private static double routeLength(List<BlockPos> path) {
+    static double routeLength(List<BlockPos> path) {
         double result = 0.0D;
         for (int i = 1; i < path.size(); i++) result += horizontalDistance(path.get(i - 1), path.get(i));
         return result;
@@ -3012,7 +2540,7 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * {@code rise × 8 + grade² × 90 + tunnelPenalty}。两套口径不同 ⇒ 闸门可以接受
      * 「水平 104 格、但要爬 25 格崖」的陆路（水平上只比上限多 4 格）。</p>
      */
-    private static double routeClimb(List<BlockPos> path) {
+    static double routeClimb(List<BlockPos> path) {
         if (path == null || path.size() < 2) return 0.0D;
         double result = 0.0D;
         for (int i = 1; i < path.size(); i++) {
@@ -3022,34 +2550,34 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     /** 竖向 1 格折算成多少「等效水平格」——与 A* 代价里的 {@code rise × 8} 同口径。 */
-    private static final double VERTICAL_EQUIV_BLOCKS = 8.0D;
+    static final double VERTICAL_EQUIV_BLOCKS = 8.0D;
 
-    private static double horizontalDistance(BlockPos a, BlockPos b) {
+    static double horizontalDistance(BlockPos a, BlockPos b) {
         return Math.hypot(b.getX() - a.getX(), b.getZ() - a.getZ());
     }
 
-    private static long horizontalDistanceSquared(int x1, int z1, int x2, int z2) {
+    static long horizontalDistanceSquared(int x1, int z1, int x2, int z2) {
         long dx = (long) x1 - x2;
         long dz = (long) z1 - z2;
         return dx * dx + dz * dz;
     }
 
-    private static int nearestGrid(int value, int origin, int step) {
+    static int nearestGrid(int value, int origin, int step) {
         return origin + (int) Math.round((value - origin) / (double) step) * step;
     }
 
-    private static long key(int x, int z) {
+    static long key(int x, int z) {
         return ((long) x << 32) ^ (z & 0xffffffffL);
     }
 
-    private static String format(double value) {
+    static String format(double value) {
         return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 
     record Violation(int start, int end, int rise, double length) {
     }
 
-    private record RepairSlice(int startIndex, int endIndex,
+    record RepairSlice(int startIndex, int endIndex,
                                List<BlockPos> path, BlockPos center) {
     }
 
@@ -3069,21 +2597,21 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
     }
 
     @FunctionalInterface
-    private interface EdgeObstacle {
+    interface EdgeObstacle {
         EdgeObstacle NONE = (from, to) -> false;
 
         boolean blocked(BlockPos from, BlockPos to);
     }
 
     /** 点是否落在冲突盒内（用于"禁止进入建筑盒"的硬绕行重试）。 */
-    private static boolean pointInsideBox(BoundingBox box, BlockPos pos) {
+    static boolean pointInsideBox(BoundingBox box, BlockPos pos) {
         if (box == null || pos == null) return false;
         return pos.getX() >= box.minX() && pos.getX() <= box.maxX()
                 && pos.getZ() >= box.minZ() && pos.getZ() <= box.maxZ()
                 && pos.getY() >= box.minY() && pos.getY() <= box.maxY();
     }
 
-    private record StateKey(int x, int y, int z, int direction) {
+    record StateKey(int x, int y, int z, int direction) {
     }
 
     /**
@@ -3095,14 +2623,14 @@ culvertMaxStations = Math.max(0, Math.min(16, look.culvertMaxStations()));
      * 用于「过河代价按连续水站数递增」。只加 4 字节/节点，且【不进 StateKey】——
      * 进 key 会让状态数最坏 ×7，不可接受；同状态以不同 wetRun 被去重属可接受近似。
      */
-    private record Node(int x, int y, int z, int direction, double cost, double length,
+    record Node(int x, int y, int z, int direction, double cost, double length,
                         int wetRun, double score, Node parent) {
         StateKey key() {
             return new StateKey(x, y, z, direction);
         }
     }
 
-    private record Bounds(int minX, int minZ, int maxX, int maxZ) {
+    record Bounds(int minX, int minZ, int maxX, int maxZ) {
         static Bounds around(List<BlockPos> path, int margin, int step) {
             return around(path, margin, step, null);
         }
