@@ -1257,3 +1257,58 @@ int searchEnd   = Math.min(n - 2, anchor + LOCAL_SEGMENT_RADIUS);
 | `protectionRank` | `RoadConstructionSafety.isProtected*` 系列 |
 | `tunnelStation` / `bridgeStation` | `RoadData.spans()` 按 `SpanType` 分派 |
 | `columnY` | `SegmentPaver.planGrade` 的横断面压平结果（**必须传真实值**，否则「对齐现状」不成立）|
+
+---
+
+# 复查结论一：S1「桥范围只算一次」需要更正措辞（2026-11-13）
+
+## 实测
+
+`BridgeRangeCalculator.compute` 的真实调用点（全模块）：
+
+| 位置 | 频率 |
+|---|---|
+| `BuildFrame:112`（缓存内部，按内容指纹） | **每条路一次** |
+| `RoadConstructionVolumePlanner:322`（`visit` 内部） | **每条路一次**（`FinalRoadStructureValidator` 调）|
+| ~~`RoadConstructionVolumePlanner:248`（`collect` 内部）~~ | **已删**（见下）|
+
+⇒ **每条路仍要算 2 次**，不是 1 次。
+
+## 为什么不再压到 1 次
+
+`visit` 那个调用方是 `FinalRoadStructureValidator`，它在**落盘前**做结构校验，
+需要遍历全部列。它理论上可以复用 `BuildFrame` 的缓存，但那需要
+从 `pathlogic.construction` 反向依赖 `persistence`（算指纹要 `RoadShardStorage`），
+会破坏 G2 的分层 ratchet —— 而收益是「每条路少一次 O(站数) 的区间算术」。
+
+**不值得。** 所以这条的真正价值应该这样表述：
+
+> **从「每区块重算」降为「每条路常数次」**：一条 2000 站的路铺满 30×30 区块，
+> 桥范围判定从 **900 次 × O(2000)** 降到 **2 次 × O(2000)**。
+
+原措辞「桥范围只算一次」是我的过度简化，已在此更正。
+
+---
+
+# 复查结论二：死代码守卫只覆盖类型，不覆盖方法（2026-11-13）
+
+审计过程中发现 `RoadConstructionVolumePlanner.collect(...)` **全模块零调用** ——
+一个 8 行的薄封装，`DeadCodeGuardTest` 抓不到它（它只查类型引用）。
+
+## 做了一次全仓方法级审计
+
+详见 `docs/DEAD-METHOD-AUDIT.md`。要点：
+
+- 原始候选 **160 个**零引用公共方法；
+- 抽样核实 5 个，**4 个是误判**：`@Override` 框架回调、`protected` 覆写、
+  方法引用 `this::xxx`（源码里没有 `name(` 形态）、配置类程序化 setter；
+- 本轮只删了 **2 个**确认安全的：`SegmentPaver.pavedOverProtectedRoadbed()`
+  （计数器本身保留，还在给日志做节流）与上面的 `collect`。
+
+## 一条方法论结论
+
+> 按名字统计"引用"对**类型**够用（类型名不会以 `::Type` 形式出现），
+> 对**方法**不够用（`::method`、覆写、反射都不留名字痕迹）。
+
+这就是为什么 `DeadCodeGuardTest` 只做类型级 —— 那不是偷懒，是名字级分析的上限。
+要自动化方法级死代码检测，必须上 AST 或字节码级分析。

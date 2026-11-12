@@ -210,15 +210,6 @@ public final class RoadConstructionVolumePlanner {
         }
     }
 
-    public static List<ColumnVolume> collect(RoadData road, Context context) {
-        List<ColumnVolume> result = new ArrayList<>();
-        visit(road, context, volume -> {
-            result.add(volume);
-            return true;
-        });
-        return List.copyOf(result);
-    }
-
     /**
      * Enumerates every X/Z column whose terrain height may be consulted while
      * validating a road. This is geometry-only and deliberately does not read

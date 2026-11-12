@@ -38,14 +38,14 @@ public final class SegmentPaver {
     private static final AtomicLong UNSUPPORTED_STATIONS = new AtomicLong();
     /** Road lip supports placed this session; a diagnostic, never a gate. */
     private static final AtomicLong SHOULDER_SUPPORTS = new AtomicLong();
-    /** 0.9.033：受保护路基上照常铺了路面的列数（O-14「单列保护漏单格洞」的取证计数）。 */
+    /**
+     * 0.9.033：受保护路基上照常铺了路面的列数（O-14「单列保护漏单格洞」的取证计数）。
+     *
+     * <p>2026-11-13：读它的 getter {@code pavedOverProtectedRoadbed()} 全仓无人调用，已删。
+     * 计数器本身保留 —— 它还在给日志做节流（{@code paved <= 8 || paved % 64 == 0}）。</p>
+     */
     private static final AtomicLong PAVED_OVER_PROTECTED_ROADBED = new AtomicLong();
     private SegmentPaver() {}
-
-    /** {@return how many road-surface cells this process filled over a protected roadbed} */
-    public static long pavedOverProtectedRoadbed() {
-        return PAVED_OVER_PROTECTED_ROADBED.get();
-    }
 
     /** 一列路的三种处置；抽成纯枚举是为了让优先级能被单测钉住。 */
     public enum ColumnAction {
