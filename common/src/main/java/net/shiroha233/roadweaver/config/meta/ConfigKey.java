@@ -77,6 +77,22 @@ public record ConfigKey(
                 cat, tier, status, nameZh, nameEn, tooltipZh, unit, noteZh);
     }
 
+    /** 字符串列表。默认值直接存 List，便于与配置类字段做元素级比较。 */
+    public static ConfigKey list(String jsonKey, java.util.List<String> def,
+                                 ConfigCategory cat, ConfigTier tier, ConfigStatus status,
+                                 String nameZh, String nameEn, String tooltipZh, String noteZh) {
+        return new ConfigKey(jsonKey, ConfigType.LIST, java.util.List.copyOf(def), null, null,
+                cat, tier, status, nameZh, nameEn, tooltipZh, "", noteZh);
+    }
+
+    /** 字符串。 */
+    public static ConfigKey string(String jsonKey, String def,
+                                   ConfigCategory cat, ConfigTier tier, ConfigStatus status,
+                                   String nameZh, String nameEn, String tooltipZh, String noteZh) {
+        return new ConfigKey(jsonKey, ConfigType.STRING, def, null, null,
+                cat, tier, status, nameZh, nameEn, tooltipZh, "", noteZh);
+    }
+
     /** 枚举。 */
     public static ConfigKey enumeration(String jsonKey, String def,
                                         ConfigCategory cat, ConfigTier tier, ConfigStatus status,

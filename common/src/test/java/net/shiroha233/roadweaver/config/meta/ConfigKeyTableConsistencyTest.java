@@ -37,11 +37,26 @@ class ConfigKeyTableConsistencyTest {
     private static final Map<String, String> CONFIG_CLASSES = new LinkedHashMap<>();
 
     static {
-        CONFIG_CLASSES.put("pathfindingCost",
-                "net.shiroha233.roadweaver.config.sub.PathfindingCostConfig");
+        CONFIG_CLASSES.put("structurePrediction",
+                "net.shiroha233.roadweaver.config.sub.StructurePredictionConfig");
         CONFIG_CLASSES.put("planning",
                 "net.shiroha233.roadweaver.config.sub.PlanningConfig");
-        CONFIG_CLASSES.put("bridge", "net.shiroha233.roadweaver.config.sub.BridgeConfig");
+        CONFIG_CLASSES.put("terrainProfile",
+                "net.shiroha233.roadweaver.config.sub.TerrainProfileConfig");
+        CONFIG_CLASSES.put("pathfindingCost",
+                "net.shiroha233.roadweaver.config.sub.PathfindingCostConfig");
+        CONFIG_CLASSES.put("roadAppearance",
+                "net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig");
+        CONFIG_CLASSES.put("bridge",
+                "net.shiroha233.roadweaver.config.sub.BridgeConfig");
+        CONFIG_CLASSES.put("performance",
+                "net.shiroha233.roadweaver.config.sub.PerformanceConfig");
+        CONFIG_CLASSES.put("roadsideStructure",
+                "net.shiroha233.roadweaver.config.sub.RoadsideStructureConfig");
+        CONFIG_CLASSES.put("roadsideVillage",
+                "net.shiroha233.roadweaver.config.sub.RoadsideVillageConfig");
+        CONFIG_CLASSES.put("client",
+                "net.shiroha233.roadweaver.config.sub.ClientConfig");
     }
 
     @Test
@@ -120,14 +135,19 @@ class ConfigKeyTableConsistencyTest {
     }
 
     @Test
-    void 键名不得重复() {
-        List<String> seen = new ArrayList<>();
+    void 同一配置类内键名不得重复() {
+        // JSON 键在**各自配置对象内**唯一即可，不同配置类可以同名。
+        // 实测 enabled 同时出现在 structurePrediction / roadsideStructure /
+        // roadsideVillage 三个类里，这是合法的 —— 它们落在不同的 JSON 子对象下。
         List<String> dup = new ArrayList<>();
-        for (ConfigKey key : ConfigKeyTable.all()) {
-            if (seen.contains(key.jsonKey())) dup.add(key.jsonKey());
-            seen.add(key.jsonKey());
+        for (String config : ConfigKeyTable.registeredConfigs()) {
+            List<String> seen = new ArrayList<>();
+            for (ConfigKey key : ConfigKeyTable.forConfig(config)) {
+                if (seen.contains(key.jsonKey())) dup.add(config + "." + key.jsonKey());
+                seen.add(key.jsonKey());
+            }
         }
-        assertTrue(dup.isEmpty(), "元数据表里键名重复: " + String.join(", ", dup));
+        assertTrue(dup.isEmpty(), "同一配置类里键名重复: " + String.join(", ", dup));
     }
 
     @Test

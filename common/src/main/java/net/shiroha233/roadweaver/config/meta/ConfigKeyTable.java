@@ -22,11 +22,15 @@ import java.util.stream.Collectors;
  * </ol>
  *
  * <h2>渐进接入</h2>
- * <p>本仓共 243 个键。目前 {@link PathfindingCostKeys}（57 个）、{@link PlanningKeys}（60 个）
- * 与 {@link BridgeKeys}（17 个）已接入，合计 134 个；其余 109 个仍由旧的手写代码管理。
+ * <p>本仓 <b>232 个键全部接入</b>（10 个配置类，顺序与 ModConfig 字段一致）。
+ * 注：{@code RoadGenerationConfig} 不是 {@code ModConfig} 的字段 —— 它是运行期
+ * 构造的快照对象，不参与 JSON 持久化，所以不在表内（它有 11 个字段会让人误
+ * 以为总数是 243）。
  * {@code ConfigKeyTableConsistencyTest} 会在两边<b>双向</b>校验：
  * 已接入的配置类必须与表完全一致；未接入的暂时跳过。</p>
  *
+ * @see PerformanceKeys
+ * @see RoadAppearanceKeys
  * @see PathfindingCostKeys
  * @see PlanningKeys
  * @see BridgeKeys
@@ -39,9 +43,16 @@ public final class ConfigKeyTable {
     private static final Map<String, List<ConfigKey>> BY_CONFIG = new LinkedHashMap<>();
 
     static {
-        BY_CONFIG.put("pathfindingCost", PathfindingCostKeys.ALL);
+        BY_CONFIG.put("structurePrediction", StructurePredictionKeys.ALL);
         BY_CONFIG.put("planning", PlanningKeys.ALL);
+        BY_CONFIG.put("terrainProfile", TerrainProfileKeys.ALL);
+        BY_CONFIG.put("pathfindingCost", PathfindingCostKeys.ALL);
+        BY_CONFIG.put("roadAppearance", RoadAppearanceKeys.ALL);
         BY_CONFIG.put("bridge", BridgeKeys.ALL);
+        BY_CONFIG.put("performance", PerformanceKeys.ALL);
+        BY_CONFIG.put("roadsideStructure", RoadsideStructureKeys.ALL);
+        BY_CONFIG.put("roadsideVillage", RoadsideVillageKeys.ALL);
+        BY_CONFIG.put("client", ClientKeys.ALL);
     }
 
     /** 全部已接入的键（不可变）。 */
