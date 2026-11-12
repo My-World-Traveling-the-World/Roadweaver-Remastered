@@ -289,12 +289,9 @@ public final class LoadingGenerationOverlayRenderer {
     // 详情区：保留道路此前的全部字段，按阶段切换逻辑原样呈现。
     // -----------------------------------------------------------------------------------------
 
+    /** 详情区占几行 —— 计算在 {@link LoadingOverlayText}，这里只做取字段。 */
     private static int detailLineCount(InitialGenerationProgressSnapshot snapshot) {
-        boolean showDebug = snapshot.stage() == InitialGenerationStage.ROAD_GENERATION
-                || snapshot.stage() == InitialGenerationStage.POST_PROCESSING;
-        boolean showFallback = snapshot.fallbackReason() != null && !snapshot.fallbackReason().isBlank();
-        // summary + 2 route phases + mode + step + device + tiles + throughput
-        return 7 + (showDebug ? 2 : 0) + (showFallback ? 1 : 0);
+        return LoadingOverlayText.detailLineCount(snapshot.stage(), snapshot.fallbackReason());
     }
 
     private static int drawDetail(GuiGraphics graphics, Minecraft mc, Font font, ModConfig config,
@@ -425,9 +422,7 @@ public final class LoadingGenerationOverlayRenderer {
     }
 
     private static Component etaLine(InitialGenerationProgressSnapshot snapshot) {
-        // 只显示已用时间：剩余估算在早期阶段不可靠，去掉以免误导。
-        return Component.translatable("gui.roadweaver.initgen.elapsed_only",
-                formatDuration(snapshot.elapsedMillis()));
+        return LoadingOverlayText.etaLine(snapshot.elapsedMillis());
     }
 
     // -----------------------------------------------------------------------------------------
@@ -474,9 +469,7 @@ public final class LoadingGenerationOverlayRenderer {
     }
 
     private static Component samplingModeLabel(TerrainSamplingMode mode) {
-        return Component.translatable(
-                "config.roadweaver.terrain_sampling_mode.option."
-                        + mode.name().toLowerCase(Locale.ROOT));
+        return LoadingOverlayText.samplingModeLabel(mode);
     }
 
     private static void drawFitted(GuiGraphics graphics, Font font, Component text,
@@ -492,94 +485,29 @@ public final class LoadingGenerationOverlayRenderer {
     }
 
     private static Component routePhaseLine(String key, RoutePhaseProgress progress) {
-        RoutePhaseProgress safe = progress == null ? RoutePhaseProgress.zero() : progress;
-        String step = safe.samplingStep() > 0 ? Integer.toString(safe.samplingStep()) : "-";
-        String status = statusLabel(safe.status());
-        if (safe.generating() > 0) {
-            status = "生成中";
-        } else if (safe.pending() > 0 && !"生成中".equals(status)) {
-            status = "待处理";
-        } else if (safe.failed() > 0 && "已完成".equals(status)) {
-            status = "已结束（含失败）";
-        }
-        return Component.translatable(key, safe.total(), safe.generating(), safe.done(), safe.failed(),
-                safe.retained(), safe.handedOff(), safe.pending(), status, step);
+        return LoadingOverlayText.routePhaseLine(key, progress);
     }
 
-    private static String statusLabel(String operation) {
-        if (operation == null || operation.isBlank() || "idle".equals(operation)) return "-";
-        String value = operation.toLowerCase(Locale.ROOT);
-        if (value.contains("sampling") && value.contains("planning")) return "采样/规划中";
-        if (value.contains("sampling") || value.contains("sample")) return "采样中";
-        if (value.contains("planning") || value.contains("plan")) return "规划中";
-        if (value.contains("structure") || value.contains("corridor") || value.contains("obstacle")
-                || value.contains("discovering")) return "规划中";
-        if (value.contains("generating") || value.contains("generation") || value.contains("generate")) {
-            return "生成中";
-        }
-        if (value.contains("waiting") || value.contains("queued")) return "等待中";
-        if (value.contains("handed_to_candidate")) return "已转候补";
-        if (value.contains("retained_protected_gap")) return "已保留保护间隙";
-        if (value.contains("processing_final_roads")) return "最终道路处理中";
-        if (value.contains("merging_final_network") || value.contains("finalizing_network")
-                || value.contains("flushing_road_data")) return "最终网络收尾中";
-        if (value.contains("no_candidate") || value.contains("candidate_unavailable")) return "无可用候补";
-        if (value.contains("awaiting_candidate") || value.contains("pending_candidate")) return "待候补";
-        if (value.contains("exhausted")) return "候补已耗尽";
-        if (value.contains("finished") || value.contains("complete")) return "已完成";
-        return operation;
-    }
-
-    /**
-     * Operations are raw identifiers, printed verbatim. The ones a player can
-     * actually be parked on get a readable label; everything else stays as-is.
-     */
     private static String operationLabel(String operation) {
-        String value = printable(operation);
-        return switch (value) {
-            case "waiting_for_wall_prewarm" -> "等待长城完成";
-            default -> value;
-        };
+        return LoadingOverlayText.operationLabel(operation);
     }
 
     private static String printable(String value) {
-        return value == null || value.isBlank() ? "-" : value;
+        return LoadingOverlayText.printable(value);
     }
 
     private static String printableDevice(InitialGenerationProgressSnapshot snapshot) {
-        String deviceName = printable(snapshot.deviceName());
-        if (!"-".equals(deviceName)) {
-            return deviceName;
-        }
-        return printable(snapshot.backend());
+        return LoadingOverlayText.printableDevice(snapshot.deviceName(), snapshot.backend());
     }
 
     private static String exactSamplingEta(InitialGenerationProgressSnapshot snapshot) {
-        double rate = snapshot.samplesPerSecond();
-        if (rate <= 0.0) {
-            return "--";
-        }
-        long remaining = Math.max(0L, snapshot.samplesTotal() - snapshot.samplesDone());
-        long seconds = (long) Math.ceil(remaining / rate);
-        if (seconds >= 60L) {
-            return String.format(Locale.ROOT, "%d:%02d", seconds / 60L, seconds % 60L);
-        }
-        return seconds + "s";
+        return LoadingOverlayText.exactSamplingEta(
+                snapshot.samplesPerSecond(), snapshot.samplesTotal(), snapshot.samplesDone());
     }
 
     private static String exactBatchRate(InitialGenerationProgressSnapshot snapshot) {
-        if (snapshot.lastBatchMillis() <= 0L) {
-            return "--";
-        }
-        return String.format(Locale.ROOT, "%.0f",
-                snapshot.lastBatchSamples() * 1000.0 / snapshot.lastBatchMillis());
+        return LoadingOverlayText.exactBatchRate(
+                snapshot.lastBatchSamples(), snapshot.lastBatchMillis());
     }
 
-    private static String formatDuration(long millis) {
-        long seconds = Math.max(0L, millis / 1000L);
-        if (seconds >= 60L) {
-            return String.format(Locale.ROOT, "%d:%02d", seconds / 60L, seconds % 60L);
-        }
-        return seconds + "s";
-    }
 }
