@@ -66,6 +66,38 @@ class ArchitectureGuardTest {
             new String[]{"pipeline", "metric,topology,band,foundation-core,api,util"}
     );
 
+    /**
+     * 基线：超过 <b>1000 行</b>的文件（2026-11-12 用户硬约束：一个文件不得超过千行）。
+     *
+     * <p>这 17 个文件合计 32,257 行，是重构的<b>主要债务</b>。规则是 ratchet：
+     * 只能从这里删，不许往这里加。拆完一个就从这里删掉一个，
+     * 最终这个集合必须为空。</p>
+     *
+     * <p>拆分方向（按功能，不按行数均分）：</p>
+     * <ul>
+     *   <li>内部 record / enum / interface → 各自独立成文件（机械拆分，零风险）</li>
+     *   <li>按职责分组的方法 → 拆成协作类（如「快照构建」/「避让查询」/「端点筛选」）</li>
+     * </ul>
+     */
+    private static final java.util.Set<String> BASELINE_OVER_1000 = java.util.Set.of(
+            "pathlogic.structures.StructureAvoidanceService",
+            "postprocess.RoadSnapService",
+            "planning.terrain.AccurateGradeRepairPlanner",
+            "planning.RoadPlanningService",
+            "generation.InitialGenManager",
+            "pathfinding.PathSpanExtractor",
+            "pathlogic.pathcalc.RoadPathCalculator",
+            "pathlogic.core.Road",
+            "pathlogic.tunnel.RoadTunnelBuilder",
+            "generation.RoadGenerationService",
+            "pathlogic.grade.RoadGradePlanner",
+            "client.map.RoadMapScreen",
+            "pathlogic.junction.ExistingRoadJunctionService",
+            "pathfinding.sampling.AccurateHeightSampler",
+            "worldgen.road.RoadChunkPlanCompiler",
+            "postprocess.PathPostProcessor"
+    );
+
     /** 基线：超过 800 行的类（2026-11-12）。只许从这里删，不许往这里加。 */
     private static final Set<String> BASELINE_LONG_CLASSES = Set.of(
             "pathlogic.structures.StructureAvoidanceService",
@@ -80,7 +112,6 @@ class ArchitectureGuardTest {
             "generation.RoadGenerationService",
             "pathlogic.grade.RoadGradePlanner",
             "client.map.RoadMapScreen",
-            "client.config.localization.ChineseRoadWeaverNames",
             "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler",
             "worldgen.road.RoadChunkPlanCompiler",
@@ -185,6 +216,24 @@ class ArchitectureGuardTest {
     }
 
     // ── 约束 3 / 4：类规模 ratchet ───────────────────────────────
+
+    @Test
+    void 一个文件不得超过一千行() throws IOException {
+        List<String> overLimit = new ArrayList<>();
+        for (Path f : allJavaFiles()) {
+            int lines = Files.readAllLines(f, StandardCharsets.UTF_8).size();
+            if (lines <= 1000) continue;
+            String name = className(f);
+            if (!BASELINE_OVER_1000.contains(name)) {
+                overLimit.add(name + " (" + lines + " 行)");
+            }
+        }
+        assertTrue(overLimit.isEmpty(),
+                "【硬约束】一个文件不得超过 1000 行。新增超限文件必须拆分。\n"
+                        + "新超限文件:\n  " + String.join("\n  ", overLimit)
+                        + "\n（当前基线 " + BASELINE_OVER_1000.size()
+                        + " 个文件超限，拆完一个就从 BASELINE_OVER_1000 删掉一个）");
+    }
 
     @Test
     void 超过八百行的类不许新增() throws IOException {
