@@ -99,15 +99,12 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
 
     private MapDockRenderer.DockLayout dockLayout;
     private EditBox searchBox;
-    private String searchQuery = "";
-    private List<MapSearchResult> searchResults = List.of();
-    private boolean searchLoading;
-    private boolean searchFailed;
-    private int searchRequestSeq;
-    private long searchDeadlineMs;
-    private long searchStartedAtMs;
-    private String pendingSearchQuery = "";
-    private String submittedSearchQuery = "";
+    /** 搜索状态机：防抖 / 请求序号 / 8 秒超时 / 本地优先合并全在里面。 */
+    private final MapSearchController search = new MapSearchController(
+            request -> ClientNetBridge.requestSearch(
+                    request.seq(), request.dimensionId(), request.query()),
+            query -> ClientMapNotes.searchAliases(query, MapStructureSearchService.MAX_RESULTS),
+            MapStructureSearchService.MAX_RESULTS);
     private MapSnapshot filteredSnapshot;
     private int filteredSnapshotRevision = -1;
     private MapSnapshot filteredSnapshotSource;
@@ -132,8 +129,8 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         searchBox.setTextColor(MapTheme.PANEL_TEXT);
         searchBox.setTextColorUneditable(MapTheme.PANEL_MUTED);
         searchBox.setHint(Component.translatable("gui.roadweaver.map.panel.search.hint"));
-        searchBox.setValue(searchQuery);
-        searchBox.setResponder(this::onSearchQueryChanged);
+        searchBox.setValue(search.query());
+        searchBox.setResponder(value -> search.onQueryChanged(value, System.currentTimeMillis()));
         if (!hasMapOpenPermission()) {
             denyMapAccessAndClose();
             return;
@@ -194,7 +191,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         ServerLevel samplingLevel = MapViewportController.resolveSingleplayerLevel(mc);
         List<AutomaticPlanningSamplingBounds> automaticPlanningSamplingBounds =
                 activeAutomaticPlanningSamplingBounds(samplingLevel);
-        processSearchDebounce();
+        search.tick(System.currentTimeMillis(), currentDimensionId);
         MapSnapshot visibleSnapshot = visibleSnapshot();
         dockLayout = MapDockRenderer.layout(this.width, this.height);
         int workspaceBottom = workspaceBottomLimit(dockLayout);
@@ -318,7 +315,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         }
 
         workspacePanel.render(g, this.font, this.width, this.height, workspaceBottom,
-                snapshot, filterState, searchResults, searchLoading, searchFailed);
+                snapshot, filterState, search.results(), search.loading(), search.failed());
         renderSearchBox(g, mouseX, mouseY, partialTick);
 
         EnumSet<MapDockAction> activeActions = EnumSet.noneOf(MapDockAction.class);
@@ -379,7 +376,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         if (workspacePanel.contains(mouseX, mouseY, this.width, this.height, workspaceBottom)) {
             MapWorkspacePanel.Hit hit = workspacePanel.hit(
                     mouseX, mouseY, this.width, this.height, workspaceBottom,
-                    snapshot, filterState, searchResults);
+                    snapshot, filterState, search.results());
             handleWorkspaceHit(hit, mouseX, mouseY, button);
             return true;
         }
@@ -524,7 +521,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         }
         if (searchFocused) {
             if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
-                submitSearchNow();
+                search.submitNow(System.currentTimeMillis(), currentDimensionId);
                 return true;
             }
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -679,49 +676,6 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         searchBox.setY(rect.y() + 1);
         searchBox.setWidth(Math.max(20, rect.width() - 12));
         searchBox.render(graphics, mouseX, mouseY, partialTick);
-    }
-
-    private void onSearchQueryChanged(String value) {
-        searchQuery = value == null ? "" : value;
-        pendingSearchQuery = searchQuery.trim();
-        searchFailed = false;
-        searchLoading = false;
-        searchStartedAtMs = 0L;
-        searchResults = ClientMapNotes.searchAliases(pendingSearchQuery, MapStructureSearchService.MAX_RESULTS);
-        if (pendingSearchQuery.isEmpty()) {
-            searchLoading = false;
-            searchDeadlineMs = 0L;
-            return;
-        }
-        searchDeadlineMs = System.currentTimeMillis() + 250L;
-    }
-
-    private void processSearchDebounce() {
-        long now = System.currentTimeMillis();
-        if (searchLoading && searchStartedAtMs > 0L && now - searchStartedAtMs > 8_000L) {
-            searchLoading = false;
-            searchFailed = true;
-            searchStartedAtMs = 0L;
-            searchRequestSeq++;
-        }
-        if (searchDeadlineMs <= 0L || now < searchDeadlineMs) return;
-        submitSearchNow();
-    }
-
-    private void submitSearchNow() {
-        String query = searchQuery.trim();
-        searchDeadlineMs = 0L;
-        if (query.isEmpty() || currentDimensionId == null) {
-            searchLoading = false;
-            searchResults = List.of();
-            return;
-        }
-        submittedSearchQuery = query;
-        searchLoading = true;
-        searchFailed = false;
-        searchStartedAtMs = System.currentTimeMillis();
-        int requestSeq = ++searchRequestSeq;
-        ClientNetBridge.requestSearch(requestSeq, currentDimensionId, query);
     }
 
     private void selectSearchResult(MapSearchResult result) {
@@ -1050,26 +1004,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
                                     ResourceLocation dimensionId,
                                     boolean success,
                                     List<MapSearchResult> serverResults) {
-        if (requestSeq != searchRequestSeq || dimensionId == null || !dimensionId.equals(currentDimensionId)) return;
-        if (!submittedSearchQuery.equals(searchQuery.trim())) return;
-        searchLoading = false;
-        searchStartedAtMs = 0L;
-        searchFailed = !success;
-        if (!success) return;
-
-        java.util.LinkedHashMap<Long, MapSearchResult> merged = new java.util.LinkedHashMap<>();
-        for (MapSearchResult local : ClientMapNotes.searchAliases(searchQuery, MapStructureSearchService.MAX_RESULTS)) {
-            merged.put(searchResultKey(local.pos()), local);
-        }
-        if (serverResults != null) {
-            for (MapSearchResult result : serverResults) {
-                if (result == null || result.pos() == null) continue;
-                if (!merged.containsKey(searchResultKey(result.pos()))
-                        && merged.size() >= MapStructureSearchService.MAX_RESULTS) break;
-                merged.put(searchResultKey(result.pos()), result);
-            }
-        }
-        searchResults = List.copyOf(merged.values());
+        search.acceptResults(requestSeq, dimensionId, currentDimensionId, success, serverResults);
     }
 
     public void acceptSnapshotPart(int requestSeq,
@@ -1231,9 +1166,6 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         return MapAutomaticPlanningSamplingCache.snapshot(currentDimensionId);
     }
 
-    private static long searchResultKey(BlockPos pos) {
-        return (((long) pos.getX()) << 32) ^ (pos.getZ() & 0xffffffffL);
-    }
 
     private void denyMapAccessAndClose() {
         ClientMapAccessGuard.notifyDenied(this.minecraft);
