@@ -37,6 +37,8 @@ import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 // 仍留在 AccurateGradeRepairPlanner 里的常量、代价函数与工具（包内可见）。
 import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner.*;
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
+import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;
+import static net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair.*;
 
 /**
  * 局部窗口 A* 重路由。

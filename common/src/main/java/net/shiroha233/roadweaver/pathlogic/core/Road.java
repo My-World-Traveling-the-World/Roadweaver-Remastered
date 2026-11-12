@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -502,7 +503,7 @@ public final class Road {
                 }
                 PathfindingCostConfig detourCfg = genConfig.pathfinding().snapshot();
                 detourCfg.sanitize();
-                List<BlockPos> repaired = AccurateGradeRepairPlanner.repairStructureIntersectionsAtExactClearance(
+                List<BlockPos> repaired = StructureRepair.repairStructureIntersectionsAtExactClearance(
                         centreProfile, level, cache.getAccurateSampler(level), detourCfg, connection, 50);
                 if (repaired == null || repaired.size() < 2 || repaired.equals(centreProfile)) {
                     LOGGER.warn("RoadWeaver structure repair loop exiting: local detour unavailable "

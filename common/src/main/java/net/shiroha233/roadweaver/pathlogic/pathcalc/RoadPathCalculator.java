@@ -2,6 +2,9 @@
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
+import net.shiroha233.roadweaver.planning.terrain.StructureRepair.ExactStructureRepairOutcome;
+import net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair;
+import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
@@ -1219,8 +1222,8 @@ public final class RoadPathCalculator {
                 LOGGER.info("RoadWeaver starting single building local repair radius={} fine-precision connection={}->{}",
                         localRepairRadius, connection.from(), connection.to());
                 refreshPlanningSnapshot(level, connection, working);
-                AccurateGradeRepairPlanner.ExactStructureRepairOutcome outcome =
-                        AccurateGradeRepairPlanner.repairStructureIntersectionsAtExactClearanceDetailed(
+                ExactStructureRepairOutcome outcome =
+                        StructureRepair.repairStructureIntersectionsAtExactClearanceDetailed(
                                 working, level, accurate, pathCfg, connection, localRepairRadius);
                 List<BlockPos> exact = outcome.path();
                 if (exact != null && !exact.isEmpty()) {
@@ -1330,7 +1333,7 @@ public final class RoadPathCalculator {
             for (int cycle = 0; cycle < MAX_EXACT_CONSTRAINT_CYCLES; cycle++) {
                 if (!AccurateGradeRepairPlanner.intersectsLakeConstraints(
                         working, width, accurate, streams)) return working;
-                List<BlockPos> repaired = AccurateGradeRepairPlanner.repairLakeIntersections(
+                List<BlockPos> repaired = LakeRiverRepair.repairLakeIntersections(
                         working, level, accurate, finePathCfg, connection, streams, width, detour);
                 if (repaired == null || repaired.isEmpty() || repaired.equals(working)) break;
                 long signature = routeSignature(repaired);
@@ -1372,7 +1375,7 @@ public final class RoadPathCalculator {
 
         LOGGER.info("RoadWeaver starting river local repair window={} connection={}->{}",
                 RIVER_LOCAL_DETOUR_BLOCKS, connection.from(), connection.to());
-        List<BlockPos> repaired = AccurateGradeRepairPlanner.repairRiverIntersections(
+        List<BlockPos> repaired = LakeRiverRepair.repairRiverIntersections(
                 path, level, accurate, pathCfg.withAStarStep(1), connection, streams,
                 width, RIVER_LOCAL_DETOUR_BLOCKS);
         if (repaired != null && !repaired.equals(path)
@@ -1415,7 +1418,7 @@ public final class RoadPathCalculator {
         PathfindingCostConfig pathCfg = cfg.pathfinding().snapshot();
         pathCfg.setAStarStep(1);
         pathCfg.sanitize();
-        List<BlockPos> repaired = AccurateGradeRepairPlanner.repairRiverIntersections(
+        List<BlockPos> repaired = LakeRiverRepair.repairRiverIntersections(
                 path, level, cache.getAccurateSampler(level), pathCfg, connection, streams,
                 width, RIVER_LOCAL_DETOUR_BLOCKS);
         if (repaired == null || repaired.equals(path)
