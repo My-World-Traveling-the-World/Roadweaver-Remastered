@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.minecraft.core.BlockPos;
@@ -93,15 +94,15 @@ public final class StructureAvoidanceServiceTest {
 
     private static void testProtectedGapPolicy() {
         List<BlockPos> path = path(20);
-        require(StructureAvoidanceService.protectedGapPatternAcceptableForTest(
+        require(protectedGapPatternAcceptableForTest(
                         path, mask(20, 5, 15)), "internal long building gap should be accepted");
-        require(StructureAvoidanceService.protectedGapPatternAcceptableForTest(
+        require(protectedGapPatternAcceptableForTest(
                         path, mask(20, 3, 4, 12, 13)), "separate internal building gaps should be accepted");
-        require(StructureAvoidanceService.protectedGapPatternAcceptableForTest(
+        require(protectedGapPatternAcceptableForTest(
                         path, mask(20, 0, 3)), "route-start building gap should retain the remaining route");
-        require(StructureAvoidanceService.protectedGapPatternAcceptableForTest(
+        require(protectedGapPatternAcceptableForTest(
                         path, mask(20, 16, 19)), "route-end building gap should retain the remaining route");
-        require(!StructureAvoidanceService.protectedGapPatternAcceptableForTest(
+        require(!protectedGapPatternAcceptableForTest(
                         path, new boolean[20]), "route without a building collision should not be a gap");
     }
 
@@ -113,13 +114,13 @@ public final class StructureAvoidanceServiceTest {
         }
         StructureConnection connection = new StructureConnection(
                 placements.get(0), placements.get(11));
-        require(StructureAvoidanceService.endpointOnlyProtectedGapPatternForTest(
+        require(endpointOnlyProtectedGapPatternForTest(
                         List.of(placements.get(0), placements.get(11)),
                         List.of(new RoadSpan(placements.get(11), placements.get(11),
                                 SpanType.PROTECTED_GAP))),
                 "endpoint-only protected gap was incorrectly sent to topology fallback");
 
-        require(!StructureAvoidanceService.endpointOnlyProtectedGapPatternForTest(
+        require(!endpointOnlyProtectedGapPatternForTest(
                         List.of(placements.get(0), placements.get(11)),
                         List.of(new RoadSpan(placements.get(6), placements.get(6),
                                 SpanType.PROTECTED_GAP))),

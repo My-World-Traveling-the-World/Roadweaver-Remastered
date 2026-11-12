@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.path;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -180,10 +181,10 @@ public final class SharedEndpointPathReuse {
                 List<BlockPos> originalPath = result.paths().get(entry.getKey());
                 List<BlockPos> mergedPath = entry.getValue();
                 if (originalPath == null || mergedPath == null || originalPath.equals(mergedPath)) continue;
-                int crossingsBefore = StructureAvoidanceService.passThroughVillageCrossings(
+                int crossingsBefore = passThroughVillageCrossings(
                         level, entry.getKey(), originalPath);
                 if (crossingsBefore < 0) continue;
-                int crossingsAfter = StructureAvoidanceService.passThroughVillageCrossings(
+                int crossingsAfter = passThroughVillageCrossings(
                         level, entry.getKey(), mergedPath);
                 if (crossingsAfter > crossingsBefore) {
                     rewritten.put(entry.getKey(), originalPath);

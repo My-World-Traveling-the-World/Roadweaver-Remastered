@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;

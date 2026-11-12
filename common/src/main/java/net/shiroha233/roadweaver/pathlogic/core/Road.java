@@ -1,6 +1,7 @@
 /* 文件职责：生成单条道路并协调精确地形路径、跨度与附属结构。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.PresetService;
@@ -200,7 +201,7 @@ public final class Road {
                 targetY = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);
                 spans = PathSpanExtractor.refineTunnelSpans(spans, segments, targetY, level, cache);
             }
-            List<RoadSpan> protectedGaps = StructureAvoidanceService.protectedGapSpans(
+            List<RoadSpan> protectedGaps = protectedGapSpans(
                     level, connection, segments);
             if (!protectedGaps.isEmpty()) {
                 ArrayList<RoadSpan> withGaps = new ArrayList<>(spans);

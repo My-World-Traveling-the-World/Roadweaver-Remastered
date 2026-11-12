@@ -1,6 +1,7 @@
 /* 文件职责：组织普通道路的精确量化寻路与最终路径段生成。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.ensurePlanningSnapshotForPathAsync;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -1166,14 +1167,14 @@ public final class RoadPathCalculator {
             return PathCalculationResult.failure();
         }
         if (connection != null
-                && StructureAvoidanceService.intersectsPreparedRoute(level, connection, segments)
-                && StructureAvoidanceService.intersectsPreparedRouteWithUnresolvedStructure(level, connection, segments)) {
+                && intersectsPreparedRoute(level, connection, segments)
+                && intersectsPreparedRouteWithUnresolvedStructure(level, connection, segments)) {
             LOGGER.error("RoadWeaver refused to finalize a route whose exact footprint still intersects a protected structure connection={}->{}",
                     connection.from(), connection.to());
             return PathCalculationResult.failure();
         }
         if (connection != null
-                && StructureAvoidanceService.intersectsPreparedRoute(level, connection, segments)) {
+                && intersectsPreparedRoute(level, connection, segments)) {
             LOGGER.info("RoadWeaver retained verified structure protection gaps connection={}->{}; construction will skip only overlapping columns",
                     connection.from(), connection.to());
         }
@@ -1237,14 +1238,14 @@ public final class RoadPathCalculator {
                         break;
                     }
                     refreshPlanningSnapshot(level, connection, exact);
-                    if (!StructureAvoidanceService.intersectsPreparedPath(level, connection, exact, accurate)) {
+                    if (!intersectsPreparedPath(level, connection, exact, accurate)) {
                         LOGGER.info("RoadWeaver accepted single building local repair radius={} fine-precision connection={}->{}",
                                 localRepairRadius, connection.from(), connection.to());
                         return exact;
                     }
                     working = List.copyOf(exact);
                 }
-                if (!StructureAvoidanceService.intersectsPreparedPath(level, connection, working, accurate)) {
+                if (!intersectsPreparedPath(level, connection, working, accurate)) {
                     LOGGER.info("RoadWeaver accepted verified structure protection gap after building radius={} connection={}->{}",
                             localRepairRadius, connection.from(), connection.to());
                     return working;
@@ -1611,24 +1612,23 @@ public final class RoadPathCalculator {
             LAST_SEGMENT_FAILURE.set("curved_null");
         }
         if (curved != null && (connection == null
-                || !StructureAvoidanceService.intersectsPreparedRoute(level, connection, curved))) {
+                || !intersectsPreparedRoute(level, connection, curved))) {
             return curved;
         }
         if (curved != null && connection != null
-                && !StructureAvoidanceService.protectedGapSpans(level, connection, curved).isEmpty()) {
+                && !protectedGapSpans(level, connection, curved).isEmpty()) {
             // 0.8.316：平滑（Catmull-Rom）会把已经绕开建筑的折线推进建筑里——真机
             // "retained route with internal building protection gap" 全部出现在平滑路径上。
             // 旧代码在这里直接保留带缺口的平滑路径，连"不做平滑的直线版本"都没算过。
             // 这里补算一次未平滑版本：只要它的保护缺口更少就换用它（缺口 = 路面被建筑
             // 打断，比路稍显生硬严重得多），从源头减少交给局部修复的缺口数。
-            int curvedGaps = StructureAvoidanceService.protectedGapSpans(level, connection, curved).size();
+            int curvedGaps = protectedGapSpans(level, connection, curved).size();
             if (preferUnsmoothedOnProtectionGap()) {
                 List<RoadSegmentPlacement> unsmoothed = PathPostProcessor.processUnrelaxedLinear(
                         path, width, level, cache, terrain,
                         PathPostProcessor.configuredBridgeMinWaterDepth(), accurate);
                 if (unsmoothed != null && unsmoothed.size() >= 3) {
-                    int unsmoothedGaps = StructureAvoidanceService
-                            .protectedGapSpans(level, connection, unsmoothed).size();
+                    int unsmoothedGaps = protectedGapSpans(level, connection, unsmoothed).size();
                     if (unsmoothedGaps < curvedGaps) {
                         // 0.8.324：未平滑版是原始 A* 走廊，可能明显更长、更折。真机
                         // 20260909 16.15 存档 (288,-256)->(880,208)：缺口 5->0，但站点
@@ -1660,13 +1660,13 @@ public final class RoadPathCalculator {
             LAST_SEGMENT_FAILURE.set("linear_null");
         }
         if (linear != null && linear.size() >= 2
-                && !StructureAvoidanceService.intersectsPreparedRoute(level, connection, linear)) {
+                && !intersectsPreparedRoute(level, connection, linear)) {
             LOGGER.info("RoadWeaver retained unsmoothed route to preserve a structure connection={}->{}",
                     connection.from(), connection.to());
             return linear;
         }
         if (linear != null && linear.size() >= 3 && connection != null
-                && !StructureAvoidanceService.protectedGapSpans(level, connection, linear).isEmpty()) {
+                && !protectedGapSpans(level, connection, linear).isEmpty()) {
             LOGGER.warn("RoadWeaver retained linear route with internal building protection gap connection={}->{}",
                     connection.from(), connection.to());
             return linear;

@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;

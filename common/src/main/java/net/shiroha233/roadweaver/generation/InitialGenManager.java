@@ -1,6 +1,7 @@
 /* 文件职责：协调首次世界加载时的道路规划、生成、进度与持久化。 */
 package net.shiroha233.roadweaver.generation;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -567,7 +568,7 @@ public final class InitialGenManager {
                         String outcome;
                         if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
                                 && result.road() != null) {
-                            boolean endpointOnlyGap = StructureAvoidanceService.hasOnlyEndpointProtectedGaps(
+                            boolean endpointOnlyGap = hasOnlyEndpointProtectedGaps(
                                     level, task, result.road());
                             if (!result.road().hasProtectedGap() || endpointOnlyGap) {
                                 outcome = "COMPLETED" + (endpointOnlyGap ? "(endpoint-only gap)" : "");
@@ -1464,7 +1465,7 @@ public final class InitialGenManager {
                                     && result.road() != null
                                     && result.road().hasProtectedGap()
                                     && task != null
-                                    && !StructureAvoidanceService.hasOnlyEndpointProtectedGaps(
+                                    && !hasOnlyEndpointProtectedGaps(
                                     level, task, result.road());
                             if (result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
                                     && result.road() != null) {

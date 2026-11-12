@@ -1,6 +1,7 @@
 /* 文件职责：调度道路生成任务并维护规划路径缓存生命周期。 */
 package net.shiroha233.roadweaver.generation;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -515,7 +516,7 @@ public final class RoadGenerationService {
                     && primary.road() != null
                     && primary.road().hasProtectedGap();
             boolean endpointOnlyProtectedGap = primaryProtectedGap
-                    && StructureAvoidanceService.hasOnlyEndpointProtectedGaps(
+                    && hasOnlyEndpointProtectedGaps(
                     level, connection, primary.road());
             if ((primary.success() && (!primaryProtectedGap || endpointOnlyProtectedGap))
                     || ConnectionDeletionService.shouldAbort(level, connection)) {
