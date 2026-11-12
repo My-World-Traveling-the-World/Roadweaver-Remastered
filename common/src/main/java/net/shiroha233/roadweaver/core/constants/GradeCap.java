@@ -2,7 +2,6 @@
 package net.shiroha233.roadweaver.core.constants;
 
 import java.util.Locale;
-import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 
 /**
  * 最大纵向坡度档位（0.9.061）。

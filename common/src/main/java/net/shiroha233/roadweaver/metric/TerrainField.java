@@ -1,7 +1,9 @@
-/* 文件职责：度量层对「地形」的唯一依赖 —— 高度与坡度；不含任何采样实现。 */
+/* 文件职责：度量层对「地形」的唯一依赖 —— 高度与坡度；不含任何采样实现。
+ * ⚠ 本文件不得 import pathlogic.* —— 度量层是最底层，反向依赖会破坏分层。
+ *   2026-11-13：这里曾残留一行 import static ...ObstacleJudge.*;（零引用、同步脚本副产物），
+ *   修好守卫的 import 正则后才被发现。 */
 package net.shiroha233.roadweaver.metric;
 
-import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 /**
  * 地形场（度量层的输入端口）。
  *

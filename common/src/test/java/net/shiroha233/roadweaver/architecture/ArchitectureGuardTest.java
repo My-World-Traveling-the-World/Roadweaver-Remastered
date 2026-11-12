@@ -134,11 +134,29 @@ class ArchitectureGuardTest {
             "generation.progress.InitialGenerationProgressTracker"
     );
 
-    /** 基线：有「文件职责」头注的文件数（2026-11-12，共 461 个 java 文件里的 172 个）。 */
-    private static final int BASELINE_DUTY_HEADERS = 172;
+    /**
+     * 基线：有「文件职责」头注的文件数。
+     *
+     * <p>2026-11-12 设 172（当时共 461 个 java 文件）；到 2026-11-13 实际已达 <b>298 / 586</b>，
+     * 基线却还停在 172 ⇒ ratchet 早已失效：文件数掉到 173 也能过检。
+     * 现按实测抬到 298，之后只许升不许降。</p>
+     */
+    private static final int BASELINE_DUTY_HEADERS = 298;
 
+    /*
+     * 匹配本仓内部 import —— 必须同时覆盖四种写法，少一种就等于给守卫开天窗：
+     *   ① import net.x.Y;              （普通导入）
+     *   ② import static net.x.Y.member;（静态导入单成员）
+     *   ③ import static net.x.Y.*;     （静态通配）
+     *   ④ import net.x.*;              （普通通配）
+     *
+     * 2026-11-13 修正：原正则用 [\w.]+ 直接接 ;，**匹配不到 ③④ 两种通配导入**，
+     * 而全仓实测有 420 处通配 import（116 个文件、20%），来源前六全是重构时抽出的
+     * pathlogic.structures.* —— 抽取时用 import static X.* 做同包协作，
+     * 结果系统性地把守卫弄瞎了。教训：守卫自己的正则也要有负控。
+     */
     private static final Pattern IMPORT = Pattern.compile(
-            "^\\s*import\\s+(?:static\\s+)?(net\\.shiroha233\\.roadweaver\\.[\\w.]+)\\s*;",
+            "^\\s*import\\s+(?:static\\s+)?(net\\.shiroha233\\.roadweaver\\.[\\w.]+?)(?:\\.\\*)?\\s*;",
             Pattern.MULTILINE);
 
     private static final Pattern METHOD_DECL = Pattern.compile(
@@ -202,6 +220,106 @@ class ArchitectureGuardTest {
         assertTrue(violations.isEmpty(),
                 "层依赖必须单向（ARCHITECTURE.md 的依赖表）。反向依赖违反项:\n  "
                         + String.join("\n  ", violations));
+    }
+
+
+    // ── 约束 2b：28 个包的跨包依赖 ratchet（2026-11-13 补强）──────────
+
+    /**
+     * 跨包依赖基线文件。
+     *
+     * <p>2026-11-13 之前，守卫的分层规则**只覆盖 metric/topology/band/pipeline/bridge
+     * 五个包**，其余 23 个包零约束 —— 实测长出 39 对双向依赖而无人报警。
+     * 现在把全部 28 个包都纳入 ratchet：<b>现有的 157 条依赖边是基线，只许缩小不许新增</b>。</p>
+     *
+     * <p>为什么不是一次性收紧成硬规则：现有边里就藏着真违规（例如
+     * {@code network -> client} 9 处、{@code config -> client} 1 处），
+     * 一次性硬卡会直接把构建打红、逼人绕过守卫。ratchet 是唯一可持续的做法 ——
+     * 它承认债务存在，但保证债务不会变大。</p>
+     *
+     * <p>要消除某条边：改代码，然后把该行从基线文件里删掉。</p>
+     */
+    private static final Path DEPS_BASELINE =
+            Paths.get("src", "test", "resources", "architecture", "deps-baseline.txt");
+
+    /** 已知「服务端包 import 客户端」的债务：只许减少，不许新增。 */
+    private static final java.util.Map<String, Integer> CLIENT_LEAK_BASELINE = java.util.Map.of(
+            "config", 1,
+            "map", 1,
+            "network", 9,
+            "route", 2);
+
+    /** 扫出全部「源包 -> 目标包」的依赖边及出现次数。 */
+    private static java.util.Map<String, Integer> crossPackageEdges() throws IOException {
+        java.util.Map<String, Integer> edges = new java.util.TreeMap<>();
+        for (Path f : allJavaFiles()) {
+            // 必须相对 ROOT（src/main/java/net/shiroha233/roadweaver）而不是 SRC ——
+            // 否则首段会算成仓库根包名 net，得到 net -> core 这种荒谬的边。
+            String rel = ROOT.relativize(f).toString();
+            // src/main/java 下还有不属于本模组命名空间的目录（如 architectury 的 dev/），
+            // 它们会 relativize 成 ..\dev\… —— 不是我们的包，跳过。
+            if (rel.startsWith("..")) continue;
+            String srcPkg = rel.contains(java.io.File.separator)
+                    ? rel.substring(0, rel.indexOf(java.io.File.separator))
+                    : "(root)";
+            Matcher m = IMPORT.matcher(Files.readString(f, StandardCharsets.UTF_8));
+            while (m.find()) {
+                String rest = m.group(1).substring("net.shiroha233.roadweaver.".length());
+                String dstPkg = rest.contains(".") ? rest.substring(0, rest.indexOf('.')) : rest;
+                if (dstPkg.isEmpty() || dstPkg.equals(srcPkg)) continue;
+                edges.merge(srcPkg + " -> " + dstPkg, 1, Integer::sum);
+            }
+        }
+        return edges;
+    }
+
+    @Test
+    void 跨包依赖不许新增() throws IOException {
+        assertTrue(Files.isRegularFile(DEPS_BASELINE),
+                "缺跨包依赖基线文件: " + DEPS_BASELINE.toAbsolutePath());
+        java.util.Set<String> baseline = new java.util.LinkedHashSet<>();
+        for (String line : Files.readAllLines(DEPS_BASELINE, StandardCharsets.UTF_8)) {
+            String s = line.trim();
+            if (s.isEmpty() || s.startsWith("#")) continue;
+            baseline.add(s.replaceAll("\\s+\\d+$", ""));
+        }
+        java.util.Map<String, Integer> current = crossPackageEdges();
+        List<String> added = new ArrayList<>();
+        for (String edge : current.keySet()) {
+            if (!baseline.contains(edge)) added.add(edge + "  (" + current.get(edge) + " 处)");
+        }
+        assertTrue(added.isEmpty(),
+                "新增了不允许的跨包依赖（28 个包的依赖图是 ratchet，只许缩小）：\n  "
+                        + String.join("\n  ", added)
+                        + "\n如确属必要，请先把该边加入 "
+                        + "common/src/test/resources/architecture/deps-baseline.txt 并说明理由。");
+    }
+
+    @Test
+    void 服务端包不得依赖客户端() throws IOException {
+        List<String> problems = new ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> e : crossPackageEdges().entrySet()) {
+            String[] parts = e.getKey().split(" -> ");
+            if (!"client".equals(parts[1]) || "client".equals(parts[0])) continue;
+            Integer allowed = CLIENT_LEAK_BASELINE.get(parts[0]);
+            if (allowed == null) {
+                problems.add(parts[0] + " -> client（新增，客户端类不该出现在服务端包里，"
+                        + e.getValue() + " 处）");
+            } else if (e.getValue() > allowed) {
+                problems.add(parts[0] + " -> client（" + e.getValue() + " 处 > 基线 " + allowed + "）");
+            }
+        }
+        assertTrue(problems.isEmpty(),
+                "服务端包不得依赖客户端类（专用服务器上这些类不存在）。\n  "
+                        + String.join("\n  ", problems)
+                        + "\n若只是 DTO，请把它搬到中立包（如 core.model）。");
+
+        // 反向也要守：债务只许减少 —— 减少了就顺手把基线数字改小。
+        for (java.util.Map.Entry<String, Integer> e : CLIENT_LEAK_BASELINE.entrySet()) {
+            int now = crossPackageEdges().getOrDefault(e.getKey() + " -> client", 0);
+            assertTrue(now <= e.getValue(),
+                    "基线数字小于实际：" + e.getKey() + " 现在 " + now + " 处 > 基线 " + e.getValue());
+        }
     }
 
     // ── 约束 3 / 4：类规模 ratchet ───────────────────────────────

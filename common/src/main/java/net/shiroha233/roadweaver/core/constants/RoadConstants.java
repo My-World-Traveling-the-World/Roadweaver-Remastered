@@ -1,7 +1,6 @@
 /* 文件职责：集中定义全局常量。 */
 package net.shiroha233.roadweaver.core.constants;
 
-import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 
 public final class RoadConstants {
 
