@@ -87,7 +87,6 @@ class ArchitectureGuardTest {
     private static final java.util.Set<String> BASELINE_OVER_1000 = java.util.Set.of(
             "planning.RoadPlanningService",
             "generation.InitialGenManager",
-            "pathfinding.PathSpanExtractor",
             "pathlogic.pathcalc.RoadPathCalculator",
             "pathlogic.core.Road",
             "pathlogic.tunnel.RoadTunnelBuilder",

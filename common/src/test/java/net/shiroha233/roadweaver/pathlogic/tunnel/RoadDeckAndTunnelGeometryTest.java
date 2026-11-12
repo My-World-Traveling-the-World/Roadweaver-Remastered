@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,7 +73,7 @@ class RoadDeckAndTunnelGeometryTest {
     @Test
     void anUnderseaTunnelAlwaysLeavesRockBetweenItsRoofAndTheWater() {
         for (int oceanFloorWg : new int[] {40, 62, 63, 100}) {
-            int roadY = net.shiroha233.roadweaver.pathfinding.PathSpanExtractor.underseaRoadY(oceanFloorWg);
+            int roadY = net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner.underseaRoadY(oceanFloorWg);
             int roofY = roadY + RoadTunnelBuilder.roofOffset();
             int topmostSolid = oceanFloorWg - 1;
             assertEquals(RoadTunnelBuilder.ROCKS_ABOVE_ROOF, topmostSolid - roofY,

@@ -2,6 +2,9 @@
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
+import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
+import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
@@ -177,7 +180,7 @@ public final class Road {
                         level, segments, List.of(), cache, terrain, genConfig, streams);
                 List<RoadSpan> provisionalTunnels = PathSpanExtractor.refineTunnelSpans(
                         List.of(), segments, provisionalTargetY, level, cache);
-                spans = PathSpanExtractor.retainVerticallyRelevantCrossings(
+                spans = SpanConflictResolver.retainVerticallyRelevantCrossings(
                         spans, provisionalTunnels, segments, provisionalTargetY,
                         level, cache, terrain, streams, genConfig.tunnelClearHeight(),
                         routeBridgeMinWaterDepth());
@@ -193,9 +196,9 @@ public final class Road {
             // an unsafe bridge approach column.
             for (int bridgeRefinement = 0; bridgeRefinement < 3; bridgeRefinement++) {
                 if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
-                List<RoadSpan> refinedSpans = PathSpanExtractor.refineFinalFillBridgeSpans(
+                List<RoadSpan> refinedSpans = FillBridgeExtender.refineFinalFillBridgeSpans(
                         spans, segments, targetY, level, cache);
-                refinedSpans = PathSpanExtractor.extendExistingStreamsBridgeApproaches(
+                refinedSpans = FillBridgeExtender.extendExistingStreamsBridgeApproaches(
                         refinedSpans, segments, streams);
                 if (refinedSpans.equals(spans)) break;
                 spans = refinedSpans;
@@ -1004,7 +1007,7 @@ public final class Road {
         logEndpointProfile("after-structure-lock", connection, smoothed, terrainY, n, startBoundary, endBoundary);
         applyCrossingProfiles(level, cache, terrain, segments, centers, smoothed, crossingRanges, cfg,
                 streams, routeBridgeMinWaterDepth());
-        List<RoadSpan> underseaSpans = PathSpanExtractor.convertLongOceanBridgesToUnderseaTunnels(
+        List<RoadSpan> underseaSpans = UnderseaTunnelPlanner.convertLongOceanBridgesToUnderseaTunnels(
                 spans, segments, level, cache, footprintSamples);
         if (underseaSpans != spans && spans != null) {
             try {
@@ -1015,7 +1018,7 @@ public final class Road {
                 // the normal generation path supplies a mutable list.
             }
         }
-        smoothed = PathSpanExtractor.applyUnderseaTunnelProfile(
+        smoothed = UnderseaTunnelPlanner.applyUnderseaTunnelProfile(
                 toIntegerList(smoothed), spans, segments, level, cache, footprintSamples,
                 cfg.tunnelClearHeight())
                 .stream().mapToInt(Integer::intValue).toArray();

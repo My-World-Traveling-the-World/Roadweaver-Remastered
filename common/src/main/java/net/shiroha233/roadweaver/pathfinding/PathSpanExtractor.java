@@ -30,13 +30,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static net.shiroha233.roadweaver.pathfinding.impl.PathfindingHelper.isWaterLike;
+import static net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner.*;
+import static net.shiroha233.roadweaver.pathfinding.FillBridgeExtender.*;
+import static net.shiroha233.roadweaver.pathfinding.SpanConflictResolver.*;
+import static net.shiroha233.roadweaver.pathfinding.TunnelFootprintSampler.*;
 
 /**
  * 道路跨度提取器。
  */
 public final class PathSpanExtractor {
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    private static final int TUNNEL_RUN_MIN_LENGTH = 3;
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final int TUNNEL_RUN_MIN_LENGTH = 3;
     // ---- 0.9.010 突起度(prominence)取证：只读诊断，判定路径一行未动 ----
     // 用户观察：沿途常有「宽 5~10 格、高 10~15 格」的孤立突起，路却被打成断头路。怀疑是口径问题：
     // 现有 buried 用「footprint 最大覆土 = 地形 − targetY(规划路面)」，纵断面一旦沿突起爬上去，
@@ -46,37 +50,37 @@ public final class PathSpanExtractor {
     // 而这套取证在两片世界跑完后结论已经明确：同一判据下 bumps 全是 0，promMax=n/a ——
     // 说明「孤立突起」不是这条路线的主要地形形态，取证使命结束。
     // 需要复现时加 -Droadweaver.bumpDiag=true；阈值/窗口仍可 -Droadweaver.bumpProminence= / bumpWindow=。
-    private static final boolean BUMP_DIAG = Boolean.parseBoolean(
+    static final boolean BUMP_DIAG = Boolean.parseBoolean(
             System.getProperty("roadweaver.bumpDiag", "false"));
-    private static final int BUMP_PROMINENCE_THRESHOLD = Integer.getInteger(
+    static final int BUMP_PROMINENCE_THRESHOLD = Integer.getInteger(
             "roadweaver.bumpProminence", 8);
-    private static final int BUMP_WINDOW_STATIONS = Integer.getInteger(
+    static final int BUMP_WINDOW_STATIONS = Integer.getInteger(
             "roadweaver.bumpWindow", 12);
     /** Fallback when the dry-depression bridge threshold cannot be read. */
-    private static final int DEFAULT_DRY_DEPRESSION_BRIDGE_DEPTH = 6;
-    private static final int CANYON_BANK_SEARCH_SEGMENTS = 8;
-    private static final int CANYON_MIN_DEPTH_BLOCKS = 10;
-    private static final int CANYON_MIN_WIDTH_BLOCKS = 5;
+    static final int DEFAULT_DRY_DEPRESSION_BRIDGE_DEPTH = 6;
+    static final int CANYON_BANK_SEARCH_SEGMENTS = 8;
+    static final int CANYON_MIN_DEPTH_BLOCKS = 10;
+    static final int CANYON_MIN_WIDTH_BLOCKS = 5;
     /** Very long, deep ocean crossings may become transparent sea-floor tunnels. */
-    private static final int UNDERSEA_TUNNEL_MIN_LENGTH_BLOCKS = 256;
-    private static final int UNDERSEA_TUNNEL_MIN_DEPTH_BLOCKS = 8;
-    private static final double UNDERSEA_TUNNEL_SELECTION_PROBABILITY = 0.5D;
+    static final int UNDERSEA_TUNNEL_MIN_LENGTH_BLOCKS = 256;
+    static final int UNDERSEA_TUNNEL_MIN_DEPTH_BLOCKS = 8;
+    static final double UNDERSEA_TUNNEL_SELECTION_PROBABILITY = 0.5D;
     /** Land-side approach covered by the tunnel before reaching the shoreline. */
-    private static final int UNDERSEA_APPROACH_TUNNEL_BLOCKS = 128;
+    static final int UNDERSEA_APPROACH_TUNNEL_BLOCKS = 128;
     /** A water crossing up to this many blocks wide stays a short ford (ROAD_CROSSING). */
     public static final int ROAD_CROSSING_MAX_WIDTH_BLOCKS = 12;
     /** A shallow dry depression can be graded across a bounded endpoint step. */
     static final int MAX_DRY_CROSSING_ENDPOINT_DELTA = 3;
     /** Search beyond the immediate edge when a dry depression is a real canyon. */
-    private static final int DRY_DEPRESSION_BANK_SEARCH_STATIONS = 32;
+    static final int DRY_DEPRESSION_BANK_SEARCH_STATIONS = 32;
     /** Deep dry depressions must never fall back to ordinary fill. */
-    private static final int DRY_DEPRESSION_FORCE_BRIDGE_DEPTH = 16;
+    static final int DRY_DEPRESSION_FORCE_BRIDGE_DEPTH = 16;
     /**
      * Streams distinguishes its wet channel from the wider terrain-carved
      * corridor.  A persisted bridge must reach the latter's bank; otherwise a
      * low bank station is later rejected as an unsafe ordinary-road fill.
      */
-    private static final int STREAMS_BRIDGE_CORRIDOR_GAP_SEGMENTS = 2;
+    static final int STREAMS_BRIDGE_CORRIDOR_GAP_SEGMENTS = 2;
 
     private PathSpanExtractor() {}
 
@@ -389,7 +393,7 @@ public final class PathSpanExtractor {
      * 0.9.010 取证：每个中心站的地形表面高度。缺快采样时退回站自身 Y，
      * 与 {@link #centerStationOverburden} 的兜底口径保持一致。
      */
-    private static int[] centerTerrainHeights(List<BlockPos> centers,
+    static int[] centerTerrainHeights(List<BlockPos> centers,
                                               Map<Long, AccurateHeightSample> samples,
                                               AccurateHeightSampler accurate) {
         int[] heights = new int[centers.size()];
@@ -410,7 +414,7 @@ public final class PathSpanExtractor {
     }
 
     /** [from, to] 内高度的 25% 分位（稳健下沿，抗单格噪声）；全无效返回 MIN_VALUE。 */
-    private static int lowQuantile(int[] values, int from, int to) {
+    static int lowQuantile(int[] values, int from, int to) {
         if (values == null) return Integer.MIN_VALUE;
         int lo = Math.max(0, from);
         int hi = Math.min(values.length - 1, to);
@@ -432,7 +436,7 @@ public final class PathSpanExtractor {
      * {@code [ROAD-BUMP]} 行。生产判据见 {@link TunnelEnvelopeCriterion#prominence(int[])} ——
      * 那个用「低分位下包络」当基准，不会因为突起比窗口还宽就把高地自己当成基准。</p>
      */
-    private static int[] prominences(int[] terrainHeight, int window) {
+    static int[] prominences(int[] terrainHeight, int window) {
         if (terrainHeight == null || terrainHeight.length == 0) return null;
         int[] prom = new int[terrainHeight.length];
         for (int i = 0; i < terrainHeight.length; i++) {
@@ -451,7 +455,7 @@ public final class PathSpanExtractor {
      * 只读：不改 result、不改 targetY、不改任何 span。
      * 关注 {@code covered=NO} 的那些行 —— 它们就是「该打隧道却被铺成路面」的候选。
      */
-    private static void logBumpRuns(int[] terrainHeight,
+    static void logBumpRuns(int[] terrainHeight,
                                     int[] prominence,
                                     List<Integer> targetY,
                                     boolean[] bridge,
@@ -525,7 +529,7 @@ public final class PathSpanExtractor {
      *
      * <p>读不到配置时退回出厂默认（离线单测 / 初始化早期走的都是这条）。</p>
      */
-    private static TunnelEnvelopeCriterion.Costs tunnelCosts() {
+    static TunnelEnvelopeCriterion.Costs tunnelCosts() {
         try {
             var cfg = ConfigService.get().pathfindingCost();
             double step = Math.max(1, cfg.effectiveAStarStep());
@@ -543,7 +547,7 @@ public final class PathSpanExtractor {
     }
 
     /** 0.9.005-B: centre-station overburden (terrain height - planned road Y). */
-    private static int centerStationOverburden(List<BlockPos> centers, List<Integer> targetY,
+    static int centerStationOverburden(List<BlockPos> centers, List<Integer> targetY,
                                                Map<Long, AccurateHeightSample> samples,
                                                AccurateHeightSampler accurate, int index) {
         if (index < 0 || index >= centers.size() || index >= targetY.size()) return Integer.MIN_VALUE;
@@ -557,7 +561,7 @@ public final class PathSpanExtractor {
     }
 
     /** 0.9.005-B: is the centre station a wet column (water surface above ocean floor). */
-    private static boolean isWetStation(List<BlockPos> centers,
+    static boolean isWetStation(List<BlockPos> centers,
                                         Map<Long, AccurateHeightSample> samples, int index) {
         if (index < 0 || index >= centers.size() || samples == null || samples.isEmpty()) return false;
         BlockPos center = centers.get(index);
@@ -570,203 +574,6 @@ public final class PathSpanExtractor {
      * Converts only very long, deep ocean bridges into TUNNEL spans. Rivers,
      * lakes, shallow crossings and mixed shore corridors remain bridges.
      */
-    public static List<RoadSpan> convertLongOceanBridgesToUnderseaTunnels(
-            List<RoadSpan> existing,
-            List<RoadSegmentPlacement> segments,
-            ServerLevel level,
-            TerrainSamplingCache cache,
-            Map<Long, AccurateHeightSample> sampledCenters) {
-        if (existing == null || existing.isEmpty() || segments == null
-                || segments.size() < 3 || level == null || cache == null) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-        List<BlockPos> centers = new ArrayList<>(segments.size());
-        for (RoadSegmentPlacement segment : segments) {
-            if (segment == null || segment.middlePos() == null) return List.copyOf(existing);
-            centers.add(segment.middlePos());
-        }
-        Map<Long, AccurateHeightSample> centerSamples = sampledCenters == null ? Map.of() : sampledCenters;
-        List<RoadSpan> result = new ArrayList<>();
-        int converted = 0;
-        for (RoadSpan span : existing) {
-            if (span == null || span.type() != SpanType.BRIDGE) {
-                if (span != null) result.add(span);
-                continue;
-            }
-            int start = indexOfXz(centers, span.start());
-            int end = indexOfXz(centers, span.end());
-            if (start < 0 || end < 0) {
-                result.add(span);
-                continue;
-            }
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            if (crossingWidthBlocks(centers, from, to) < UNDERSEA_TUNNEL_MIN_LENGTH_BLOCKS) {
-                result.add(span);
-                continue;
-            }
-            if (!chooseUnderseaTunnel(span, centers)) {
-                result.add(span);
-                LOGGER.info("RoadWeaver retained long ocean bridge by 50%% selection range={}..{}",
-                        from, to);
-                continue;
-            }
-            int oceanColumns = 0;
-            int waterColumns = 0;
-            int minimumBed = Integer.MAX_VALUE;
-            int maximumDepth = 0;
-            for (int index = from; index <= to; index++) {
-                BlockPos center = centers.get(index);
-                AccurateHeightSample sample = centerSamples.get(
-                        AccurateHeightSample.key(center.getX(), center.getZ()));
-                if (sample == null) continue;
-                boolean ocean = cache.getBiome(level, center.getX(), center.getZ()).is(BiomeTags.IS_OCEAN);
-                boolean water = SurfaceWaterClassifier.isWaterColumn(
-                        sample.worldSurfaceWg(), sample.oceanFloorWg(), ocean, level.getSeaLevel());
-                if (!ocean || !water) continue;
-                oceanColumns++;
-                waterColumns++;
-                minimumBed = Math.min(minimumBed, sample.oceanFloorWg());
-                maximumDepth = Math.max(maximumDepth,
-                        SurfaceWaterClassifier.waterDepth(sample.worldSurfaceWg(), sample.oceanFloorWg(),
-                                ocean, level.getSeaLevel(), true));
-            }
-            int spanColumns = Math.max(1, to - from + 1);
-            if (oceanColumns < Math.max(3, Math.ceilDiv(spanColumns * 3, 4))
-                    || waterColumns != oceanColumns
-                    || maximumDepth < UNDERSEA_TUNNEL_MIN_DEPTH_BLOCKS
-                    || minimumBed == Integer.MAX_VALUE) {
-                result.add(span);
-                continue;
-            }
-            int tunnelFrom = extendIndexByDistance(centers, from, -1, UNDERSEA_APPROACH_TUNNEL_BLOCKS);
-            int tunnelTo = extendIndexByDistance(centers, to, 1, UNDERSEA_APPROACH_TUNNEL_BLOCKS);
-            result.add(new RoadSpan(centers.get(tunnelFrom), centers.get(tunnelTo), SpanType.TUNNEL));
-            converted++;
-            LOGGER.info("RoadWeaver converted long ocean bridge to undersea tunnel range={}..{} approach={} lengthBlocks={} minBedY={} maxDepth={}",
-                    tunnelFrom, tunnelTo, UNDERSEA_APPROACH_TUNNEL_BLOCKS,
-                    crossingWidthBlocks(centers, from, to), minimumBed, maximumDepth);
-        }
-        return converted == 0 ? List.copyOf(existing) : normalizeTunnelSpans(result, centers);
-    }
-
-    private static boolean chooseUnderseaTunnel(RoadSpan span, List<BlockPos> centers) {
-        if (span == null || centers == null) return false;
-        long seed = 0x554E444552534541L;
-        seed = seed * 31L + span.start().asLong();
-        seed = seed * 31L + span.end().asLong();
-        if (!centers.isEmpty()) seed ^= centers.get(0).asLong();
-        double probability = ConfigService.get().terrainProfile().oceanUnderseaChance();
-        return new SplittableRandom(seed).nextDouble() < probability;
-    }
-
-    private static int extendIndexByDistance(List<BlockPos> centers, int start, int direction, int blocks) {
-        int index = Math.max(0, Math.min(centers.size() - 1, start));
-        double travelled = 0.0D;
-        while (travelled < blocks) {
-            int next = index + direction;
-            if (next < 0 || next >= centers.size()) break;
-            travelled += horizontalDistance(centers.get(index), centers.get(next));
-            index = next;
-        }
-        return index;
-    }
-
-    /** Lowers converted ocean-tunnel stations below the sampled sea floor. */
-    public static List<Integer> applyUnderseaTunnelProfile(
-            List<Integer> targetY,
-            List<RoadSpan> spans,
-            List<RoadSegmentPlacement> segments,
-            ServerLevel level,
-            TerrainSamplingCache cache,
-            Map<Long, AccurateHeightSample> sampledCenters,
-            int clearHeight) {
-        if (targetY == null || spans == null || segments == null || level == null || cache == null
-                || targetY.size() != segments.size() || segments.size() < 3) {
-            return targetY == null ? List.of() : List.copyOf(targetY);
-        }
-        List<BlockPos> centers = new ArrayList<>(segments.size());
-        for (RoadSegmentPlacement segment : segments) {
-            if (segment == null || segment.middlePos() == null) return List.copyOf(targetY);
-            centers.add(segment.middlePos());
-        }
-        Map<Long, AccurateHeightSample> samples = sampledCenters == null ? Map.of() : sampledCenters;
-        ArrayList<Integer> result = new ArrayList<>(targetY);
-        int safeClear = Math.max(2, Math.min(16, clearHeight));
-        for (RoadSpan span : spans) {
-            if (span == null || span.type() != SpanType.TUNNEL) continue;
-            int start = indexOfXz(centers, span.start());
-            int end = indexOfXz(centers, span.end());
-            if (start < 0 || end < 0) continue;
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            int firstWater = -1;
-            int lastWater = -1;
-            int waterCount = 0;
-            Map<Integer, Integer> underwaterTargets = new java.util.LinkedHashMap<>();
-            for (int index = from; index <= to; index++) {
-                BlockPos center = centers.get(index);
-                AccurateHeightSample sample = samples.get(
-                        AccurateHeightSample.key(center.getX(), center.getZ()));
-                if (sample == null || !cache.getBiome(level, center.getX(), center.getZ()).is(BiomeTags.IS_OCEAN)
-                        || !SurfaceWaterClassifier.isWaterColumn(
-                        sample.worldSurfaceWg(), sample.oceanFloorWg(), true, level.getSeaLevel())) continue;
-                if (firstWater < 0) firstWater = index;
-                lastWater = index;
-                waterCount++;
-                underwaterTargets.put(index, underseaRoadY(sample.oceanFloorWg()));
-            }
-            if (firstWater < 0 || waterCount < Math.max(3, Math.ceilDiv(to - from + 1, 2))) continue;
-
-            for (Map.Entry<Integer, Integer> target : underwaterTargets.entrySet()) {
-                int index = target.getKey();
-                result.set(index, Math.min(result.get(index), target.getValue()));
-            }
-
-            // Build short ramps at both sea-floor tunnel mouths instead of a
-            // vertical drop from the surface bridge deck.
-            smoothUnderseaApproach(result, targetY, firstWater, -1, safeClear);
-            smoothUnderseaApproach(result, targetY, lastWater, 1, safeClear);
-        }
-        return List.copyOf(result);
-    }
-
-    /**
-     * The deck level for an undersea tunnel station, from the ocean floor's first water block.
-     *
-     * <p>{@code oceanFloorWg} is "topmost solid block + 1", so the topmost solid block is
-     * {@code oceanFloorWg - 1}. The deck must sit deep enough that the roof - {@code roofOffset()} above the
-     * deck - leaves {@link RoadTunnelBuilder#ROCKS_ABOVE_ROOF} solid blocks below the water. The old formula
-     * ({@code oceanFloorWg - safeClear - 1}) put the roof one block <em>above</em> the seabed, i.e. in the
-     * first water block: the "tunnel" was a single stone-brick layer lying on the sea floor with the ocean
-     * resting on it, and nothing in the pipeline noticed because the overburden test measured to the water
-     * surface.
-     */
-    public static int underseaRoadY(int oceanFloorWg) {
-        return oceanFloorWg - 1 - RoadTunnelBuilder.roofOffset() - RoadTunnelBuilder.ROCKS_ABOVE_ROOF;
-    }
-
-    private static void smoothUnderseaApproach(List<Integer> result, List<Integer> original,
-                                               int mouth, int direction, int clearHeight) {
-        if (mouth < 0 || mouth >= result.size()) return;
-        int underwater = result.get(mouth);
-        int reference = original.get(mouth);
-        int maxApproach = Math.max(16, Math.min(128, Math.abs(reference - underwater) * 2 + 16));
-        int anchorIndex = mouth + direction * maxApproach;
-        if (anchorIndex < 0 || anchorIndex >= original.size()) {
-            anchorIndex = mouth + direction * Math.min(16, maxApproach);
-        }
-        anchorIndex = Math.max(0, Math.min(original.size() - 1, anchorIndex));
-        int anchorY = original.get(anchorIndex);
-        for (int distance = 1; distance <= maxApproach; distance++) {
-            int index = mouth + direction * distance;
-            if (index < 0 || index >= result.size()) break;
-            double ratio = distance / (double) maxApproach;
-            int ramp = (int) Math.round(underwater + (anchorY - underwater) * ratio);
-            result.set(index, Math.min(result.get(index), ramp));
-        }
-    }
-
     /** Rebuilds tunnel spans after a road has been trimmed or merged. */
     public static RoadData refineRoadTunnels(RoadData road,
                                              ServerLevel level,
@@ -791,652 +598,8 @@ public final class PathSpanExtractor {
      * the bridge template. Water spans already present in {@code existing}
      * always take precedence.
      */
-    public static List<RoadSpan> refineFinalFillBridgeSpans(List<RoadSpan> existing,
-                                                             List<RoadSegmentPlacement> segments,
-                                                             List<Integer> targetY,
-                                                             ServerLevel level,
-                                                             TerrainSamplingCache cache) {
-        if (segments == null || targetY == null || segments.size() != targetY.size()
-                || segments.size() < 3 || level == null || cache == null) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-        List<BlockPos> centers = new ArrayList<>(segments.size());
-        Set<Long> sampledKeys = new HashSet<>();
-        List<BlockPos> positions = new ArrayList<>();
-        for (RoadSegmentPlacement segment : segments) {
-            if (segment == null || segment.middlePos() == null) return existing == null ? List.of() : List.copyOf(existing);
-            centers.add(segment.middlePos());
-            if (segment.positions() == null) continue;
-            for (BlockPos position : segment.positions()) {
-                if (position != null && sampledKeys.add(AccurateHeightSample.key(position.getX(), position.getZ()))) {
-                    positions.add(position);
-                }
-            }
-        }
-        Map<Long, AccurateHeightSample> samples = cache.getAccurateSampler(level).samplePositions(positions);
-        int[] lowest = new int[segments.size()];
-        java.util.Arrays.fill(lowest, Integer.MAX_VALUE);
-        AccurateHeightSampler accurate = cache.getAccurateSampler(level);
-        for (int index = 0; index < segments.size(); index++) {
-            List<BlockPos> footprint = segments.get(index).positions();
-            if (footprint == null) continue;
-            for (BlockPos position : footprint) {
-                if (position == null) continue;
-                AccurateHeightSample sample = samples.get(AccurateHeightSample.key(position.getX(), position.getZ()));
-                if (sample != null) lowest[index] = Math.min(lowest[index], accurate.surfaceHeight(sample));
-            }
-        }
-        return refineFinalFillBridgeSpans(existing, centers, targetY, lowest);
-    }
-
-    /**
-     * Extends an already selected Streams bridge through the remainder of its
-     * own carved corridor.  This is deliberately not a new crossing detector:
-     * a dry Streams corridor cannot create a bridge by itself.  It only keeps
-     * a bridge chosen from a real channel from stopping before the bank.
-     */
-    public static List<RoadSpan> extendExistingStreamsBridgeApproaches(List<RoadSpan> existing,
-                                                                         List<RoadSegmentPlacement> segments,
-                                                                         StreamsReflowingCompat.SamplingSession streams) {
-        if (existing == null || existing.isEmpty() || segments == null || segments.size() < 2
-                || streams == null || !streams.isAvailable()) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-        List<BlockPos> centers = new ArrayList<>(segments.size());
-        for (RoadSegmentPlacement segment : segments) {
-            if (segment == null || segment.middlePos() == null) return List.copyOf(existing);
-            centers.add(segment.middlePos());
-        }
-        boolean[] corridor = new boolean[centers.size()];
-        for (int index = 0; index < centers.size(); index++) {
-            BlockPos center = centers.get(index);
-            corridor[index] = streams.sample(center.getX(), center.getZ()).inCorridor();
-        }
-        return extendExistingBridgesIntoCorridor(existing, centers, corridor);
-    }
-
-    static List<RoadSpan> extendExistingBridgesIntoCorridor(List<RoadSpan> existing,
-                                                              List<BlockPos> centers,
-                                                              boolean[] corridor) {
-        if (existing == null || existing.isEmpty() || centers == null || centers.isEmpty()
-                || corridor == null || corridor.length != centers.size()) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-        List<int[]> ranges = new ArrayList<>();
-        List<RoadSpan> result = new ArrayList<>();
-        boolean changed = false;
-        for (RoadSpan span : existing) {
-            if (span == null || span.type() != SpanType.BRIDGE) {
-                if (span != null) result.add(span);
-                continue;
-            }
-            int start = indexOfXz(centers, span.start());
-            int end = indexOfXz(centers, span.end());
-            if (start < 0 || end < 0) {
-                result.add(span);
-                continue;
-            }
-            int lower = Math.min(start, end);
-            int upper = Math.max(start, end);
-            int extendedLower = extendBridgeBank(corridor, lower, -1);
-            int extendedUpper = extendBridgeBank(corridor, upper, 1);
-            changed |= extendedLower != lower || extendedUpper != upper;
-            ranges.add(new int[]{extendedLower, extendedUpper});
-        }
-        if (ranges.isEmpty() || !changed) return List.copyOf(existing);
-
-        ranges.sort(java.util.Comparator.comparingInt(range -> range[0]));
-        List<int[]> merged = new ArrayList<>();
-        for (int[] range : ranges) {
-            if (merged.isEmpty() || range[0] > merged.getLast()[1] + 1) {
-                merged.add(range);
-            } else {
-                merged.getLast()[1] = Math.max(merged.getLast()[1], range[1]);
-            }
-        }
-        for (int[] range : merged) {
-            result.add(new RoadSpan(centers.get(range[0]), centers.get(range[1]), SpanType.BRIDGE));
-        }
-        return List.copyOf(result);
-    }
-
-    private static int extendBridgeBank(boolean[] corridor, int bridgeEdge, int direction) {
-        int index = bridgeEdge;
-        for (int candidate = bridgeEdge + direction;
-             candidate >= 0 && candidate < corridor.length;
-             candidate += direction) {
-            if (corridor[candidate]) {
-                index = candidate;
-                continue;
-            }
-            if (corridorResumes(corridor, candidate, direction)) {
-                index = candidate;
-                continue;
-            }
-            // Include one stable bank station so the template and the ordinary
-            // road own the same landing column, then stop on dry land.
-            if (index != bridgeEdge) index = candidate;
-            break;
-        }
-        return index;
-    }
-
-    private static boolean corridorResumes(boolean[] corridor, int from, int direction) {
-        for (int step = 1; step <= STREAMS_BRIDGE_CORRIDOR_GAP_SEGMENTS; step++) {
-            int candidate = from + direction * step;
-            if (candidate < 0 || candidate >= corridor.length) return false;
-            if (corridor[candidate]) return true;
-        }
-        return false;
-    }
-
-    static List<RoadSpan> refineFinalFillBridgeSpans(List<RoadSpan> existing,
-                                                      List<BlockPos> centers,
-                                                      List<Integer> targetY,
-                                                      int[] lowestFootprintSurface) {
-        if (centers == null || targetY == null || lowestFootprintSurface == null
-                || centers.size() != targetY.size() || centers.size() != lowestFootprintSurface.length
-                || centers.size() < 3) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-        List<RoadSpan> result = new ArrayList<>(existing == null ? List.of() : existing);
-        boolean[] special = specialSpanMask(result, centers);
-        // Dry-depression bridging has its own threshold; the ordinary fill
-        // limit stays owned by RoadGradePlanner's shared grade snapshot.
-        int dryBridgeDepth = dryDepressionBridgeDepth();
-        boolean[] unsafeFill = new boolean[targetY.size()];
-        for (int index = 0; index < targetY.size(); index++) {
-            if (special[index] || lowestFootprintSurface[index] == Integer.MAX_VALUE) continue;
-            unsafeFill[index] = targetY.get(index) - lowestFootprintSurface[index] >= dryBridgeDepth;
-        }
-        appendFinalFillBridgeSpans(result, centers, targetY, lowestFootprintSurface, unsafeFill, special);
-        return List.copyOf(result);
-    }
-
-    private static boolean[] specialSpanMask(List<RoadSpan> spans, List<BlockPos> centers) {
-        boolean[] special = new boolean[centers.size()];
-        if (spans == null) return special;
-        for (RoadSpan span : spans) {
-            if (span == null || (span.type() != SpanType.BRIDGE
-                    && span.type() != SpanType.ROAD_CROSSING
-                    && span.type() != SpanType.TUNNEL
-                    && span.type() != SpanType.TUNNEL_JUNCTION
-                    && span.type() != SpanType.NETWORK_REUSE
-                    && span.type() != SpanType.CULVERT
-                    && span.type() != SpanType.PROTECTED_GAP)) continue;
-            int start = indexOfXz(centers, span.start());
-            int end = indexOfXz(centers, span.end());
-            if (start < 0 || end < 0) continue;
-            for (int index = Math.min(start, end); index <= Math.max(start, end); index++) special[index] = true;
-        }
-        return special;
-    }
-
-    private static void appendFinalFillBridgeSpans(List<RoadSpan> spans,
-                                                   List<BlockPos> centers,
-                                                   List<Integer> targetY,
-                                                   int[] lowestFootprintSurface,
-                                                   boolean[] unsafeFill,
-                                                   boolean[] special) {
-        for (int index = 0; index < unsafeFill.length; ) {
-            while (index < unsafeFill.length && !unsafeFill[index]) index++;
-            if (index >= unsafeFill.length) return;
-            int unsafeStart = index;
-            while (index + 1 < unsafeFill.length && unsafeFill[index + 1]) index++;
-            int unsafeEnd = index++;
-
-            int bridgeStart = findDryDepressionBank(
-                    unsafeStart, -1, unsafeFill, special);
-            int bridgeEnd = findDryDepressionBank(
-                    unsafeEnd, 1, unsafeFill, special);
-            // A deep fill can start or end at the route boundary. There is no
-            // ordinary bank on the missing side, but the endpoint itself is a
-            // valid landing station. Without this fallback the unsafe run was
-            // silently left unclassified and ordinary paving later skipped it
-            // one station at a time, producing a disconnected canyon.
-            if (bridgeStart < 0 && unsafeStart == 0 && !special[0]) bridgeStart = 0;
-            if (bridgeEnd < 0 && unsafeEnd == unsafeFill.length - 1
-                    && !special[unsafeFill.length - 1]) bridgeEnd = unsafeFill.length - 1;
-            if (bridgeStart < 0 || bridgeEnd < 0 || bridgeStart >= bridgeEnd) continue;
-            int maximumDepth = 0;
-            for (int candidate = unsafeStart; candidate <= unsafeEnd; candidate++) {
-                maximumDepth = Math.max(maximumDepth,
-                        targetY.get(candidate) - lowestFootprintSurface[candidate]);
-            }
-            int widthBlocks = crossingWidthBlocks(centers, bridgeStart, bridgeEnd);
-            int bankHeightDelta = Math.abs(targetY.get(bridgeStart) - targetY.get(bridgeEnd));
-            SpanType type = crossingTypeForWidth(widthBlocks);
-            // A deep depression or a large bank mismatch cannot be represented
-            // by ordinary fill. Promote it to a bridge even when its horizontal
-            // width is short; this prevents a 20+ block vertical fill from
-            // being retried as a normal road and then rejected downstream.
-            if (maximumDepth >= DRY_DEPRESSION_FORCE_BRIDGE_DEPTH
-                    || bankHeightDelta > MAX_DRY_CROSSING_ENDPOINT_DELTA) {
-                type = SpanType.BRIDGE;
-            }
-            appendNormalizedWaterSpan(spans, centers, bridgeStart, bridgeEnd, type);
-            LOGGER.info("RoadWeaver final-grade dry depression plan type={} widthBlocks={} "
-                            + "unsafeFillRange={}..{} stableRange={}..{} depth={} bankHeightDelta={}",
-                    type, widthBlocks, unsafeStart, unsafeEnd, bridgeStart, bridgeEnd,
-                    maximumDepth, bankHeightDelta);
-        }
-    }
-
-    private static int findDryDepressionBank(int start,
-                                             int direction,
-                                             boolean[] unsafeFill,
-                                             boolean[] special) {
-        if (unsafeFill == null || special == null || unsafeFill.length != special.length) return -1;
-        for (int distance = 1; distance <= DRY_DEPRESSION_BANK_SEARCH_STATIONS; distance++) {
-            int index = start + direction * distance;
-            if (index < 0 || index >= unsafeFill.length) return -1;
-            if (!unsafeFill[index] && !special[index]) return index;
-        }
-        return -1;
-    }
-
     /** Final physical-span mutual exclusion for already-classified spans. */
-    public static List<RoadSpan> resolvePhysicalSpanOverlaps(
-            List<RoadSpan> spans, List<BlockPos> centers) {
-        return normalizeTunnelSpans(spans, centers);
-    }
-
-    static List<RoadSpan> normalizeTunnelSpans(List<RoadSpan> spans, List<BlockPos> centers) {
-        if (spans == null || spans.isEmpty() || centers == null || centers.isEmpty()) {
-            return spans == null ? List.of() : List.copyOf(spans);
-        }
-        // One x/z -> index lookup per call: the per-span loops below would
-        // otherwise rescan the whole center list for every span endpoint,
-        // turning an O(spans + centers) pass into O(spans * centers).
-        Map<Long, Integer> centerIndex = xzIndex(centers);
-        List<RoadSpan> result = new ArrayList<>();
-        List<int[]> ranges = new ArrayList<>();
-        // T-26: bridge ranges are collected on the same pass so they can be
-        // merged below. Before this, TUNNEL was the only physical type that got
-        // a merge, so the final-fill / canyon / water producers could each
-        // append a BRIDGE over the same water and every one of them survived.
-        List<int[]> bridgeRanges = new ArrayList<>();
-        // Spans of every other type keep their original relative order.
-        List<RoadSpan> passthrough = new ArrayList<>();
-        for (RoadSpan span : spans) {
-            if (span == null || (span.type() != SpanType.TUNNEL && span.type() != SpanType.BRIDGE)) {
-                passthrough.add(span);
-                continue;
-            }
-            int start = indexOfXz(centerIndex, span.start());
-            int end = indexOfXz(centerIndex, span.end());
-            if (start < 0 || end < 0) {
-                // Unresolvable endpoint: keep the span untouched. TUNNEL used to
-                // be dropped here and still is; a BRIDGE was kept, so it stays
-                // kept (it simply cannot join the merge below).
-                if (span.type() == SpanType.BRIDGE) passthrough.add(span);
-                continue;
-            }
-            // Keep the pre-existing drop of single-station TUNNELs; a
-            // one-station BRIDGE was always retained, so it still is here and
-            // simply participates in the merge below.
-            if (start == end && span.type() == SpanType.TUNNEL) continue;
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            if (span.type() == SpanType.TUNNEL) ranges.add(new int[]{from, to});
-            else bridgeRanges.add(new int[]{from, to});
-        }
-        result.addAll(passthrough);
-        mergeRangesInto(result, centers, ranges, SpanType.TUNNEL);
-        mergeRangesInto(result, centers, bridgeRanges, SpanType.BRIDGE);
-        return resolveOverlappingWaterSpans(result, centers, centerIndex);
-    }
-
-    /**
-     * T-26: merges every overlapping-or-adjacent range of one physical type into
-     * a single span.
-     *
-     * <p>Real case (2026-09-16): one water crossing produced two BRIDGE spans
-     * whose endpoints differed by 1..30 stations. Both were persisted, and
-     * {@code Road.applyCrossingProfiles} then ran {@code applyFixedRange} once
-     * per range — each doing its own linear bank-to-bank interpolation over the
-     * shared stations. The later range overwrote the earlier deck height, so a
-     * single bridge came out as two parallel decks a few blocks apart, with a
-     * visible step at the overlap.</p>
-     *
-     * <p>Adjacency ({@code range[0] <= end + 1}) merges too, matching the
-     * TUNNEL behaviour: two bridges separated by a single dry station are one
-     * structure, and leaving a one-station gap there produces the same deck
-     * discontinuity.</p>
-     */
-    private static void mergeRangesInto(List<RoadSpan> result,
-                                        List<BlockPos> centers,
-                                        List<int[]> ranges,
-                                        SpanType type) {
-        if (ranges.isEmpty()) return;
-        ranges.sort(java.util.Comparator.comparingInt(range -> range[0]));
-        int start = -1;
-        int end = -1;
-        for (int[] range : ranges) {
-            if (start < 0) {
-                start = range[0];
-                end = range[1];
-            } else if (range[0] <= end + 1) {
-                end = Math.max(end, range[1]);
-            } else {
-                result.add(new RoadSpan(centers.get(start), centers.get(end), type));
-                start = range[0];
-                end = range[1];
-            }
-        }
-        if (start >= 0) result.add(new RoadSpan(centers.get(start), centers.get(end), type));
-    }
-
-    /**
-     * Physical-span mutual exclusion (T5): a station may carry only one of
-     * bridge / crossing / tunnel. Tunnel selection is based on the real
-     * overburden profile and the undersea conversion is a deliberate
-     * water-column decision, so where a tunnel range overlaps a bridge or
-     * crossing the tunnel wins and the water span is dropped or shrunk to its
-     * non-overlapping remainder. Without this, a converted undersea tunnel's
-     * ±128-station approach swallows a neighbouring bridge and the validator
-     * rejects the road with overlapping-physical-spans. Runs after every
-     * tunnel-normalizing producer, so the self-check covers all of them.
-     */
-    private static List<RoadSpan> resolveOverlappingWaterSpans(List<RoadSpan> spans,
-                                                               List<BlockPos> centers) {
-        return resolveOverlappingWaterSpans(spans, centers, xzIndex(centers));
-    }
-
-    private static List<RoadSpan> resolveOverlappingWaterSpans(List<RoadSpan> spans,
-                                                               List<BlockPos> centers,
-                                                               Map<Long, Integer> centerIndex) {
-        int n = centers.size();
-        boolean[] tunnel = new boolean[n];
-        boolean anyTunnel = false;
-        for (RoadSpan span : spans) {
-            if (span == null || span.type() != SpanType.TUNNEL) continue;
-            int start = indexOfXz(centerIndex, span.start());
-            int end = indexOfXz(centerIndex, span.end());
-            if (start < 0 || end < 0) continue;
-            for (int i = Math.min(start, end); i <= Math.max(start, end); i++) {
-                tunnel[i] = true;
-                anyTunnel = true;
-            }
-        }
-        if (!anyTunnel) return spans;
-        List<RoadSpan> result = new ArrayList<>(spans.size());
-        for (RoadSpan span : spans) {
-            if (span == null || (span.type() != SpanType.BRIDGE
-                    && span.type() != SpanType.ROAD_CROSSING)) {
-                result.add(span);
-                continue;
-            }
-            int start = indexOfXz(centerIndex, span.start());
-            int end = indexOfXz(centerIndex, span.end());
-            if (start < 0 || end < 0) {
-                result.add(span);
-                continue;
-            }
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            List<int[]> freeRuns = new ArrayList<>();
-            int runStart = -1;
-            for (int i = from; i <= to; i++) {
-                if (!tunnel[i]) {
-                    if (runStart < 0) runStart = i;
-                } else if (runStart >= 0) {
-                    freeRuns.add(new int[]{runStart, i - 1});
-                    runStart = -1;
-                }
-            }
-            if (runStart >= 0) freeRuns.add(new int[]{runStart, to});
-            if (freeRuns.size() == 1 && freeRuns.get(0)[0] == from
-                    && freeRuns.get(0)[1] == to) {
-                result.add(span);
-                continue;
-            }
-            LOGGER.info("RoadWeaver resolved physical span overlap: tunnel wins, {} range={}..{} "
-                            + "kept as {} remainder run(s)",
-                    span.type(), from, to, freeRuns.size());
-            for (int[] run : freeRuns) {
-                // A bridge needs two distinct endpoints; a one-station bridge
-                // remainder is invalid, so it is dropped (the tunnel already
-                // implements those stations). A one-station crossing is valid.
-                if (span.type() == SpanType.BRIDGE && run[0] == run[1]) {
-                    LOGGER.info("RoadWeaver dropped one-station bridge remainder inside tunnel range={}..{}",
-                            from, to);
-                    continue;
-                }
-                result.add(new RoadSpan(centers.get(run[0]), centers.get(run[1]), span.type()));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Removes a surface-water crossing when the complete tunnel clearance is
-     * below the river bed. Crossing width and bridge selection stay unchanged
-     * for roads whose construction volume actually reaches the water column.
-     */
-    public static List<RoadSpan> retainVerticallyRelevantCrossings(
-            List<RoadSpan> existing,
-            List<RoadSpan> provisionalTunnels,
-            List<RoadSegmentPlacement> segments,
-            List<Integer> provisionalTargetY,
-            ServerLevel level,
-            TerrainSamplingCache cache,
-            PathTerrainField terrain,
-            StreamsReflowingCompat.SamplingSession streams,
-            int tunnelClearHeight,
-            int bridgeMinWaterDepth) {
-        if (existing == null || existing.isEmpty() || segments == null
-                || provisionalTargetY == null || segments.size() != provisionalTargetY.size()) {
-            return existing == null ? List.of() : List.copyOf(existing);
-        }
-
-        List<BlockPos> centers = new ArrayList<>(segments.size());
-        Map<Long, Integer> indices = new java.util.HashMap<>();
-        for (int i = 0; i < segments.size(); i++) {
-            BlockPos center = segments.get(i).middlePos();
-            centers.add(center);
-            indices.putIfAbsent(xzKey(center), i);
-        }
-        boolean[] tunnel = new boolean[segments.size()];
-        if (provisionalTunnels != null) {
-            for (RoadSpan span : provisionalTunnels) {
-                if (span == null || span.type() != SpanType.TUNNEL) continue;
-                Integer start = indices.get(xzKey(span.start()));
-                Integer end = indices.get(xzKey(span.end()));
-                if (start == null || end == null) continue;
-                for (int i = Math.min(start, end); i <= Math.max(start, end); i++) tunnel[i] = true;
-            }
-        }
-
-        AccurateHeightSampler accurate = cache.getAccurateSampler(level);
-        Map<Long, AccurateHeightSample> samples = accurate.samplePositions(centers);
-        List<RoadSpan> retained = new ArrayList<>(existing.size());
-        int clearHeight = Math.max(2, Math.min(16, tunnelClearHeight));
-        for (RoadSpan span : existing) {
-            if (span == null || (span.type() != SpanType.BRIDGE
-                    && span.type() != SpanType.ROAD_CROSSING)) {
-                retained.add(span);
-                continue;
-            }
-            Integer start = indices.get(xzKey(span.start()));
-            Integer end = indices.get(xzKey(span.end()));
-            if (start == null || end == null) {
-                retained.add(span);
-                continue;
-            }
-
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            boolean foundWater = false;
-            boolean safelyBelowEveryWaterColumn = true;
-            int maximumTunnelCeiling = Integer.MIN_VALUE;
-            int minimumBed = Integer.MAX_VALUE;
-            for (int i = from; i <= to; i++) {
-                BlockPos center = centers.get(i);
-                BridgeWaterSample water = bridgeWaterSample(
-                        level, cache, terrain, accurate, samples, streams, center, bridgeMinWaterDepth);
-                if (!water.water()) continue;
-                foundWater = true;
-                int ceilingY = provisionalTargetY.get(i) + clearHeight - 1;
-                maximumTunnelCeiling = Math.max(maximumTunnelCeiling, ceilingY);
-                minimumBed = Math.min(minimumBed, water.bedY());
-                if (!tunnel[i] || !tunnelFitsBelowWaterBed(
-                        provisionalTargetY.get(i), clearHeight, water.bedY())) {
-                    safelyBelowEveryWaterColumn = false;
-                    break;
-                }
-            }
-            if (foundWater && safelyBelowEveryWaterColumn) {
-                LOGGER.info("RoadWeaver retained underground tunnel below surface water type={} range={}..{} "
-                                + "maximumTunnelCeilingY={} minimumRiverBedY={}",
-                        span.type(), from, to, maximumTunnelCeiling, minimumBed);
-                continue;
-            }
-            retained.add(span);
-        }
-        return retained;
-    }
-
-    static boolean tunnelFitsBelowWaterBed(int roadY, int clearHeight, int bedY) {
-        if (bedY == Integer.MIN_VALUE) return false;
-        int safeClearHeight = Math.max(2, Math.min(16, clearHeight));
-        long ceilingY = (long) roadY + safeClearHeight - 1L;
-        return ceilingY < bedY;
-    }
-
-    private static void appendTunnelWithSurfaceMouths(List<RoadSpan> result,
-            List<RoadSegmentPlacement> segments,
-            List<BlockPos> centers, List<Integer> targetY, boolean[] bridge,
-            Map<Long, AccurateHeightSample> samples,
-            AccurateHeightSampler accurate,
-            int buriedStart, int buriedEnd,
-            RoadGradePlanner.SurfaceGradeLimits limits) {
-        if (buriedEnd - buriedStart + 1 < TUNNEL_RUN_MIN_LENGTH) return;
-
-        // Include the complete approach up to the last surface-height segment.
-        // The builder treats those mouth sections as open portals instead of
-        // demanding a full stone roof. Keeping only the >=7 block core left a
-        // buried gap between the visible road and the tunnel interior.
-        int leftMouth = buriedStart - 1;
-        while (leftMouth >= 0 && !bridge[leftMouth]
-                && !fullWidthSurfaceConnected(segments, centers, targetY, samples, accurate,
-                leftMouth, limits)) leftMouth--;
-        int rightMouth = buriedEnd + 1;
-        while (rightMouth < centers.size() && !bridge[rightMouth]
-                && !fullWidthSurfaceConnected(segments, centers, targetY, samples, accurate,
-                rightMouth, limits)) rightMouth++;
-
-        if (leftMouth < 0 || rightMouth >= centers.size()
-                || bridge[Math.max(0, Math.min(bridge.length - 1, leftMouth))]
-                || bridge[Math.max(0, Math.min(bridge.length - 1, rightMouth))]) {
-            // The route is already a sustained deep cut. Do not discard the
-            // tunnel classification merely because a clean surface mouth
-            // could not be found (for example at a connected mountain edge).
-            // Otherwise the same stations fall back to ordinary-road paving
-            // and are rejected later as cut-too-deep, leaving a gap instead
-            // of excavating the planned tunnel.
-            int fallbackStart = buriedStart;
-            int fallbackEnd = buriedEnd;
-            if (fallbackStart > 0 && !bridge[fallbackStart - 1]) fallbackStart--;
-            if (fallbackEnd + 1 < centers.size() && !bridge[fallbackEnd + 1]) fallbackEnd++;
-            if (fallbackEnd - fallbackStart + 1 >= TUNNEL_RUN_MIN_LENGTH) {
-                result.add(new RoadSpan(centers.get(fallbackStart), centers.get(fallbackEnd), SpanType.TUNNEL));
-                LOGGER.warn("RoadWeaver retained deep-cut tunnel without stable surface mouths "
-                                + "range={}..{} buried={}..{}",
-                        fallbackStart, fallbackEnd, buriedStart, buriedEnd);
-            }
-            return;
-        }
-        int tunnelStart = leftMouth;
-        int tunnelEnd = rightMouth;
-        if (tunnelEnd - tunnelStart + 1 >= TUNNEL_RUN_MIN_LENGTH) {
-            result.add(new RoadSpan(centers.get(tunnelStart), centers.get(tunnelEnd), SpanType.TUNNEL));
-        }
-    }
-
-    private static Map<Long, AccurateHeightSample> sampleTunnelFootprints(
-            List<RoadSegmentPlacement> segments,
-            List<BlockPos> centers,
-            List<Integer> targetY,
-            ServerLevel level,
-            TerrainSamplingCache cache) {
-        if (segments == null || level == null || cache == null) return Map.of();
-        List<BlockPos> positions = new ArrayList<>();
-        for (RoadSegmentPlacement segment : segments) {
-            if (segment == null) continue;
-            // 0.9.063：中心站列**必须**被采到 —— 突起度判据吃的是中心站的地形高度，
-            // 而 footprint 不保证包含中心列（见 TwoStagePathfindingManager / RoadSnapService）。
-            // 漏采会退回 center.getY()（那是**规划路面**高度），突起度就会恒为 0。
-            if (segment.middlePos() != null) positions.add(segment.middlePos());
-            if (segment.positions() == null) continue;
-            positions.addAll(segment.positions());
-        }
-        return positions.isEmpty() ? Map.of() : cache.getAccurateSampler(level).samplePositions(positions);
-    }
-
-    private static boolean fullWidthSurfaceConnected(List<RoadSegmentPlacement> segments,
-                                                     List<BlockPos> centers,
-                                                     List<Integer> targetY,
-                                                     Map<Long, AccurateHeightSample> samples,
-                                                     AccurateHeightSampler accurate,
-                                                     int index,
-                                                     RoadGradePlanner.SurfaceGradeLimits limits) {
-        // Same cut/fill source as RoadGradePlanner (TerrainProfileConfig +
-        // terrain profile mode) so tunnel portal selection cannot disagree
-        // with the profile clamps that produced the road height.
-        int cutLimit = limits.cut(false);
-        int fillLimit = limits.fill(false);
-        if (accurate == null || samples == null || samples.isEmpty()) {
-            int fallbackOverburden = overburden(centers, targetY, index);
-            return fallbackOverburden <= cutLimit
-                    && fallbackOverburden >= -fillLimit;
-        }
-        RoadSegmentPlacement segment = segments.get(index);
-        if (segment == null || segment.positions() == null || segment.positions().isEmpty()) return false;
-        int roadY = targetY.get(index);
-        for (BlockPos position : segment.positions()) {
-            AccurateHeightSample sample = samples.get(AccurateHeightSample.key(position.getX(), position.getZ()));
-            int terrainY = sample != null ? accurate.surfaceHeight(sample) : centers.get(index).getY();
-            // A tunnel may begin immediately after a legal open cut.  Requiring
-            // a near-flat (two-block) station here left a 5 -> 6 block hillside
-            // transition without a valid portal, so construction later skipped
-            // the six-block core instead of building the tunnel.
-            if (terrainY - roadY > cutLimit
-                    || roadY - terrainY > fillLimit) return false;
-        }
-        return true;
-    }
-
-    private static int maximumFootprintOverburden(List<RoadSegmentPlacement> segments,
-                                                   List<BlockPos> centers,
-                                                   List<Integer> targetY,
-                                                   Map<Long, AccurateHeightSample> samples,
-                                                   AccurateHeightSampler accurate,
-                                                   int index) {
-        if (index < 0 || index >= segments.size() || index >= targetY.size()) return Integer.MAX_VALUE;
-        int roadY = targetY.get(index);
-        RoadSegmentPlacement segment = segments.get(index);
-        if (accurate == null || samples == null || samples.isEmpty()
-                || segment == null || segment.positions() == null || segment.positions().isEmpty()) {
-            return overburden(centers, targetY, index);
-        }
-        int maximum = Integer.MIN_VALUE;
-        for (BlockPos position : segment.positions()) {
-            if (position == null) continue;
-            AccurateHeightSample sample = samples.get(AccurateHeightSample.key(position.getX(), position.getZ()));
-            int terrainY = sample != null ? accurate.surfaceHeight(sample) : centers.get(index).getY();
-            maximum = Math.max(maximum, terrainY - roadY);
-        }
-        return maximum == Integer.MIN_VALUE ? overburden(centers, targetY, index) : maximum;
-    }
-
-    private static int overburden(List<BlockPos> centers, List<Integer> targetY, int index) {
-        BlockPos center = centers.get(index);
-        Integer target = targetY.get(index);
-        return center == null || target == null ? Integer.MAX_VALUE : center.getY() - target;
-    }
-
-    private static void collectBridgeSpans(List<RoadSpan> spans,
+    static void collectBridgeSpans(List<RoadSpan> spans,
                                            List<RoadSegmentPlacement> segments,
                                            List<BlockPos> centers,
                                            ServerLevel level,
@@ -1510,7 +673,7 @@ public final class PathSpanExtractor {
     }
 
     /** 0.9.034（R-04 诊断）：一段水域的「湿列密度」只读摘要，每段水一行。 */
-    private static void logWaterMaskDiag(int waterStart, int waterEnd, int stations, int footprint,
+    static void logWaterMaskDiag(int waterStart, int waterEnd, int stations, int footprint,
                                          int fullWet, int partlyWet, int singleColumnWet) {
         if (stations <= 0) return;
         LOGGER.info("RoadWeaver [ROAD-BRIDGE-MASK] waterRange={}..{} stations={} footprintCols={} "
@@ -1519,7 +682,7 @@ public final class PathSpanExtractor {
     }
 
     /** Samples every rasterized road column, not just the center station. */
-    private static BridgeWaterSample segmentWaterSample(ServerLevel level,
+    static BridgeWaterSample segmentWaterSample(ServerLevel level,
                                                         TerrainSamplingCache cache,
                                                         PathTerrainField terrain,
                                                         AccurateHeightSampler accurate,
@@ -1556,7 +719,7 @@ public final class PathSpanExtractor {
                 : new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
     }
 
-    private static int terrainSurfaceY(PathTerrainField terrain,
+    static int terrainSurfaceY(PathTerrainField terrain,
                                        AccurateHeightSampler accurate,
                                        Map<Long, AccurateHeightSample> samples,
                                        BlockPos pos) {
@@ -1567,7 +730,7 @@ public final class PathSpanExtractor {
         return sample != null ? sample.worldSurfaceWg() : accurate.worldSurfaceWg(pos.getX(), pos.getZ());
     }
 
-    private static BridgeWaterSample bridgeWaterSample(ServerLevel level,
+    static BridgeWaterSample bridgeWaterSample(ServerLevel level,
                                          TerrainSamplingCache cache,
                                          PathTerrainField terrain,
                                          AccurateHeightSampler accurate,
@@ -1629,7 +792,7 @@ public final class PathSpanExtractor {
                 bridgeWater ? oceanFloor : Integer.MIN_VALUE);
     }
 
-    private static void appendWaterCrossingSpan(List<RoadSpan> spans,
+    static void appendWaterCrossingSpan(List<RoadSpan> spans,
                                                 List<BlockPos> centers,
                                                 int waterStart,
                                                 int waterEnd,
@@ -1670,7 +833,7 @@ public final class PathSpanExtractor {
         return Math.max(1, (int) Math.round(distance + representedBlockWidth));
     }
 
-    private static double horizontalDistance(BlockPos a, BlockPos b) {
+    static double horizontalDistance(BlockPos a, BlockPos b) {
         long dx = (long) b.getX() - a.getX();
         long dz = (long) b.getZ() - a.getZ();
         return Math.sqrt((double) dx * dx + (double) dz * dz);
@@ -1682,7 +845,7 @@ public final class PathSpanExtractor {
      * the water itself does not. A bridge owns that overlap; trim the smaller
      * crossing instead of persisting two physical span types for one station.
      */
-    private static void appendNormalizedWaterSpan(List<RoadSpan> spans,
+    static void appendNormalizedWaterSpan(List<RoadSpan> spans,
                                                   List<BlockPos> centers,
                                                   int waterStart,
                                                   int waterEnd,
@@ -1755,7 +918,7 @@ public final class PathSpanExtractor {
         }
     }
 
-    private static boolean[] crossingMask(List<RoadSpan> spans, List<BlockPos> centers) {
+    static boolean[] crossingMask(List<RoadSpan> spans, List<BlockPos> centers) {
         boolean[] result = new boolean[centers.size()];
         for (RoadSpan span : spans) {
             if (span.type() != SpanType.BRIDGE && span.type() != SpanType.ROAD_CROSSING) continue;
@@ -1767,10 +930,10 @@ public final class PathSpanExtractor {
         return result;
     }
 
-    private record BridgeWaterSample(boolean water, int waterSurfaceY, int bedY) {
+    record BridgeWaterSample(boolean water, int waterSurfaceY, int bedY) {
     }
 
-    private static int indexOfXz(List<BlockPos> centers, BlockPos target) {
+    static int indexOfXz(List<BlockPos> centers, BlockPos target) {
         if (centers == null || target == null) return -1;
         long key = xzKey(target);
         for (int i = 0; i < centers.size(); i++) {
@@ -1780,7 +943,7 @@ public final class PathSpanExtractor {
     }
 
     /** Builds one x/z -> index lookup for a whole span pass. */
-    private static Map<Long, Integer> xzIndex(List<BlockPos> centers) {
+    static Map<Long, Integer> xzIndex(List<BlockPos> centers) {
         Map<Long, Integer> index = new HashMap<>(centers == null ? 0 : centers.size() * 2);
         if (centers == null) return index;
         for (int i = 0; i < centers.size(); i++) {
@@ -1790,13 +953,13 @@ public final class PathSpanExtractor {
         return index;
     }
 
-    private static int indexOfXz(Map<Long, Integer> index, BlockPos target) {
+    static int indexOfXz(Map<Long, Integer> index, BlockPos target) {
         if (index == null || target == null) return -1;
         Integer found = index.get(xzKey(target));
         return found == null ? -1 : found;
     }
 
-    private static long xzKey(BlockPos pos) {
+    static long xzKey(BlockPos pos) {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
@@ -1805,7 +968,7 @@ public final class PathSpanExtractor {
      * above its lowest footprint column reaches this depth. Independent of the
      * ordinary fill limit: shallow depressions are graded, deep ones bridged.
      */
-    private static int dryDepressionBridgeDepth() {
+    static int dryDepressionBridgeDepth() {
         try {
             return Math.max(2, Math.min(16,
                     ConfigService.get().planning().dryDepressionBridgeDepth()));

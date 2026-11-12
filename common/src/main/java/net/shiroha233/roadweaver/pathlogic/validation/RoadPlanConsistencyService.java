@@ -1,6 +1,8 @@
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.minecraft.server.level.ServerLevel;
+import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
+import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -44,9 +46,9 @@ public final class RoadPlanConsistencyService {
                 road.roadSegmentList(), level, cache, terrain, streams, bridgeMinWaterDepth);
         physical = PathSpanExtractor.refineTunnelSpans(
                 physical, road.roadSegmentList(), road.targetY(), level, cache);
-        physical = PathSpanExtractor.refineFinalFillBridgeSpans(
+        physical = FillBridgeExtender.refineFinalFillBridgeSpans(
                 physical, road.roadSegmentList(), road.targetY(), level, cache);
-        physical = PathSpanExtractor.resolvePhysicalSpanOverlaps(
+        physical = SpanConflictResolver.resolvePhysicalSpanOverlaps(
                 physical, centersOf(road.roadSegmentList()));
 
         List<RoadSpan> metadata = new ArrayList<>();
@@ -133,7 +135,7 @@ public final class RoadPlanConsistencyService {
         //    Road.applyCrossingProfiles 的"后写覆盖前写"。
         // 不动任何高度、不动选线。
         int spanCountBeforeFinalNormalize = merged.size();
-        merged = new ArrayList<>(PathSpanExtractor.resolvePhysicalSpanOverlaps(
+        merged = new ArrayList<>(SpanConflictResolver.resolvePhysicalSpanOverlaps(
                 merged, centersOf(road.roadSegmentList())));
         if (merged.size() != spanCountBeforeFinalNormalize) {
             org.slf4j.LoggerFactory.getLogger("roadweaver").info(

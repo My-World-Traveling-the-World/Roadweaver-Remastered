@@ -73,7 +73,7 @@ public final class WaterOnlyBridgePolicyTest {
     private static void assertShallowNarrowDepressionStaysOrdinary(int threshold) {
         int floor = SURFACE - Math.max(1, threshold - 1);
         List<BlockPos> centers = line(12);
-        List<RoadSpan> result = PathSpanExtractor.refineFinalFillBridgeSpans(
+        List<RoadSpan> result = FillBridgeExtender.refineFinalFillBridgeSpans(
                 List.of(), centers, endpointHeights(12, SURFACE + 1, SURFACE - 2),
                 dryDepression(12, 1, 10, floor));
         if (!result.isEmpty()) {
@@ -87,7 +87,7 @@ public final class WaterOnlyBridgePolicyTest {
     private static void assertNarrowDepressionUsesDirectCrossing(int threshold) {
         int floor = SURFACE - threshold;
         List<BlockPos> centers = line(12);
-        List<RoadSpan> result = PathSpanExtractor.refineFinalFillBridgeSpans(
+        List<RoadSpan> result = FillBridgeExtender.refineFinalFillBridgeSpans(
                 List.of(), centers, endpointHeights(12, SURFACE + 1, SURFACE - 2),
                 dryDepression(12, 1, 10, floor));
         if (result.stream().noneMatch(span -> span.type() == SpanType.ROAD_CROSSING)
@@ -101,7 +101,7 @@ public final class WaterOnlyBridgePolicyTest {
     private static void assertWideDepressionUsesBridge(int threshold) {
         int floor = SURFACE - threshold;
         List<BlockPos> centers = line(21);
-        List<RoadSpan> result = PathSpanExtractor.refineFinalFillBridgeSpans(
+        List<RoadSpan> result = FillBridgeExtender.refineFinalFillBridgeSpans(
                 List.of(), centers, endpointHeights(21, SURFACE + 1, SURFACE - 2),
                 dryDepression(21, 1, 19, floor));
         if (result.stream().noneMatch(span -> span.type() == SpanType.BRIDGE)) {
@@ -113,7 +113,7 @@ public final class WaterOnlyBridgePolicyTest {
     /** ③ 平坦地形不得产生任何跨越 span。 */
     private static void assertFlatTerrainRemainsOrdinary(int threshold) {
         List<BlockPos> centers = line(8);
-        List<RoadSpan> result = PathSpanExtractor.refineFinalFillBridgeSpans(
+        List<RoadSpan> result = FillBridgeExtender.refineFinalFillBridgeSpans(
                 List.of(), centers, constantHeights(8, SURFACE), constantTerrain(8, SURFACE));
         if (!result.isEmpty()) {
             throw new AssertionError("flat terrain created a crossing span: " + result);
