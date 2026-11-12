@@ -1,3 +1,4 @@
+/* 文件职责：地图界面的输入分发（点击 / 拖动 / 滚轮），把命中结果交给屏幕。 */
 package net.shiroha233.roadweaver.client.map;
 
 import net.minecraft.core.BlockPos;

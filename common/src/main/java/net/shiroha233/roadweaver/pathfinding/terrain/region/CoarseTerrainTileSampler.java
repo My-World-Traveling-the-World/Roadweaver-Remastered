@@ -1,3 +1,4 @@
+/* 文件职责：粗地形瓦片的采样器：把采样请求批量喂给后端。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import net.minecraft.world.level.biome.Biome;

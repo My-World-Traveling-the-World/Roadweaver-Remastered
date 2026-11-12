@@ -1,3 +1,4 @@
+/* 文件职责：与 Streams Reflowing 的可选集成层：采样会话、水域计划与「是否可用」判定，全部走 api 契约、不含反射。 */
 package net.shiroha233.roadweaver.compat;
 
 import org.slf4j.Logger;

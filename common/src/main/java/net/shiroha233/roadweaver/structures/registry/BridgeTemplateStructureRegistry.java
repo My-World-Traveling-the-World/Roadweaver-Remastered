@@ -1,3 +1,4 @@
+/* 文件职责：桥模板结构的注册表。 */
 package net.shiroha233.roadweaver.structures.registry;
 
 import net.minecraft.world.level.biome.Biome;

@@ -1,3 +1,4 @@
+/* 文件职责：把玩家手绘路线注入成可施工的规划连接。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;

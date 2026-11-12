@@ -1,3 +1,4 @@
+/* 文件职责：粗地形区域的聚合视图。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import net.minecraft.world.level.biome.Biome;

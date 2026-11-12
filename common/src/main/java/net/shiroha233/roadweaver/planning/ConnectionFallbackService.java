@@ -1,3 +1,4 @@
+/* 文件职责：连接规划失败后的降级链：逐级放宽约束再试，并把最终降级原因记下来。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.world.level.Level;

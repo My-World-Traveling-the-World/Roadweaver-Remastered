@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的 15 个可绑定键位 —— ★ UiFeatureGuardTest 锁的就是这份清单，少一个就是功能丢失。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import com.mojang.blaze3d.platform.InputConstants;

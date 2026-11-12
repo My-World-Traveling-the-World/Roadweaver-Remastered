@@ -1,3 +1,4 @@
+/* 文件职责：地图快照的网络编解码。 */
 package net.shiroha233.roadweaver.network;
 
 import io.netty.handler.codec.DecoderException;

@@ -1,3 +1,4 @@
+/* 文件职责：预设的读写与内置预设注册。 */
 package net.shiroha233.roadweaver.config;
 
 import com.google.gson.Gson;

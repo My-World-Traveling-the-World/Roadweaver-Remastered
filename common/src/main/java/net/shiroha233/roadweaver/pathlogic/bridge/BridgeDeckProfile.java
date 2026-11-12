@@ -1,3 +1,4 @@
+/* 文件职责：桥面纵断面：桥面高度沿跨径的取值曲线。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import java.util.List;

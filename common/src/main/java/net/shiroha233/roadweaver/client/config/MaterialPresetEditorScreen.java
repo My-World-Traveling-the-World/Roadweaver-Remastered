@@ -1,3 +1,4 @@
+/* 文件职责：材料预设编辑界面。 */
 package net.shiroha233.roadweaver.client.config;
 
 import net.minecraft.world.level.block.Block;

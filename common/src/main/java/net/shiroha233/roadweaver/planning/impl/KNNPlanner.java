@@ -1,3 +1,4 @@
+/* 文件职责：k 近邻网络规划器。 */
 package net.shiroha233.roadweaver.planning.impl;
 
 import net.minecraft.core.BlockPos;

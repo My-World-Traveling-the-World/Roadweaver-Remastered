@@ -1,3 +1,4 @@
+/* 文件职责：世界内的手绘路线编辑交互（准星选中控制点、微调高度）。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import java.util.List;

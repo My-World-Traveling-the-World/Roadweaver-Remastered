@@ -1,3 +1,4 @@
+/* 文件职责：简单模板结构片段的实现。 */
 package net.shiroha233.roadweaver.structures.pieces;
 
 import com.mojang.serialization.DataResult;

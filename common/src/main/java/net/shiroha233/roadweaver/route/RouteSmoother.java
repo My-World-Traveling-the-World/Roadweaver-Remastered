@@ -1,3 +1,4 @@
+/* 文件职责：手绘折线的平滑（Catmull-Rom）—— 与地图绘制、与施工路径共用同一套曲线，做到所见即所建。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;

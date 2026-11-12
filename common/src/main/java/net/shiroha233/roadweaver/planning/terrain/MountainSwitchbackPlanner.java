@@ -1,3 +1,4 @@
+/* 文件职责：山体盘山（之字形回头弯）路线的规划。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;

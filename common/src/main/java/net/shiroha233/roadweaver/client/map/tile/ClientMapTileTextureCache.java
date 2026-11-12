@@ -1,3 +1,4 @@
+/* 文件职责：客户端地图瓦片纹理缓存。 */
 package net.shiroha233.roadweaver.client.map.tile;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

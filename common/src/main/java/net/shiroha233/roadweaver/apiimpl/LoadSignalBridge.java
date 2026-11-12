@@ -1,3 +1,4 @@
+/* 文件职责：跨模组加载信号桥的实现（ownerId 是其对外契约，改名会断掉外部集成）。 */
 package net.shiroha233.roadweaver.apiimpl;
 
 import net.shiroha233.roadweaver.api.outgoing.LoadKind;

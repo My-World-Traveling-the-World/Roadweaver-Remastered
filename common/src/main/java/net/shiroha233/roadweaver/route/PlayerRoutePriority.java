@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的施工优先级。 */
 package net.shiroha233.roadweaver.route;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

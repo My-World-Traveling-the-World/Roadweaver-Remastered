@@ -1,3 +1,4 @@
+/* 文件职责：未知结构端点的共享高度注册表 —— 跨路一致性契约：从不同方向接近同一未知端点的路必须落在同一高度，这是全局 DP 单独产生不了的。 */
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

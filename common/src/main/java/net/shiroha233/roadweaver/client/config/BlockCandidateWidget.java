@@ -1,3 +1,4 @@
+/* 文件职责：配置里的方块候选项组件。 */
 package net.shiroha233.roadweaver.client.config;
 
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;

@@ -1,3 +1,4 @@
+/* 文件职责：已加载区块的道路被动回填 —— 每次限量，刻意不主动加载区块。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.minecraft.world.level.ChunkPos;

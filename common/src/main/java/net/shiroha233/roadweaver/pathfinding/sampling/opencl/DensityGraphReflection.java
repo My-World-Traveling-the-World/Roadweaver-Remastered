@@ -1,3 +1,4 @@
+/* 文件职责：用反射接 DensityGraph 相关 API 的兼容层（隔离上游版本差异）。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import java.lang.reflect.Field;

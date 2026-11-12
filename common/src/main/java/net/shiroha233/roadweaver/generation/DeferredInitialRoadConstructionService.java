@@ -1,3 +1,4 @@
+/* 文件职责：开局道路的延迟施工：等条件满足再铺，避免和预热抢线程。 */
 package net.shiroha233.roadweaver.generation;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

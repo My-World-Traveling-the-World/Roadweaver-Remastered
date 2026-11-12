@@ -1,3 +1,4 @@
+/* 文件职责：配置里的结构选择界面。 */
 package net.shiroha233.roadweaver.client.config;
 
 import dev.architectury.platform.Platform;

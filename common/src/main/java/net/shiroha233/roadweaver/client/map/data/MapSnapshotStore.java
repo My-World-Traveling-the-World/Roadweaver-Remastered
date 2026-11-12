@@ -1,3 +1,4 @@
+/* 文件职责：客户端地图快照的本地存储与增量维护。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

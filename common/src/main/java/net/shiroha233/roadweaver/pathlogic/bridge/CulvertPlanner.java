@@ -1,3 +1,4 @@
+/* 文件职责：涵洞规划：在路面下方留出过水口，避免道路变成水坝。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.core.BlockPos;

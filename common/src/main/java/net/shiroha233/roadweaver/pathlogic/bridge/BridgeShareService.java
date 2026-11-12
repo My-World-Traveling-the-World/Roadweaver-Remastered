@@ -1,3 +1,4 @@
+/* 文件职责：多条路共用一座桥时的归属与端点一致性处理。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.core.BlockPos;

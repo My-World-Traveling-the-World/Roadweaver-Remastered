@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的施工进度。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.UUID;

@@ -1,3 +1,4 @@
+/* 文件职责：规划一致性校验：区间与剖面是否自洽 —— 它也会重新提取物理区间，是「反复重算」的来源之一。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.minecraft.server.level.ServerLevel;

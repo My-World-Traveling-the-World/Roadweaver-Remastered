@@ -1,3 +1,4 @@
+/* 文件职责：用 Xaero 小地图当底图的地图背景渲染（可选集成）。 */
 package net.shiroha233.roadweaver.client.map;
 
 import dev.architectury.platform.Platform;

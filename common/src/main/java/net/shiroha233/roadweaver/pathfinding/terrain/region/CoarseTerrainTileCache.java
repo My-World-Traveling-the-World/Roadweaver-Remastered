@@ -1,3 +1,4 @@
+/* 文件职责：粗地形瓦片的缓存与淘汰。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

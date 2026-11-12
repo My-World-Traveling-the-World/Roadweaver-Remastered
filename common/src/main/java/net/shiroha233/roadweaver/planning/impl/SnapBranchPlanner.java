@@ -1,3 +1,4 @@
+/* 文件职责：吸附分支式网络规划器：把候选连接吸附到既有路网上。 */
 package net.shiroha233.roadweaver.planning.impl;
 
 import net.minecraft.core.BlockPos;

@@ -1,3 +1,4 @@
+/* 文件职责：截断与既有路重叠的规划段，避免沿同一条走廊重复开路。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

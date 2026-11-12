@@ -1,3 +1,4 @@
+/* 文件职责：api 模块的后端实现：把各能力接口接到 common 的真实实现上。 */
 package net.shiroha233.roadweaver.apiimpl;
 
 import java.util.ArrayList;

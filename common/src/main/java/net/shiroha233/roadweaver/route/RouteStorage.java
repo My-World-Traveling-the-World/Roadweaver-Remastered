@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的落盘存储。 */
 package net.shiroha233.roadweaver.route;
 
 import com.google.gson.Gson;

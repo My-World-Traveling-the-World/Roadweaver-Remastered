@@ -1,3 +1,4 @@
+/* 文件职责：地图笔记的编辑界面。 */
 package net.shiroha233.roadweaver.client.map.ui;
 
 import net.minecraft.core.BlockPos;

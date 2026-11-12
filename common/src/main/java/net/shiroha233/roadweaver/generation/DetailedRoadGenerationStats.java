@@ -1,3 +1,4 @@
+/* 文件职责：道路生成的细分统计（各阶段耗时），供日志与诊断读取。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateSamplingStats;

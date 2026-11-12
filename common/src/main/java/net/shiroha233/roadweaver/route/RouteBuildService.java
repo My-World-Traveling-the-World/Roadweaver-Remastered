@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线「提交施工」的服务端流程：校验 → 落数据 → 入队强制加载与铺装。 */
 package net.shiroha233.roadweaver.route;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

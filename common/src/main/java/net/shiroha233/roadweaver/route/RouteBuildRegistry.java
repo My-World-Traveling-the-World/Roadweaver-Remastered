@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线施工状态的注册表（进行中 / 完成 / 失败）。 */
 package net.shiroha233.roadweaver.route;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

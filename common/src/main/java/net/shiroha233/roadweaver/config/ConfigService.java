@@ -1,3 +1,4 @@
+/* 文件职责：配置的加载 / 保存 / 缓存与默认值合并 —— 配置键名即 Java 字段名（GSON 直存），改名等于迁移。 */
 package net.shiroha233.roadweaver.config;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

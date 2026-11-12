@@ -1,3 +1,4 @@
+/* 文件职责：运行期粗粒度 GPU 预算：决定一批能并行多少，避免把显卡打满。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;

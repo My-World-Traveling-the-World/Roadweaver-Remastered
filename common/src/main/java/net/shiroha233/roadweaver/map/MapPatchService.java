@@ -1,3 +1,4 @@
+/* 文件职责：地图增量补丁的生成与应用。 */
 package net.shiroha233.roadweaver.map;
 
 import net.minecraft.world.level.Level;

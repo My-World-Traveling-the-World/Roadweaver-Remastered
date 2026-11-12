@@ -52,7 +52,7 @@ public final class MaintainabilityReportTest {
     /** 接近千行硬约束的预警档。 */
     private static final int VERY_LONG_FILE = 800;
     /** 职责头 ratchet 底线（2026-11-13 实测 320）。 */
-    private static final int DUTY_HEADER_FLOOR = 541;
+    private static final int DUTY_HEADER_FLOOR = 595;
 
     /** 长参数表判定：括号内超过 120 个字符。 */
     private static final Pattern LONG_PARAMS = Pattern.compile("\\w+\\s*\\([^)]{120,}\\)");
@@ -181,6 +181,11 @@ public final class MaintainabilityReportTest {
 
         assertTrue(duty >= DUTY_HEADER_FLOOR,
                 "有「文件职责」头的文件从 " + DUTY_HEADER_FLOOR + " 掉到 " + duty + " —— 注释不许倒退");
+        // 2026-11-13：注释债已清零，ratchet 升级为硬要求 —— 新文件必须带「文件职责」头，
+        // 不再有「先欠着」的余地。这条比上面的 ratchet 更严，二者同时生效。
+        assertTrue(duty == total,
+                "有 " + (total - duty) + " 个文件缺「文件职责」头注（现在要求 100% 覆盖）："
+                        + "新增 .java 文件请在第一行写 /* 文件职责：<做什么、不做什么> */");
         assertTrue(veryLong <= 3,
                 "有效代码行超过 " + VERY_LONG_FILE + " 的文件有 " + veryLong + " 个（上限 3）—— 请拆分");
         int over1000 = (int) rows.stream().filter(r -> r.code > 1000).count();

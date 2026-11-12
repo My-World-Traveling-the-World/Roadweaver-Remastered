@@ -1,3 +1,4 @@
+/* 文件职责：结构发现服务：扫描并缓存可被选为端点或避让目标的结构。 */
 package net.shiroha233.roadweaver.config.structure;
 
 import com.google.gson.Gson;

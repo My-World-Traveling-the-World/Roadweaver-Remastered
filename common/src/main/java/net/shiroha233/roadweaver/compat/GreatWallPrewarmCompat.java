@@ -1,3 +1,4 @@
+/* 文件职责：与长城模组预热流程的兼容层。 */
 package net.shiroha233.roadweaver.compat;
 
 import java.util.concurrent.CompletableFuture;

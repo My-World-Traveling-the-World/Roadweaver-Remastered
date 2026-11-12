@@ -1,3 +1,4 @@
+/* 文件职责：结构选择配置。 */
 package net.shiroha233.roadweaver.config.structure;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

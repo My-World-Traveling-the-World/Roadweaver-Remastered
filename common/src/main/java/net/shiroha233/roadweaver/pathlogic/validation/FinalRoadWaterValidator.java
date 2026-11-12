@@ -1,3 +1,4 @@
+/* 文件职责：落盘前的涉水校验：路面不得泡在水里、桥下必须真的有水。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.minecraft.core.BlockPos;

@@ -1,3 +1,4 @@
+/* 文件职责：道路质量度量：坡度分布、空洞、断点、接缝台阶 —— 诊断与 AB 对比共用同一套口径。 */
 package net.shiroha233.roadweaver.pathlogic.metrics;
 
 import net.minecraft.core.BlockPos;

@@ -1,3 +1,4 @@
+/* 文件职责：落盘前对每条路做结构层面的最终校验（借用体积规划遍历全部列）。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
