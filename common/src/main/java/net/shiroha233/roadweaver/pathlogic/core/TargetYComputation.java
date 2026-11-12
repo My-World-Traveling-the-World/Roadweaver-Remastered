@@ -73,6 +73,8 @@ import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
 // 仍留在同包其它类里的常量与工具。
 import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
 
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
+
 /**
  * 目标高度（纵断面）计算。
  *
@@ -93,6 +95,11 @@ import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
  * （除了把一次配置调用换成同名参数），含缩进。</p>
  */
 public final class TargetYComputation {
+    /** 剖面 AB 实验窗口：允许挖多深。实验参数，非生产值。 */
+    private static final int PROFILE_AB_MAX_CUT = 24;
+    /** 剖面 AB 实验窗口：允许填多高。实验参数，非生产值。 */
+    private static final int PROFILE_AB_MAX_FILL = 12;
+
     public static List<Integer> computeTargetY(ServerLevel level, List<RoadSegmentPlacement> segments,
                                                    List<RoadSpan> spans, TerrainSamplingCache cache,
                                                    PathTerrainField terrain,
@@ -485,6 +492,18 @@ public final class TargetYComputation {
             }
         }
         logEndpointProfile("computeTargetY-exit", connection, smoothed, terrainY, n, startBoundary, endBoundary);
+        // ── 剖面 AB 双跑（只观察，不改变返回结果）──────────────────────────
+        // 旧流水线已经算出 smoothed。这里另外跑一次全局 DP 并把两者度量并排记下来，
+        // 用于回答「新解到底更好还是更差」——在此之前不允许切默认。
+        // 开关：-Droadweaver.profileAb=on（默认关闭，关闭时一次布尔判断就返回）。
+        //
+        // 窗口参数是**实验参数**，不是生产值：故意放宽（挖 24 / 填 12）是为了让 DP
+        // 在陡地形上也可行，把对比聚焦在「坡度平顺 vs 土方量」，而不是让不可行掩盖一切。
+        // maxStep 取「每两站 M 格」折算成的每站步长（向上取整），与旧版约束口径一致。
+        ProfileAbObserver.observe(smoothed, terrainY, isCrossing,
+                PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL,
+                Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
+                connection == null ? "?" : connection.from() + "->" + connection.to());
         return out;
     }
 }
