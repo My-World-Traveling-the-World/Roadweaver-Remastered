@@ -136,6 +136,99 @@
 
 ---
 
+## 第 3 级前置 A：先抽 `SurfaceGradeLimits`（**必做，否则删不动**）
+
+### 为什么
+
+`RoadGradePlanner.SurfaceGradeLimits` 被 **4 个文件**引用：
+
+```
+pathfinding/PathSpanExtractor        pathlogic/core/TargetYComputation
+pathfinding/TunnelFootprintSampler   pathlogic/grade/UnknownEndpointHeightRegistry
+```
+
+**后两个不在旧链路里**。也就是说：直接删 `RoadGradePlanner` 会砸掉两个
+跟旧算法无关的调用方。
+
+> 算法（15 道 pass）可以删，**配置上限快照必须留**。
+
+### 精确的移动清单（AST 实测行号，2026-11-13 快照）
+
+| 内容 | 原位置（`RoadGradePlanner.java`，1-based）|
+|---|---|
+| `record SurfaceGradeLimits` | **71–167**（含 `capture()` 77/92、`cut()` 140、`fill()` 144、`logReducedLimits` 154）|
+| 该 record 的 javadoc | **65–70** |
+| `MAX_SURFACE_FILL` | 38（其 javadoc 从 **27** 开始 —— 见陷阱 2）|
+| `MAX_SURFACE_CUT` | 40 |
+| `TUNNEL_CORE_OVERBURDEN` | 41 |
+| `TUNNEL_MIN_RUN` | 43（**同时被 648 的 javadoc 与 820 的代码用** ⇒ 原处留别名）|
+| `LIMIT_LOGGER` / `LIMIT_LOG_AT` | 169–171（只被 `logReducedLimits` 用 ⇒ 一起搬）|
+
+**不要动**：`TUNNEL_MOUTH_OVERBURDEN`(42) 及其余隧道常量 —— 它们只在旧算法里用。
+
+### ★ 陷阱 1：新文件里别再声明一次 record
+
+第一次尝试的失败形态：
+
+```
+SurfaceGradeLimits.java:154: 错误: 在记录 SurfaceGradeLimits 中定义了变量 LIMIT_LOGGER
+TunnelFootprintSampler.java:136: 错误: 找不到符号  cut(boolean)
+PathSpanExtractor.java:288: 错误: 找不到符号  capture()
+```
+
+根因不是括号扫描 —— 是**手写的文件头里又写了一遍 `public record SurfaceGradeLimits(...)`**，
+于是搬来的 record 变成内层类型，把外层的实现全遮住。
+**新文件头只放 `package` + `import`，record 声明只来自搬移块。**
+
+### ★ 陷阱 2：部分删除会把 javadoc 变成未闭合
+
+第二次尝试的失败形态：
+
+```
+RoadGradePlanner.java:710: 错误: 找不到符号  TUNNEL_MOUTH_OVERBURDEN
+```
+
+根因：我按行号删了 34–41（以为那是"常量块"），但那几行的 javadoc **从第 27 行就开始了**，
+删掉 34–41 把 `*/` 一起删掉 ⇒ 注释一路吞到下一个 `*/`，把第 42 行的常量**吃进注释里**。
+
+**所以删除范围必须覆盖整个 javadoc 块** —— 用 AST 定位声明后，再向上找到最近的 `/**`，
+向下找到声明行，整块处理；不要凭"看起来像常量块"的行号区间删。
+
+### 正确的做法（用编译器自己当结构来源）
+
+写一个 20 行的 AST 小工具，问 `javac` 要真实边界，而不是自己数括号：
+
+```java
+JavaCompiler c = ToolProvider.getSystemJavaCompiler();
+var fm = c.getStandardFileManager(null, null, StandardCharsets.UTF_8);
+JavacTask task = (JavacTask) c.getTask(null, fm, null,
+        List.of("-proc:none", "-d", "<tmp>"), null, fm.getJavaFileObjects(file.toFile()));
+Iterable<? extends CompilationUnitTree> units = task.parse();
+Trees positions = Trees.instance(task);          // 注意：不是 task.getTrees()
+for (CompilationUnitTree u : units)
+    for (Tree t : u.getTypeDecls())
+        if (t instanceof ClassTree ct)
+            for (Tree m : ct.getMembers()) {
+                long s = positions.getSourcePositions().getStartPosition(u, m);
+                long e = positions.getSourcePositions().getEndPosition(u, m);
+                // 打印行号 + 成员名
+            }
+```
+
+`-proc:none` 且不做 attribution ⇒ **不需要 MC classpath 也能解析**。
+本次已用它得到上表那些行号。
+
+### 验收
+
+```powershell
+.\verify.ps1        # 必须 ALL GREEN
+```
+
+额外确认：全仓不再有 `RoadGradePlanner.SurfaceGradeLimits` 这种限定引用
+（`grep -r "RoadGradePlanner.SurfaceGradeLimits"` 应为空）。
+
+---
+
 ## 第 3 级：删旧实现（按 S5 方法台账三级走）
 
 **前置**：第 1、2 级都通过，且**默认值已切成新内核并稳定一段时间**。
