@@ -23,6 +23,10 @@ public final class RoadJUnitRegressionSuite {
                         // 且类型与默认值逐项相等。已废弃/未接线的键必须写明原因。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.meta.ConfigKeyTableConsistencyTest"),
+                        // 度量层数学性质（M2 起）：正交/对角代价对称性、
+                        // 方向性坡度、Fast Marching 逼近欧氏距离、绕障不穿障碍。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.metric.FinslerMetricTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(

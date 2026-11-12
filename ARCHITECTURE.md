@@ -73,7 +73,28 @@ client / fabric   状态渲染分离 / 平台壳
 
 ## 三层算法
 
-### 第一层 · metric：Finsler 度量 + Fast Marching
+### 第一层 · metric：Finsler 度量 + Fast Marching　✅ **已实现（2026-11-12）**
+
+实现了 5 个文件 + 8 个测试用例（`PASS tests=502`）：
+
+| 文件 | 职责 |
+|---|---|
+| `TerrainField` | port：`height(x,z)` + `gradient(x,z)`，与采样实现无关 |
+| `ObstacleField` | port：连续障碍势（不是布尔「能不能走」） |
+| `FinslerMetric` | `c(x,θ) = 1 + λg(∇h·θ̂)² + λo·V(x)` |
+| `FastMarchingSolver` | Godunov upwind + 堆驱动，`O(n log n)` |
+| `ArrivalTimeField` | 到达时间场 + 负梯度回溯出路径 |
+
+**测试抓到两个真实实现 bug**（都是「看起来对、跑起来错」的类型）：
+
+1. **慢度方向写反**：`slowness = 1/cost` ⇒ 高代价格子变成「走得快」⇒ 路径直接穿墙。
+   `cost` 本身就是每单位长度的代价，Eikonal 里 `|∇T| = cost`，慢度就是 `cost`。
+2. **慢度取错格**：用「已冻结格」的代价去更新邻居 ⇒ 墙后的便宜格子把值倒灌回墙格
+   ⇒ **一道 9 倍代价的墙完全透明**（`T(30,20)` 恰好等于直线 10.0）。
+   迎风格式必须取「正在求解的那一格」的慢度。
+
+**已量化的已知限制**：一阶 4 邻域格式在 45° 方向高估欧氏距离约 21%（理论值）。
+这不是 bug —— 上层只用它决定拓扑与走位，精确几何由 `band` 层修正；换二阶或 8 邻域可压到 2~5%，属 V2。
 
 ```
 c(x, θ̂) = 1 + λ_grade·(∇h(x)·θ̂)² + λ_obs·V(x)
