@@ -1,4 +1,8 @@
 # RoadWeaver
+
+> **文档导航**：[`docs/README.md`](docs/README.md) ——
+> 当前状态看 [`docs/STATUS-20261113.md`](docs/STATUS-20261113.md)；
+> 改动前必跑 [`verify.ps1`](verify.ps1)。
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/6jk8Pote?style=flat-square&logo=Modrinth&label=Modrinth)](https://modrinth.com/mod/roadweaver)
 [![CurseForge Downloads](https://img.shields.io/curseforge/dt/1358489?style=flat-square&logo=CurseForge&label=CurseForge&color=f16436)](https://www.curseforge.com/minecraft/mc-mods/roadweaver)
 [![Discord Invite](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white&style=flat-square)](https://discord.gg/tUJMJkbbr2)

@@ -1,5 +1,9 @@
 # 死方法审计（2026-11-13）
 
+> **相关文档**：本文是**方法论 + 一次性清单**。方法级删除边界见
+> [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)；删除顺序与验收见
+> [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md)。
+
 > 起因：`DeadCodeGuardTest` 只查**类型**（零引用类型会被拦），但**方法**不在它视野里。
 > 本轮手工审计发现并删除了 2 个确认无人调用的公共方法。
 
