@@ -1200,3 +1200,60 @@ int searchEnd   = Math.min(n - 2, anchor + LOCAL_SEGMENT_RADIUS);
 
 第 1 级仍需在**调用方**接线：`computeTargetY` 要把 `connection` /
 `UnknownEndpointHeightRegistry` / `spans` 翻译成 `Constraints`。这是那 100~150 行的主体。
+
+---
+
+# S2 结构价值落地：BuildPlan（2026-11-13）
+
+前面两轮已经论证：S2 没有剩余的性能热点，它的价值在**结构**。
+这一轮把那个价值真正建起来 —— `spec/BuildPlan` + `spec/BuildPlanCompiler`。
+
+## 它解决什么问题
+
+旧版把「这一列要不要铺、铺到哪一层、是不是桥面/隧道」的判定散在施工路径里：
+`SegmentPaver.paveSegment` 一边遍历列、一边查世界（`isProtected*`）、一边决定动作。
+
+后果三条：
+
+| 后果 | 具体表现 |
+|---|---|
+| **测不了** | 判定依赖世界状态，纯 JUnit 里跑不起来 |
+| **说不清** | 「这一列为什么被跳过」只能跑过之后从日志里猜 |
+| **改不动** | 想改判定规则，得在施工循环里做手术 |
+
+`BuildPlan` 把判定结果**物化成数据**：世界信息由调用方翻译成输入，
+`BuildPlanCompiler` 只做纯函数分类，施工侧只负责按 Plan 放方块。
+
+## 与 SegmentPaver 的对照表（将来接线用）
+
+| `BuildPlan.Kind` | SegmentPaver 里的对应 |
+|---|---|
+| `SKIP` | `ColumnAction.SKIP`（地表被保护）|
+| `PAVE_SURFACE_ONLY` | `ColumnAction.PAVE_SURFACE_ONLY`（路基被保护）|
+| `PAVE_NORMAL` | `ColumnAction.PAVE_NORMAL` |
+| `BRIDGE_DECK` | `BridgeSegment` 覆盖的站 |
+| `TUNNEL_BORE` | `tunnelBody` 为真的站 |
+
+## ★ 一条被钉住的顺序不变量
+
+规则的**顺序**是：地表保护 → 隧道/桥 → 路基保护 → 正常铺装。
+
+最容易改错的是第一条：**地表被保护的东西，桥也不该从它上面压过去**。
+测试 `地表保护优先于桥与隧道` 专门钉这个 —— 同一列既是隧道又地表受保护时，
+结果必须是 `SKIP`。
+
+## 现状：尚未接线（刻意的）
+
+`BuildPlan` / `BuildPlanCompiler` 目前**只被测试使用**，不在生产路径上。
+
+接线放在 S7 第 2 级，因为那时判定（桥隧/保护）才是稳定的。现在先把数据模型定下来，
+是因为第 2 级要写的「旧判定翻译成模式约束」正好需要这样一个目标结构 ——
+**先定形状，后填内容，比边写边改形状便宜**。
+
+接线要补的三个输入（都已在 `Inputs` 的注释里写明）：
+
+| 输入 | 从哪来 |
+|---|---|
+| `protectionRank` | `RoadConstructionSafety.isProtected*` 系列 |
+| `tunnelStation` / `bridgeStation` | `RoadData.spans()` 按 `SpanType` 分派 |
+| `columnY` | `SegmentPaver.planGrade` 的横断面压平结果（**必须传真实值**，否则「对齐现状」不成立）|
