@@ -38,6 +38,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.band.ElasticBandSolverTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pipeline.RoadPipelineTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PathfindingCostConfigTest"),
