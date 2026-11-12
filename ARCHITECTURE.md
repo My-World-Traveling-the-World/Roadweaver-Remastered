@@ -257,3 +257,66 @@ RoadNetworkPlan → QualityGate
 1. **职责** —— 这个类负责什么、不负责什么
 2. **为什么这样设计** —— 关键约束、数学依据
 3. **踩过的坑** —— 历史事故与它们的钉子（测试）
+
+---
+
+## 附：`StructureAvoidanceService` 的功能域地图（2026-11-12 实测）
+
+这个类是新仓里最后一块「上帝静态类」。它从 4,766 行拆到 3,542 行（-1,223）之后，
+剩余部分**已经没有可整体搬出的嵌套类型**了 —— 全部是 **124 个静态方法**。
+所以要继续拆分，只能按下面的功能域**成簇搬方法**，而不是搬类型。
+
+### 已搬出的部分（可对照这些文件看职责边界）
+
+| 文件 | 行数 | 职责 |
+|---|---|---|
+| `PieceOccupancy` | 387 | 单个结构碎片的逐块占位判定（实心/杂物/会掉的块）|
+| `PrepareTiming` | 133 | 准备阶段分段计时（纯记账，不参与判定）|
+| `OwnedStructureBox` | 57 | 带归属信息的结构包围盒，碰撞判定转发给 `PieceOccupancy` |
+| `PreparedStartKey` / `RouteKey` / `StructureOwnerKey` | 12 / 6 / 6 | 三个缓存键 record |
+| `PlanningSnapshot` | 772 | 规划期不可变结构快照（哪些盒挡路、哪些端点豁免）|
+| `PlanningSnapshotUnavailableException` | 9 | 「没有快照」这条路径的显式异常 |
+
+### 剩余 3,542 行的功能域划分（按方法名与行号聚类）
+
+| 功能域 | 方法（示例） | 大致行数 | 可否独立？ |
+|---|---|---|---|
+| **A. 世界生成期避让查询** | `shouldAvoid` / `shouldAvoidAny` / `shouldAvoidConstruction` / `shouldAvoidPrepared*` / `resolveWorldgenEntry` / `collectPieces` | ~290 | 可，但被 `Road` / 施工侧直接调，需同步改调用点 |
+| **B. 路由线准备与快照编排** | `preparePlanningSnapshotsAsync`(×2) / `preparePlanningSnapshotsForPathsAsync`(×3) / `ensurePlanningSnapshotForPathAsync` / `preparePathCorridorSnapshots*` | ~350 | 可，依赖 `PreparedStartResolver` 域 |
+| **C. 端点筛选与归属推断** | `EndpointFilterOutcome` / `filterUnknownEndpointInsideVillage` / `endpointMatchesStructure` / `resolveEndpointOwners*` / `inferNearbyEndpointOwner` / `levelOwner` | ~520 | **最适合下一刀**：输入输出清晰，外部只经 `PlanningSnapshot.endpointOwners()` 消费 |
+| **D. 障碍判定与建筑规避** | `blocksVerifiedBuilding` / `blocksPlanningObstacle` / `blocksVillageCluster` / `buildClusterBoxes` / `describePlanningCollision` / `planningCollisionBox` | ~180 | 可，是对外契约最核心的一块 |
+| **E. 保护缺口与过村逻辑** | `isProtectedGapAcceptable` / `protectedGapSpans` / `passThroughVillageCrossings` / `evaluateProtectedGapPattern` / `hasOnlyEndpointProtectedGaps` | ~230 | 可，但判据与旧仓 `PROTECTED_GAP` 逐字对应，改结构时**不许动判据** |
+| **F. 走廊构建** | `buildPathCorridors` / `addChunkLine` / `collectCorridorStartKeys` / `withinCorridorPath` / `predictObstacleCandidates` | ~290 | 可，纯几何 |
+| **G. 结构起点解析** | `resolvePreparedStartsAsync`(×4) / `resolvePreparedStartWindow` / `resolvePreparedStartBatchOnce` / `createPreparedStartFuture` / `acquireNativeDirectLane` / `requestChunkAsync` / `storePreparedStart` / `cachedPreparedStart` | ~735 | **最大的一块**，已于 2026-11-12 尝试搬出但编译未通过而回退（见下）|
+| **H. 小工具** | `normalizeSource` / `distanceSquaredToSegment` / `putBounded` / `trimBounded` / `elapsedMillis` / `intersectsConstructionBand` | ~80 | 可，纯函数 |
+
+### ★ 尝试搬 G 域时遇到的拦路问题（下次动手前必须先解决）
+
+把 2,229~2,962 行整块切成 `PreparedStartResolver` 后编译报：
+
+```
+PreparedStartResolver.java:121: 错误: 未结束的注释
+PreparedStartResolver.java:2:   错误: 未声明的类不应有程序包
+```
+
+- 已排除：切片首尾边界正确（2,229 是方法签名、2,962 是方法闭合、2,963 是空行）；
+  逐行扫描块注释深度显示**整个文件是平衡的**；把生成的中文 javadoc 换成纯 ASCII **错误不变**。
+- 因此问题在**搬出的正文**里，与注释文字无关。下一刀的定位办法：
+  把切片二分成两半分别生成文件编译，用二分法把 `/*` 的来源缩到一个方法内。
+- 一旦定位，G 域仍是最值得搬的一块（735 行，且域内几乎不依赖 A~F）。
+
+### 双向静态导入：拆静态工具类的标准手法
+
+搬静态方法簇时**两侧调用点都可以一个字不改**：
+
+```java
+// 新类里
+import static ...StructureAvoidanceService.*;   // 用服务侧的常量与工具
+// 服务里
+import static ...PreparedStartResolver.*;       // 仍按原短名调被搬走的方法
+```
+
+代价是相关成员从 `private` 放宽到**包内可见**。这条手法在搬 `PlanningSnapshot`
+时已验证可行（13 条静态导入 + 服务侧 15 个成员放宽 + 快照类内 17 个方法放宽），
+回归 `PASS tests=589` 不变。**它比「把每处调用改成 `类名.方法(...)`」安全得多**，
+因为 diff 能直接证明「只有可见性变了，逻辑没变」。
