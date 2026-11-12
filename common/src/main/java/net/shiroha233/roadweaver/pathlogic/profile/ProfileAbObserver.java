@@ -43,6 +43,15 @@ public final class ProfileAbObserver {
     private static final AtomicInteger INFEASIBLE = new AtomicInteger();
     private static final AtomicInteger FAILED = new AtomicInteger();
 
+    // ── 聚合统计：让一次游戏会话就能给出结论，而不是让人去数散日志 ──
+    private static final AtomicInteger DP_WINS = new AtomicInteger();
+    private static final AtomicInteger LEGACY_WINS = new AtomicInteger();
+    private static final AtomicInteger TIES = new AtomicInteger();
+    private static final java.util.concurrent.ConcurrentLinkedQueue<String> WORST =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+    /** 只留最差的 8 条，便于回查「新解在哪类路上输」。 */
+    private static final int WORST_KEEP = 8;
+
     private ProfileAbObserver() {
     }
 
@@ -80,9 +89,24 @@ public final class ProfileAbObserver {
             }
             ProfileMetrics a = ProfileMetrics.of(legacyProfile, terrainY, crossing);
             ProfileMetrics b = ProfileMetrics.of(dp.get(), terrainY, crossing);
+            int dpBetter = b.betterCount(a);
+            int legacyBetter = a.betterCount(b);
+            if (dpBetter > legacyBetter) {
+                DP_WINS.incrementAndGet();
+            } else if (legacyBetter > dpBetter) {
+                LEGACY_WINS.incrementAndGet();
+                if (WORST.size() < WORST_KEEP) {
+                    WORST.add(tag + " legacy[" + a.line() + "] dp[" + b.line() + "]");
+                }
+            } else {
+                TIES.incrementAndGet();
+            }
             if (call <= 8 || call % 16 == 0) {
                 LOGGER.info("[PROFILE-AB] #{} stations={} tag={} legacy[{}] dp[{}] {}",
                         call, legacyProfile.length, tag, a.line(), b.line(), a.versus(b));
+            }
+            if (call % 32 == 0) {
+                LOGGER.info("[PROFILE-AB-SUMMARY] {}", summarize());
             }
         } catch (Throwable t) {
             // 观察器绝不能影响主流程
@@ -170,6 +194,45 @@ public final class ProfileAbObserver {
     /** 模式观察的累计次数（诊断/测试用）。 */
     public static int modeCalls() {
         return MODE_CALLS.get();
+    }
+
+    /**
+     * 会话总结：一句话说清「谁更好、好多少、新解输在哪类路」。
+     *
+     * <h2>为什么需要它</h2>
+     * <p>散日志适合逐条排查，但回答不了「该不该切默认」这个决策问题。
+     * 一次游戏会话跑完后，只要看这一行：dpWin 明显多于 legacyWin ⇒ 可以切；
+     * legacyWin 更多 ⇒ 先看 {@link #worstCases()} 里输在哪。</p>
+     */
+    public static String summarize() {
+        int dp = DP_WINS.get();
+        int legacy = LEGACY_WINS.get();
+        int tie = TIES.get();
+        int total = dp + legacy + tie;
+        String verdict = total == 0 ? "尚无数据"
+                : dp > legacy ? "新解占优，可考虑切默认"
+                : legacy > dp ? "旧解占优，先看 worstCases"
+                : "旗鼓相当";
+        return "总计=" + total + " dpWin=" + dp + " legacyWin=" + legacy + " tie=" + tie
+                + " 不可行=" + INFEASIBLE.get() + " 失败=" + FAILED.get()
+                + " → " + verdict;
+    }
+
+    /** 新解输得最明显的若干条（最多 8 条），用于回查原因。 */
+    public static String worstCases() {
+        if (WORST.isEmpty()) return "(无)";
+        return String.join("\n  ", WORST);
+    }
+
+    /** 清空统计（测试用）。 */
+    public static void resetStats() {
+        CALLS.set(0);
+        INFEASIBLE.set(0);
+        FAILED.set(0);
+        DP_WINS.set(0);
+        LEGACY_WINS.set(0);
+        TIES.set(0);
+        WORST.clear();
     }
 
     /** 累计调用次数（诊断/测试用）。 */

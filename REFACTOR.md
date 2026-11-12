@@ -670,3 +670,53 @@ plannedBridgeResult = BridgeRangeCalculator.compute(...)    // O(站数)，扫�
 3. 其余按包规模递减。
 
 不建议按「文件顺序」或「字母序」推进 —— 那样前几轮就耗在无关紧要的 getter 上。
+
+---
+
+# AB 数据怎么收集、怎么读（2026-11-13）
+
+## 收集（一次游戏会话就够）
+
+```
+-Droadweaver.profileAb=on
+```
+
+普通玩法即可，规划一批路线（开局预热就会跑几十条）。每 32 条会打一次总结：
+
+```
+[PROFILE-AB-SUMMARY] 总计=64 dpWin=41 legacyWin=15 tie=8 不可行=0 失败=0 → 新解占优，可考虑切默认
+```
+
+逐条明细（前 8 条 + 每 16 条一条）：
+
+```
+[PROFILE-AB] #17 stations=812 tag=(0,0)->(1200,0)
+    legacy[p95=1.42 maxStep=3 cut=812 fill=190 steps=7]
+    dp[p95=1.00 maxStep=1 cut=640 fill=155 steps=0] win=4 lose=0
+```
+
+模式决策对比（桥隧）：
+
+```
+[PROFILE-AB-MODE] #9 stations=812 tag=(0,0)->(1200,0)
+    legacy[bannedGround=41 tunnel=3] dp[bridge=12(2座) tunnel=1(1条) cost=1843.2]
+```
+
+## 怎么读
+
+| 信号 | 含义 | 该做什么 |
+|---|---|---|
+| `dpWin` 明显多于 `legacyWin` | 新解在坡度/台阶/土方上普遍更好 | 可以准备切默认 |
+| `legacyWin` 更多 | 新解有系统性缺陷 | 看 `worstCases()`（最多 8 条最差样本），定位是哪一类路 |
+| `不可行` 很多 | DP 的窗口/坡度参数太紧 | 调 `PROFILE_AB_MAX_CUT/FILL` 或 maxStep 口径 |
+| `dp[bridge=N]` 远少于 `legacy[bannedGround=M]` | 旧判定判多的桥可能并不必要 | 这是 S4 的收益上限 |
+
+## `summarize()` / `worstCases()`
+
+`ProfileAbObserver.summarize()` 返回一句话结论（含 verdict）；
+`worstCases()` 返回新解输得最明显的若干条，带完整的 legacy/dp 度量 —— 
+**这是回答「为什么输」的入口**，不用去翻散日志。
+
+`resetStats()` 用于重新开始一轮统计（测试也用）。
+
+回归 PASS tests=662。

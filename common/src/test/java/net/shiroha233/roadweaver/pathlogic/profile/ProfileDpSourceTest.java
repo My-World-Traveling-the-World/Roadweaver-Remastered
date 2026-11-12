@@ -131,6 +131,29 @@ final class ProfileDpSourceTest {
     }
 
     @Test
+    void AB会话总结能给出可决策的结论() {
+        ProfileAbObserver.resetStats();
+        System.setProperty("roadweaver.profileAb", "on");
+        int[] terrain = new int[]{70, 70, 70, 70, 70, 70};
+
+        // 旧解：一路爬升 6 格（明显更差：坡度大、台阶多）
+        int[] legacyBad = new int[]{70, 71, 70, 72, 70, 73};
+        ProfileAbObserver.observe(legacyBad, terrain, new boolean[6], 8, 4, 1, "bad-legacy");
+
+        String s = ProfileAbObserver.summarize();
+        assertTrue(s.contains("dpWin=1"), "case=dp-win-counted: " + s);
+        assertTrue(s.contains("新解占优"), "case=verdict: " + s);
+        assertEquals("(无)", ProfileAbObserver.worstCases(), "case=no-worst-cases");
+
+        // 再喂一条旧解明显更好的：桥面被钉成直线、而旧解也平 —— 这里只验证计数机制
+        ProfileAbObserver.resetStats();
+        int[] legacyFlat = new int[]{70, 70, 70, 70, 70, 70};
+        ProfileAbObserver.observe(legacyFlat, terrain, new boolean[6], 8, 4, 1, "flat-legacy");
+        String s2 = ProfileAbObserver.summarize();
+        assertTrue(s2.contains("tie=1") || s2.contains("legacyWin=1"), "case=counted: " + s2);
+    }
+
+    @Test
     void 模式观察器默认关闭时不做事() {
         int before = ProfileAbObserver.modeCalls();
         ProfileAbObserver.observeModes(new int[]{70, 70, 70, 70}, new int[]{70, 70, 70, 70},

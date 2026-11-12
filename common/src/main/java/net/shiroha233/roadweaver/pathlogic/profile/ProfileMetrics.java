@@ -73,6 +73,21 @@ public record ProfileMetrics(
     }
 
     /**
+     * 本度量比 {@code other} 更好的指标个数（0..4）。
+     *
+     * <p>和 {@link #versus} 同口径，但返回数字、便于聚合统计 ——
+     * AB 会话总结里要累加胜负，不适合解析字符串。</p>
+     */
+    public int betterCount(ProfileMetrics other) {
+        int win = 0;
+        if (p95Grade < other.p95Grade) win++;
+        if (maxStep < other.maxStep) win++;
+        if (cut + fill < other.cut + other.fill) win++;
+        if (steps < other.steps) win++;
+        return win;
+    }
+
+    /**
      * 与另一个度量做胜负数统计。
      *
      * <p>口径：坡度和挖填方<b>越小越好</b>，台阶数越小越好。
