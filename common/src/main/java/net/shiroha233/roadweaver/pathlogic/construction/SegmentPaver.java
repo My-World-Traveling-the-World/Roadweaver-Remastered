@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -197,7 +198,7 @@ public final class SegmentPaver {
         // 0.9.065：洞身段禁止向上清空（岩体就是顶）；洞口明挖段与普通路段不受影响。
         boolean tunnelBody = tunnelBodyStation(grade.preserveTunnelGrade(), openCutStation);
         int[] tunnelSpan = grade.preserveTunnelGrade()
-                ? RoadTunnelBuilder.tunnelScope(road, centers, segmentIndex) : null;
+                ? PlannedSectionBuilder.tunnelScope(road, centers, segmentIndex) : null;
         TunnelClearLedger.Scope tunnelScope = tunnelSpan == null
                 ? null : new TunnelClearLedger.Scope(tunnelSpan[0], tunnelSpan[1]);
         if (tunnelBody) TunnelClearLedger.noteBodyStation(tunnelScope);

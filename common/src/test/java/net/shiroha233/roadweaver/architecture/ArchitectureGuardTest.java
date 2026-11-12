@@ -89,7 +89,6 @@ class ArchitectureGuardTest {
             "generation.InitialGenManager",
             "pathlogic.pathcalc.RoadPathCalculator",
             "pathlogic.core.Road",
-            "pathlogic.tunnel.RoadTunnelBuilder",
             "generation.RoadGenerationService",
             "pathlogic.grade.RoadGradePlanner",
             "pathlogic.junction.ExistingRoadJunctionService",

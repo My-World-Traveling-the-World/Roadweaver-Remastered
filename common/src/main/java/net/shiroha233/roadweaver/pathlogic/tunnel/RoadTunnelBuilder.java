@@ -35,6 +35,9 @@ import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.construction.SegmentPaver;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
+import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*;
+import static net.shiroha233.roadweaver.pathlogic.tunnel.PortalSafetyRules.*;
+import static net.shiroha233.roadweaver.pathlogic.tunnel.ScenicDomeBuilder.*;
 
 /**
  * Conservative tunnel construction for persisted TUNNEL spans. Each section
@@ -42,7 +45,7 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
  * of being paved as an ordinary road inside solid terrain.
  */
 public final class RoadTunnelBuilder {
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     /** The historical clear height, still the default in the config. */
     static final int DEFAULT_CLEAR_HEIGHT = 5;
     /**
@@ -75,7 +78,7 @@ public final class RoadTunnelBuilder {
     static final int SIDE_CLEARANCE = 1;
     static final int WALL_OFFSET = 2;
     /** One lantern roughly every 10 tunnel stations (stations are ~1 block apart). */
-    private static final int LANTERN_INTERVAL = 10;
+    static final int LANTERN_INTERVAL = 10;
     /**
      * Fallback mouth length (stations) for the case where no terrain can be read.
      *
@@ -85,7 +88,7 @@ public final class RoadTunnelBuilder {
      * approach road needs (see {@link #portalAdvance}); this number survives only as the answer for
      * {@code reason=no-sampler} / {@code reason=no-terrain}, i.e. when there is no terrain to measure.
      */
-    private static final int PORTAL_TRANSITION_SEGMENTS = 14;
+    static final int PORTAL_TRANSITION_SEGMENTS = 14;
     /**
      * Hard cap on one mouth section, in stations.
      *
@@ -93,25 +96,25 @@ public final class RoadTunnelBuilder {
      * mouth but the whole hillside, so the section is left to the cover test instead of being cut open
      * indefinitely. The cap also bounds {@link #portalAdvance} whatever the sampled depth says.
      */
-    private static final int PORTAL_MAX_SEGMENTS = 32;
+    static final int PORTAL_MAX_SEGMENTS = 32;
     /** Shortest mouth section, in stations: the throat has to exist for the road to enter the bore. */
-    private static final int PORTAL_MIN_SEGMENTS = 1;
+    static final int PORTAL_MIN_SEGMENTS = 1;
     /**
      * Viewing-dome dimensions for a glazed (scenic) tunnel. The width comes from the shared
      * shell so this vault and a submerged crossing's vault are the same shape.
      */
-    private static final int DOME_RADIUS = ScenicGlassShell.RADIUS;
-    private static final int DOME_SPRING = roofOffset() + 2 - DOME_RADIUS;
+    static final int DOME_RADIUS = ScenicGlassShell.RADIUS;
+    static final int DOME_SPRING = roofOffset() + 2 - DOME_RADIUS;
     /** A portal is a local mouth, never an instruction to strip an entire mountain. */
-    private static final int MAX_PORTAL_CLEAR_HEIGHT = 16;
-    private static final AtomicLong PORTAL_SECTIONS = new AtomicLong();
-    private static final AtomicLong BLOCKED_SECTIONS = new AtomicLong();
-    private static final AtomicLong PROTECTED_GAP_SECTIONS = new AtomicLong();
+    static final int MAX_PORTAL_CLEAR_HEIGHT = 16;
+    static final AtomicLong PORTAL_SECTIONS = new AtomicLong();
+    static final AtomicLong BLOCKED_SECTIONS = new AtomicLong();
+    static final AtomicLong PROTECTED_GAP_SECTIONS = new AtomicLong();
     /** 站索引反查允许的坐标漂移（格）；站序列被重建过时会漂 1~2 格。 */
-    private static final int STATION_XZ_FALLBACK_TOLERANCE = 4;
-    private static final AtomicLong STATION_FALLBACK_HITS = new AtomicLong();
-    private static final AtomicLong STATION_FALLBACK_MISSES = new AtomicLong();
-    private static final Map<net.minecraft.server.level.ServerLevel, ConcurrentHashMap<SpanKey, SpanState>> SPAN_STATES =
+    static final int STATION_XZ_FALLBACK_TOLERANCE = 4;
+    static final AtomicLong STATION_FALLBACK_HITS = new AtomicLong();
+    static final AtomicLong STATION_FALLBACK_MISSES = new AtomicLong();
+    static final Map<net.minecraft.server.level.ServerLevel, ConcurrentHashMap<SpanKey, SpanState>> SPAN_STATES =
             Collections.synchronizedMap(new WeakHashMap<>());
     /**
      * Spans in which at least one station was rejected for a non-protection
@@ -128,7 +131,7 @@ public final class RoadTunnelBuilder {
      * across dimensions and worlds. The rejection is a per-session,
      * per-level runtime observation, not durable state.</p>
      */
-    private static final Map<net.minecraft.server.level.ServerLevel, Set<Long>> REJECTED_TUNNEL_SPANS =
+    static final Map<net.minecraft.server.level.ServerLevel, Set<Long>> REJECTED_TUNNEL_SPANS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
     private RoadTunnelBuilder() {
@@ -164,7 +167,7 @@ public final class RoadTunnelBuilder {
                 span, state, junction, externalJunction));
     }
 
-    private static void prepareSpanState(WorldGenLevel world, SpanState state, RoadData road,
+    static void prepareSpanState(WorldGenLevel world, SpanState state, RoadData road,
             List<BlockPos> centers, int[] profile, Span span) {
         synchronized (state.lock) {
             if (state.decision == Decision.UNKNOWN) {
@@ -178,7 +181,7 @@ public final class RoadTunnelBuilder {
         }
     }
 
-    private static TunnelPlan preflight(WorldGenLevel world, RoadData road, RoadSegmentPlacement segment,
+    static TunnelPlan preflight(WorldGenLevel world, RoadData road, RoadSegmentPlacement segment,
             int segmentIndex, List<BlockPos> centers, int[] profile, Span span, SpanState state,
             boolean junction, boolean externalJunction) {
         if (world == null || road == null || segment == null || centers == null || profile == null) {
@@ -291,7 +294,7 @@ public final class RoadTunnelBuilder {
                 scenicWater, false, false);
     }
 
-    private static SafetyCheck sectionSafe(WorldGenLevel world, RoadData road, PlannedSection section, SpanState state) {
+    static SafetyCheck sectionSafe(WorldGenLevel world, RoadData road, PlannedSection section, SpanState state) {
         try {
             SafetyCheck roadbed = roadbedSafe(world, road, section);
             if (!roadbed.safe()) return roadbed;
@@ -526,11 +529,11 @@ public final class RoadTunnelBuilder {
      * Portal classification must use actual terrain (see requiresOpenPortal)
      * or an explicit span endpoint, never the already-normalized centre Y.
      */
-    private static boolean isPortalSection(List<BlockPos> centers, int[] profile, int segmentIndex) {
+    static boolean isPortalSection(List<BlockPos> centers, int[] profile, int segmentIndex) {
         return false;
     }
 
-    private static boolean isTunnelEndpointPortal(List<BlockPos> centers,
+    static boolean isTunnelEndpointPortal(List<BlockPos> centers,
                                                   Span span,
                                                   int segmentIndex) {
         if (centers == null || centers.isEmpty() || span == null) return false;
@@ -542,7 +545,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** The throat of a tunnel is always an open mouth, even inside a mountain. */
-    private static boolean isSpanMouthSegment(PortalSplit split, Span span, int segmentIndex) {
+    static boolean isSpanMouthSegment(PortalSplit split, Span span, int segmentIndex) {
         if (split != null) {
             return Math.abs(segmentIndex - split.spanFirst()) < split.portalStart()
                     || Math.abs(segmentIndex - split.spanLast()) < split.portalEnd();
@@ -734,7 +737,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** 洞口站的路面列（含路面高度）；取不到就返回 {@code null}（⇒ 退回 14 站）。 */
-    private static List<BlockPos> mouthRoad(RoadData road, List<BlockPos> centers, int[] profile,
+    static List<BlockPos> mouthRoad(RoadData road, List<BlockPos> centers, int[] profile,
                                             Span span, int station) {
         if (road == null || road.roadSegmentList() == null) return null;
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
@@ -744,7 +747,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** 实测站距（格）：洞口站与相邻内侧站的水平距离；取不到就用名义步长。 */
-    private static double stationStep(List<BlockPos> centers, int station, int inward) {
+    static double stationStep(List<BlockPos> centers, int station, int inward) {
         if (centers == null) return RoadConstants.DEFAULT_ASTAR_STEP;
         int other = station + inward;
         if (station < 0 || station >= centers.size() || other < 0 || other >= centers.size()) {
@@ -784,26 +787,11 @@ public final class RoadTunnelBuilder {
      * and that reading must never mean "cut it open": it is exactly the case where the roof is the only
      * thing keeping the ocean out.
      */
-    private static boolean requiresOpenPortal(WorldGenLevel world, PlannedSection section) {
-        if (world == null || section == null) return false;
-        try {
-            for (BlockPos column : section.road()) {
-                int rock = RoadConstructionSafety.rockSurfaceHeight(world, column.getX(), column.getZ());
-                if (rock > column.getY() + roofOffset()) continue;
-                if (isWaterAboveRoof(world, column)) continue;
-                return true;
-            }
-        } catch (RuntimeException unavailableWorldgenColumn) {
-            return false;
-        }
-        return false;
-    }
-
     /** Water cells removed from inside a sealed bore. */
-    private static final AtomicLong DRIED_BORE_CELLS = new AtomicLong();
+    static final AtomicLong DRIED_BORE_CELLS = new AtomicLong();
     /** Water cells in the shell that the lining replaced. */
-    private static final AtomicLong SEALED_SHELL_CELLS = new AtomicLong();
-    private static final int[][] BORE_SIDES = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    static final AtomicLong SEALED_SHELL_CELLS = new AtomicLong();
+    static final int[][] BORE_SIDES = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     /**
      * Keeps the bore of a sealed tunnel dry.
@@ -817,59 +805,7 @@ public final class RoadTunnelBuilder {
      * <p>Portal sections get the drying half only: their mouth is meant to be open, and lining it would
      * wall off the entrance the player walks through.
      */
-    static int[] sealBore(WorldGenLevel world, TunnelPlan plan) {
-        if (world == null || plan == null || plan.interior().isEmpty()) return new int[]{0, 0};
-        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
-        BlockState air = Blocks.AIR.defaultBlockState();
-        boolean sealShell = !plan.portal();
-        int roof = roofOffset();
-        int dried = 0;
-        int sealed = 0;
-        for (BlockPos interior : plan.interior()) {
-            int terrain = RoadConstructionSafety.terrainHeight(world, interior.getX(), interior.getZ());
-            for (int dy = 1; dy <= roof; dy++) {
-                BlockPos inside = interior.above(dy);
-                if (isWaterCell(world, inside)) {
-                    if (!isWallOwned(inside)) {
-                        world.setBlock(inside, air, 3);
-                        dried++;
-                    }
-                    continue;
-                }
-                if (!sealShell) continue;
-                if (!world.getBlockState(inside).isAir()) continue;
-                for (int[] side : BORE_SIDES) {
-                    BlockPos shell = inside.offset(side[0], 0, side[1]);
-                    if (!isWaterCell(world, shell)) continue;
-                    if (RoadConstructionSafety.isProtectedTunnelVolume(world, shell, plan.road(),
-                            world.getBlockState(shell), terrain) || isWallOwned(shell)) continue;
-                    world.setBlock(shell, stone, 3);
-                    sealed++;
-                }
-            }
-        }
-        if (dried > 0 || sealed > 0) {
-            long total = DRIED_BORE_CELLS.addAndGet(dried) + SEALED_SHELL_CELLS.addAndGet(sealed);
-            if (total <= 64 || total % 512 == 0) {
-                BlockPos sample = plan.interior().get(plan.interior().size() / 2);
-                LOGGER.info("RoadWeaver tunnel sealed bore dried={} shell={} at {},{} y={} total={}",
-                        dried, sealed, sample.getX(), sample.getZ(), sample.getY(), total);
-            }
-        }
-        return new int[]{dried, sealed};
-    }
-
-    private static boolean isWaterCell(WorldGenLevel world, BlockPos pos) {
-        return world.getBlockState(pos).getFluidState().is(FluidTags.WATER);
-    }
-
     /** Every direct tunnel write goes through the same wall veto; planning is never consulted here. */
-    private static boolean isWallOwned(BlockPos pos) {
-        return pos != null && net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
-                net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
-                pos.getX(), pos.getY(), pos.getZ());
-    }
-
     /**
      * Whether open water sits directly above this column's roof line.
      *
@@ -878,192 +814,9 @@ public final class RoadTunnelBuilder {
      * water - so the scan found nothing and the "water is not an opening" rule never applied to the one case
      * it was written for.
      */
-    private static boolean isWaterAboveRoof(WorldGenLevel world, BlockPos column) {
-        int from = column.getY() + roofOffset() + 1;
-        // Far enough to reach the sea surface from a deep bore, and never past the build height.
-        int to = Math.min(world.getMaxBuildHeight() - 1,
-                Math.max(world.getSeaLevel() + 2, from + 128));
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos(column.getX(), from, column.getZ());
-        for (int y = from; y <= to; y++) {
-            cursor.setY(y);
-            if (world.getBlockState(cursor).getFluidState().is(FluidTags.WATER)) return true;
-        }
-        return false;
-    }
-
-    static boolean shouldOpenPortalTransition(String reason, List<BlockPos> centers, int[] profile,
-                                              int spanStart, int spanEnd, int segmentIndex) {
-        return "insufficient-overburden".equals(reason)
-                && hasNearbyPortalSection(centers, profile, spanStart, spanEnd, segmentIndex);
-    }
-
-    private static boolean shouldOpenPortalTransition(String reason, List<BlockPos> centers, int[] profile,
-                                                      Span span, int segmentIndex) {
-        return span != null && shouldOpenPortalTransition(
-                reason, centers, profile, span.start(), span.end(), segmentIndex);
-    }
-
     /** Geometry/load failures must not split a mountain tunnel; only hard
      *  structural protection (protected-*) is allowed to stop the bore. */
-    private static boolean isContinuityOnlyFailure(String reason) {
-        if (reason == null) return false;
-        return reason.equals("insufficient-overburden")
-                || reason.equals("insufficient-wall-overburden")
-                || reason.startsWith("unavailable-")
-                || reason.startsWith("invalid-");
-    }
-
-    private static boolean hasNearbyPortalSection(List<BlockPos> centers, int[] profile,
-                                                  int spanStart, int spanEnd, int segmentIndex) {
-        if (centers == null || profile == null || centers.size() != profile.length
-                || segmentIndex < spanStart || segmentIndex > spanEnd) return false;
-        int from = Math.max(spanStart, segmentIndex - PORTAL_TRANSITION_SEGMENTS);
-        int to = Math.min(spanEnd, segmentIndex + PORTAL_TRANSITION_SEGMENTS);
-        for (int index = from; index <= to; index++) {
-            if (isPortalSection(centers, profile, index)) return true;
-        }
-        return false;
-    }
-
-    private static SafetyCheck portalSafe(WorldGenLevel world, RoadData road, PlannedSection section, SpanState state) {
-        try {
-            SafetyCheck roadbed = roadbedSafe(world, road, section);
-            if (!roadbed.safe()) return roadbed;
-            for (BlockPos column : section.interior()) {
-                if (!columnAvailableWithoutLoading(world, column)) {
-                    return SafetyCheck.failure("unavailable-loaded-portal-column", column);
-                }
-                int terrain = RoadConstructionSafety.terrainHeight(world, column.getX(), column.getZ());
-                int clearTo = Math.min(MAX_PORTAL_CLEAR_HEIGHT,
-                        Math.max(clearHeight(), terrain - column.getY() + 1));
-                if (column.getY() < world.getMinBuildHeight()
-                        || column.getY() + clearTo >= world.getMaxBuildHeight()) {
-                    return SafetyCheck.failure("invalid-portal-height", column);
-                }
-                int fromDy = section.isRoadColumn(column) ? 0 : 1;
-                for (int dy = fromDy; dy <= clearTo; dy++) {
-                    BlockPos volume = column.above(dy);
-                    if (!world.getBlockState(volume).getFluidState().isEmpty()
-                            && !world.getBlockState(volume).getFluidState().is(FluidTags.WATER)) {
-                        return SafetyCheck.failure("fluid-in-portal", volume);
-                    }
-                }
-                BlockPos clearanceStart = section.isRoadColumn(column) ? column : column.above();
-                int clearanceHeight = section.isRoadColumn(column) ? clearTo + 1 : clearTo;
-                AboveColumnClearer.ClearanceCheck clearance = AboveColumnClearer.checkAboveColumnExact(
-                        world, clearanceStart, road, clearanceHeight, true,
-                        pos -> isOwnTunnelLantern(world, pos, road, state)
-                                || isOwnLegacyPortalWall(world, pos, road, section));
-                if (!clearance.ready()) return SafetyCheck.failure(clearance.reason(), clearance.position());
-            }
-            return SafetyCheck.success();
-        } catch (RuntimeException unavailableWorldgenColumn) {
-            return SafetyCheck.failure("unavailable-portal-column", section.lantern());
-        }
-    }
-
-    private static SafetyCheck junctionSafe(WorldGenLevel world, RoadData road, PlannedSection section,
-                                            SpanState state, boolean externalJunction) {
-        try {
-            SafetyCheck roadbed = roadbedSafe(world, road, section);
-            if (!roadbed.safe()) return roadbed;
-            for (BlockPos column : section.interior()) {
-                if (!columnAvailableWithoutLoading(world, column)) {
-                    return SafetyCheck.failure("unavailable-loaded-junction-column", column);
-                }
-                if (column.getY() < world.getMinBuildHeight()
-                        || column.getY() + roofOffset() >= world.getMaxBuildHeight()) {
-                    return SafetyCheck.failure("invalid-junction-height", column);
-                }
-                int fromDy = section.isRoadColumn(column) ? 0 : 1;
-                for (int dy = fromDy; dy <= clearHeight(); dy++) {
-                    BlockPos volume = column.above(dy);
-                    if (!world.getBlockState(volume).getFluidState().isEmpty()
-                            && !world.getBlockState(volume).getFluidState().is(FluidTags.WATER)) {
-                        return SafetyCheck.failure("fluid-in-junction", volume);
-                    }
-                }
-                BlockPos clearanceStart = section.isRoadColumn(column) ? column : column.above();
-                int clearanceHeight = section.isRoadColumn(column) ? clearHeight() + 1 : clearHeight();
-                AboveColumnClearer.ClearanceCheck clearance = AboveColumnClearer.checkAboveColumnExact(
-                        world, clearanceStart, road, clearanceHeight, true,
-                        pos -> isOwnTunnelLantern(world, pos, road, state)
-                                || (externalJunction
-                                && RoadConstructionSafety.isClearableExternalJunctionStructureBlock(
-                                world, pos, road)));
-                if (!clearance.ready()) return SafetyCheck.failure(clearance.reason(), clearance.position());
-            }
-            return SafetyCheck.success();
-        } catch (RuntimeException unavailableWorldgenColumn) {
-            return SafetyCheck.failure("unavailable-junction-column", section.lantern());
-        }
-    }
-
-    private static SafetyCheck roadbedSafe(WorldGenLevel world, RoadData road, PlannedSection section) {
-        for (BlockPos roadColumn : section.road()) {
-            BlockPos roadbed = roadColumn.below();
-            if (!columnAvailableWithoutLoading(world, roadbed)) {
-                return SafetyCheck.failure("unavailable-loaded-roadbed", roadbed);
-            }
-            int terrain = RoadConstructionSafety.terrainHeight(world, roadbed.getX(), roadbed.getZ());
-            if (RoadConstructionSafety.isProtectedTunnelVolume(world, roadbed, road,
-                    world.getBlockState(roadbed), terrain)) {
-                return SafetyCheck.failure("protected-roadbed", roadbed);
-            }
-        }
-        return SafetyCheck.success();
-    }
-
-    private static boolean isProtectedTunnelBlock(WorldGenLevel world, RoadData road, BlockPos position,
-            BlockState block, SpanState state, int columnTerrainY) {
-        if (RoadConstructionSafety.isProtectedTunnelVolume(world, position, road, block, columnTerrainY)) {
-            return !isOwnedTunnelLantern(block, position, state.plannedLanterns);
-        }
-        return false;
-    }
-
-    private static boolean isOwnTunnelLantern(WorldGenLevel world, BlockPos position, RoadData road, SpanState state) {
-        return position != null && isOwnedTunnelLantern(
-                        world.getBlockState(position), position, state.plannedLanterns)
-                && !RoadConstructionSafety.isProtectedPreparedLocation(world, position, road);
-    }
-
-    private static boolean isOwnLegacyPortalWall(WorldGenLevel world, BlockPos position,
-                                                  RoadData road, PlannedSection section) {
-        if (world == null || position == null || section == null
-                || !world.getBlockState(position).is(Blocks.STONE_BRICKS)
-                || RoadConstructionSafety.isProtectedPreparedLocation(world, position, road)) return false;
-        for (BlockPos wall : section.walls()) {
-            if (wall == null || wall.getX() != position.getX() || wall.getZ() != position.getZ()) continue;
-            int dy = position.getY() - wall.getY();
-            if (dy >= 0 && dy <= 3) return true;
-        }
-        return false;
-    }
-
-    private static void clearLegacyPortalWalls(WorldGenLevel world, TunnelPlan plan) {
-        for (BlockPos wall : plan.walls()) {
-            for (int dy = 0; dy <= 3; dy++) {
-                BlockPos position = wall.above(dy);
-                BlockState state = world.getBlockState(position);
-                if (!state.is(Blocks.STONE_BRICKS)
-                        || RoadConstructionSafety.isProtectedPreparedLocation(world, position, plan.road())) continue;
-                // 这里只认「石砖」就删 —— 长城的墙带正是 stone_bricks，所以必须否决长城列，
-                // 否则任何贴着墙的隧道洞口都会在墙上开一条竖缝。
-                if (net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
-                        net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.CUT,
-                        position.getX(), position.getY(), position.getZ())) continue;
-                world.setBlock(position, Blocks.AIR.defaultBlockState(), 3);
-            }
-        }
-    }
-
-    static boolean isOwnedTunnelLantern(BlockState block, BlockPos position, Set<Long> plannedLanterns) {
-        return block != null && position != null && plannedLanterns != null
-                && block.is(Blocks.LANTERN) && plannedLanterns.contains(position.asLong());
-    }
-
-    private static int terrainHeightAt(WorldGenLevel world, BlockPos pos) {
+    static int terrainHeightAt(WorldGenLevel world, BlockPos pos) {
         return pos == null || world == null
                 ? Integer.MIN_VALUE
                 : RoadConstructionSafety.terrainHeight(world, pos.getX(), pos.getZ());
@@ -1081,7 +834,7 @@ public final class RoadTunnelBuilder {
      * 属于真硬保护,改为逐站缺口 —— 旧行为把它计入整段降级,是穿山隧道
      * "洞→未挖墙→洞"残墙的第二来源。
      */
-    private static boolean isHardProtectionFailure(String reason) {
+    static boolean isHardProtectionFailure(String reason) {
         return "protected-block".equals(reason)
                 || "protected-roadbed".equals(reason)
                 // 0.9.027：AboveColumnClearer 会把它写成 `protected-headroom:<blockId>`，
@@ -1090,11 +843,11 @@ public final class RoadTunnelBuilder {
     }
 
     /** {@code protected-headroom[:blockId]} —— 只否掉头顶净空，不否掉整站（见 preflight 里的 N-10 乙）。 */
-    private static boolean isHeadroomOnly(String reason) {
+    static boolean isHeadroomOnly(String reason) {
         return reason != null && reason.startsWith("protected-headroom");
     }
 
-    private static TunnelPlan protectedGapPlan(RoadData road, List<BlockPos> centers, Span span,
+    static TunnelPlan protectedGapPlan(RoadData road, List<BlockPos> centers, Span span,
             int segmentIndex, String reason, BlockPos position) {
         long count = PROTECTED_GAP_SECTIONS.incrementAndGet();
         if (count <= 32 || count % 128 == 0) {
@@ -1110,7 +863,7 @@ public final class RoadTunnelBuilder {
         return TunnelPlan.protectedGapPlan();
     }
 
-    private static TunnelPlan reject(WorldGenLevel world, RoadData road, List<BlockPos> centers, Span span,
+    static TunnelPlan reject(WorldGenLevel world, RoadData road, List<BlockPos> centers, Span span,
             int segmentIndex, String reason, BlockPos position) {
         long count = BLOCKED_SECTIONS.incrementAndGet();
         if (span != null && road != null && world != null) {
@@ -1132,7 +885,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** Stable identity of one tunnel span of one road for the rejection ledger. */
-    private static long spanKey(RoadData road, Span span) {
+    static long spanKey(RoadData road, Span span) {
         long fingerprint = road == null ? 0L : net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage.computeFingerprint(road);
         int start = span == null ? -1 : span.start();
         int end = span == null ? -1 : span.end();
@@ -1140,7 +893,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** 0.8.365 (S1): true when this span was already rejected for this level. */
-    private static boolean isSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
+    static boolean isSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
         if (level == null || road == null || span == null) return false;
         Set<Long> rejected;
         synchronized (REJECTED_TUNNEL_SPANS) { rejected = REJECTED_TUNNEL_SPANS.get(level); }
@@ -1148,7 +901,7 @@ public final class RoadTunnelBuilder {
     }
 
     /** 0.8.365 (S1): records the whole-span rejection for this level only. */
-    private static void markSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
+    static void markSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
         if (level == null || road == null || span == null) return;
         Set<Long> rejected;
         synchronized (REJECTED_TUNNEL_SPANS) {
@@ -1157,36 +910,8 @@ public final class RoadTunnelBuilder {
         rejected.add(spanKey(road, span));
     }
 
-    private static boolean containsWater(WorldGenLevel world, List<BlockPos> positions) {
-        if (world == null || positions == null) return false;
-        for (BlockPos position : positions) {
-            if (position != null && world.getBlockState(position).getFluidState().is(FluidTags.WATER)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /** Longitudinal length of a plan's interior, for normalising the glass gradient. */
-    private static double scenicSpanLength(TunnelPlan plan) {
-        if (plan == null || plan.interior().size() < 2) return 0.0D;
-        List<BlockPos> interior = plan.interior();
-        double length = 0.0D;
-        for (int i = 0; i + 1 < interior.size(); i++) {
-            BlockPos a = interior.get(i);
-            BlockPos b = interior.get(i + 1);
-            length += Math.hypot(b.getX() - a.getX(), b.getZ() - a.getZ());
-        }
-        return length;
-    }
-
     /** How far along the span this column sits, as 0..1 along the centre line. */
-    private static double scenicProgress(BlockPos column, BlockPos start, double spanLength) {
-        if (column == null || start == null || spanLength <= 0.0D) return 0.0D;
-        double along = Math.hypot(column.getX() - start.getX(), column.getZ() - start.getZ());
-        return along / spanLength;
-    }
-
     /**
      * Glass colour for one point along a glazed tunnel, as a round-trip gradient.
      *
@@ -1195,49 +920,7 @@ public final class RoadTunnelBuilder {
      *
      * @param progress 0 at the span start, 1 at its end; clamped
      */
-    private static BlockState scenicGlassState(double progress) {
-        return ScenicGlassShell.glass(progress);
-    }
-
-    private static void placeScenicDome(WorldGenLevel world, TunnelPlan plan,
-                                        BlockPos spanStart, double spanLength) {
-        if (world == null || plan == null) return;
-        for (BlockPos wall : plan.walls()) {
-            BlockPos nearest = nearestInterior(wall, plan.interior());
-            if (nearest == null) continue;
-            int dx = Integer.compare(wall.getX() - nearest.getX(), 0);
-            int dz = Integer.compare(wall.getZ() - nearest.getZ(), 0);
-            if (dx == 0 && dz == 0) {
-                dx = 1;
-            }
-            // Colour follows the same longitudinal gradient as the roof, sampled at this
-            // wall's own position so the vault fades along with the tube.
-            BlockState glass = scenicGlassState(scenicProgress(wall, spanStart, spanLength));
-            // A semicircular arch in the cross-section plane, shared with the submerged
-            // deck builder so a glazed tunnel and a glazed crossing match.
-            //
-            // `outward` is the lateral distance from the wall, so the rise comes from the
-            // circle `sqrt(r^2 - outward^2)` above the springing line. At outward 0 this
-            // gives the crown (`DOME_SPRING + DOME_RADIUS`, matching the old flat peak) and
-            // at outward `DOME_RADIUS` the springing line itself. Filling from the road level
-            // up to that height keeps the full-height glazed side walls and only reshapes the
-            // arch.
-            for (int outward = 0; outward <= DOME_RADIUS; outward++) {
-                BlockPos column = wall.offset(dx * outward, 0, dz * outward);
-                int top = DOME_SPRING + ScenicGlassShell.archRise(outward);
-                for (int dy = 0; dy <= top; dy++) {
-                    BlockPos glassPos = column.above(dy);
-                    if (isWallOwned(glassPos)
-                            || RoadConstructionSafety.isProtectedExactConstructionBlock(world, glassPos, plan.road())) {
-                        continue;
-                    }
-                    world.setBlock(glassPos, glass, 3);
-                }
-            }
-        }
-    }
-
-    private static BlockPos nearestInterior(BlockPos target, List<BlockPos> interior) {
+    static BlockPos nearestInterior(BlockPos target, List<BlockPos> interior) {
         if (target == null || interior == null || interior.isEmpty()) return null;
         BlockPos nearest = null;
         long distance = Long.MAX_VALUE;
@@ -1255,177 +938,6 @@ public final class RoadTunnelBuilder {
     }
 
     /** Runtime backfill may inspect loaded chunks, but must never request a new one. */
-    private static boolean columnAvailableWithoutLoading(WorldGenLevel world, BlockPos position) {
-        if (!(world instanceof ServerLevel level) || position == null) return true;
-        return level.getChunkSource().getChunkNow(position.getX() >> 4, position.getZ() >> 4) != null;
-    }
-
-    public static PlannedSection plannedSection(RoadSegmentPlacement segment, int index,
-                                         List<BlockPos> centers, int[] profile, int spanStart) {
-        if (segment == null || segment.positions() == null || segment.positions().isEmpty()) return null;
-        int[] heights = RoadHeightInterpolator.batchInterpolate(segment.positions(), index, centers, profile);
-        if (heights.length != segment.positions().size()) return null;
-        List<BlockPos> road = new ArrayList<>();
-        for (int i = 0; i < heights.length; i++) road.add(new BlockPos(segment.positions().get(i).getX(), heights[i], segment.positions().get(i).getZ()));
-        BlockPos before = centers.get(Math.max(0, index - 1));
-        BlockPos after = centers.get(Math.min(centers.size() - 1, index + 1));
-        int dx = after.getX() - before.getX();
-        int dz = after.getZ() - before.getZ();
-        int nx = -Integer.signum(dz);
-        int nz = Integer.signum(dx);
-        if (nx == 0 && nz == 0) return null;
-        // The lateral offsets below step by whole cells, so the projection normal must move exactly one
-        // projection unit per cell. On a diagonal route the true normal is (-1,1)/sqrt2, and stepping a
-        // single cell along it moves *two* projection units: the wall column landed at p=+-5 while the
-        // roadway spans p in [-1,+1], leaving an unexcavated ridge at p=+-2/+-4 with the stone lining
-        // buried inside the rock - a bore that looks three wide instead of five and changes width at every
-        // turn. Stepping along both axes on a diagonal keeps every step at one projection unit.
-        boolean diagonal = dx != 0 && dz != 0;
-        int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
-        for (BlockPos pos : road) {
-            int p = pos.getX() * nx + pos.getZ() * nz;
-            min = Math.min(min, p); max = Math.max(max, p);
-        }
-        Map<Long, BlockPos> interior = unique(road);
-        Map<Long, BlockPos> walls = new LinkedHashMap<>();
-        for (BlockPos pos : road) {
-            int p = pos.getX() * nx + pos.getZ() * nz;
-            if (p == min) lateral(interior, walls, pos, -1, nx, nz, diagonal);
-            if (p == max) lateral(interior, walls, pos, 1, nx, nz, diagonal);
-        }
-        Map<Long, BlockPos> shell = unique(interior.values());
-        shell.putAll(walls);
-        return new PlannedSection(List.copyOf(road), List.copyOf(interior.values()), List.copyOf(walls.values()),
-                List.copyOf(shell.values()), road.get(road.size() / 2));
-    }
-
-    /**
-     * Adds the clearance and wall cells one lateral step out from a roadway column.
-     *
-     * <p>Axis-aligned routes step once along the normal. Diagonal routes step along both axes for the same
-     * lateral step, because a diagonal normal cannot be expressed as a single cell and stepping one cell
-     * along it would move two projection units (see the comment in {@link #plannedSection}).
-     */
-    private static void lateral(Map<Long, BlockPos> interior, Map<Long, BlockPos> walls,
-                                BlockPos pos, int sign, int nx, int nz, boolean diagonal) {
-        if (diagonal) {
-            add(interior, pos.offset(sign * SIDE_CLEARANCE * nx, 0, 0));
-            add(interior, pos.offset(0, 0, sign * SIDE_CLEARANCE * nz));
-            add(walls, pos.offset(sign * WALL_OFFSET * nx, 0, 0));
-            add(walls, pos.offset(0, 0, sign * WALL_OFFSET * nz));
-            return;
-        }
-        add(interior, pos.offset(sign * SIDE_CLEARANCE * nx, 0, sign * SIDE_CLEARANCE * nz));
-        add(walls, pos.offset(sign * WALL_OFFSET * nx, 0, sign * WALL_OFFSET * nz));
-    }
-
-    /**
-     * 0.9.065：这一站所在的 TUNNEL span 站区间（闭区间 {@code [first, last]}）；
-     * 不是隧道站返回 {@code null}。给 [TUNNEL-CLEAR] 台账按段记账用 —— 只读查询，不改任何判定。
-     */
-    public static int[] tunnelScope(RoadData road, List<BlockPos> centers, int segmentIndex) {
-        if (road == null || centers == null || centers.isEmpty()) return null;
-        Span span = findSpan(road.spans(), centers, segmentIndex);
-        if (span == null) return null;
-        return new int[] { Math.min(span.start(), span.end()), Math.max(span.start(), span.end()) };
-    }
-
-    private static Span findSpan(List<RoadSpan> spans, List<BlockPos> centers, int index) {
-        if (spans == null) return null;
-        for (RoadSpan candidate : spans) {
-            if (candidate == null || candidate.type() != SpanType.TUNNEL) continue;
-            int start = indexOf(centers, candidate.start());
-            int end = indexOf(centers, candidate.end());
-            if (start < 0 || end < 0) continue;
-            if (start > end) { int swap = start; start = end; end = swap; }
-            if (index >= start && index <= end) return new Span(start, end);
-        }
-        return null;
-    }
-
-    private static boolean isInSpan(List<RoadSpan> spans, List<BlockPos> centers, int index, SpanType type) {
-        if (spans == null || type == null) return false;
-        for (RoadSpan candidate : spans) {
-            if (candidate == null || candidate.type() != type) continue;
-            int start = indexOf(centers, candidate.start());
-            int end = indexOf(centers, candidate.end());
-            if (start < 0 || end < 0) continue;
-            if (index >= Math.min(start, end) && index <= Math.max(start, end)) return true;
-        }
-        return false;
-    }
-
-    /**
-     * 站索引反查：先精确 XZ，失配时退化为「最近的站」（0.9.080）。
-     *
-     * <p>为什么必须有兜底：`RoadSpan` 只存 BlockPos 不存站索引，而站序列会被
-     * `ExistingRoadJunctionService.mergeRoads` / `Road.rebuild` 重建过，
-     * 重建后同一逻辑位置的坐标可能漂 1~2 格。原来精确匹配 == 找不到 ==
-     * `findSpan` 返回 null == <b>整段隧道一格都不挖</b>，而且全程静默。
-     * 这与 0.9.036 修「桥共享丢整座桥」是同一个病根，这里用同一套兜底思路：
-     * 允许 ≤{@value #STATION_XZ_FALLBACK_TOLERANCE} 格的漂移，超过就放弃（宁可丢不可错配）。</p>
-     */
-    static int indexOf(List<BlockPos> centers, BlockPos target) {
-        if (target == null || centers == null || centers.isEmpty()) return -1;
-        long targetKey = xzKey(target);
-        for (int i = 0; i < centers.size(); i++) {
-            if (xzKey(centers.get(i)) == targetKey) return i;
-        }
-        int best = -1;
-        int bestDist = Integer.MAX_VALUE;
-        for (int i = 0; i < centers.size(); i++) {
-            BlockPos c = centers.get(i);
-            if (c == null) continue;
-            int d = Math.max(Math.abs(c.getX() - target.getX()), Math.abs(c.getZ() - target.getZ()));
-            if (d < bestDist) {
-                bestDist = d;
-                best = i;
-            }
-        }
-        if (best >= 0 && bestDist <= STATION_XZ_FALLBACK_TOLERANCE) {
-            if (STATION_FALLBACK_HITS.incrementAndGet() <= 8) {
-                LOGGER.info("RoadWeaver tunnel span endpoint matched by nearest station: target={} nearest={} dxz={}",
-                        target, centers.get(best), bestDist);
-            }
-            return best;
-        }
-        if (STATION_FALLBACK_MISSES.incrementAndGet() <= 8) {
-            LOGGER.warn("RoadWeaver tunnel span endpoint unmatchable: target={} nearestDxz={} centers={} "
-                    + "-> this tunnel span will be skipped entirely",
-                    target, best < 0 ? -1 : bestDist, centers.size());
-        }
-        return -1;
-    }
-
-    private static long xzKey(BlockPos pos) {
-        return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
-    }
-
-    private static Map<Long, BlockPos> unique(Iterable<BlockPos> positions) {
-        Map<Long, BlockPos> result = new LinkedHashMap<>();
-        for (BlockPos pos : positions) add(result, pos);
-        return result;
-    }
-
-    private static void add(Map<Long, BlockPos> positions, BlockPos pos) {
-        positions.putIfAbsent(pos.asLong(), pos);
-    }
-
-    private static SpanState spanState(net.minecraft.server.level.ServerLevel level, RoadData road,
-            Span span, List<BlockPos> centers) {
-        ConcurrentHashMap<SpanKey, SpanState> states;
-        synchronized (SPAN_STATES) {
-            states = SPAN_STATES.computeIfAbsent(level, ignored -> new ConcurrentHashMap<>());
-        }
-        long start = centers.get(span.start()).asLong();
-        long end = centers.get(span.end()).asLong();
-        long first = Math.min(start, end);
-        long second = Math.max(start, end);
-        long ownerFirst = road != null && road.hasOwnerPair() ? Math.min(road.ownerA2dKey(), road.ownerB2dKey()) : 0L;
-        long ownerSecond = road != null && road.hasOwnerPair() ? Math.max(road.ownerA2dKey(), road.ownerB2dKey()) : 0L;
-        return states.computeIfAbsent(new SpanKey(first, second, ownerFirst, ownerSecond), ignored -> new SpanState());
-    }
-
     public static void clearForLevel(net.minecraft.server.level.ServerLevel level) {
         if (level == null) return;
         synchronized (SPAN_STATES) { SPAN_STATES.remove(level); }
@@ -1441,11 +953,11 @@ public final class RoadTunnelBuilder {
     public record TunnelPlan(List<BlockPos> interior, List<BlockPos> walls, BlockPos lantern, boolean placeLantern,
             RoadData road, boolean portal, boolean junction, boolean scenic, boolean blocked,
             boolean protectedGap) {
-        private static final TunnelPlan NONE =
+        static final TunnelPlan NONE =
                 new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, false, false);
-        private static final TunnelPlan BLOCKED =
+        static final TunnelPlan BLOCKED =
                 new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, true, false);
-        private static final TunnelPlan PROTECTED_GAP =
+        static final TunnelPlan PROTECTED_GAP =
                 new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, true, true);
         public TunnelPlan { interior = List.copyOf(interior); walls = List.copyOf(walls); }
         public static TunnelPlan none() { return NONE; }
@@ -1465,14 +977,14 @@ public final class RoadTunnelBuilder {
         }
     }
 
-    private record SafetyCheck(boolean safe, String reason, BlockPos position) {
-        private static SafetyCheck success() { return new SafetyCheck(true, "ready", null); }
-        private static SafetyCheck failure(String reason, BlockPos position) {
+    record SafetyCheck(boolean safe, String reason, BlockPos position) {
+        static SafetyCheck success() { return new SafetyCheck(true, "ready", null); }
+        static SafetyCheck failure(String reason, BlockPos position) {
             return new SafetyCheck(false, reason, position);
         }
     }
 
-    private record Span(int start, int end) {
+    record Span(int start, int end) {
         int length(List<BlockPos> centers) {
             double total = 0;
             for (int i = start; i < end; i++) total += Math.hypot(centers.get(i + 1).getX() - centers.get(i).getX(), centers.get(i + 1).getZ() - centers.get(i).getZ());
@@ -1481,40 +993,5 @@ public final class RoadTunnelBuilder {
 
     }
 
-    private record SpanKey(long first, long second, long ownerFirst, long ownerSecond) { }
-
-    private enum Decision { UNKNOWN, APPROVED, REJECTED }
-
-    private static final class SpanState {
-        private final Object lock = new Object();
-        private Decision decision = Decision.UNKNOWN;
-        private final Set<Long> plannedLanterns = new HashSet<>();
-        private boolean lanternsPrepared;
-        /** 0.9.064：洞口段长判定 —— 每个 span 只算一次、只打一行（同一 span 的其它站复用）。 */
-        private boolean portalResolved;
-        private volatile PortalSplit portalSplit;
-
-        private void preparePortal(WorldGenLevel world, RoadData road, List<BlockPos> centers,
-                                   int[] profile, Span span) {
-            if (portalResolved) return;
-            portalResolved = true;
-            portalSplit = announcePortalSplit(resolvePortalSplit(world, road, centers, profile, span));
-        }
-
-        private void prepareLanterns(RoadData road, List<BlockPos> centers, int[] profile, Span span) {
-            if (lanternsPrepared) return;
-            lanternsPrepared = true;
-            if (road == null || centers == null || profile == null || span == null
-                    || road.roadSegmentList().size() != centers.size()) return;
-            for (int index = span.start(); index <= span.end(); index++) {
-                if ((index - span.start()) % LANTERN_INTERVAL != 0
-                        || isInSpan(road.spans(), centers, index, SpanType.TUNNEL_JUNCTION)) continue;
-                PlannedSection planned = plannedSection(
-                        road.roadSegmentList().get(index), index, centers, profile, span.start());
-                if (planned != null && planned.lantern() != null) {
-                    plannedLanterns.add(planned.lantern().above(clearHeight()).asLong());
-                }
-            }
-        }
-    }
+    record SpanKey(long first, long second, long ownerFirst, long ownerSecond) { }
 }

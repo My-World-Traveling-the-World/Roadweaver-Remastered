@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -268,7 +269,7 @@ public final class RoadConstructionVolumePlanner {
             if (masks.tunnel[index] || masks.tunnelJunction[index]) {
                 int spanStart = masks.tunnelStart[index] >= 0
                         ? masks.tunnelStart[index] : Math.max(0, index - 1);
-                RoadTunnelBuilder.PlannedSection section = RoadTunnelBuilder.plannedSection(
+                RoadTunnelBuilder.PlannedSection section = PlannedSectionBuilder.plannedSection(
                         segment, index, centers, profile, spanStart);
                 if (section != null) {
                     section.road().forEach(add);
@@ -434,7 +435,7 @@ public final class RoadConstructionVolumePlanner {
                                        RoadSegmentPlacement segment,
                                        int index) {
         int spanStart = masks.tunnelStart[index] >= 0 ? masks.tunnelStart[index] : Math.max(0, index - 1);
-        RoadTunnelBuilder.PlannedSection section = RoadTunnelBuilder.plannedSection(
+        RoadTunnelBuilder.PlannedSection section = PlannedSectionBuilder.plannedSection(
                 segment, index, centers, profile, spanStart);
         if (section == null) return true;
         boolean junction = masks.tunnelJunction[index];

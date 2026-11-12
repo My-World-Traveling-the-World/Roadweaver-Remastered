@@ -32,16 +32,16 @@ class TunnelStationIndexFallbackTest {
     @Test
     void exactCoordinateStillMatches() {
         List<BlockPos> centers = line(10, 8);
-        assertEquals(3, RoadTunnelBuilder.indexOf(centers, new BlockPos(24, 64, 0)));
+        assertEquals(3, PlannedSectionBuilder.indexOf(centers, new BlockPos(24, 64, 0)));
     }
 
     @Test
     void driftWithinToleranceMatchesNearestStation() {
         List<BlockPos> centers = line(10, 8);
         // 目标比第 3 个站偏 2 格：重建后坐标漂移就是这个量级
-        assertEquals(3, RoadTunnelBuilder.indexOf(centers, new BlockPos(26, 64, 0)));
+        assertEquals(3, PlannedSectionBuilder.indexOf(centers, new BlockPos(26, 64, 0)));
         // 偏 4 格仍在容差内
-        assertEquals(3, RoadTunnelBuilder.indexOf(centers, new BlockPos(28, 64, 0)));
+        assertEquals(3, PlannedSectionBuilder.indexOf(centers, new BlockPos(28, 64, 0)));
     }
 
     @Test
@@ -49,20 +49,20 @@ class TunnelStationIndexFallbackTest {
         List<BlockPos> centers = line(10, 8);
         // 偏 8 格：正好是下一个站的位置，会精确命中第 4 个；用 6 格制造「都够不到」的情形
         List<BlockPos> sparse = List.of(new BlockPos(0, 64, 0), new BlockPos(40, 64, 0));
-        assertEquals(-1, RoadTunnelBuilder.indexOf(sparse, new BlockPos(20, 64, 0)),
+        assertEquals(-1, PlannedSectionBuilder.indexOf(sparse, new BlockPos(20, 64, 0)),
                 "偏离两端都超过 4 格时必须放弃，否则会把隧道端点错配到别的段上");
     }
 
     @Test
     void emptyOrNullInputIsSafe() {
-        assertEquals(-1, RoadTunnelBuilder.indexOf(List.of(), new BlockPos(0, 64, 0)));
-        assertEquals(-1, RoadTunnelBuilder.indexOf(line(5, 8), null));
+        assertEquals(-1, PlannedSectionBuilder.indexOf(List.of(), new BlockPos(0, 64, 0)));
+        assertEquals(-1, PlannedSectionBuilder.indexOf(line(5, 8), null));
     }
 
     @Test
     void yDifferenceDoesNotAffectMatching() {
         List<BlockPos> centers = line(10, 8);
         // 重建可能只漂 Y（0.9.036 桥那次就是 Y 漂一格），XZ 匹配不应受影响
-        assertEquals(3, RoadTunnelBuilder.indexOf(centers, new BlockPos(24, 99, 0)));
+        assertEquals(3, PlannedSectionBuilder.indexOf(centers, new BlockPos(24, 99, 0)));
     }
 }
