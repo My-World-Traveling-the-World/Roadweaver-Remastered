@@ -82,10 +82,23 @@
 
 **回滚**：删掉开关即回到 `LEGACY`。或者保持开关但把默认值设回 `LEGACY`。
 
-**⚠ 已知风险**：`ProfileDpSource` 目前**不含**结构边界锁定（村庄/出生点端点必须落在实测地表）、
-未知端点共享高度、隧道 in-line 约束。这些都是 `computeTargetY` 里已有的硬契约。
-所以第 1 级切 `DP` 后，**端点高度会与旧行为不同** —— 这可能是"看起来更差"的主要原因。
-**若第 1 级观察到这里，先补这些契约再谈第 2 级。**
+**✅ 已解决（2026-11-13）**：`ProfileDpSource` 现在支持三条硬契约 ——
+`ProfileDpSource.Constraints(pin, mustBeCovered, minCover)`：
+
+| 契约 | 实现 |
+|---|---|
+| 结构边界锁定（村庄 / 出生点 / 命名结构端点）| `pin[i] = 实测地表高度` |
+| 未知端点共享高度 | `pin[i] = UnknownEndpointHeightRegistry 给出的高度` |
+| 隧道覆土 | `mustBeCovered[i] = true` + `minCover`，**宁可挖得比 maxCut 更深也要保住覆土** |
+
+**有一处刻意的语义改进**：旧版 `applySingleBoundaryGrade` 会硬铺一条**无视 fill 窗口**的引道，
+这正是「锁定点周围填方超限」的来源。新实现把选择权交给调用方 ——
+要贴住高处的锁定点，就显式放宽 `maxFill`；求解器**不会偷偷超限**。
+已用测试钉住这条（`钉住高度超出窗口时_要么放宽窗口要么不可行`）。
+
+**第 1 级仍需在调用方做接线**：`computeTargetY` 要把
+`connection` / `UnknownEndpointHeightRegistry` / `spans` 翻译成 `Constraints`。
+这部分是第 1 级「要写的 100~150 行」里的主要工作量。
 
 ---
 

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -184,5 +185,124 @@ final class ProfileDpSourceTest {
         ProfileAbObserver.observe(legacy, terrain, crossing, 8, 4, 1, "test");
         assertArrayEquals(snapshot, legacy, "case=input-untouched");
         assertTrue(ProfileAbObserver.calls() > 0, "case=observed");
+    }
+
+    // ── 三条硬契约（S7 第 1 级的前置）─────────────────────────
+
+    @Test
+    void 钉住的端点必须原样落入剖面并自动生成引道() {
+        // 40 站平地（地表 70），第 0 站钉在 73（在 fill 窗口 74 以内）。
+        // 这正是「村庄入口必须落在实测地表」的形态。
+        int n = 40;
+        int[] terrain = new int[n];
+        java.util.Arrays.fill(terrain, 70);
+        int[] pin = new int[n];
+        java.util.Arrays.fill(pin, -1);
+        pin[0] = 73;
+
+        Optional<int[]> p = ProfileDpSource.solve(terrain, null, 8, 4, 1,
+                new ProfileDpSource.Constraints(pin, null, 0));
+        assertTrue(p.isPresent(), "case=feasible");
+        int[] prof = p.get();
+        assertEquals(73, prof[0], "case=pinned-exact");
+        for (int i = 1; i < n; i++) {
+            assertTrue(Math.abs(prof[i] - prof[i - 1]) <= 1,
+                    "case=legal-ramp 第 " + i + " 站跳了 " + Math.abs(prof[i] - prof[i - 1]));
+        }
+        // 引道最终必须落回地面
+        assertEquals(70, prof[n - 1], "case=ramp-meets-terrain");
+    }
+
+    /**
+     * 契约边界：钉住高度必须**在坡度可达范围内**。
+     *
+     * <p>钉在 76 而窗口顶只有 74（地表 70 + maxFill 4）时，引道第 2 站需要 75，
+     * 但 75 超出窗口 ⇒ 整体不可行。这是**刻意**的语义：</p>
+     *
+     * <p>旧版 {@code applySingleBoundaryGrade} 会硬铺一条无视 fill 窗口的坡；
+     * 那个行为正是「锁定点周围出现填方超限」的来源。新实现把选择权交给调用方：
+     * 要贴住高处的锁定点，就显式把 {@code maxFill} 放宽（下一行就是这么做的），
+     * 而不是让求解器偷偷超限。</p>
+     */
+    @Test
+    void 钉住高度超出窗口时_要么放宽窗口要么不可行() {
+        int n = 10;
+        int[] terrain = new int[n];
+        java.util.Arrays.fill(terrain, 70);
+        int[] pin = new int[n];
+        java.util.Arrays.fill(pin, -1);
+        pin[0] = 76;
+
+        // 窗口顶 74（=70+4）⇒ 够不着 76 的引道 ⇒ 不可行
+        assertFalse(ProfileDpSource.solve(terrain, null, 8, 4, 1,
+                        new ProfileDpSource.Constraints(pin, null, 0)).isPresent(),
+                "case=narrow-window-infeasible");
+
+        // 把 fill 放宽到 10（窗口顶 80）⇒ 同一钉住值立刻可行
+        Optional<int[]> widened = ProfileDpSource.solve(terrain, null, 8, 10, 1,
+                new ProfileDpSource.Constraints(pin, null, 0));
+        assertTrue(widened.isPresent(), "case=widened-feasible");
+        assertEquals(76, widened.get()[0], "case=pinned-exact-after-widen");
+    }
+
+    @Test
+    void 钉住但坡度不足以过渡时必须报不可行() {
+        int n = 5;
+        int[] terrain = new int[n];
+        java.util.Arrays.fill(terrain, 70);
+        int[] pin = new int[n];
+        java.util.Arrays.fill(pin, -1);
+        pin[4] = 90;       // 20 格落差，只剩 4 站、maxStep=1 ⇒ 物理不可能
+        Optional<int[]> p = ProfileDpSource.solve(terrain, null, 8, 4, 1,
+                new ProfileDpSource.Constraints(pin, null, 0));
+        assertFalse(p.isPresent(), "case=infeasible-must-be-empty");
+    }
+
+    @Test
+    void 隧道段必须有覆土_宁可挖得更深() {
+        // 20 站，中间 5 站要求覆土 ≥ 6 格。地表 70，maxCut 只有 4 ——
+        // 覆土是硬要求，所以允许它挖到 70-6=64（比 maxCut 更深）。
+        int n = 20;
+        int[] terrain = new int[n];
+        java.util.Arrays.fill(terrain, 70);
+        boolean[] covered = new boolean[n];
+        for (int i = 8; i <= 12; i++) covered[i] = true;
+
+        Optional<int[]> p = ProfileDpSource.solve(terrain, null, 4, 4, 2,
+                new ProfileDpSource.Constraints(null, covered, 6));
+        assertTrue(p.isPresent(), "case=feasible");
+        int[] prof = p.get();
+        for (int i = 8; i <= 12; i++) {
+            assertTrue(prof[i] <= terrain[i] - 6,
+                    "case=cover 第 " + i + " 站高度 " + prof[i] + " 不满足覆土 6");
+        }
+        // 覆土让步的是挖方上限：允许比 maxCut=4 更深
+        assertTrue(prof[10] <= 70 - 6, "case=deeper-than-maxcut");
+    }
+
+    @Test
+    void 钉住与覆土互相矛盾时必须立刻抛() {
+        int n = 3;
+        int[] terrain = new int[n];
+        java.util.Arrays.fill(terrain, 70);
+        int[] pin = new int[n];
+        java.util.Arrays.fill(pin, -1);
+        pin[1] = 70;                                   // 钉在地表
+        boolean[] covered = new boolean[n];
+        covered[1] = true;                             // 又要求覆土 ≥6
+        assertThrows(IllegalArgumentException.class, () ->
+                        ProfileDpSource.solve(terrain, null, 8, 4, 2,
+                                new ProfileDpSource.Constraints(pin, covered, 6)),
+                "case=contradicting-contracts");
+    }
+
+    @Test
+    void 无约束等于旧行为() {
+        int[] terrain = new int[]{70, 70, 71, 73, 76, 78, 78, 77};
+        Optional<int[]> a = ProfileDpSource.solve(terrain, null, 6, 3, 1);
+        Optional<int[]> b = ProfileDpSource.solve(terrain, null, 6, 3, 1,
+                ProfileDpSource.Constraints.none());
+        assertTrue(a.isPresent() && b.isPresent(), "case=both-feasible");
+        assertArrayEquals(a.get(), b.get(), "case=none-is-noop");
     }
 }

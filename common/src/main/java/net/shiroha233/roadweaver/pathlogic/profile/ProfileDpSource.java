@@ -26,6 +26,55 @@ public final class ProfileDpSource {
     private ProfileDpSource() {
     }
 
+    /**
+     * 硬契约：DP 必须无条件遵守的三件事。
+     *
+     * <h2>为什么这三条必须是「约束」而不是「代价」</h2>
+     * <p>它们都来自旧版 {@code computeTargetY} 里已经存在的硬契约，
+     * 玩家能直接看到违反的后果：</p>
+     *
+     * <table>
+     *   <tr><th>契约</th><th>违反的后果</th></tr>
+     *   <tr><td>{@code pin} 结构边界锁定（村庄 / 出生点 / 命名结构端点）</td>
+     *       <td>路的入口悬在屋顶上方或埋进地里 —— 玩家一眼就看出来</td></tr>
+     *   <tr><td>{@code pin} 未知端点共享高度</td>
+     *       <td>从两个方向来的路在同一结构口落成两个不同高度，接缝处出现台阶</td></tr>
+     *   <tr><td>{@code mustBeCovered} 隧道覆土</td>
+     *       <td>隧道顶离地表太近，挖穿成露天沟</td></tr>
+     * </table>
+     *
+     * <p>把它们做成代价项是错的 —— 代价可以被"更划算的方案"打败，
+     * 而这三条没有"更划算"的余地。</p>
+     *
+     * @param pin            每站钉死的高度；{@code null} 或负值表示不钉
+     * @param mustBeCovered  每站是否必须保持覆土（隧道段）；{@code null} 表示没有
+     * @param minCover       覆土最小厚度（格）
+     */
+    public record Constraints(int[] pin, boolean[] mustBeCovered, int minCover) {
+
+        /** 无约束。 */
+        public static Constraints none() {
+            return new Constraints(null, null, 0);
+        }
+
+        public Constraints {
+            if (minCover < 0) throw new IllegalArgumentException("minCover 不能为负");
+            if (pin != null && mustBeCovered != null && pin.length != mustBeCovered.length) {
+                throw new IllegalArgumentException("pin 与 mustBeCovered 长度必须一致");
+            }
+        }
+
+        /** 某站是否被钉住。 */
+        public boolean pinned(int i) {
+            return pin != null && i < pin.length && pin[i] >= 0;
+        }
+
+        /** 某站是否必须有覆土。 */
+        public boolean covered(int i) {
+            return mustBeCovered != null && i < mustBeCovered.length && mustBeCovered[i];
+        }
+    }
+
     /** 一次翻译的产物：问题 + 用于回溯的边界信息。 */
     public record Prepared(ProfileDpSolver.Problem problem, int[] terrain, boolean[] crossing) {
     }
@@ -41,8 +90,16 @@ public final class ProfileDpSource {
      */
     public static Prepared prepare(int[] terrainY, boolean[] crossing,
                                    int maxCut, int maxFill, int maxStep) {
+        return prepare(terrainY, crossing, maxCut, maxFill, maxStep, Constraints.none());
+    }
+
+    /** 带硬契约的翻译。 */
+    public static Prepared prepare(int[] terrainY, boolean[] crossing,
+                                   int maxCut, int maxFill, int maxStep,
+                                   Constraints constraints) {
         int n = terrainY.length;
         if (n == 0) throw new IllegalArgumentException("至少一站");
+        if (constraints == null) constraints = Constraints.none();
         int[] lo = new int[n];
         int[] hi = new int[n];
         int[] pin = new int[n];
@@ -50,6 +107,28 @@ public final class ProfileDpSource {
             pin[i] = -1;
             lo[i] = terrainY[i] - maxCut;
             hi[i] = terrainY[i] + maxFill;
+        }
+        // ── 契约 ③：隧道覆土 ──
+        // 覆土是硬要求，所以当它与「最大挖方」冲突时，让步的是挖方：
+        // 宁可挖得比 maxCut 更深，也不能让隧道顶离地表太近（那会挖穿成露天沟）。
+        for (int i = 0; i < n; i++) {
+            if (!constraints.covered(i)) continue;
+            int cap = terrainY[i] - constraints.minCover();
+            if (cap < hi[i]) hi[i] = cap;
+            if (lo[i] > hi[i]) lo[i] = hi[i];
+        }
+        // ── 契约 ①②：钉住（结构边界 / 未知端点共享高度）──
+        for (int i = 0; i < n; i++) {
+            if (!constraints.pinned(i)) continue;
+            int v = constraints.pin()[i];
+            if (constraints.covered(i) && v > terrainY[i] - constraints.minCover()) {
+                throw new IllegalArgumentException("第 " + i + " 站既被钉在 " + v
+                        + " 又要求覆土 ≥ " + constraints.minCover() + "（地表 " + terrainY[i]
+                        + "）—— 这两个契约互相矛盾，调用方接线错了");
+            }
+            pin[i] = v;
+            lo[i] = v;
+            hi[i] = v;
         }
         // 桥段钉成两端地形直线内插
         int i = 0;
@@ -83,7 +162,26 @@ public final class ProfileDpSource {
      */
     public static Optional<int[]> solve(int[] terrainY, boolean[] crossing,
                                         int maxCut, int maxFill, int maxStep) {
-        Prepared p = prepare(terrainY, crossing, maxCut, maxFill, maxStep);
+        return solve(terrainY, crossing, maxCut, maxFill, maxStep, Constraints.none());
+    }
+
+    /**
+     * 带硬契约的求解。
+     *
+     * <h2>钉住的站会如何影响整条剖面</h2>
+     * <p>钉住 + {@code maxStep} 合起来<b>自动生成合法引道</b>：
+     * DP 必须从那个高度出发、每站最多变 maxStep，于是它会在钉住站两侧
+     * 铺出一条满足坡度上限的过渡 —— 这正是旧版 {@code applySingleBoundaryGrade}
+     * 手工在做的事（从锁定点向内铺一格一格的坡），只是 DP 顺带就得到了。</p>
+     *
+     * <p><b>不可行的情形</b>：钉住的高度离地形太远、且站数不足以在坡度上限内过渡到时，
+     * 返回 {@link Optional#empty()}。调用方必须把这种情况当作真实失败处理
+     * （旧版是靠 {@code applySingleBoundaryGrade} 硬铺坡，可能铺出超过坡度上限的陡坡）。</p>
+     */
+    public static Optional<int[]> solve(int[] terrainY, boolean[] crossing,
+                                        int maxCut, int maxFill, int maxStep,
+                                        Constraints constraints) {
+        Prepared p = prepare(terrainY, crossing, maxCut, maxFill, maxStep, constraints);
         return ProfileDpSolver.solve(p.problem()).map(ProfileDpSolver.Solution::profile);
     }
 }
