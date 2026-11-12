@@ -1,3 +1,4 @@
+/* 文件职责：人工装饰系统。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.core.BlockPos;

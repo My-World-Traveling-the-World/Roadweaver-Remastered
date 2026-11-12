@@ -1,3 +1,4 @@
+/* 文件职责：基于最小生成树（Kruskal）的路网规划器。 */
 package net.shiroha233.roadweaver.planning.impl;
 
 import net.minecraft.core.BlockPos;

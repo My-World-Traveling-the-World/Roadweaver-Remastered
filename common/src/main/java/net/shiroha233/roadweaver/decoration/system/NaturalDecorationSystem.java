@@ -1,3 +1,4 @@
+/* 文件职责：自然装饰系统。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.core.BlockPos;

@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线 3D 渲染专用的 {@link RenderType}（★ 2026-09-26 任务 B）。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;

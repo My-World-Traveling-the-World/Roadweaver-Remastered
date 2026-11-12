@@ -1,3 +1,4 @@
+/* 文件职责：木材活板门映射器。 */
 package net.shiroha233.roadweaver.decoration.material;
 
 import net.minecraft.world.level.block.Blocks;

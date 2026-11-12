@@ -1,3 +1,4 @@
+/* 文件职责：文件型持久化的统一路径解析。 */
 package net.shiroha233.roadweaver.persistence.files;
 
 import java.nio.file.Path;

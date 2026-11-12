@@ -1,3 +1,4 @@
+/* 文件职责：**地图端点标记开关**（★ 2026-09-26 任务 A，用户要求）。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import net.shiroha233.roadweaver.config.ConfigService;

@@ -1,3 +1,4 @@
+/* 文件职责：CPU 粗高度批量采样器。 */
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 import net.minecraft.server.level.ServerLevel;

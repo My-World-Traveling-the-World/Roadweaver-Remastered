@@ -1,3 +1,4 @@
+/* 文件职责：路灯装饰。 */
 package net.shiroha233.roadweaver.decoration.types;
 
 import net.minecraft.world.level.block.Blocks;

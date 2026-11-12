@@ -1,3 +1,4 @@
+/* 文件职责：模组结构类型注册中心。 */
 package net.shiroha233.roadweaver.structures.registry;
 
 import net.minecraft.world.level.levelgen.structure.StructureType;

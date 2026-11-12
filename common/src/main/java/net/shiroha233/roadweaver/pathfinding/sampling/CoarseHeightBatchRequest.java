@@ -1,3 +1,4 @@
+/* 文件职责：粗高度批量采样请求。 */
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 /**

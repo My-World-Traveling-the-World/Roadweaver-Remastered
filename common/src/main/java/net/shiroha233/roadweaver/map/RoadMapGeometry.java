@@ -1,3 +1,4 @@
+/* 文件职责：地图与叠加层使用的只读几何视图。 */
 package net.shiroha233.roadweaver.map;
 
 import net.minecraft.core.BlockPos;

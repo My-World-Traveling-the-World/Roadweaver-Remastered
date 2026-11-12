@@ -1,3 +1,4 @@
+/* 文件职责：全局地形采样统计。 */
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 import java.util.concurrent.atomic.AtomicLong;

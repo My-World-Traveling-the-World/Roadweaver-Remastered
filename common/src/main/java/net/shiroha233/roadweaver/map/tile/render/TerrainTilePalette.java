@@ -1,3 +1,4 @@
+/* 文件职责：低精度瓦片调色板。 */
 package net.shiroha233.roadweaver.map.tile.render;
 
 import net.minecraft.world.level.biome.Biome;

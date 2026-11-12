@@ -1,3 +1,4 @@
+/* 文件职责：结构连接（起点 → 终点 + 状态）。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

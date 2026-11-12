@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的状态。 */
 package net.shiroha233.roadweaver.route;
 
 /**

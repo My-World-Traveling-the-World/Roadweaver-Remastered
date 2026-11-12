@@ -1,3 +1,4 @@
+/* 文件职责：平台桥：提交区块请求而不在服务端线程上等待。 */
 package net.shiroha233.roadweaver.runtime;
 
 import java.util.concurrent.CompletableFuture;

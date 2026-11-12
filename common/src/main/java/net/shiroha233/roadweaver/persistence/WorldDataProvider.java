@@ -1,3 +1,4 @@
+/* 文件职责：世界数据的提供方接口 —— 隔离存档实现与调用方。 */
 package net.shiroha233.roadweaver.persistence;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

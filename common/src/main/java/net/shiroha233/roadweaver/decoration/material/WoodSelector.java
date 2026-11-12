@@ -1,3 +1,4 @@
+/* 文件职责：木材选择器。 */
 package net.shiroha233.roadweaver.decoration.material;
 
 import net.minecraft.world.level.biome.Biome;

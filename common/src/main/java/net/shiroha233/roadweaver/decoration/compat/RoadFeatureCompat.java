@@ -1,3 +1,4 @@
+/* 文件职责：道路生成兼容层。 */
 package net.shiroha233.roadweaver.decoration.compat;
 
 import java.util.HashSet;

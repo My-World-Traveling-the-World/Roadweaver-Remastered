@@ -1,3 +1,4 @@
+/* 文件职责：用两张世界生成高度图（地表 / 海底）判定地表水列。 */
 package net.shiroha233.roadweaver.pathfinding.terrain;
 
 /**

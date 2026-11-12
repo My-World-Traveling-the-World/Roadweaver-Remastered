@@ -1,3 +1,4 @@
+/* 文件职责：道路完整数据（宽度、类型、材料、分段、跨度、目标高度）。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

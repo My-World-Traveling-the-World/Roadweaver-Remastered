@@ -1,3 +1,4 @@
+/* 文件职责：施工前**确认框**（★ UX-7，用户 2026-09-25 要求「弹确认框」）。 */
 package net.shiroha233.roadweaver.client.map.ui;
 
 import java.util.ArrayList;

@@ -1,3 +1,4 @@
+/* 文件职责：0.9.065：[TUNNEL-CLEAR] 每段（span）一行的清空台账。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

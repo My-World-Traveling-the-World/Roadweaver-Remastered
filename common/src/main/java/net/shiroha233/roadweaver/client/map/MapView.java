@@ -1,3 +1,4 @@
+/* 文件职责：地图视图管理。 */
 package net.shiroha233.roadweaver.client.map;
 
 import net.minecraft.client.Minecraft;

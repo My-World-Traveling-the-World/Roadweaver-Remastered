@@ -1,3 +1,4 @@
+/* 文件职责：初始小屋结构类型。 */
 package net.shiroha233.roadweaver.structures.types;
 
 import com.mojang.serialization.Codec;

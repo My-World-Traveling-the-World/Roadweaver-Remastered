@@ -1,3 +1,4 @@
+/* 文件职责：自动地形剖面的按地形覆盖配置。 */
 package net.shiroha233.roadweaver.config.sub;
 
 import net.shiroha233.roadweaver.config.SubConfig;

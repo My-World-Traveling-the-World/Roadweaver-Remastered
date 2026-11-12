@@ -1,3 +1,4 @@
+/* 文件职责：持久化「哪些路指纹已在哪些整区块施工完成」，避免重复铺装。 */
 package net.shiroha233.roadweaver.persistence;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

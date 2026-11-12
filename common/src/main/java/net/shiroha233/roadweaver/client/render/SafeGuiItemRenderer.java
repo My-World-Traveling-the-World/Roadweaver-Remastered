@@ -1,3 +1,4 @@
+/* 文件职责：GUI 物品渲染安全包装。 */
 package net.shiroha233.roadweaver.client.render;
 
 import java.util.Collections;

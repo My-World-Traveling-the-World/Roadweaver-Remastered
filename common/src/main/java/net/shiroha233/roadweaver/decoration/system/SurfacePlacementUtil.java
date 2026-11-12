@@ -1,3 +1,4 @@
+/* 文件职责：表面放置工具。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.core.BlockPos;

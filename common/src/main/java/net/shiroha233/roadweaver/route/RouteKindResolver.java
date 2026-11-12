@@ -1,3 +1,4 @@
+/* 文件职责：段类型的**唯一判定规则**（★ 审计 R3-P1-5 / R3-P2-1 的统一修复）。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;

@@ -1,3 +1,4 @@
+/* 文件职责：道路分段放置数据（中心点 + 方块位置列表）。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

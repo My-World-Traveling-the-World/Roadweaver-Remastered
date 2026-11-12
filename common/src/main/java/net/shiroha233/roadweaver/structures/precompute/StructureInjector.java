@@ -1,3 +1,4 @@
+/* 文件职责：结构注入器。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import net.minecraft.world.level.ChunkPos;

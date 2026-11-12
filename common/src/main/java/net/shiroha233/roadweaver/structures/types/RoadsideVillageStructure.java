@@ -1,3 +1,4 @@
+/* 文件职责：路边村庄结构类型。 */
 package net.shiroha233.roadweaver.structures.types;
 
 import com.mojang.serialization.Codec;

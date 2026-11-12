@@ -1,3 +1,4 @@
+/* 文件职责：每条路的启动诊断，用来在进入世界之前发现「静默等待」。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.shiroha233.roadweaver.core.model.StructureConnection;

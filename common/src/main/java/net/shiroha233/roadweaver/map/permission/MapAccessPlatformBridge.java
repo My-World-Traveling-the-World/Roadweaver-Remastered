@@ -1,3 +1,4 @@
+/* 文件职责：地图访问的平台桥（@ExpectPlatform，由各加载器实现）。 */
 package net.shiroha233.roadweaver.map.permission;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线按键的**跨平台注册桥**。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

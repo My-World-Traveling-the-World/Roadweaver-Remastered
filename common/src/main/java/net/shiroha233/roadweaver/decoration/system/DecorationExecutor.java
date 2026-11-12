@@ -1,3 +1,4 @@
+/* 文件职责：装饰执行器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.shiroha233.roadweaver.decoration.base.Decoration;

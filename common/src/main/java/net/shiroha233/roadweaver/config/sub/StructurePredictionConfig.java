@@ -1,3 +1,4 @@
+/* 文件职责：结构预测配置。 */
 package net.shiroha233.roadweaver.config.sub;
 
 import net.shiroha233.roadweaver.config.SubConfig;

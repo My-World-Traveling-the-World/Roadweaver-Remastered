@@ -1,3 +1,4 @@
+/* 文件职责：UI 绘制工具集（本模组各界面共用的绘制原语）。 */
 package net.shiroha233.roadweaver.client.render;
 
 import net.minecraft.network.chat.Component;

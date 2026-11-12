@@ -1,3 +1,4 @@
+/* 文件职责：桥梁段规划器。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.core.BlockPos;

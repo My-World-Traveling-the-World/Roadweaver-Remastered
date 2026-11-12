@@ -1,3 +1,4 @@
+/* 文件职责：结构避让的诊断计数器（从 {@link StructureAvoidanceService} 拆出）。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
 import java.util.concurrent.atomic.AtomicBoolean;

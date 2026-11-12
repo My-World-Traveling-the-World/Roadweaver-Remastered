@@ -1,3 +1,4 @@
+/* 文件职责：路网规划器工厂，根据算法枚举返回对应实现。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.shiroha233.roadweaver.config.sub.PlanningConfig.PlanningAlgorithm;

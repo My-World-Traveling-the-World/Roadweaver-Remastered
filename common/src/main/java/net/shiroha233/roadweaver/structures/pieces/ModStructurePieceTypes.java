@@ -1,3 +1,4 @@
+/* 文件职责：模组结构片段类型注册。 */
 package net.shiroha233.roadweaver.structures.pieces;
 
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;

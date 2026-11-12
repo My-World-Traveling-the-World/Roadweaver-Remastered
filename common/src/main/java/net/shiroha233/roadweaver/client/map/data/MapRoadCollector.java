@@ -1,3 +1,4 @@
+/* 文件职责：道路折线快照收集。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import net.minecraft.world.level.Level;

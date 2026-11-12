@@ -1,3 +1,4 @@
+/* 文件职责：巨树（Tan's Huge Trees）的精确列预留：在 TreePlacer 写方块之前调用，避免树与路抢同一列。 */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

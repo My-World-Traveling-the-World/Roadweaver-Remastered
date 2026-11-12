@@ -1,3 +1,4 @@
+/* 文件职责：玩家手绘路线中「一段」的用途类型。 */
 package net.shiroha233.roadweaver.route;
 
 /**

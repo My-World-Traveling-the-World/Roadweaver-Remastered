@@ -1,3 +1,4 @@
+/* 文件职责：地图快照数据 - 不可变数据结构。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import net.minecraft.core.BlockPos;

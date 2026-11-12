@@ -1,3 +1,4 @@
+/* 文件职责：自定义 UI 屏幕共用的非模糊背景。 */
 package net.shiroha233.roadweaver.client.render;
 
 import net.minecraft.client.gui.GuiGraphics;

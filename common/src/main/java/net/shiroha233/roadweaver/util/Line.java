@@ -1,3 +1,4 @@
+/* 文件职责：线段几何计算，提供最近点投影和 Frenet 标架。 */
 package net.shiroha233.roadweaver.util;
 
 import net.minecraft.world.phys.Vec3;

@@ -1,3 +1,4 @@
+/* 文件职责：单人模式 overlay 瓦片只读调度。 */
 package net.shiroha233.roadweaver.client.map.tile;
 
 import net.shiroha233.roadweaver.map.tile.core.MapTileLayer;

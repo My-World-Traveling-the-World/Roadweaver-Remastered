@@ -1,3 +1,4 @@
+/* 文件职责：灯笼柱装饰。 */
 package net.shiroha233.roadweaver.decoration.types;
 
 import net.minecraft.world.level.block.Blocks;

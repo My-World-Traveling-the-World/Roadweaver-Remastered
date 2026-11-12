@@ -1,3 +1,4 @@
+/* 文件职责：路网拓扑规划器接口。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

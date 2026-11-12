@@ -1,3 +1,4 @@
+/* 文件职责：跨路桥「共享跨越」判定（0.9.029 / R-03 核心）。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.core.BlockPos;

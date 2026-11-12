@@ -1,3 +1,4 @@
+/* 文件职责：世界加载界面 Tips 渲染器。 */
 package net.shiroha233.roadweaver.client.tips;
 
 import dev.architectury.platform.Platform;

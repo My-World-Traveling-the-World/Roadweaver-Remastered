@@ -1,3 +1,4 @@
+/* 文件职责：样条曲线与贝塞尔曲线数学工具。 */
 package net.shiroha233.roadweaver.postprocess;
 
 /**

@@ -1,3 +1,4 @@
+/* 文件职责：内置示例预设模板定义。 */
 package net.shiroha233.roadweaver.config;
 
 import java.util.ArrayList;

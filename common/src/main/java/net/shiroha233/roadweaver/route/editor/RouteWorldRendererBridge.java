@@ -1,3 +1,4 @@
+/* 文件职责：世界渲染注册的跨平台桥。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

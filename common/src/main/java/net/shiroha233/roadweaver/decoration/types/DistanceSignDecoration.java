@@ -1,3 +1,4 @@
+/* 文件职责：距离路牌装饰。 */
 package net.shiroha233.roadweaver.decoration.types;
 
 import net.shiroha233.roadweaver.decoration.base.OrientedDecoration;

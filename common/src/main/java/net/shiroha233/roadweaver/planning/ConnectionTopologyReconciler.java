@@ -1,3 +1,4 @@
+/* 文件职责：阻止「待建直连边」与已完成的网络路径重复 —— 否则会沿同一条走廊再规划一遍。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

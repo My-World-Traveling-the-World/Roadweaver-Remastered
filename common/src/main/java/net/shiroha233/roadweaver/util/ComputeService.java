@@ -1,3 +1,4 @@
+/* 文件职责：异步计算服务，封装共享工作池的提交操作。 */
 package net.shiroha233.roadweaver.util;
 
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;

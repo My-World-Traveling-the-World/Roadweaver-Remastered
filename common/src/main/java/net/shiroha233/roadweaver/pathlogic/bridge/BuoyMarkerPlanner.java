@@ -1,3 +1,4 @@
+/* 文件职责：浮标标记规划器。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import java.util.List;

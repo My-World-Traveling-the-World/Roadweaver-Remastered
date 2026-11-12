@@ -1,3 +1,4 @@
+/* 文件职责：基于 Delaunay 三角剖分的路网拓扑规划器。 */
 package net.shiroha233.roadweaver.planning.impl;
 
 import net.minecraft.core.BlockPos;

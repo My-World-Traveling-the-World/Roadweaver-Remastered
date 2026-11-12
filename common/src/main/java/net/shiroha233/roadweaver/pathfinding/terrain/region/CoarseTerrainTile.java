@@ -1,3 +1,4 @@
+/* 文件职责：单个持久化粗采样地形瓦片。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;

@@ -1,3 +1,4 @@
+/* 文件职责：路边内容的延迟落盘：一直保存到它所属的区块收到结构起始点为止。 */
 package net.shiroha233.roadweaver.persistence.files;
 
 import com.google.gson.Gson;

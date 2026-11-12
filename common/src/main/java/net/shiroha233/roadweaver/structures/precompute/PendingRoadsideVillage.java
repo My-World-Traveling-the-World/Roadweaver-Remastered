@@ -1,3 +1,4 @@
+/* 文件职责：待注入的路边村庄。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import java.util.List;

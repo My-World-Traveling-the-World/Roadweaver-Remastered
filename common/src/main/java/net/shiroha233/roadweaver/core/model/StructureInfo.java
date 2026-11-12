@@ -1,3 +1,4 @@
+/* 文件职责：单个结构位置与类型标识。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

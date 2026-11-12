@@ -1,3 +1,4 @@
+/* 文件职责：Density graph 编译结果。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 /**

@@ -1,3 +1,4 @@
+/* 文件职责：网格渲染器 - 绘制地图网格和刻度。 */
 package net.shiroha233.roadweaver.client.map.render;
 
 import net.minecraft.network.chat.Component;

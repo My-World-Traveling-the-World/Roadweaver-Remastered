@@ -1,3 +1,4 @@
+/* 文件职责：道路跨度区间（起点、终点、类型）。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

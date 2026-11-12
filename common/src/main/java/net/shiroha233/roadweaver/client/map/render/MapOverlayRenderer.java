@@ -1,3 +1,4 @@
+/* 文件职责：地图前景叠加层绘制。 */
 package net.shiroha233.roadweaver.client.map.render;
 
 import net.minecraft.core.BlockPos;

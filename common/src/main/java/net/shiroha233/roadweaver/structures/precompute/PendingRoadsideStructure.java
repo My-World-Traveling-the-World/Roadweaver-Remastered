@@ -1,3 +1,4 @@
+/* 文件职责：待放置的路边结构信息。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import com.mojang.serialization.Codec;

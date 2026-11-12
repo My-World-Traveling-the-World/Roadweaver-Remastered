@@ -1,3 +1,4 @@
+/* 文件职责：本模组 UI 的通用选择列表基类（原版 SelectionList 的薄封装）。 */
 package net.shiroha233.roadweaver.client.config;
 
 import net.minecraft.client.Minecraft;

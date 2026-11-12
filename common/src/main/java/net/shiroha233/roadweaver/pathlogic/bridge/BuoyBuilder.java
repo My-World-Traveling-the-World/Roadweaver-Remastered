@@ -1,3 +1,4 @@
+/* 文件职责：浮标建造器。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.world.level.block.Blocks;

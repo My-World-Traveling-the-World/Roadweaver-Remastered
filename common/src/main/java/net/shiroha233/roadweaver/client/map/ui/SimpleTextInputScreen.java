@@ -1,3 +1,4 @@
+/* 文件职责：简单文本输入界面。 */
 package net.shiroha233.roadweaver.client.map.ui;
 
 import net.shiroha233.roadweaver.client.render.ScreenBackgrounds;

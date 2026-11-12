@@ -1,3 +1,4 @@
+/* 文件职责：普通道路 Feature 配置。 */
 package net.shiroha233.roadweaver.config;
 
 import com.mojang.serialization.Codec;

@@ -1,3 +1,4 @@
+/* 文件职责：阻止拓扑替换把某个路网连通分量与出生点切断 —— 出生点不可达等于存档废掉。 */
 package net.shiroha233.roadweaver.generation;
 
 import java.util.ArrayDeque;

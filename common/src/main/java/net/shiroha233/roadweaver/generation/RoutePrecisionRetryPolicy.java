@@ -1,3 +1,4 @@
+/* 文件职责：让每次重试都停留在玩家选定的精度档，不因重试而偷偷降精度。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.shiroha233.roadweaver.config.ConfigService;

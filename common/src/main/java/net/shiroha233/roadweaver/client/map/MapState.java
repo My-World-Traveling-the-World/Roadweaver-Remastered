@@ -1,3 +1,4 @@
+/* 文件职责：地图界面状态管理 - 集中管理所有可变UI状态。 */
 package net.shiroha233.roadweaver.client.map;
 
 import org.jetbrains.annotations.Nullable;

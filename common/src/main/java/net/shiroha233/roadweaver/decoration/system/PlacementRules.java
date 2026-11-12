@@ -1,3 +1,4 @@
+/* 文件职责：放置规则。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.world.level.block.Block;

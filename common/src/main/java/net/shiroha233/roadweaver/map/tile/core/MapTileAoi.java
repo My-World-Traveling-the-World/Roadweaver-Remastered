@@ -1,3 +1,4 @@
+/* 文件职责：围绕动态规划窗口定义的瓦片采样 AOI。 */
 package net.shiroha233.roadweaver.map.tile.core;
 
 import java.util.Objects;

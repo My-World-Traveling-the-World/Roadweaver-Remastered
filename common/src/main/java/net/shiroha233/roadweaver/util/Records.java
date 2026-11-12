@@ -1,3 +1,4 @@
+/* 文件职责：公共数据记录与编解码器（Common） 注意：保持与现有代码的字段访问兼容；允许在 Codec 字段名上与历史数据不完全一致。 */
 package net.shiroha233.roadweaver.util;
 
 import com.mojang.serialization.Codec;

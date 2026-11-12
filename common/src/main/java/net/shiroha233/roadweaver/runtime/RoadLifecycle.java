@@ -1,3 +1,4 @@
+/* 文件职责：服务端停机期间异步道路工作线程的全局写闸门。 */
 package net.shiroha233.roadweaver.runtime;
 
 import java.util.concurrent.atomic.AtomicBoolean;

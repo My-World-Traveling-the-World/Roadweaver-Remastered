@@ -1,3 +1,4 @@
+/* 文件职责：单张瓦片的离散坐标。 */
 package net.shiroha233.roadweaver.map.tile.core;
 
 /**

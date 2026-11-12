@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线 → 施工参数的**逐段映射**。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;

@@ -1,3 +1,4 @@
+/* 文件职责：跳过桥梁岸边路牌规划器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

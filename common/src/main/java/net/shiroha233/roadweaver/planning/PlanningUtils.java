@@ -1,3 +1,4 @@
+/* 文件职责：路径规划相关的工具方法集合。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

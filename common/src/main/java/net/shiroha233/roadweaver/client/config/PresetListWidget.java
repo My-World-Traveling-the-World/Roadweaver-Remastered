@@ -1,3 +1,4 @@
+/* 文件职责：预设列表组件。 */
 package net.shiroha233.roadweaver.client.config;
 
 import java.util.List;

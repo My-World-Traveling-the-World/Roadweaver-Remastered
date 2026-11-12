@@ -1,3 +1,4 @@
+/* 文件职责：地图视口请求协调。 */
 package net.shiroha233.roadweaver.client.map;
 
 import net.minecraft.resources.ResourceLocation;

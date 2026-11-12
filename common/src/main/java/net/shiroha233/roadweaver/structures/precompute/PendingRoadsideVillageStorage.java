@@ -1,3 +1,4 @@
+/* 文件职责：路边村庄待注入存储。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

@@ -1,3 +1,4 @@
+/* 文件职责：装饰规划器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.core.BlockPos;

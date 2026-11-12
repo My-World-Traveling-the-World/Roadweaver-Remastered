@@ -1,3 +1,4 @@
+/* 文件职责：地图访问策略：谁能看、能看到什么范围。 */
 package net.shiroha233.roadweaver.map.permission;
 
 import com.mojang.serialization.Codec;

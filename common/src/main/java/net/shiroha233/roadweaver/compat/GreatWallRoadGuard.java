@@ -1,3 +1,4 @@
+/* 文件职责：道路侧访问长城只读守卫的唯一入口。 */
 package net.shiroha233.roadweaver.compat;
 
 import java.util.ArrayList;

@@ -1,3 +1,4 @@
+/* 文件职责：道路位置查询门面，用于阻止树木在道路上生成。 */
 package net.shiroha233.roadweaver.persistence;
 
 import net.minecraft.core.BlockPos;

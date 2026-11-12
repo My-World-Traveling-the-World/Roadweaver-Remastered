@@ -1,3 +1,4 @@
+/* 文件职责：结构路径节点 - 树形数据结构 将结构 ID 按分隔符解析成树形结构，支持折叠显示。 */
 package net.shiroha233.roadweaver.client.config;
 
 import net.shiroha233.roadweaver.client.config.localization.ChineseRoadWeaverNames;

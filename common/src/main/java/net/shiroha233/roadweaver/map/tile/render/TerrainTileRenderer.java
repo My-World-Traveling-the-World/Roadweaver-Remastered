@@ -1,3 +1,4 @@
+/* 文件职责：基础地貌瓦片渲染器。 */
 package net.shiroha233.roadweaver.map.tile.render;
 
 import net.minecraft.world.level.biome.Biome;

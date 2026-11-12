@@ -1,3 +1,4 @@
+/* 文件职责：由当前玩家位置推导地图 AOI。 */
 package net.shiroha233.roadweaver.map.tile.core;
 
 import net.minecraft.resources.ResourceLocation;

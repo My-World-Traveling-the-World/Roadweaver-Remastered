@@ -1,3 +1,4 @@
+/* 文件职责：桥梁段数据结构。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.world.phys.Vec3;

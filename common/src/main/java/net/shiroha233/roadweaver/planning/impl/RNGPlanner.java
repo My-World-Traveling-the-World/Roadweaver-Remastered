@@ -1,3 +1,4 @@
+/* 文件职责：基于相对邻域图（RNG）的路网拓扑规划器。 */
 package net.shiroha233.roadweaver.planning.impl;
 
 import net.minecraft.core.BlockPos;

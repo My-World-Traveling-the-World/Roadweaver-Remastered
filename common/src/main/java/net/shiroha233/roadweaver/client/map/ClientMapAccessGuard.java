@@ -1,3 +1,4 @@
+/* 文件职责：客户端侧地图访问守卫：服务端拒绝时不让界面继续假设可访问。 */
 package net.shiroha233.roadweaver.client.map;
 
 import net.minecraft.network.chat.Component;

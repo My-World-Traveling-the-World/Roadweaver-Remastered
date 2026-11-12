@@ -1,3 +1,4 @@
+/* 文件职责：寻路算法共享常量。 */
 package net.shiroha233.roadweaver.core.constants;
 
 /**

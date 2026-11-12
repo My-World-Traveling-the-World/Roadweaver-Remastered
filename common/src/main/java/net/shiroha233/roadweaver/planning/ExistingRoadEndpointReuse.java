@@ -1,3 +1,4 @@
+/* 文件职责：找一条已完工的自动路作为后续自动连接的端点（刻意做成生成器：每次只产出一个候选）。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

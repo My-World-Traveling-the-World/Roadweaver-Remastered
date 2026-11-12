@@ -1,3 +1,4 @@
+/* 文件职责：快速高度采样器。 */
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 import java.util.concurrent.ConcurrentHashMap;

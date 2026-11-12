@@ -1,3 +1,4 @@
+/* 文件职责：结构道路偏移服务。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
 import net.minecraft.world.level.Level;

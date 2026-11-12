@@ -1,3 +1,4 @@
+/* 文件职责：客户端地图笔记存储 - 按存档隔离并持久化。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import net.minecraft.core.BlockPos;

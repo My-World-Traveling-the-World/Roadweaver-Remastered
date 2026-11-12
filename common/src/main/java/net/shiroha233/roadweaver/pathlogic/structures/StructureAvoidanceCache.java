@@ -1,3 +1,4 @@
+/* 文件职责：结构避让的核心缓存（从 {@link StructureAvoidanceService} 拆出）。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
 import net.minecraft.server.level.ChunkResult;

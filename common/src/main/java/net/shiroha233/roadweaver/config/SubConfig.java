@@ -1,3 +1,4 @@
+/* 文件职责：子配置基础接口，定义配置校验和快照能力。 */
 package net.shiroha233.roadweaver.config;
 
 /**

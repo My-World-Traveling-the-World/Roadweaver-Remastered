@@ -1,3 +1,4 @@
+/* 文件职责：基于 ThreadLocal 的 CPU 节流工具，控制寻路线程占空比。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
 import net.shiroha233.roadweaver.config.ConfigService;

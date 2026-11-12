@@ -1,3 +1,4 @@
+/* 文件职责：道路方块放置器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.world.level.block.Blocks;

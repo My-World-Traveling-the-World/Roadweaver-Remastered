@@ -1,3 +1,4 @@
+/* 文件职责：地图局部更新包。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import net.minecraft.core.BlockPos;

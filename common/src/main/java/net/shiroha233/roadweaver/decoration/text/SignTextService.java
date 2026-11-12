@@ -1,3 +1,4 @@
+/* 文件职责：路牌文本服务。 */
 package net.shiroha233.roadweaver.decoration.text;
 
 import net.minecraft.world.level.ChunkPos;

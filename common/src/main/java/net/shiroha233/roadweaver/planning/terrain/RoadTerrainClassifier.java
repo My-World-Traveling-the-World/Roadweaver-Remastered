@@ -1,3 +1,4 @@
+/* 文件职责：把粗采样分类成自动剖面所使用的地形标签。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
 import net.minecraft.core.BlockPos;

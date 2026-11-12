@@ -1,3 +1,4 @@
+/* 文件职责：服务端地图 patch 推送桥接。 */
 package net.shiroha233.roadweaver.network;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

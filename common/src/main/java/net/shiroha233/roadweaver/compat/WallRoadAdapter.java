@@ -1,3 +1,4 @@
+/* 文件职责：唯一直接引用长城 api 的类 —— 目的是把"没装长城"时的类加载风险关在这一个文件里。 */
 package net.shiroha233.roadweaver.compat;
 
 /**

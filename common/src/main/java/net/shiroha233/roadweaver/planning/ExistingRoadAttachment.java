@@ -1,3 +1,4 @@
+/* 文件职责：把「通向村庄的失败连接」改接到「附近已有的道路上」。 */
 package net.shiroha233.roadweaver.planning;
 
 import net.minecraft.core.BlockPos;

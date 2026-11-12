@@ -1,3 +1,4 @@
+/* 文件职责：木材资源组合（栅栏、悬挂告示牌、木板）。 */
 package net.shiroha233.roadweaver.core.model;
 
 import net.minecraft.world.level.block.Block;

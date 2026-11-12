@@ -1,3 +1,4 @@
+/* 文件职责：结构标签条目，表示一个标签及其包含的所有结构。 */
 package net.shiroha233.roadweaver.config.structure;
 
 import java.util.*;

@@ -1,3 +1,4 @@
+/* 文件职责：OpenCL 侧 ImprovedNoise 描述。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 /**

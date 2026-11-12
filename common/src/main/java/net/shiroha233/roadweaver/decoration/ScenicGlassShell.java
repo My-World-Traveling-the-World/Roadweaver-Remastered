@@ -1,3 +1,4 @@
+/* 文件职责：观景玻璃廊道的共享几何与调色板（两个建造器共用同一个拱顶，避免两套实现走样）。 */
 package net.shiroha233.roadweaver.decoration;
 
 import net.minecraft.world.level.block.Blocks;

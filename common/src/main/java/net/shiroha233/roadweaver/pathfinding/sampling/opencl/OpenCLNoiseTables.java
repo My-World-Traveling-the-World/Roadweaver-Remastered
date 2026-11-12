@@ -1,3 +1,4 @@
+/* 文件职责：OpenCL 噪声表。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import java.util.List;

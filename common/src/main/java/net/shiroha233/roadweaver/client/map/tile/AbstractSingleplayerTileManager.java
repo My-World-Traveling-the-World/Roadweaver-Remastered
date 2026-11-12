@@ -1,3 +1,4 @@
+/* 文件职责：单人模式地图瓦片管理器的抽象基类。 */
 package net.shiroha233.roadweaver.client.map.tile;
 
 import net.minecraft.resources.ResourceLocation;

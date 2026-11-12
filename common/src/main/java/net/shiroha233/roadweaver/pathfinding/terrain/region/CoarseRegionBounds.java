@@ -1,3 +1,4 @@
+/* 文件职责：区域级粗采样边界。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import net.minecraft.resources.ResourceLocation;

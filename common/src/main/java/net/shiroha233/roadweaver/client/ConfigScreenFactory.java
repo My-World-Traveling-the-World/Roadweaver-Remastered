@@ -1,3 +1,4 @@
+/* 文件职责：配置屏幕工厂 - 平台抽象接口 使用 Architectury 的 ExpectPlatform 机制实现跨平台调用。 */
 package net.shiroha233.roadweaver.client;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

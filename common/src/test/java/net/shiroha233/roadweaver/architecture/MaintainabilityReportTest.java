@@ -52,7 +52,7 @@ public final class MaintainabilityReportTest {
     /** 接近千行硬约束的预警档。 */
     private static final int VERY_LONG_FILE = 800;
     /** 职责头 ratchet 底线（2026-11-13 实测 320）。 */
-    private static final int DUTY_HEADER_FLOOR = 333;
+    private static final int DUTY_HEADER_FLOOR = 541;
 
     /** 长参数表判定：括号内超过 120 个字符。 */
     private static final Pattern LONG_PARAMS = Pattern.compile("\\w+\\s*\\([^)]{120,}\\)");

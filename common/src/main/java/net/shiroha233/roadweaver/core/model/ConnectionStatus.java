@@ -1,3 +1,4 @@
+/* 文件职责：结构连接状态枚举。 */
 package net.shiroha233.roadweaver.core.model;
 
 /**

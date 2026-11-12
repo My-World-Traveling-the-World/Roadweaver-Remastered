@@ -1,3 +1,4 @@
+/* 文件职责：桥梁范围计算器。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.core.BlockPos;

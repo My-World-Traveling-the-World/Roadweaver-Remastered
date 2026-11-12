@@ -1,3 +1,4 @@
+/* 文件职责：高度轮廓服务。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
 import net.minecraft.world.level.ChunkPos;

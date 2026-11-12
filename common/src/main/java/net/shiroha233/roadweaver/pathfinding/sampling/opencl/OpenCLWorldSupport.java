@@ -1,3 +1,4 @@
+/* 文件职责：OpenCL 粗采样支持状态。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import java.util.concurrent.atomic.AtomicReference;

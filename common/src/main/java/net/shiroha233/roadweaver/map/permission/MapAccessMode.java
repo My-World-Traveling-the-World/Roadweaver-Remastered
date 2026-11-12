@@ -1,3 +1,4 @@
+/* 文件职责：地图访问模式枚举。 */
 package net.shiroha233.roadweaver.map.permission;
 
 import com.mojang.serialization.Codec;

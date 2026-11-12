@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线的**撤销栈**。 */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayDeque;

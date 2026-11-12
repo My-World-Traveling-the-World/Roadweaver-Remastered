@@ -1,3 +1,4 @@
+/* 文件职责：带朝向的装饰基类。 */
 package net.shiroha233.roadweaver.decoration.base;
 
 import net.minecraft.core.BlockPos;

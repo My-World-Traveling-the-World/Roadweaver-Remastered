@@ -1,3 +1,4 @@
+/* 文件职责：把初始路覆盖的每个区块强制加载到 FULL 再铺装（开局预热专用）。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.minecraft.server.MinecraftServer;

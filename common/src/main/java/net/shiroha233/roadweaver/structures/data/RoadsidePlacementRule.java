@@ -1,3 +1,4 @@
+/* 文件职责：路边结构放置规则。 */
 package net.shiroha233.roadweaver.structures.data;
 
 import com.mojang.serialization.Codec;

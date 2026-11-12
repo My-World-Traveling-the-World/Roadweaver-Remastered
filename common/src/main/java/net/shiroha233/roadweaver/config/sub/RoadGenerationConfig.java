@@ -1,3 +1,4 @@
+/* 文件职责：道路生成配置，聚合道路生成所需的各项配置参数。 */
 package net.shiroha233.roadweaver.config.sub;
 
 import net.shiroha233.roadweaver.config.ModConfig;

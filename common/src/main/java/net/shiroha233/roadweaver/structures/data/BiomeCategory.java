@@ -1,3 +1,4 @@
+/* 文件职责：群系分类枚举。 */
 package net.shiroha233.roadweaver.structures.data;
 
 import com.mojang.serialization.Codec;

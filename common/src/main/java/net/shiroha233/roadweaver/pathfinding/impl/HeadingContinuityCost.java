@@ -1,3 +1,4 @@
+/* 文件职责：航向连续性代价（0.9.030 / Z-2 根治「爱平缓盘旋」）。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
 /**

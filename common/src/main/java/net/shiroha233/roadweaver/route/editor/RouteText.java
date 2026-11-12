@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线界面的**本地化文本**入口（★ 审计 R3-P3-3）。 */
 package net.shiroha233.roadweaver.route.editor;
 
 import net.minecraft.network.chat.Component;

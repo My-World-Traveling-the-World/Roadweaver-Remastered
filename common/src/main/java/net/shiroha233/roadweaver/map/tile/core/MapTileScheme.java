@@ -1,3 +1,4 @@
+/* 文件职责：地图瓦片坐标与缩放规则。 */
 package net.shiroha233.roadweaver.map.tile.core;
 
 /**

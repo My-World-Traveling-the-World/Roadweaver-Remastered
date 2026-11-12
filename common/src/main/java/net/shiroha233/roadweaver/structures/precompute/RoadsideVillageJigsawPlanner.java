@@ -1,3 +1,4 @@
+/* 文件职责：路边村庄拼图规划器。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import org.slf4j.Logger;

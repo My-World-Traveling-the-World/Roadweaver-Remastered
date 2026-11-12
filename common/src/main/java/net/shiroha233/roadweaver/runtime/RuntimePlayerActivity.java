@@ -1,3 +1,4 @@
+/* 文件职责：玩家正在移动时让后台道路规划保持休眠。 */
 package net.shiroha233.roadweaver.runtime;
 
 import net.minecraft.server.level.ServerPlayer;

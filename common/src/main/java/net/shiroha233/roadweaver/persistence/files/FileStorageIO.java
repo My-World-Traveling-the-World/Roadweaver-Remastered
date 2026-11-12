@@ -1,3 +1,4 @@
+/* 文件职责：文件型存储的原子写和目录清理辅助。 */
 package net.shiroha233.roadweaver.persistence.files;
 
 import org.slf4j.Logger;

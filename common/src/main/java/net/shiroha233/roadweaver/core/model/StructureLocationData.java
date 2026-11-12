@@ -1,3 +1,4 @@
+/* 文件职责：结构位置集合，兼容旧版（仅位置列表）和新版（含类型信息）格式。 */
 package net.shiroha233.roadweaver.core.model;
 
 import com.mojang.serialization.Codec;

@@ -1,3 +1,4 @@
+/* 文件职责：overlay 瓦片渲染器。 */
 package net.shiroha233.roadweaver.map.tile.render;
 
 import net.minecraft.core.BlockPos;

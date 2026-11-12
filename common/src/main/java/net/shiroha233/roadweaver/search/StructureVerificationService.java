@@ -1,3 +1,4 @@
+/* 文件职责：结构验证服务。 */
 package net.shiroha233.roadweaver.search;
 
 import net.shiroha233.roadweaver.core.model.StructureInfo;

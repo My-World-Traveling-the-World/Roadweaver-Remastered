@@ -1,3 +1,4 @@
+/* 文件职责：单个结构条目，用于 GUI 展示和选择。 */
 package net.shiroha233.roadweaver.config.structure;
 
 import java.util.Objects;

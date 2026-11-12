@@ -1,3 +1,4 @@
+/* 文件职责：路边结构注册中心。 */
 package net.shiroha233.roadweaver.structures.registry;
 
 import net.minecraft.world.level.Level;

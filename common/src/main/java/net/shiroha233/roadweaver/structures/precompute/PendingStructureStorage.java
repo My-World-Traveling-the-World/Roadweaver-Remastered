@@ -1,3 +1,4 @@
+/* 文件职责：预计算结构存储服务。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

@@ -1,3 +1,4 @@
+/* 文件职责：地图访问权限服务：判断当前玩家能否看到地图。 */
 package net.shiroha233.roadweaver.map.permission;
 
 import net.minecraft.server.level.ServerPlayer;

@@ -1,3 +1,4 @@
+/* 文件职责：overlay 瓦片静态场景。 */
 package net.shiroha233.roadweaver.map.tile.query;
 
 import java.util.List;

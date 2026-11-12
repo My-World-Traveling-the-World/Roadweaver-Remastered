@@ -1,3 +1,4 @@
+/* 文件职责：串行化严格的 GPU 工作，同时允许普通精确工作转交 CPU。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import java.util.concurrent.CancellationException;

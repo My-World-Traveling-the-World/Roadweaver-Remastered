@@ -1,3 +1,4 @@
+/* 文件职责：客户端网络桥接。 */
 package net.shiroha233.roadweaver.network;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;

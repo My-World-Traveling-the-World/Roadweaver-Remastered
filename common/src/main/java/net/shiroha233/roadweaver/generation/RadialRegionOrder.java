@@ -1,3 +1,4 @@
+/* 文件职责：按到中心的半径顺序枚举区域。 */
 package net.shiroha233.roadweaver.generation;
 
 import net.shiroha233.roadweaver.planning.RoadPlanningReadinessIndex;

@@ -1,3 +1,4 @@
+/* 文件职责：本模组自定义屏幕的基类。 */
 package net.shiroha233.roadweaver.client.render;
 
 import net.minecraft.network.chat.Component;

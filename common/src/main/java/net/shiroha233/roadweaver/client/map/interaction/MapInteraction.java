@@ -1,3 +1,4 @@
+/* 文件职责：地图交互辅助 - 悬停高亮和提示。 */
 package net.shiroha233.roadweaver.client.map.interaction;
 
 import net.minecraft.core.BlockPos;

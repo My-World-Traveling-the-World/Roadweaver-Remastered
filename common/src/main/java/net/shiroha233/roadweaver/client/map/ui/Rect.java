@@ -1,3 +1,4 @@
+/* 文件职责：简单矩形记录类。 */
 package net.shiroha233.roadweaver.client.map.ui;
 
 /**

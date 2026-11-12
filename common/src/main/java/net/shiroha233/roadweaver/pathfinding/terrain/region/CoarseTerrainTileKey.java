@@ -1,3 +1,4 @@
+/* 文件职责：持久化粗采样地形瓦片坐标。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
 import net.minecraft.resources.ResourceLocation;

@@ -1,3 +1,4 @@
+/* 文件职责：玩家手绘的一条路线。 */
 package net.shiroha233.roadweaver.route;
 
 import com.mojang.serialization.Codec;

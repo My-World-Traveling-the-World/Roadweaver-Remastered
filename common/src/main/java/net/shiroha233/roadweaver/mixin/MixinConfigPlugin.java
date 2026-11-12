@@ -1,3 +1,4 @@
+/* 文件职责：Mixin 配置插件。 */
 package net.shiroha233.roadweaver.mixin;
 
 import net.fabricmc.loader.api.FabricLoader;

@@ -1,3 +1,4 @@
+/* 文件职责：材料网格组件。 */
 package net.shiroha233.roadweaver.client.config;
 
 import net.minecraft.world.item.ItemStack;

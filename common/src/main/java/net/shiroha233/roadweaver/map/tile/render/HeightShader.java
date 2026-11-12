@@ -1,3 +1,4 @@
+/* 文件职责：高度着色与颜色工具。 */
 package net.shiroha233.roadweaver.map.tile.render;
 
 /**

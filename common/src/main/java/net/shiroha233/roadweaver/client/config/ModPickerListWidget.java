@@ -1,3 +1,4 @@
+/* 文件职责：结构选择界面左侧的模组导航栏。 */
 package net.shiroha233.roadweaver.client.config;
 
 import com.mojang.blaze3d.systems.RenderSystem;

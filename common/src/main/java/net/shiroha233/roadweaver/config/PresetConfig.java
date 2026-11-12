@@ -1,3 +1,4 @@
+/* 文件职责：道路预设配置数据容器。 */
 package net.shiroha233.roadweaver.config;
 
 import java.util.ArrayList;

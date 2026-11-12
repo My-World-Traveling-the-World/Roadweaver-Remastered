@@ -1,3 +1,4 @@
+/* 文件职责：地图数据本地存储管理。 */
 package net.shiroha233.roadweaver.client.map.data;
 
 import com.google.gson.Gson;

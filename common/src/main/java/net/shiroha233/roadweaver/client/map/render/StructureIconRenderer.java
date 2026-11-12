@@ -1,3 +1,4 @@
+/* 文件职责：结构点图标的分类与扁平化绘制。 */
 package net.shiroha233.roadweaver.client.map.render;
 
 import com.mojang.blaze3d.systems.RenderSystem;

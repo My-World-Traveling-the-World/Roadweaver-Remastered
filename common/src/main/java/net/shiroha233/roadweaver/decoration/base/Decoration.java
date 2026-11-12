@@ -1,3 +1,4 @@
+/* 文件职责：装饰的公共契约（基类/接口）。 */
 package net.shiroha233.roadweaver.decoration.base;
 
 import net.minecraft.world.level.block.Blocks;

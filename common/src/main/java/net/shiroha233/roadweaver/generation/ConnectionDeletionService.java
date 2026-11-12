@@ -1,3 +1,4 @@
+/* 文件职责：协调用户「删除未完成连接」的请求，并在拆除过程中处理中止信号。 */
 package net.shiroha233.roadweaver.generation;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

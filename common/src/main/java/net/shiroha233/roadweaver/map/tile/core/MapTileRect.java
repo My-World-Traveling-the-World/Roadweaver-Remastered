@@ -1,3 +1,4 @@
+/* 文件职责：某个缩放级别上的瓦片矩形范围。 */
 package net.shiroha233.roadweaver.map.tile.core;
 
 import java.util.ArrayList;

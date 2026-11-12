@@ -1,3 +1,4 @@
+/* 文件职责：地图加载会话。 */
 package net.shiroha233.roadweaver.client.map;
 
 import net.minecraft.resources.ResourceLocation;

@@ -1,3 +1,4 @@
+/* 文件职责：路牌文本延迟写入存储门面。 */
 package net.shiroha233.roadweaver.persistence.sharded;
 
 import net.minecraft.world.level.ChunkPos;

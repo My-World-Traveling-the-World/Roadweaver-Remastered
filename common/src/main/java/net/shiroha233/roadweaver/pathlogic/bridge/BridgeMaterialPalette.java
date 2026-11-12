@@ -1,3 +1,4 @@
+/* 文件职责：内置木桥模板的材料投影。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.world.level.block.Blocks;

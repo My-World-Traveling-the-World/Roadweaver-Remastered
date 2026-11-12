@@ -1,3 +1,4 @@
+/* 文件职责：结构索引服务。 */
 package net.shiroha233.roadweaver.search;
 
 import net.minecraft.world.level.Level;

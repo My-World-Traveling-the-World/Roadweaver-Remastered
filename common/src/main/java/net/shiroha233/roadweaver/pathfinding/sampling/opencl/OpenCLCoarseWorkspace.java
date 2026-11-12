@@ -1,3 +1,4 @@
+/* 文件职责：复用连续粗粒度 GPU 批次的大块可变缓冲，避免每批重新分配。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;

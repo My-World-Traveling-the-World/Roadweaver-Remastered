@@ -1,3 +1,4 @@
+/* 文件职责：初始小屋放置器。 */
 package net.shiroha233.roadweaver.structures.placement;
 
 import net.minecraft.core.BlockPos;

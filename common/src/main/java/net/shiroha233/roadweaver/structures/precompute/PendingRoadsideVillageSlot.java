@@ -1,3 +1,4 @@
+/* 文件职责：路边村庄的虚拟拼图接口。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import net.minecraft.core.BlockPos;

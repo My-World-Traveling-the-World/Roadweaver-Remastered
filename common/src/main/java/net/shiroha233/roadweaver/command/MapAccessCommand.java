@@ -1,3 +1,4 @@
+/* 文件职责：地图访问相关的指令入口。 */
 package net.shiroha233.roadweaver.command;
 
 import com.mojang.authlib.GameProfile;

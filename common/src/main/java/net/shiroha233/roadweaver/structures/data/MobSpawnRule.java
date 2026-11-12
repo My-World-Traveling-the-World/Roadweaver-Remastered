@@ -1,3 +1,4 @@
+/* 文件职责：结构生物生成规则。 */
 package net.shiroha233.roadweaver.structures.data;
 
 import com.mojang.serialization.Codec;
