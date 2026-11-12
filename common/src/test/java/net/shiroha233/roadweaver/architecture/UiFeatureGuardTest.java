@@ -250,12 +250,29 @@ public final class UiFeatureGuardTest {
         Path iface = srcRoot.resolve("client/ConfigScreenFactory.java");
         assertTrue(Files.isRegularFile(iface), "common 侧缺 ConfigScreenFactory 接口");
 
-        Path impl = repoRoot.resolve("fabric").resolve("src").resolve("main").resolve("java")
+        Path dir = repoRoot.resolve("fabric").resolve("src").resolve("main").resolve("java")
                 .resolve("net").resolve("shiroha233").resolve("roadweaver").resolve("client")
-                .resolve("fabric").resolve("ConfigScreenFactoryImpl.java");
+                .resolve("fabric");
+        Path impl = dir.resolve("ConfigScreenFactoryImpl.java");
         assertTrue(Files.isRegularFile(impl), "fabric 侧缺 ConfigScreenFactoryImpl 实现：" + impl);
-        int lines = Files.readAllLines(impl, StandardCharsets.UTF_8).size();
-        assertTrue(lines >= 1500,
-                "配置界面实现从 1791 行缩到 " + lines + " 行 —— 疑似丢功能");
+
+        // 2026-11-13：配置界面已按分区拆成 ConfigScreenFactoryImpl + 12 个 *Section 类
+        // （原单文件 1791 行、12 个分区挤在一起）。所以口径从「单文件行数」改成
+        // 「配置界面实现的总行数」—— 拆开合法，缩水仍然被拦。
+        int total = Files.readAllLines(impl, StandardCharsets.UTF_8).size();
+        int sections = 0;
+        try (Stream<Path> s = Files.list(dir)) {
+            for (Path p : s.filter(x -> x.getFileName().toString().endsWith("Section.java")).toList()) {
+                int n = Files.readAllLines(p, StandardCharsets.UTF_8).size();
+                assertTrue(n >= 30, "分区 " + p.getFileName() + " 只有 " + n
+                        + " 行 —— 疑似被清空或退化成空壳");
+                total += n;
+                sections++;
+            }
+        }
+        assertTrue(sections >= 12,
+                "配置界面分区从 12 个缩到 " + sections + " 个 —— 有分区被合并或删除");
+        assertTrue(total >= 1500,
+                "配置界面实现总行数从 1791 缩到 " + total + " 行 —— 疑似丢功能");
     }
 }

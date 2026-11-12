@@ -13,6 +13,8 @@ import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.decoration.text.SignTextService;
 import net.shiroha233.roadweaver.generation.LoadedChunkRoadBackfill;
 import net.shiroha233.roadweaver.generation.IdleRoadGenerationService;
+import net.shiroha233.roadweaver.planning.PlanningBoundsOps;
+import net.shiroha233.roadweaver.generation.RoadTaskExecutor;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
 import net.shiroha233.roadweaver.generation.DeferredInitialRoadConstructionService;
 import net.shiroha233.roadweaver.generation.RoadGenerationService;
@@ -121,7 +123,7 @@ public final class ServerPlanningHooks {
             ServerLevel level = server.getLevel(Level.OVERWORLD);
             if (level != null) {
                 IdleRoadGenerationService.tick(level);
-                RoadGenerationService.tick(level);
+                RoadTaskExecutor.tick(level);
                 SignTextService.tick(level);
                 // ★ 2026-10-15：延迟施工队列的排水口（此前 pending 只写不读）。
                 // 开局规划落盘时区块往往还没生成（世界生成路径编译出空计划），而
@@ -157,7 +159,7 @@ public final class ServerPlanningHooks {
             MapStructureSearchService.clearRuntime();
             RoadGenerationService.onServerStopping();
             RoadPlanningReadinessIndex.clearRuntime();
-            RoadPlanningService.resetAll();
+            PlanningBoundsOps.resetAll();
             RuntimePlayerActivity.reset();
             // 0.8.345：复位 InitialGenManager 的跨世界静态状态。
             // 此前 active 只在正常完成路径被清，异常关机后残留 true，

@@ -720,3 +720,96 @@ plannedBridgeResult = BridgeRangeCalculator.compute(...)    // O(站数)，扫�
 `resetStats()` 用于重新开始一轮统计（测试也用）。
 
 回归 PASS tests=662。
+
+---
+
+# ★ 2026-11-13 重大发现：fabric 模块一直编译不过，验收口径有洞
+
+## 现象
+
+做配置界面拆分时顺手编译 fabric，报错：
+
+```
+ServerPlanningHooks.java:124: 找不到符号  RoadGenerationService.tick(level)
+ServerPlanningHooks.java:160: 找不到符号  RoadPlanningService.resetAll()
+```
+
+## 根因
+
+这两个方法在早前重构中被**搬到了别的类**：
+
+| 老位置 | 新位置 |
+|---|---|
+| `RoadGenerationService.tick(ServerLevel)` | `RoadTaskExecutor.tick(ServerLevel)`（逐行一致，纯搬家）|
+| `RoadPlanningService.resetAll()` | `PlanningBoundsOps.resetAll()`（逐行一致，纯搬家）|
+
+搬家本身是对的，**但调用方 `ServerPlanningHooks`（fabric 侧）没跟着改**。
+
+## ★ 为什么一直没被发现
+
+`:common:roadJUnitRegressionSuite` **只编译 common 模块**。fabric 的编译错误它一个都看不到。
+而之前所有验收都是跑这个套件 —— 于是「测试全绿」和「模块编译不过」可以同时成立。
+
+## 这暴露了守卫体系的一个洞
+
+现有 7 类守卫全是**静态源码扫描**：分层依赖、死代码类型、重算热点、台账、UI 清单……
+它们能发现「类型被删了没人引用」，但**发现不了「方法被搬家、调用方没改」** ——
+因为那需要真正的编译。
+
+## 修法（两层）
+
+1. **立即修**：`ServerPlanningHooks` 改调新入口（两处 + 两个 import）。
+2. **补闸门**：新增 `verify.ps1`，**必须同时跑**
+   - `:fabric:compileJava`
+   - `:common:roadJUnitRegressionSuite`
+
+   实测 95 秒全绿。此后每次提交前跑它 —— 只跑测试的验收不再算数。
+
+> 这条也回答了「为什么不能只靠守卫」：守卫检查的是**我们想到要检查的东西**，
+> 编译器检查的是**所有东西**。两者互补，缺一不可。
+
+---
+
+# S6：配置界面拆分（2026-11-13）
+
+`ConfigScreenFactoryImpl` **1791 行**，占 fabric 模块 41%，且在 common 里完全测不到 ——
+是仓库里最后一个「又大又零测试」的块。
+
+## 拆法：纯搬运，零逻辑改动
+
+原文件结构天然可拆：**1 个入口 + 12 个独立的分区方法**（签名完全一致）。
+
+拆成 `ConfigScreenFactoryImpl`（62 行，只剩 `createConfigScreen`）+ 12 个 `*Section` 类：
+
+| 分区 | 行数 | 分区 | 行数 |
+|---|---|---|---|
+| `PlanningSection` | 455 | `RoadGenerationSection` | 114 |
+| `PathfindingCostsSection` | 391 | `StructurePredictionSection` | 78 |
+| `BridgeSection` | 216 | `RoadsideStructuresSection` | 75 |
+| `PerformanceSection` | 195 | `SurfaceSettingsSection` | 66 |
+| `RoadsideVillageSection` | 181 | `ClientSection` | 50 |
+| `RuntimeGpuSection` | 128 | `TerrainProfileSection` | 126 |
+
+每个类都带中文「文件职责」头，并在 javadoc 里写明「从 ConfigScreenFactoryImpl 抽出、
+纯搬运、零逻辑改动」，避免后人误以为是新写的实现。
+
+## 守卫口径同步升级
+
+`UiFeatureGuardTest` 原来断言**单文件 ≥1500 行**。拆完必然红，所以口径改成
+**「配置界面实现类的总行数 ≥1500」+「分区数 ≥12」+「每个分区 ≥30 行」**：
+
+- 拆开 → 合法（总和不变）；
+- 缩水 → 仍然被拦；
+- 某个分区被清空成空壳 → 被拦。
+
+## 中途踩的坑（值得记）
+
+第一版抽取脚本的括号扫描器有个 bug：`in_line_comment` 标志**在行尾没复位**，
+于是文件里第一个 `//` 注释之后所有大括号都被当注释跳过，一路吃到文件末尾 ——
+12 个方法被当成 1 个，生成了一个 1754 行的巨型类。
+
+好在我先看输出（「找到 1 个可抽取方法」）就发现不对，`git checkout` 回滚后修好扫描器重跑：
+13 个块全部正确配平。
+
+**教训**：自动改写代码时，**必须校验「抽取块数/总行数」这类守恒量**，
+不能只看"生成成功"。
