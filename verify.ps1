@@ -29,7 +29,21 @@ if (-not (Test-Path $gradle)) {
     $gradle = $found.FullName
 }
 
-$opts = @('--no-daemon', '--console=plain', '--dependency-verification=off')
+# Keep this file ASCII-only (Windows PowerShell 5 reads .ps1 as ANSI).
+#
+# -Dorg.gradle.internal.instrumentation.agent=false is a workaround, not a
+# preference: on 2026-11-13 the Gradle daemon started but the client could not
+# connect ("Could not connect to the Gradle daemon", daemon removed its own
+# registry entry ~10s later) with no compile errors at all. Disabling the
+# instrumentation agent made the same build succeed immediately. Keep the flag
+# until the underlying agent issue is understood; removing it re-introduces a
+# failure mode that looks exactly like "fabric does not compile".
+$opts = @(
+    '--no-daemon',
+    '--console=plain',
+    '--dependency-verification=off',
+    '-Dorg.gradle.internal.instrumentation.agent=false'
+)
 
 Write-Host "[verify] stage 1/2: :fabric:compileJava (not covered by common tests)"
 $out1 = & $gradle :fabric:compileJava @opts 2>&1

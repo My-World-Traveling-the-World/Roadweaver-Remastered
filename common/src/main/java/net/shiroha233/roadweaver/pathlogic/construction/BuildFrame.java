@@ -63,6 +63,16 @@ public final class BuildFrame {
     /**
      * 一条路的建造帧。
      *
+     * <h2>★ 访问器的使用纪律</h2>
+     * <p>{@link #middlePositions()} 返回的是 {@code List.copyOf} 的不可变列表，
+     * 元素 {@code BlockPos} 也不可变 ⇒ <b>可以直接共享，随便读</b>。</p>
+     *
+     * <p>但 {@link #isBridge()} / {@link #skipSegments()} / {@link #mergedRanges()}
+     * <b>是缓存内部状态</b>：数组与缓存共享（只在 {@code Frames} 构造时 clone 过一次）。
+     * 想拿出去改，<b>必须用 {@link #copyForUser()}</b> —— 它会深拷贝。</p>
+     *
+     * <p>这条纪律现在由 {@code BuildFrameTest.桥区间里的int数组也是深拷贝} 盯着。</p>
+     *
      * @param middlePositions 每站中心点（{@code BlockPos} 不可变，可安全共享）
      * @param isBridge        规划期的桥掩码
      * @param mergedRanges    合并后的桥区间
@@ -75,6 +85,8 @@ public final class BuildFrame {
 
         /**
          * 发一份可以随便改的副本给调用方。
+         *
+         * <p><b>生产路径只应使用本方法</b>，不要直接用上面三个访问器 —— 理由见类内「访问器的使用纪律」。</p>
          *
          * <p>深拷贝是刻意的 —— 见类注释「为什么必须深拷贝出去」。</p>
          */

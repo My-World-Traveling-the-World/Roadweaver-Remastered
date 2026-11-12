@@ -3,6 +3,61 @@
 **起点：`roadweaver` 仓 `6c0ec6b`（道路 `0.9.098` / SHA `60B9A6C7`）的完整副本。**
 旧仓已冻结为 **oracle（验收基准）**，见旧仓 `FREEZE.md`。
 
+## 目录与结论索引（按主题，不按时间）
+
+> 本文是**追加式日志**（1300+ 行，按时间往下长）。这份索引按主题组织，
+> 便于回查结论 —— 不按时间翻。每节末尾都标了在文件里的相对位置。
+
+### ★ 先看这几条：我自己的误判与更正
+
+| # | 原判断 | 更正后 | 依据 |
+|---|---|---|---|
+| 1 | `promoteRuntimeBridges` 是「每区块重算桥范围」的热点 | 它是 **O(窗口) 增量探测的安全网**，设计必需，**不能删** | 读源码：`inWindow` + `RUNTIME_BRIDGES` 增量去重 |
+| 2 | `SegmentPaver.planGrade` 是「施工期重算坡度」热点 | 插值仅 **约 2 万 flops/区块**（每列只扫 5 段），**不是热点** | `LOCAL_SEGMENT_RADIUS = 2` |
+| 3 | S1「桥范围只算一次」 | 实际**每条路 2 次**；真实收益是「每区块 → 每条路常数次」 | 实测调用点 |
+| 4 | 死代码守卫能覆盖方法级 | 只覆盖**类型**；方法级按名统计**误判率 80%** | 160 个候选抽 5 个，4 个误判 |
+
+**这 4 条都在「自我更正 / 复查结论」小节里，请优先读** —— 它们是避免"按错误判断改代码"的关键。
+
+### 按 S 步骤
+
+| 步骤 | 状态 | 关键结论 |
+|---|---|---|
+| S1 `RoadSpec` | ✅ 结案 | 权威表示 + 站索引解析；静态验收：4 个重算热点触发文件数均 ≤2 |
+| S2 判定/施工解耦 | ✅ 结案 | **性能无热点**（已论证）；价值在结构 ⇒ `BuildPlan` 已落地但未接线 |
+| S3 纵断面 DP | ✅ 内核 + 生产开关 | 暴力枚举 300 组证明最优；离线研究土方量压倒性占优 |
+| S4 桥隧同 DAG | ✅ 内核 + AB | 独立重写规则的暴力解 200 组对拍；能解「地面不可行但可桥隧」的地形 |
+| S5 后处理降级 | ✅ 台账完成 | 20 个文件分类；44 个方法里 **36 个**随旧链路消失 |
+| S6 UI 接线 | ✅ 守卫 + 拆分 | 9 动作 / 15 键位 / 4 UI 区全部锁死；配置界面 1791 → 62 + 12 分区 |
+| S7 删旧 + 切默认 | 🔄 第 1 级代码完成 | 等真实地形数据；切换手册已备 |
+
+### 操作手册（不是日志，是照着做的文档）
+
+| 文档 | 用途 |
+|---|---|
+| `docs/S7-SWITCH-CHECKLIST.md` | **四级切换手册**：前置条件 / 要改的代码 / 验证命令 / 回滚 |
+| `docs/S5-POSTPROCESS-LEDGER.md` | 后处理 20 个文件的保留/替换分类 |
+| `docs/S5-METHOD-MAP.md` | 3 个待删文件的方法级删除边界（44 → 36）|
+| `docs/DEAD-METHOD-AUDIT.md` | 死方法审计方法与 80% 误判的教训 |
+| `docs/METRICS-20261113.md` | 维护性指标快照 |
+| `verify.ps1` | **双模块闸门**：fabric 编译 + common 回归，缺一不可 |
+
+### 守卫清单（`common/src/test/java/.../architecture/`）
+
+| 守卫 | 防什么 |
+|---|---|
+| `ArchitectureGuardTest` | 分层依赖 / 千行硬约束 / 职责头 / 28 包依赖 ratchet |
+| `DeadCodeGuardTest` | 零引用**类型**（[A] 真死 / [B] 平台实现）|
+| `SingleSourceOfTruthTest` | 7 个重算热点的触发文件数 + 施工热路径不许直接重算全路 |
+| `PostprocessLedgerTest` | S5 文件级台账与代码同步 |
+| `S5MethodMapTest` | 方法级删除边界（可删方法外部引用恒为 0）|
+| `UiFeatureGuardTest` | 9 dock 动作 / 15 键位 / 4 UI 区 / 配置界面可达 |
+| `MaintainabilityReportTest` | 指标 + 三条硬阈值 + 注释覆盖率 ratchet |
+| `LegacyLedgerTest` | 重制台账与代码不许漂移 |
+
+---
+
+
 ## 为什么要新仓
 
 旧仓 109,275 行里，包语义边界已经崩了，修修补补到不了根治：
@@ -1312,3 +1367,59 @@ int searchEnd   = Math.min(n - 2, anchor + LOCAL_SEGMENT_RADIUS);
 
 这就是为什么 `DeadCodeGuardTest` 只做类型级 —— 那不是偷懒，是名字级分析的上限。
 要自动化方法级死代码检测，必须上 AST 或字节码级分析。
+
+---
+
+# 环境事故：Gradle daemon 连不上（2026-11-13）
+
+## 症状
+
+`verify.ps1` 突然报 `FAIL: fabric does not compile`，但**没有任何编译错误**。
+裸跑 `:fabric:compileJava` 的完整输出里是：
+
+```
+Could not connect to the Gradle daemon.
+Daemon pid: 12772 ... Last 20 lines from daemon log:
+  Listening on [... port:1513, addresses:[localhost/127.0.0.1]]
+  Daemon server started.
+  (9 秒后) Removing daemon address from the registry
+```
+
+daemon **确实起来了、也在监听**，但客户端连不上，9 秒后 daemon 自己撤销注册。
+
+## 排除过的原因（都不是）
+
+| 猜想 | 实测 |
+|---|---|
+| 端口耗尽 | TIME_WAIT 只有 9，动态端口 1024~65535 全可用 |
+| Windows 保留端口段 | 只有 50000-50059，与 1513 无关 |
+| 磁盘满 | C: 剩 441 GB，D: 剩 70 GB |
+| 内存不足 | 可用 16.2 GB / 32 GB |
+| IPv6/localhost 解析 | `localhost` → `::1` + `127.0.0.1`；加 `preferIPv4Stack` 无效 |
+| 残留 java 进程 | 全部杀掉后重建 daemon 目录，仍然失败 |
+| Gradle 客户端本身 | `gradle --version` 正常 |
+
+## 真正的解法
+
+```powershell
+gradle ... -Dorg.gradle.internal.instrumentation.agent=false
+```
+
+**关掉 instrumentation agent 后同一条命令立刻成功。**
+
+推断：agent jar 加载/握手阶段出了问题，导致 daemon 与 client 之间的通道建立失败 ——
+而 Gradle 把这个失败报成"连不上 daemon"，与编译错误毫无关系。
+
+## ★ 为什么把它写进 `verify.ps1`
+
+这个故障的**表象极具误导性**：它打印的是 `FAIL: fabric does not compile`。
+下一个人（或下一轮的我）看到这句话，第一反应会是「我改坏了源码」，
+然后去翻刚提交的 diff —— 而问题根本不在代码里。
+
+所以把规避参数固化进 `verify.ps1`，并在该脚本里注明：
+**这是一条 workaround，不是偏好；去掉它会重新引入一个「看起来像编译失败」的故障模式。**
+
+## 教训
+
+> 验收脚本报"编译失败"时，先看**完整输出**，不要只看它自己打印的那句结论。
+> 那句结论是脚本作者（我）写的猜测，不是编译器说的话。

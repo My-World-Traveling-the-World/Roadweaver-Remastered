@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -87,5 +88,46 @@ final class BuildFrameTest {
         BuildFrame.Frames b = BuildFrame.of(9L, stations(4), List.of(), null);
         assertNotSame(a, b, "case=recomputed");
         assertTrue(b.middlePositions().size() == 4, "case=content-intact");
+    }
+
+    @Test
+    void 中心线列表是不可变的() {
+        // PathFeature 全程只读它，但「只读」应当是**被强制**的，不能靠约定。
+        BuildFrame.Frames frames = BuildFrame.of(555L, stations(6), List.of(), null);
+        List<net.minecraft.core.BlockPos> centers = frames.middlePositions();
+        assertEquals(6, centers.size(), "case=size");
+        assertThrows(UnsupportedOperationException.class,
+                () -> centers.add(new net.minecraft.core.BlockPos(99, 64, 99)),
+                "case=unmodifiable-add");
+        assertThrows(UnsupportedOperationException.class,
+                () -> centers.set(0, new net.minecraft.core.BlockPos(99, 64, 99)),
+                "case=unmodifiable-set");
+    }
+
+    @Test
+    void 桥区间里的int数组也是深拷贝() {
+        // Frames.mergedRanges() 里的 int[] 与缓存共享，但 copyForUser() 必须深拷贝。
+        // 这条防的是「改了返回值里的区间，把缓存里的也改了」。
+        BuildFrame.Frames frames = BuildFrame.of(777L, stations(8),
+                List.of(new net.shiroha233.roadweaver.core.model.RoadSpan(
+                        new net.minecraft.core.BlockPos(2, 64, 0),
+                        new net.minecraft.core.BlockPos(5, 64, 0),
+                        net.shiroha233.roadweaver.core.model.SpanType.BRIDGE)),
+                null);
+        net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator.RangeResult first =
+                frames.copyForUser();
+        if (!first.mergedRanges().isEmpty()) {
+            first.mergedRanges().get(0)[0] = 999;
+        }
+        net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator.RangeResult second =
+                BuildFrame.of(777L, stations(8),
+                        List.of(new net.shiroha233.roadweaver.core.model.RoadSpan(
+                                new net.minecraft.core.BlockPos(2, 64, 0),
+                                new net.minecraft.core.BlockPos(5, 64, 0),
+                                net.shiroha233.roadweaver.core.model.SpanType.BRIDGE)),
+                        null).copyForUser();
+        for (int[] r : second.mergedRanges()) {
+            assertTrue(r[0] != 999, "case=int-array-not-shared");
+        }
     }
 }
