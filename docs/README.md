@@ -71,5 +71,5 @@ REFACTOR.md（过程日志）──► 引用以上全部
 |---|---|
 | [`verify.ps1`](../verify.ps1) | 双模块闸门（fabric 编译 + common 回归），**每次提交前必跑** |
 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) | 分层与包职责 —— **先读它顶部的「时效性更正」**：`foundation.*` 那套分层从未落地，真实架构是保留旧顶层包就地重构 |
-| [`CONVENTIONS.md`](../CONVENTIONS.md) | 编码约定 |
+| [`CONVENTIONS.md`](../CONVENTIONS.md) | 编码约定 —— **先读顶部「时效性更正」**：它描述的是旧仓；仍然成立的是 §4.1 三个环境坑（JDK21 / Gradle 8.8 / 离线）与 §4.3 部署规矩 |
 | `common/src/test/java/.../architecture/` | 8 个守卫类的实现 |

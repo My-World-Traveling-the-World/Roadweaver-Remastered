@@ -1671,3 +1671,42 @@ for (String pkg : SOLVER_PACKAGES)          // = ["metric","topology","band","pi
 > **文档里「受检」二字必须写明受检的粒度。**
 > 「本文与代码同源受检」听起来像"整篇都被校验"，实际只校验了 4 个字串。
 > 这种模糊表述比没有检查更危险 —— 它让人以为其余部分也是权威的。
+
+---
+
+# `CONVENTIONS.md` 时效性更正（2026-11-13）
+
+这份文档描述的是**旧仓 `roadweaver`** 的约定，被一起搬进了新仓。逐条核对后：
+
+## 已经不成立
+
+| 下文写的 | 新仓实际 |
+|---|---|
+| 仓库路径 `roadweaver` / 分支 `0.8.374-route-editor` | `roadweaver-next` / 分支 **`main`** / **没有 remote** |
+| 版本号 `0.8.XXX` | **`2.3.1-1.21.1-plaincraft-direct-core.0.9.098`** |
+| commit 用 `RoadWeaver <version>: ...` | 实际用 `type(scope): 中文说明` |
+| 「测试不是 JUnit 注解，23 个 regression 用 main+require 断言」 | **两半都变了**：① `RoadJUnitRegressionSuite` 是**真正的 JUnit 5**（Platform Launcher 发现用例）；② 注册的 regression 是 **36 个** |
+| 「已聚合全部 23 个」 | `test` 聚合 **32 / 36**；未聚合的 4 个是重装备 harness |
+| §5 的版本基线与外部文档路径 | 换成仓内 `REFACTOR.md` / `docs/STATUS-*` / `docs/S7-SWITCH-CHECKLIST.md` |
+
+## 仍然成立（很重要）
+
+- §4.1 三个环境坑：**JDK 26 在 PATH 上必须先设 JAVA_HOME=jdk-21**、**不要用 Gradle 9.x**、`--offline`；
+- §4.2-1 `tasks.withType(Test) { exclude '**/*' }` 仍在（`common/build.gradle:33-35`）
+  ⇒ `:common:test` 显示 `NO-SOURCE` 是正常的，别被它骗；
+- §4.3 部署四条（先关游戏、只给客户端 mods 做 `.bak`、记 SHA-256、三处一致）。
+
+## 新仓正确的验证方式
+
+```powershell
+.\verify.ps1        # :fabric:compileJava + :common:roadJUnitRegressionSuite（684 用例）
+```
+
+## 一条模式
+
+连着三份老文档（`AUDIT` / `ARCHITECTURE` / `CONVENTIONS`）都是同一个问题：
+**它们是"某个时刻"的真相，却被当作"当前"的真相放在仓库根目录。**
+
+处理办法统一成：**顶部加「时效性更正」节，分「仍成立 / 已过期 / 已被更正」三类**，
+而不是删掉重写 —— 历史判断本身也是资产（比如为什么当初要分层、
+为什么曾经认为 `:common:test` 不可靠）。

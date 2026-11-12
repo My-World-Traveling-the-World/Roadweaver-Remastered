@@ -1,5 +1,51 @@
 # RoadWeaver 最终仓库 —— 协作约定
 
+## ⚠ 时效性更正（2026-11-13 补，**读下文前先读这一节**）
+
+**这份文档描述的是旧仓 `roadweaver` 的约定**，它被一起搬进了 `roadweaver-next`，
+但里面多数具体条目在新仓已经不成立。逐条核对结果：
+
+### 已经不成立（照做会错）
+
+| 下文写的 | 新仓实际 |
+|---|---|
+| §1 仓库路径 `D:\云游四海-Mod源码\roadweaver`，分支 `0.8.374-route-editor` | 实际是 `roadweaver-next`，分支 **`main`**，**没有 remote**（纯本地仓）|
+| §2 版本号 `0.8.XXX` | 实际 **`2.3.1-1.21.1-plaincraft-direct-core.0.9.098`**（`build.gradle:26`）|
+| §2 commit message 用 `RoadWeaver <version>: ...` | 实际用 `type(scope): 中文说明`（如 `feat(profile): ...`、`docs(s7): ...`）|
+| §4.2「测试**不是** JUnit 注解，23 个 regression 用 `main` + 自定义 `require(...)` 断言」 | **两半都变了**：① `net.shiroha233.roadweaver.RoadJUnitRegressionSuite` 是**真正的 JUnit 5**（用 JUnit Platform Launcher 的 `DiscoverySelectors` 发现用例）；② 注册的 regression 任务是 **36 个**，不是 23 个 |
+| §4.2「已聚合全部 23 个」 | 实际 `tasks.named('test')` 聚合 **32 / 36**；未聚合的 4 个是重装备：`routeQualityHarness`、`routeQualityCorpus`、`topologyHarness`、`roadCenterlineAudit`（本就不该进日常回归）|
+| §5 版本基线与文档路径（`D:\后续任务清单\roadweaver\...`） | 已换成新仓内的 `REFACTOR.md` / `docs/STATUS-20261113.md` / `docs/S7-SWITCH-CHECKLIST.md` |
+
+### 仍然成立（很重要，别丢）
+
+| 下文写的 | 说明 |
+|---|---|
+| §4.1-1 `PATH` 上的 `java` 是 JDK 26，必须先设 `JAVA_HOME=jdk-21` | **成立**，否则 `Unsupported class file major version 70` |
+| §4.1-2 不要用 Gradle 9.x，用 wrapper 锁定的 **8.8** | **成立**（`architectury-loom 1.7.435` 与 9.x 不兼容）|
+| §4.1-3 离线构建 `--offline` | 成立（依赖已缓存）|
+| §4.2-1 `common/build.gradle` 里 `tasks.withType(Test) { exclude '**/*' }` 清空 JUnit 发现 ⇒ `:common:test` 显示 `NO-SOURCE` | **成立**（`common/build.gradle:33-35` 仍是这样，所以别被 `NO-SOURCE` 骗）|
+| §4.3 部署：先关游戏、只给客户端 mods 做 `.bak`、记 SHA-256、三处一致 | **成立** |
+| §3 回退：`git checkout` / `reset --hard`，不要丢弃改动 | 成立（但没有 remote，所以不存在 push 语义）|
+
+### ★ 新仓正确的验证方式
+
+```powershell
+.\verify.ps1
+```
+
+它跑两件事：`:fabric:compileJava`（**common 的回归任务不编译 fabric**，这个洞真出过事）
++ `:common:roadJUnitRegressionSuite`（684 个用例）。全绿才算过。
+
+只想跑测试时：`:common:roadJUnitRegressionSuite`（比 `:common:test` 快，
+且它是 JUnit 用例的唯一权威入口）。
+
+> **另有一条新仓踩过的坑**：Gradle daemon 会间歇性「起来了但客户端连不上」。
+> `verify.ps1` 已内建重试，并且**不会**把它报成"编译失败"——
+> 看到 `daemon unreachable (NOT a compile error)` 就只是重跑，别去翻源码。
+
+---
+
+
 ## 1. 本仓库是唯一权威源码
 
 - 仓库路径：`D:\云游四海-Mod源码\roadweaver`（分支随版本而定，当前 `0.8.374-route-editor`）
