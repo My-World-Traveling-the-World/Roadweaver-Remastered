@@ -24,22 +24,22 @@ final class PrepareTimingSplitTest {
     @Test
     void segmentsNeverExceedParent() {
         // 真机量级：解析 64,709 + 瓦片预测 6,000 + 起点枚举 1,500 + 写缓存 300 + 前缀 80
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(REAL_PARENT_MS,
+        assertTrue(PrepareTiming.segmentsWithinTotal(REAL_PARENT_MS,
                 64_709L, 6_000L, 1_500L, 300L, 80L));
         // 边界：正好相等
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(100L, 100L));
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(100L, 60L, 40L));
+        assertTrue(PrepareTiming.segmentsWithinTotal(100L, 100L));
+        assertTrue(PrepareTiming.segmentsWithinTotal(100L, 60L, 40L));
         // 重复累加 ⇒ 立刻违反
-        assertFalse(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(100L, 60L, 60L));
+        assertFalse(PrepareTiming.segmentsWithinTotal(100L, 60L, 60L));
         // 负数段按 0 计（时钟异常不该让断言假红）
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(10L, -5L, 10L));
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(-1L));
+        assertTrue(PrepareTiming.segmentsWithinTotal(10L, -5L, 10L));
+        assertTrue(PrepareTiming.segmentsWithinTotal(-1L));
     }
 
     @Test
     void recordedSegmentsStayWithinMeasuredTotal() {
-        StructureAvoidanceService.PrepareTiming timing =
-                new StructureAvoidanceService.PrepareTiming();
+        PrepareTiming timing =
+                new PrepareTiming();
         assertFalse(timing.ran());
         timing.markRan();
         assertTrue(timing.ran());
@@ -60,18 +60,18 @@ final class PrepareTimingSplitTest {
         timing.observeWorkerThread();
 
         assertEquals(5L, timing.segmentNanos());
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(
+        assertTrue(PrepareTiming.segmentsWithinTotal(
                         timing.totalNanos(), timing.segmentNanos()),
                 "五段之和必须 <= 本对象自己的总时长");
         // 同一批数放在真机父段(72,670 ms)下也必须成立
-        assertTrue(StructureAvoidanceService.PrepareTiming.segmentsWithinTotal(
+        assertTrue(PrepareTiming.segmentsWithinTotal(
                 REAL_PARENT_MS * 1_000_000L, timing.segmentNanos()));
     }
 
     @Test
     void breakdownLineCarriesTheFourRequestedSegmentsAndThreading() {
-        StructureAvoidanceService.PrepareTiming timing =
-                new StructureAvoidanceService.PrepareTiming();
+        PrepareTiming timing =
+                new PrepareTiming();
         timing.addTileSample(1_000_000L);
         timing.addStructureOverlay(2_000_000L);
         timing.addCacheWrite(3_000_000L);

@@ -1,6 +1,7 @@
 /* 文件职责：协调结构发现、连接拓扑规划与道路地形规划用例。 */
 package net.shiroha233.roadweaver.planning;
 
+import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -1426,8 +1427,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         }
         final AdaptivePlanState state =
                 new AdaptivePlanState(configuredPlanMaxEdgeLenBlocks(), guard.finalMargin());
-        final StructureAvoidanceService.PrepareTiming prepTiming =
-                new StructureAvoidanceService.PrepareTiming();
+        final PrepareTiming prepTiming =
+                new PrepareTiming();
         return planRectRound(level, epoch, coreBounds, taskRole, requireCompletePaths,
                         existingSnapshot, timing, startupProgress, state, prepTiming)
                 .thenCompose(round -> planRectRounds(level, epoch, coreBounds, taskRole,
@@ -1448,7 +1449,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
             AsyncPlanningTiming timing,
             boolean startupProgress,
             AdaptivePlanState state,
-            StructureAvoidanceService.PrepareTiming prepTiming) {
+            PrepareTiming prepTiming) {
         final int[] candidateBounds = AdaptiveCandidateBounds
                 .boundsWithMargin(coreBounds, state.margin()).toArray();
         if (startupProgress) {
@@ -1648,7 +1649,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
             AsyncPlanningTiming timing,
             boolean startupProgress,
             AdaptivePlanState state,
-            StructureAvoidanceService.PrepareTiming prepTiming,
+            PrepareTiming prepTiming,
             AdaptiveRound round) {
         if (round == null) return finishAdaptivePlan(level, epoch, timing, state);
         state.observeStructures(timing.structureCount);
@@ -1709,7 +1710,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
             int[] coreBounds,
             AdaptivePlanState state,
             AsyncPlanningTiming timing,
-            StructureAvoidanceService.PrepareTiming prepTiming,
+            PrepareTiming prepTiming,
             Throwable failure) {
         AdaptiveCandidateBounds.Rect initial = AdaptiveCandidateBounds.initial(coreBounds);
         AdaptiveCandidateBounds.Rect expanded =
