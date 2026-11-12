@@ -1,3 +1,8 @@
+/* 文件职责：规划期预计算路边村庄的位置，供后续避让与接驳使用。
+ *
+ * 放在规划期是因为村庄位置会改变路线走向；等到施工期才发现村庄，
+ * 就只能挖穿或绕道，代价大得多。
+ */
 package net.shiroha233.roadweaver.structures.precompute;
 
 import net.minecraft.world.level.ChunkPos;

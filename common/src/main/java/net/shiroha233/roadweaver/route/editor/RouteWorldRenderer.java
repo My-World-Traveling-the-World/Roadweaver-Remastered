@@ -1,3 +1,9 @@
+/* 文件职责：在世界内用 3D 线条画手绘路线（曲线 + 控制点线框 + 竖直引线 + 选中高亮）。
+ *
+ * ★ 必须在「减去相机位置」的坐标系里画：坐标一大，float 精度不足会抖动闪烁。
+ * 用 RenderType.lines() 本地绘制而非粒子 —— 粒子不能参与射线命中检测，
+ * 且长线每秒要重发上百个包、位置还会抖。
+ */
 package net.shiroha233.roadweaver.route.editor;
 
 import com.mojang.blaze3d.vertex.PoseStack;

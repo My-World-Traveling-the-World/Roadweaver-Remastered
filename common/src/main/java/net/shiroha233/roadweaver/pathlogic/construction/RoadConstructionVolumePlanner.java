@@ -1,3 +1,8 @@
+/* 文件职责：纯几何 —— 算出最终道路会改动的每一个方块列（体积），不做施工、不判安全。
+ *
+ * 「纯几何」是它和 SegmentPaver 的分界：这里只回答「哪些列、什么高度区间」，
+ * 至于「能不能放、要不要跳过」由施工侧按世界状态决定。
+ */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;

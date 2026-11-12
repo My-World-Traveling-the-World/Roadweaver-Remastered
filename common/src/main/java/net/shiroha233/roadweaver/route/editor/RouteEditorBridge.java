@@ -1,3 +1,8 @@
+/* 文件职责：把编辑器状态与地图界面接起来 —— 屏幕坐标↔世界坐标、命中检测、拖动语义。
+ *
+ * 单独成类是因为 RoadMapScreen 已 900+ 行；这里集中「转换逻辑」，
+ * 屏幕只负责在合适的时机调用几个方法。
+ */
 package net.shiroha233.roadweaver.route.editor;
 
 import java.util.List;

@@ -1,3 +1,8 @@
+/* 文件职责：清出路面上方的净空，同时不漏出一根未受控的落沙柱。
+ *
+ * 「落沙柱」是这里的核心风险：直接往上挖到空气会切断沙砾的支撑链，
+ * 于是整列沙砾在玩家靠近时连锁下落 —— 必须在挖通之前先判定并处理。
+ */
 package net.shiroha233.roadweaver.decoration.system;
 
 import net.minecraft.world.level.block.Blocks;

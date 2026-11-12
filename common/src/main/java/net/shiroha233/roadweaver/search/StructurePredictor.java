@@ -1,3 +1,8 @@
+/* 文件职责：在不生成区块的前提下预测结构位置 —— 靠结构集的种子算术，不读真实世界。
+ *
+ * 「不生成区块」是硬约束：搜索界面里预测几十个结构，一旦触发区块生成
+ * 就会把主线程卡住；纯种子推算才能做到即时。
+ */
 package net.shiroha233.roadweaver.search;
 
 import net.minecraft.world.level.ChunkPos;

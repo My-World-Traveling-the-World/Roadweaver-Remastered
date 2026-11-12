@@ -1,3 +1,8 @@
+/* 文件职责：沿路线造木桥 —— 不把模板地形向下投影，避免在桥下凭空造出一片地。
+ *
+ * 「模板地形不向下投影」是踩过的坑：桥模板自带地形块，
+ * 无脑投影会在河床上堆出一根根柱子。
+ */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.world.level.block.CrossCollisionBlock;

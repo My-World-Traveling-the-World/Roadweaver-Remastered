@@ -1,3 +1,8 @@
+/* 文件职责：沿长跨水段铺设内置桥模板 —— 越界的模板坐标不向下投影，只写当前区块自己的方块。
+ *
+ * 「只写当前区块拥有的方块」是多区块并发生成的安全边界：
+ * 跨区块写入会和另一个正在生成的区块抢同一列。
+ */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import net.minecraft.world.level.ChunkPos;

@@ -1,3 +1,8 @@
+/* 文件职责：把玩家手绘的路线叠加到管线算出的 RoadData 上 —— 只改走向/高度/桥隧，不动几何。
+ *
+ * 玩家控制权刻意限定为「中心线走向 + 高度 + 这段是路/桥/隧道」；
+ * 宽度、曲线细化、避让结构属于引擎职责，不该让玩家手画。
+ */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;

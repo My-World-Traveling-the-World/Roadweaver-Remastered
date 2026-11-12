@@ -1,3 +1,8 @@
+/* 文件职责：手绘编辑器的**纯状态** —— 不含路线数据、不碰渲染。
+ *
+ * 路线存在 RouteEditorSession（进程级单例），因为玩家要「画完关地图 →
+ * 跑进世界看 → 回来接着调」，路线必须活得比界面久。
+ */
 package net.shiroha233.roadweaver.route.editor;
 
 import java.util.ArrayList;

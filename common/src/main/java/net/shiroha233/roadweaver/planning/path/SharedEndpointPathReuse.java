@@ -1,3 +1,8 @@
+/* 文件职责：让共用同一个结构端点的多条路，在**详细高度/桥隧/施工之前**先共用一段尾巴。
+ *
+ * 必须早于详细计算：否则每条路各自算完再合并，共享段的高度、桥隧分类
+ * 已经各算各的，合并时只能二选一，接缝必然打架。
+ */
 package net.shiroha233.roadweaver.planning.path;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;

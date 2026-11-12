@@ -1,3 +1,8 @@
+/* 文件职责：合并之后、落盘之前的**最后一道结构校验** —— 含高度台阶修复与重复路口归一。
+ *
+ * 它是「信任边界」：通过之后的数据会被写入存档并影响后续施工，
+ * 所以这里的修复宁可保守（拒绝）也不要猜。
+ */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.minecraft.core.BlockPos;
