@@ -1,6 +1,8 @@
 /* 文件职责：组织普通道路的精确量化寻路与最终路径段生成。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.ensurePlanningSnapshotForPathAsync;
+import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -994,7 +996,7 @@ public final class RoadPathCalculator {
         // before village-boundary clipping or structure repair reads it.
         try {
             awaitPlanningSnapshot(
-                    StructureAvoidanceService.ensurePlanningSnapshotForPathAsync(level, ownerConnection, rawPath));
+                    ensurePlanningSnapshotForPathAsync(level, ownerConnection, rawPath));
         } catch (RuntimeException snapshotFailure) {
             LOGGER.warn("RoadWeaver could not prepare a structure corridor for direct route connection={}->{}",
                     ownerConnection.from(), ownerConnection.to(), snapshotFailure);
@@ -1442,7 +1444,7 @@ public final class RoadPathCalculator {
             }
             InitialGenerationProgressTracker.reportRoadTaskWaiting("STRUCTURE_SNAPSHOT_FUTURE");
             CompletableFuture<Void> future =
-                    StructureAvoidanceService.ensurePlanningSnapshotForPathAsync(level, connection, path);
+                    ensurePlanningSnapshotForPathAsync(level, connection, path);
             future.whenComplete((ignored, failure) -> {
                 if (failure == null) {
                     SNAPSHOT_WAIT_CACHE.put(key, new SnapshotWaitEntry(fingerprint, future));

@@ -1,6 +1,7 @@
 /* 文件职责：协调首次世界加载时的道路规划、生成、进度与持久化。 */
 package net.shiroha233.roadweaver.generation;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -2088,7 +2089,7 @@ public final class InitialGenManager {
         long flushMs = elapsedMs(startedAt);
         RoadPositionQuery.clearCache(level);
         RoadPlanningReadinessIndex.markInitialCoverageReady(level);
-        StructureAvoidanceService.compactPreparedStartCacheAfterInitialGeneration();
+        compactPreparedStartCacheAfterInitialGeneration();
         InitialGenerationCheckpointStore.markCompleted(level);
         LOGGER.info("RoadWeaver initial finalizing timing: flushAllMs={} totalMs={}",
                 flushMs, elapsedMs(startedAt));
@@ -2129,7 +2130,7 @@ public final class InitialGenManager {
                 + "so the next world load can resume instead of restarting. phase={} done={}/{}",
                 phase, done.get(), total.get());
         roadGenerationWorkersActive = false;
-        StructureAvoidanceService.compactPreparedStartCacheAfterInitialGeneration();
+        compactPreparedStartCacheAfterInitialGeneration();
         active = false;
         generating.set(0);
         failed.incrementAndGet();
