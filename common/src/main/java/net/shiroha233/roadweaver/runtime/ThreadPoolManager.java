@@ -1,3 +1,8 @@
+/* 文件职责：共享优先级工作池的生命周期与线程数管理 —— 启动、停止、按配置缩放。
+ *
+ * 所有入口都是 synchronized：线程数变更与服务器启停必须互斥，
+ * 否则会出现「池正在停、线程数又被改大」的窗口。
+ */
 package net.shiroha233.roadweaver.runtime;
 
 import net.minecraft.server.MinecraftServer;

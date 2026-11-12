@@ -1,3 +1,8 @@
+/* 文件职责：最终世界的施工规则 —— 只在**当前正在放置的 worldgen region** 上判定，不请求区块。
+ *
+ * 「不请求区块」是防卡死的核心约束：一旦在这里 getChunk 就会阻塞 C2ME worker，
+ * 表现为服务器整体停顿。所有采样与保护判定都必须遵守这条。
+ */
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

@@ -1,3 +1,8 @@
+/* 文件职责：与其他运行时控制器的<b>可选集成</b> —— 全部走 roadweaver-api 契约，不含任何反射。
+ *
+ * 提供方没注册时每个信号返回「无意见」，道路在普通整合包里照样能用。
+ * 历史上这里曾有 9 处 Class.forName 硬编码探测，是「静默失效」的重灾区。
+ */
 package net.shiroha233.roadweaver.runtime;
 
 import net.minecraft.server.level.ServerLevel;

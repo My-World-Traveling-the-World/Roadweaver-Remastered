@@ -139,9 +139,9 @@ class ArchitectureGuardTest {
      *
      * <p>2026-11-12 设 172（当时共 461 个 java 文件）；到 2026-11-13 实际已达 <b>298 / 586</b>，
      * 基线却还停在 172 ⇒ ratchet 早已失效：文件数掉到 173 也能过检。
-     * 现按实测抬到 298，之后只许升不许降。</p>
+     * 现按实测抬到 298，之后只许升不许降。2026-11-13 又补 12 个最大的文件 ⇒ 320。</p>
      */
-    private static final int BASELINE_DUTY_HEADERS = 298;
+    private static final int BASELINE_DUTY_HEADERS = 320;
 
     /*
      * 匹配本仓内部 import —— 必须同时覆盖四种写法，少一种就等于给守卫开天窗：

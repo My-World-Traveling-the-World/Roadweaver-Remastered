@@ -1,3 +1,9 @@
+/* 文件职责：把持久化剖面约束到真实地形，并且只把「完整、持续的山体开挖」保留为隧道候选。
+ *
+ * ⚠ 这里是旧版 15 道剖面 pass 的家（夹坡度、平滑、隧道剖面、去尖峰……）。
+ * S5 台账标记 REPLACE_BY_DP：这 15 道 pass 会被「一次全局 DP」取代，
+ * 因为它们没有共同的目标函数，只能靠互相打补丁收敛。
+ */
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import net.minecraft.core.BlockPos;

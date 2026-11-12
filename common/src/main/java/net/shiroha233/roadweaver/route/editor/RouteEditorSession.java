@@ -1,3 +1,7 @@
+/* 文件职责：客户端**跨界面存活**的手绘路线会话（单例）—— 界面只是它的视图。
+ *
+ * 详情见下方类注释：为什么不能放在 Screen 字段里、为什么不做成 WorldDataAttachment。
+ */
 package net.shiroha233.roadweaver.route.editor;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

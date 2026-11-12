@@ -1,3 +1,8 @@
+/* 文件职责：把后建的路接到先建好的路上 —— 且**绝不修改先建的那条**。
+ *
+ * 「只连不改」是硬约束：先建的路可能已经有玩家建筑贴边、已经有存档引用，
+ * 事后改它的段序列会让已有存档的落盘数据和新数据打架。
+ */
 package net.shiroha233.roadweaver.postprocess;
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;

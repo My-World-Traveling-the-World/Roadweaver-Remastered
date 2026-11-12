@@ -1,3 +1,9 @@
+/* 文件职责：持久化 32×32 区块的规划覆盖状态，供外部预生成器查询。
+ *
+ * READY 的含义是「拓扑、地形路径、结构精确快照都已持久化」，
+ * **不代表方块已铺完** —— 物理施工可以晚得多。这个区分是预生成器能否
+ * 安全跳过某片区域的前提。
+ */
 package net.shiroha233.roadweaver.planning;
 
 import com.google.common.hash.Hasher;

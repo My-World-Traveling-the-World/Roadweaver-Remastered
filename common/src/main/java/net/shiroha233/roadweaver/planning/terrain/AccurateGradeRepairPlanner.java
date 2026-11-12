@@ -1,3 +1,11 @@
+/* 文件职责：用精确地形高度做「最后一道」有界修线 —— 只在出现物理不可能的坡度或断崖时改线。
+ *
+ * 粗规划仍然是权威：本类不主动「优化」路线，只在两种硬伤出现时介入
+ * （一格高的不可能坡、12 格量级的断崖式升降）。
+ *
+ * ⚠ S5 台账标记 DELETE_LATER：它是「跑完再补救」的典型 —— 正确做法是让
+ * 判定阶段就算对，而不是事后改线。等全局 DP 切默认后删。
+ */
 package net.shiroha233.roadweaver.planning.terrain;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;

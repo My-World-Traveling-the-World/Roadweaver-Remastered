@@ -1,3 +1,8 @@
+/* 文件职责：按已持久化的 TUNNEL span 保守开挖隧道 —— 不安全的一段就不动，绝不当地面路铺进实心地形。
+ *
+ * 「不安全就保持原样」是刻意的保守策略：把隧道段退化成地面铺装会造成
+ * 实心地形里出现一条悬空的路面，比不建更糟。所以宁可不建。
+ */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;

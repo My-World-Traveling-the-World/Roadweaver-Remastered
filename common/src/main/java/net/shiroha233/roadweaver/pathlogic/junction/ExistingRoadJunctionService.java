@@ -1,3 +1,8 @@
+/* 文件职责：新路到达已连通网络时复用既有路 —— 避免在已有路上再铺一条。
+ *
+ * 合并会**重建站序列**，所以任何依赖「站索引稳定」的下游都必须重新解析
+ * （这正是 RoadSpan 只存 BlockPos 会导致桥被静默丢掉的根源，见 spec/RoadSpec）。
+ */
 package net.shiroha233.roadweaver.pathlogic.junction;
 
 import net.shiroha233.roadweaver.postprocess.JunctionConnector;
