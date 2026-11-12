@@ -5,6 +5,76 @@
 
 ---
 
+## ⚠ 时效性更正（2026-11-13 补，**读下文前先读这一节**）
+
+本文开头那句「与代码<b>同源受检</b>」**远强于实际**。核对后的真实情况：
+
+### 一、机器到底查了什么
+
+`ArchitectureGuardTest.架构文档必须说明每个新架构包` 的实际断言只有一条：
+
+```java
+for (String pkg : SOLVER_PACKAGES)          // = ["metric","topology","band","pipeline"]
+    if (!text.contains(pkg)) missing.add(pkg);
+```
+
+也就是说：**它只检查本文件里出现了这 4 个包名这几个字串**。
+下面的依赖规则表、基线数字、包结构图，**没有任何一条被机器校验**。
+
+### 二、`foundation.*` 这套分层**从来没有落地**
+
+下表「目标分层」里的 `foundation.core` / `foundation.terrain` /
+`foundation.constraint` / `foundation.build` —— **这些包在代码里不存在**：
+
+| 文档写的 | 代码实际 |
+|---|---|
+| `foundation.core` | `core`（散在顶层）|
+| `foundation.terrain` | `pathfinding/sampling` + `persistence` |
+| `foundation.constraint` | **不存在**（避让判据还在 `pathlogic/structures`、`search`、`structures`）|
+| `foundation.build` | **不存在**（施工在 `pathlogic/construction`、`pathlogic/tunnel`、`decoration`）|
+
+真实架构是：**保留旧仓的顶层包结构，就地重构**，另外长出 6 个新求解包。
+顶层包实际清单（`common/src/main/java/net/shiroha233/roadweaver` 下一级）：
+
+```
+apiimpl(2)  band(3)  bridge(6)  client(77)  command(1)  compat(7)  config(39)
+core(12)    decoration(24)  generation(22)  map(31)  metric(8)  mixin(1)
+network(5)  pathfinding(96)  pathlogic(83)  persistence(24)  pipeline(10)
+planning(53)  postprocess(13)  route(29)  runtime(7)  search(3)  spec(4)
+structures(24)  topology(5)  util(3)  worldgen(7)
+```
+
+> 所以「目标分层」那一段应理解为**当时的设想**，不是现状。
+> 真正被强制的依赖约束是 `deps-baseline.txt`（162 条包依赖边的 ratchet）+ `LAYER_RULES`。
+
+### 三、底部的基线表已全部过期
+
+| 指标 | 本文写的（2026-11-12）| 实测（2026-11-13）|
+|---|---|---|
+| 超过 800 行的类 | 29 个 | **19 个** |
+| 有「文件职责」头注的文件 | 172 / 461 = 37.3% | **595 / 595 = 100%**（且有 `duty == total` 硬断言）|
+| 超过 60 个方法的类 | 11 个 | 未复核（守卫不查这一项）|
+
+### 四、两处与代码对不上的具体说法
+
+| 本文写的 | 实际 |
+|---|---|
+| `PathfindingAlgorithm.BAND` 是第 5 个寻路算法实现 | **`PathfindingAlgorithm.java` 不存在**。`pathfinding/PathfinderFactory` 直接 `import bridge.BandPathfinder` |
+| `StructureAvoidanceService` = 3,542 行 / 124 个静态方法 | 现在约 **940~1000 行 / 67 个静态方法**（后续轮次又拆过）|
+
+### 五、本文**仍然成立**的部分（这些可以照读）
+
+- 「为什么重构」那张职责分散表 —— 描述的是**旧仓**的病灶，历史事实；
+- 「两层必须记录的架构决定」（用已预热的地形场而不是重采样、步长只是搜索粒度）；
+- 弹性带的关键性质（直线输入严格不变、曲率不可能上升、μ=0 必须拒绝）；
+- 「必须保留的功能」表；
+- 「中文注释规范」；
+- 附：`StructureAvoidanceService` 的功能域地图 —— **方法清单仍有参考价值**，
+  但行数与"剩余 124 个静态方法"这类数字已过期。
+
+---
+
+
 ## 为什么重构
 
 旧仓 109,275 行里，包语义边界已经崩了：

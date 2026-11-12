@@ -1612,3 +1612,62 @@ record 的真实范围就是 71–167，与手写的 `^    }$` 标记一致。�
 
 > 又是同一件事：**不查就写，写出来的就是错的**。
 > 这张表的价值恰恰在于它把"哪些旧结论还成立"和"哪些只是我以为"分开了。
+
+---
+
+# `ARCHITECTURE.md` 时效性更正（2026-11-13）
+
+这份是最老的文档，开头写着「本文件与代码**同源受检**」。核对后发现这句话**远强于实际**。
+
+## 机器到底查了什么
+
+```java
+// ArchitectureGuardTest.架构文档必须说明每个新架构包
+for (String pkg : SOLVER_PACKAGES)          // = ["metric","topology","band","pipeline"]
+    if (!text.contains(pkg)) missing.add(pkg);
+```
+
+**只检查本文件里出现了这 4 个包名这几个字串。** 依赖规则表、基线数字、包结构图，
+没有任何一条被机器校验。
+
+## `foundation.*` 这套分层从来没有落地
+
+文档「目标分层」里的 `foundation.core` / `.terrain` / `.constraint` / `.build`
+**在代码里不存在**：
+
+| 文档写的 | 代码实际 |
+|---|---|
+| `foundation.core` | `core`（顶层）|
+| `foundation.terrain` | `pathfinding/sampling` + `persistence` |
+| `foundation.constraint` | **不存在**（避让判据仍在 `pathlogic/structures`、`search`、`structures`）|
+| `foundation.build` | **不存在**（施工在 `pathlogic/construction`、`pathlogic/tunnel`、`decoration`）|
+
+真实架构是：**保留旧仓的顶层包结构、就地重构**，另外长出 6 个新求解包
+（`metric` / `topology` / `band` / `pipeline` / `bridge` / `spec`）。
+已把 29 个顶层包的实际文件数写进更正节。
+
+## 两处具体对不上
+
+| 文档写的 | 实际 |
+|---|---|
+| `PathfindingAlgorithm.BAND` 是第 5 个寻路实现 | **`PathfindingAlgorithm.java` 不存在**；`PathfinderFactory` 直接 `import bridge.BandPathfinder` |
+| `StructureAvoidanceService` = 3,542 行 / 124 静态方法 | 现在约 **940~1000 行 / 67 个静态方法** |
+
+## 基线表全错
+
+| 指标 | 文档 | 实测 |
+|---|---|---|
+| >800 行的类 | 29 | **19** |
+| 职责头 | 172/461 = 37.3% | **595/595 = 100%**（有 `duty == total` 硬断言）|
+
+## 仍然成立的部分
+
+「为什么重构」的旧仓病灶表（历史事实）、两条架构决定（用预热地形场 / 步长只是搜索粒度）、
+弹性带的关键性质、必须保留的功能表、中文注释规范、
+`StructureAvoidanceService` 的功能域方法清单（行数已过期）。
+
+## 一条通用教训
+
+> **文档里「受检」二字必须写明受检的粒度。**
+> 「本文与代码同源受检」听起来像"整篇都被校验"，实际只校验了 4 个字串。
+> 这种模糊表述比没有检查更危险 —— 它让人以为其余部分也是权威的。
