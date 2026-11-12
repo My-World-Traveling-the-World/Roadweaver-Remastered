@@ -89,8 +89,7 @@ class ArchitectureGuardTest {
             "generation.InitialGenManager",
             "pathlogic.pathcalc.RoadPathCalculator",
             "pathlogic.core.Road",
-            "generation.RoadGenerationService",
-            "pathfinding.sampling.AccurateHeightSampler"
+            "generation.RoadGenerationService"
     );
 
     /** 基线：超过 800 行的类（2026-11-12）。只许从这里删，不许往这里加。 */

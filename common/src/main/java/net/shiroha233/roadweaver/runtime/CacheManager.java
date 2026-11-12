@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.runtime;
 
 import net.minecraft.world.level.Level;
+import net.shiroha233.roadweaver.pathfinding.sampling.SamplerStatics;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.decoration.text.SignTextService;
@@ -102,7 +103,7 @@ public final class CacheManager {
         }
 
         try {
-            AccurateHeightSampler.clearForLevel(level);
+            SamplerStatics.clearForLevel(level);
         } catch (Exception e) {
             LOGGER.warn("Chunky 让位：清理精采样缓存失败: {}", e.getMessage());
         }
@@ -178,7 +179,7 @@ public final class CacheManager {
         SignTextService.clearPending();
         TerrainSamplingStats.reset();
         TerrainSamplingSessions.clearAll();
-        AccurateHeightSampler.clearAll();
+        SamplerStatics.clearAll();
         PlannedPathCache.clearAll();
         CoarseTerrainTileCache.clearAll();
         StructureFileStorage.resetSnapshotCache();
@@ -196,7 +197,7 @@ public final class CacheManager {
 
         TerrainSamplingSessions.clear(level);
         AutomaticPlanningSamplingActivities.clear(level);
-        AccurateHeightSampler.clearForLevel(level);
+        SamplerStatics.clearForLevel(level);
         WorldgenFingerprintService.clear(level);
         PlannedPathCache.clear(level);
         RoadWorldgenPlanCache.clear(level);

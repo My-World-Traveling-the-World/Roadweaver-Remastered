@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import static net.shiroha233.roadweaver.pathfinding.sampling.SamplerStatics.*;
 
 /**
  * 精确高度采样统一门面。
@@ -45,37 +46,37 @@ public final class AccurateHeightSampler {
     // 完整块、走到 volume walk 就被别的 shard 访问挤掉"，missingColumns 反复出现
     // （真机 totalColumns=29333 missingColumns=6439）。容量按"一条路足迹 + 若干
     // 条相邻路复用"放大，逐列缓存与整块缓存都留得住，跨路也能命中。
-    private static final int CHUNK_CACHE_CAPACITY = 8192;
-    private static final int COLUMN_CACHE_CAPACITY = 262_144;
+    static final int CHUNK_CACHE_CAPACITY = 8192;
+    static final int COLUMN_CACHE_CAPACITY = 262_144;
     /**
      * P1-6: the two caches used to sit behind a single {@code cacheLock}, so
      * every worker serialised on every column lookup. They are now split into
      * independently locked LRU buckets. Cache contents only decide reuse, never
      * the sampled values, so sharding cannot change any road result.
      */
-    private static final int CACHE_SHARDS = 16;
-    private static final int SHARD_MASK = CACHE_SHARDS - 1;
-    private static final int CHUNK_SHARD_CAPACITY = Math.max(1, CHUNK_CACHE_CAPACITY / CACHE_SHARDS);
-    private static final int COLUMN_SHARD_CAPACITY = Math.max(1, COLUMN_CACHE_CAPACITY / CACHE_SHARDS);
-    private static final Map<ServerLevel, AccurateHeightSampler> SHARED_SAMPLERS = new IdentityHashMap<>();
+    static final int CACHE_SHARDS = 16;
+    static final int SHARD_MASK = CACHE_SHARDS - 1;
+    static final int CHUNK_SHARD_CAPACITY = Math.max(1, CHUNK_CACHE_CAPACITY / CACHE_SHARDS);
+    static final int COLUMN_SHARD_CAPACITY = Math.max(1, COLUMN_CACHE_CAPACITY / CACHE_SHARDS);
+    static final Map<ServerLevel, AccurateHeightSampler> SHARED_SAMPLERS = new IdentityHashMap<>();
 
-    private final ServerLevel level;
-    private final int seaLevel;
-    private final AccurateHeightBackend backend;
-    private final AccurateSampleStore store;
-    private final List<Shard<AccurateHeightChunk>> chunkShards;
-    private final List<Shard<AccurateHeightSample>> columnShards;
-    private final ConcurrentHashMap<Long, CompletableFuture<AccurateHeightChunk>> inFlight = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Long, CompletableFuture<Void>> tileInFlight = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Long, CompletableFuture<Void>> acceleratedTileInFlight = new ConcurrentHashMap<>();
-    private final AtomicBoolean closed = new AtomicBoolean();
+    final ServerLevel level;
+    final int seaLevel;
+    final AccurateHeightBackend backend;
+    final AccurateSampleStore store;
+    final List<Shard<AccurateHeightChunk>> chunkShards;
+    final List<Shard<AccurateHeightSample>> columnShards;
+    final ConcurrentHashMap<Long, CompletableFuture<AccurateHeightChunk>> inFlight = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<Long, CompletableFuture<Void>> tileInFlight = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<Long, CompletableFuture<Void>> acceleratedTileInFlight = new ConcurrentHashMap<>();
+    final AtomicBoolean closed = new AtomicBoolean();
 
     /** Tiles currently owned by this thread; prevents recursive self-joins. */
-    private final ThreadLocal<java.util.Set<Long>> ownedTiles =
+    final ThreadLocal<java.util.Set<Long>> ownedTiles =
             ThreadLocal.withInitial(java.util.HashSet::new);
 
     /** Chunks currently owned by this thread; prevents recursive self-joins. */
-    private final ThreadLocal<java.util.Set<Long>> ownedChunks =
+    final ThreadLocal<java.util.Set<Long>> ownedChunks =
             ThreadLocal.withInitial(java.util.HashSet::new);
 
     AccurateHeightSampler(ServerLevel level, AccurateHeightBackend backend) {
@@ -97,7 +98,7 @@ public final class AccurateHeightSampler {
     }
 
     /** One independently locked LRU bucket of a shared sampler cache. */
-    private static final class Shard<V> {
+    static final class Shard<V> {
         private final Object lock = new Object();
         private final Map<Long, V> entries;
 
@@ -135,15 +136,15 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private static int shardIndex(long key) {
+    static int shardIndex(long key) {
         return ((int) (key ^ (key >>> 32))) & SHARD_MASK;
     }
 
-    private Shard<AccurateHeightChunk> chunkShard(long key) {
+    Shard<AccurateHeightChunk> chunkShard(long key) {
         return chunkShards.get(shardIndex(key));
     }
 
-    private Shard<AccurateHeightSample> columnShard(long key) {
+    Shard<AccurateHeightSample> columnShard(long key) {
         return columnShards.get(shardIndex(key));
     }
 
@@ -413,7 +414,7 @@ public final class AccurateHeightSampler {
         return Optional.of(new AccurateHeightGrid(request, worldSurface, oceanFloor, motionBlocking));
     }
 
-    private AccurateHeightGrid sampleGridInternal(AccurateHeightGridRequest request,
+    AccurateHeightGrid sampleGridInternal(AccurateHeightGridRequest request,
                                                    AccurateSamplingProgress progress,
                                                    boolean acceleratedOnly) {
         ensureOpen();
@@ -554,7 +555,7 @@ public final class AccurateHeightSampler {
         closeInternal();
     }
 
-    private void closeInternal() {
+    void closeInternal() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
@@ -575,31 +576,7 @@ public final class AccurateHeightSampler {
         backend.close();
     }
 
-    public static void clearForLevel(ServerLevel level) {
-        if (level == null) {
-            return;
-        }
-        AccurateHeightSampler sampler;
-        synchronized (SHARED_SAMPLERS) {
-            sampler = SHARED_SAMPLERS.remove(level);
-        }
-        if (sampler != null) {
-            sampler.closeInternal();
-        }
-    }
-
-    public static void clearAll() {
-        List<AccurateHeightSampler> samplers;
-        synchronized (SHARED_SAMPLERS) {
-            samplers = new ArrayList<>(SHARED_SAMPLERS.values());
-            SHARED_SAMPLERS.clear();
-        }
-        for (AccurateHeightSampler sampler : samplers) {
-            sampler.closeInternal();
-        }
-    }
-
-    private AccurateHeightChunk chunkAt(int x, int z) {
+    AccurateHeightChunk chunkAt(int x, int z) {
         long key = ChunkPos.asLong(x >> 4, z >> 4);
         AccurateHeightChunk cached = getCached(key);
         if (cached != null) {
@@ -613,7 +590,7 @@ public final class AccurateHeightSampler {
         return sampled;
     }
 
-    private Map<Long, AccurateHeightSample> samplePositionsInternal(Collection<BlockPos> positions,
+    Map<Long, AccurateHeightSample> samplePositionsInternal(Collection<BlockPos> positions,
                                                                     AccurateSamplingProgress progress,
                                                                     boolean recordStats,
                                                                     boolean acceleratedOnly) {
@@ -692,7 +669,7 @@ public final class AccurateHeightSampler {
         return orderedSamples(unique.keySet(), result);
     }
 
-    private void completeOwned(Map<Long, CompletableFuture<AccurateHeightChunk>> owned,
+    void completeOwned(Map<Long, CompletableFuture<AccurateHeightChunk>> owned,
                                Map<Long, AccurateHeightChunk> result) {
         try {
             Map<Long, AccurateHeightChunk> sampled = backend.sampleChunks(owned.keySet());
@@ -732,7 +709,7 @@ public final class AccurateHeightSampler {
      * the outer sampleChunks loop can re-own the chunk on this thread instead
      * of blocking forever.
      */
-    private void joinWaiting(Map<Long, CompletableFuture<AccurateHeightChunk>> waiting,
+    void joinWaiting(Map<Long, CompletableFuture<AccurateHeightChunk>> waiting,
                              Map<Long, AccurateHeightChunk> result) {
         long timeoutMs = inFlightTimeoutMs();
         for (Map.Entry<Long, CompletableFuture<AccurateHeightChunk>> entry : waiting.entrySet()) {
@@ -754,7 +731,7 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private void completeOwnedColumnTiles(
+    void completeOwnedColumnTiles(
             Map<Long, CompletableFuture<Void>> owned,
             Map<Long, LinkedHashMap<Long, BlockPos>> positionsByTile,
             Map<Long, BlockPos> unresolved,
@@ -809,38 +786,7 @@ public final class AccurateHeightSampler {
      * the coalescer so the caller's next claim round can take the tile over
      * instead of blocking forever; the real owner's finally remove is a no-op.
      */
-    private static void joinWaitingTiles(Map<Long, CompletableFuture<Void>> waiting,
-                                         ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer) {
-        long timeoutMs = inFlightTimeoutMs();
-        for (Map.Entry<Long, CompletableFuture<Void>> entry : waiting.entrySet()) {
-            try {
-                entry.getValue().get(timeoutMs, TimeUnit.MILLISECONDS);
-            } catch (TimeoutException timedOut) {
-                coalescer.remove(entry.getKey(), entry.getValue());
-            } catch (InterruptedException interrupted) {
-                entry.getValue().cancel(true);
-                Thread.currentThread().interrupt();
-                throw new CancellationException("interrupted while waiting for accurate tile");
-            } catch (ExecutionException failure) {
-                Throwable cause = failure.getCause();
-                if (cause instanceof CancellationException cancelled) throw cancelled;
-                if (cause instanceof RuntimeException runtime) throw runtime;
-                if (cause instanceof Error error) throw error;
-                throw new IllegalStateException("accurate tile sampling failed", cause);
-            }
-        }
-    }
-
-    static long inFlightTimeoutMs() {
-        try {
-            return Math.max(100, Math.min(30_000,
-                    ConfigService.get().planning().samplingInFlightTimeoutMs()));
-        } catch (Throwable ignored) {
-            return 3_000L;
-        }
-    }
-
-    private AccurateHeightGrid sampleWholeGridWithTileLease(AccurateHeightGridRequest request,
+    AccurateHeightGrid sampleWholeGridWithTileLease(AccurateHeightGridRequest request,
                                                             AccurateSamplingProgress progress,
                                                             boolean acceleratedOnly) {
         ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer = acceleratedOnly
@@ -890,15 +836,15 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private AccurateHeightChunk getCached(long key) {
+    AccurateHeightChunk getCached(long key) {
         return chunkShard(key).get(key);
     }
 
-    private void putCached(long key, AccurateHeightChunk chunk) {
+    void putCached(long key, AccurateHeightChunk chunk) {
         chunkShard(key).put(key, chunk);
     }
 
-    private AccurateHeightSample cachedSample(long key, int blockX, int blockZ) {
+    AccurateHeightSample cachedSample(long key, int blockX, int blockZ) {
         AccurateHeightSample sample = columnShard(key).get(key);
         if (sample != null) {
             return sample;
@@ -916,7 +862,7 @@ public final class AccurateHeightSampler {
         return fromChunk;
     }
 
-    private void putColumnCached(long key, AccurateHeightSample sample) {
+    void putColumnCached(long key, AccurateHeightSample sample) {
         columnShard(key).put(key, sample);
     }
 
@@ -926,33 +872,7 @@ public final class AccurateHeightSampler {
                 : sample.worldSurfaceWg();
     }
 
-    private static LinkedHashMap<Long, BlockPos> uniquePositions(Collection<BlockPos> positions) {
-        LinkedHashMap<Long, BlockPos> unique = new LinkedHashMap<>();
-        for (BlockPos position : positions) {
-            if (position != null) {
-                unique.putIfAbsent(AccurateHeightSample.key(position.getX(), position.getZ()), position);
-            }
-        }
-        return unique;
-    }
-
-    private static LinkedHashMap<Long, LinkedHashMap<Long, BlockPos>> groupColumnsByTile(
-            Map<Long, BlockPos> positions) {
-        LinkedHashMap<Long, LinkedHashMap<Long, BlockPos>> grouped = new LinkedHashMap<>();
-        for (Map.Entry<Long, BlockPos> entry : positions.entrySet()) {
-            BlockPos position = entry.getValue();
-            long tileKey = tileKey(position.getX(), position.getZ());
-            grouped.computeIfAbsent(tileKey, ignored -> new LinkedHashMap<>())
-                    .put(entry.getKey(), position);
-        }
-        return grouped;
-    }
-
-    private static long tileKey(int blockX, int blockZ) {
-        return ChunkPos.asLong(Math.floorDiv(blockX, 256), Math.floorDiv(blockZ, 256));
-    }
-
-    private void resolveCachedColumns(LinkedHashMap<Long, BlockPos> unresolved,
+    void resolveCachedColumns(LinkedHashMap<Long, BlockPos> unresolved,
                                       Map<Long, AccurateHeightSample> result) {
         Iterator<Map.Entry<Long, BlockPos>> iterator = unresolved.entrySet().iterator();
         while (iterator.hasNext()) {
@@ -965,7 +885,7 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private static List<BlockPos> interpolatePositions(List<BlockPos> path, int divisor) {
+    static List<BlockPos> interpolatePositions(List<BlockPos> path, int divisor) {
         if (divisor <= 1 || path.size() == 1) {
             return new ArrayList<>(path);
         }
@@ -985,13 +905,13 @@ public final class AccurateHeightSampler {
         return result;
     }
 
-    private void ensureOpen() {
+    void ensureOpen() {
         if (closed.get()) {
             throw new IllegalStateException("Accurate height sampler is closed");
         }
     }
 
-    private void resolveStoredChunks(LinkedHashSet<Long> unresolved,
+    void resolveStoredChunks(LinkedHashSet<Long> unresolved,
                                      Map<Long, AccurateHeightChunk> result) {
         if (unresolved.isEmpty()) {
             return;
@@ -1014,7 +934,7 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private void resolveStoredColumns(LinkedHashMap<Long, BlockPos> unresolved,
+    void resolveStoredColumns(LinkedHashMap<Long, BlockPos> unresolved,
                                       Map<Long, AccurateHeightSample> result) {
         if (unresolved.isEmpty()) {
             return;
@@ -1037,7 +957,7 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private void fillGridColumn(int[] worldSurface,
+    void fillGridColumn(int[] worldSurface,
                                 int[] oceanFloor,
                                 int[] motionBlocking,
                                 int index,
@@ -1047,7 +967,7 @@ public final class AccurateHeightSampler {
         motionBlocking[index] = sample.motionBlockingNoLeaves();
     }
 
-    private void cacheGridColumns(AccurateHeightGrid grid) {
+    void cacheGridColumns(AccurateHeightGrid grid) {
         for (int index = 0; index < grid.request().sampleCount(); index++) {
             putColumnCached(
                     AccurateHeightSample.key(grid.request().blockX(index), grid.request().blockZ(index)),
@@ -1058,34 +978,4 @@ public final class AccurateHeightSampler {
         }
     }
 
-    private static AccurateHeightSample sampleFromChunk(AccurateHeightChunk chunk, int blockX, int blockZ) {
-        return new AccurateHeightSample(
-                chunk.worldSurfaceWg(blockX, blockZ),
-                chunk.oceanFloorWg(blockX, blockZ),
-                chunk.motionBlockingNoLeaves(blockX, blockZ));
-    }
-
-    private static Map<Long, AccurateHeightChunk> orderedChunks(Collection<Long> order,
-                                                                Map<Long, AccurateHeightChunk> chunks) {
-        LinkedHashMap<Long, AccurateHeightChunk> ordered = new LinkedHashMap<>(order.size());
-        for (long key : order) {
-            AccurateHeightChunk chunk = chunks.get(key);
-            if (chunk != null) {
-                ordered.put(key, chunk);
-            }
-        }
-        return Collections.unmodifiableMap(ordered);
-    }
-
-    private static Map<Long, AccurateHeightSample> orderedSamples(Collection<Long> order,
-                                                                  Map<Long, AccurateHeightSample> samples) {
-        LinkedHashMap<Long, AccurateHeightSample> ordered = new LinkedHashMap<>(order.size());
-        for (long key : order) {
-            AccurateHeightSample sample = samples.get(key);
-            if (sample != null) {
-                ordered.put(key, sample);
-            }
-        }
-        return Collections.unmodifiableMap(ordered);
-    }
 }
