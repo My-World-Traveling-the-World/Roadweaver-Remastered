@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
+import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
@@ -35,11 +37,11 @@ public final class StructureAvoidanceServiceTest {
         StructureConnection connection = new StructureConnection(endpoint, new BlockPos(100, 64, 0));
 
         Set<StructureOwnerKey> inferred =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(connection, List.of(), List.of(box));
+                resolveEndpointOwnersForTest(connection, List.of(), List.of(box));
         require(inferred.contains(owner), "nearby verified endpoint building was not inferred");
 
         Set<StructureOwnerKey> exact =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(
+                resolveEndpointOwnersForTest(
                         connection, List.of(new StructureInfo(endpoint, "test:terminal")), List.of(box));
         require(exact.contains(owner), "known endpoint owner was not retained");
     }
@@ -50,7 +52,7 @@ public final class StructureAvoidanceServiceTest {
         StructureOwnerKey farOwner =
                 new StructureOwnerKey(12L, "test:far");
         Set<StructureOwnerKey> far =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(
+                resolveEndpointOwnersForTest(
                         connection, List.of(), List.of(box(farOwner, 20, 0, 24, 1)));
         require(far.isEmpty(), "far building was incorrectly inferred as endpoint");
 
@@ -59,7 +61,7 @@ public final class StructureAvoidanceServiceTest {
         StructureOwnerKey right =
                 new StructureOwnerKey(14L, "test:right");
         Set<StructureOwnerKey> ambiguous =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(
+                resolveEndpointOwnersForTest(
                         connection, List.of(), List.of(box(left, -4, 0, -4, 0), box(right, 4, 0, 4, 0)));
         require(ambiguous.isEmpty(), "equidistant endpoint buildings were incorrectly selected");
     }
@@ -70,7 +72,7 @@ public final class StructureAvoidanceServiceTest {
         StructureOwnerKey actualVillage =
                 new StructureOwnerKey(15L, "ctov:large/village_mountain");
         Set<StructureOwnerKey> remapped =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(
+                resolveEndpointOwnersForTest(
                         connection,
                         List.of(new StructureInfo(endpoint, "minecraft:village_snowy")),
                         List.of(box(actualVillage, 252, -2164, 263, -2155)));
@@ -80,7 +82,7 @@ public final class StructureAvoidanceServiceTest {
         StructureOwnerKey competing =
                 new StructureOwnerKey(16L, "ctov:small/village_snowy_igloo");
         Set<StructureOwnerKey> ambiguous =
-                StructureAvoidanceService.resolveEndpointOwnersForTest(
+                resolveEndpointOwnersForTest(
                         connection,
                         List.of(new StructureInfo(endpoint, "minecraft:village_snowy")),
                         List.of(box(actualVillage, 252, -2164, 255, -2157),

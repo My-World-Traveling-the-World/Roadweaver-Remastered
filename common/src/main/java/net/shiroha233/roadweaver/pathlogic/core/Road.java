@@ -1,6 +1,7 @@
 /* 文件职责：生成单条道路并协调精确地形路径、跨度与附属结构。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.PresetService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -1293,7 +1294,7 @@ public final class Road {
         if (level == null || connection == null) return false;
         BlockPos endpoint = from ? connection.from() : connection.to();
         if (endpoint == null) return false;
-        if (StructureAvoidanceService.isVillageEndpoint(level, connection, from)) return true;
+        if (isVillageEndpoint(level, connection, from)) return true;
         BlockPos spawn = level.getSharedSpawnPos();
         if (spawn != null && spawn.getX() == endpoint.getX()
                 && spawn.getZ() == endpoint.getZ()) {
@@ -1328,7 +1329,7 @@ public final class Road {
         if (level == null || connection == null) return false;
         BlockPos endpoint = from ? connection.from() : connection.to();
         if (endpoint == null) return false;
-        if (StructureAvoidanceService.isVillageEndpoint(level, connection, from)) return false;
+        if (isVillageEndpoint(level, connection, from)) return false;
         BlockPos spawn = level.getSharedSpawnPos();
         if (spawn != null && spawn.getX() == endpoint.getX()
                 && spawn.getZ() == endpoint.getZ()) {
@@ -1350,7 +1351,7 @@ public final class Road {
         // and not the spawn may use negotiated unknown height. A named/village
         // structure must keep its real surface height even when its planning
         // snapshot has not been prepared yet.
-        return !StructureAvoidanceService.isKnownStructureEndpoint(level, connection, from);
+        return !isKnownStructureEndpoint(level, connection, from);
     }
 
     private static void constrainEndpointRamp(int[] profile, int endpoint,

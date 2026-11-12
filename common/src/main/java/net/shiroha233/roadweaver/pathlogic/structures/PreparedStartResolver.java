@@ -41,6 +41,7 @@ import java.util.function.Supplier;
 
 // 仍留在避让服务里的常量与工具（包内可见），静态导入后方法体不用改 —— 纯搬迁。
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.*;
+import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 
 /**
  * 结构起点解析器：把「某个区块可能有哪个结构」翻译成「这个结构占哪些方块」。
