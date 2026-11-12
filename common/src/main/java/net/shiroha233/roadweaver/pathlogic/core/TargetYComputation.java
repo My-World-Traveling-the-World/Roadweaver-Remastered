@@ -74,6 +74,8 @@ import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
 import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
 
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
 /**
@@ -447,6 +449,11 @@ public final class TargetYComputation {
             }
         }
 
+        // ── 剖面求解器模式分派（S7 第 1 级）──────────────────────────────
+        // 默认 LEGACY：直接返回原剖面，不建任何对象、不做任何计算 —— 保证
+        // 「没设属性」与「设了 legacy」逐字节等价，CI 才敢用默认路径当基线。
+        smoothed = applyProfileSolver(smoothed, terrainY, tunnelMask, pinnedMask,
+                startBoundary, endBoundary, cfg, connection);
         List<Integer> out = new ArrayList<>(n);
         for (int v : smoothed) out.add(v);
         // Task 16 diagnostic: flag remaining >1 station height steps and
@@ -517,5 +524,70 @@ public final class TargetYComputation {
                 connection == null ? "?" : connection.from() + "->" + connection.to(),
                 terrainY, isCrossing);
         return out;
+    }
+
+    /**
+     * 按 {@link ProfileSolverMode} 决定是否用全局 DP 替换旧流水线的剖面。
+     *
+     * <h2>三条安全约束</h2>
+     * <ol>
+     *   <li><b>默认路径零改动</b>：{@code LEGACY} 时立刻返回入参，不构造任何对象；</li>
+     *   <li><b>DP 失败必须回落</b>：不可行 / 异常一律返回旧剖面并记警告 ——
+     *       绝不因为实验性的求解器让一条路算不出来；</li>
+     *   <li><b>硬契约必须传进去</b>：结构边界锁定（村庄/出生点/命名结构）钉在
+     *       {@code startBoundary}/{@code endBoundary}，隧道段的覆土用
+     *       {@code SurfaceGradeLimits.tunnelCoreOverburden()}。
+     *       少传任何一条都会让入口高度偏离实测地表 —— 那正是玩家一眼能看出来的错误。</li>
+     * </ol>
+     *
+     * <p>窗口参数与 AB 观察器用的是同一组实验值，便于两边日志直接对比。</p>
+     */
+    private static int[] applyProfileSolver(int[] smoothed, int[] terrainY, boolean[] tunnelMask,
+                                            boolean[] pinnedMask, int startBoundary, int endBoundary,
+                                            RoadGenerationConfig cfg, StructureConnection connection) {
+        if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
+            return smoothed;
+        }
+        int n = smoothed.length;
+        try {
+            int[] pin = new int[n];
+            java.util.Arrays.fill(pin, -1);
+            if (pinnedMask != null) {
+                if (pinnedMask.length > 0 && pinnedMask[0]) pin[0] = startBoundary;
+                if (pinnedMask.length > n - 1 && pinnedMask[n - 1]) pin[n - 1] = endBoundary;
+            }
+            int minCover = Math.max(1, RoadGradePlanner.SurfaceGradeLimits.capture().tunnelCoreOverburden());
+            var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover);
+            int maxStep = Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2);
+
+            var solved = ProfileDpSource.solve(terrainY, isCrossingMaskOf(tunnelMask, n),
+                    PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL, maxStep, constraints);
+            if (solved.isEmpty()) {
+                LOGGER.warn("RoadWeaver profile solver=dp infeasible, falling back to legacy"
+                                + " stations={} connection={}->{}",
+                        n,
+                        connection == null ? "?" : connection.from(),
+                        connection == null ? "?" : connection.to());
+                return smoothed;
+            }
+            LOGGER.info("RoadWeaver profile solver=dp stations={} maxStep={} minCover={} connection={}->{}",
+                    n, maxStep, minCover,
+                    connection == null ? "?" : connection.from(),
+                    connection == null ? "?" : connection.to());
+            return solved.get();
+        } catch (Throwable t) {
+            // 实验性求解器绝不能让一条路算不出来
+            LOGGER.warn("RoadWeaver profile solver=dp failed, falling back to legacy: {}", t.toString());
+            return smoothed;
+        }
+    }
+
+    /** DP 的 crossing 参数：隧道段视作需要特殊处理（保持覆土/直线），其余交给约束。 */
+    private static boolean[] isCrossingMaskOf(boolean[] tunnelMask, int n) {
+        boolean[] mask = new boolean[n];
+        if (tunnelMask != null) {
+            System.arraycopy(tunnelMask, 0, mask, 0, Math.min(n, tunnelMask.length));
+        }
+        return mask;
     }
 }

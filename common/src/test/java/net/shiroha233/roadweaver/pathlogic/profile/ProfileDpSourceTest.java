@@ -305,4 +305,30 @@ final class ProfileDpSourceTest {
         assertTrue(a.isPresent() && b.isPresent(), "case=both-feasible");
         assertArrayEquals(a.get(), b.get(), "case=none-is-noop");
     }
+
+    // ── 模式开关 ──────────────────────────────────────────────
+
+    @Test
+    void 求解器模式默认是LEGACY且非法值也回落LEGACY() {
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(null), "case=null");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(""), "case=blank");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("dp2"), "case=typo");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("true"), "case=wrong-flag");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("DP"), "case=dp-upper");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(" dp "), "case=dp-spaces");
+    }
+
+    @Test
+    void 未设属性时读出来是LEGACY() {
+        System.clearProperty(ProfileSolverMode.PROPERTY);
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=unset");
+        System.setProperty(ProfileSolverMode.PROPERTY, "dp");
+        try {
+            assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=set-dp");
+        } finally {
+            System.clearProperty(ProfileSolverMode.PROPERTY);
+        }
+    }
 }

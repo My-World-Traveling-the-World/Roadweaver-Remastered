@@ -96,9 +96,16 @@
 要贴住高处的锁定点，就显式放宽 `maxFill`；求解器**不会偷偷超限**。
 已用测试钉住这条（`钉住高度超出窗口时_要么放宽窗口要么不可行`）。
 
-**第 1 级仍需在调用方做接线**：`computeTargetY` 要把
-`connection` / `UnknownEndpointHeightRegistry` / `spans` 翻译成 `Constraints`。
-这部分是第 1 级「要写的 100~150 行」里的主要工作量。
+**✅ 调用方接线也已完成（2026-11-13）**：`TargetYComputation.applyProfileSolver(...)`
+已经按 `-Droadweaver.profileSolver=dp` 分派，并且：
+
+| 保障 | 实现 |
+|---|---|
+| 默认路径逐字节不变 | `LEGACY` 时**立刻返回入参**，不构造任何对象 |
+| DP 失败必须回落 | 不可行 / 任何异常 ⇒ 返回旧剖面 + 记警告，绝不让一条路算不出来 |
+| 硬契约一定传进去 | `pinnedMask` → `pin`（用 `startBoundary`/`endBoundary` 实测地表）<br>`tunnelMask` → `mustBeCovered`，覆土取 `SurfaceGradeLimits.tunnelCoreOverburden()` |
+
+⇒ **第 1 级的代码已全部就位**，剩下的只是"在真实存档上跑一次 `=dp` 看结果"。
 
 ---
 
