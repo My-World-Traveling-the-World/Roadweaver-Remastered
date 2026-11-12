@@ -29,16 +29,16 @@ public final class StructureAvoidanceServiceTest {
 
     private static void testEndpointOwnerInference() {
         BlockPos endpoint = new BlockPos(0, 64, 0);
-        StructureAvoidanceService.StructureOwnerKey owner =
-                new StructureAvoidanceService.StructureOwnerKey(11L, "test:village_terminal");
-        StructureAvoidanceService.OwnedStructureBox box = box(owner, 2, -1, 4, 1);
+        StructureOwnerKey owner =
+                new StructureOwnerKey(11L, "test:village_terminal");
+        OwnedStructureBox box = box(owner, 2, -1, 4, 1);
         StructureConnection connection = new StructureConnection(endpoint, new BlockPos(100, 64, 0));
 
-        Set<StructureAvoidanceService.StructureOwnerKey> inferred =
+        Set<StructureOwnerKey> inferred =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(connection, List.of(), List.of(box));
         require(inferred.contains(owner), "nearby verified endpoint building was not inferred");
 
-        Set<StructureAvoidanceService.StructureOwnerKey> exact =
+        Set<StructureOwnerKey> exact =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(
                         connection, List.of(new StructureInfo(endpoint, "test:terminal")), List.of(box));
         require(exact.contains(owner), "known endpoint owner was not retained");
@@ -47,18 +47,18 @@ public final class StructureAvoidanceServiceTest {
     private static void testEndpointOwnerDistanceAndAmbiguity() {
         BlockPos endpoint = new BlockPos(0, 64, 0);
         StructureConnection connection = new StructureConnection(endpoint, new BlockPos(100, 64, 0));
-        StructureAvoidanceService.StructureOwnerKey farOwner =
-                new StructureAvoidanceService.StructureOwnerKey(12L, "test:far");
-        Set<StructureAvoidanceService.StructureOwnerKey> far =
+        StructureOwnerKey farOwner =
+                new StructureOwnerKey(12L, "test:far");
+        Set<StructureOwnerKey> far =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(
                         connection, List.of(), List.of(box(farOwner, 20, 0, 24, 1)));
         require(far.isEmpty(), "far building was incorrectly inferred as endpoint");
 
-        StructureAvoidanceService.StructureOwnerKey left =
-                new StructureAvoidanceService.StructureOwnerKey(13L, "test:left");
-        StructureAvoidanceService.StructureOwnerKey right =
-                new StructureAvoidanceService.StructureOwnerKey(14L, "test:right");
-        Set<StructureAvoidanceService.StructureOwnerKey> ambiguous =
+        StructureOwnerKey left =
+                new StructureOwnerKey(13L, "test:left");
+        StructureOwnerKey right =
+                new StructureOwnerKey(14L, "test:right");
+        Set<StructureOwnerKey> ambiguous =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(
                         connection, List.of(), List.of(box(left, -4, 0, -4, 0), box(right, 4, 0, 4, 0)));
         require(ambiguous.isEmpty(), "equidistant endpoint buildings were incorrectly selected");
@@ -67,9 +67,9 @@ public final class StructureAvoidanceServiceTest {
     private static void testEndpointExitRemapAcrossWorldgenIds() {
         BlockPos endpoint = new BlockPos(256, 300, -2160);
         StructureConnection connection = new StructureConnection(endpoint, new BlockPos(1104, 180, -2400));
-        StructureAvoidanceService.StructureOwnerKey actualVillage =
-                new StructureAvoidanceService.StructureOwnerKey(15L, "ctov:large/village_mountain");
-        Set<StructureAvoidanceService.StructureOwnerKey> remapped =
+        StructureOwnerKey actualVillage =
+                new StructureOwnerKey(15L, "ctov:large/village_mountain");
+        Set<StructureOwnerKey> remapped =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(
                         connection,
                         List.of(new StructureInfo(endpoint, "minecraft:village_snowy")),
@@ -77,9 +77,9 @@ public final class StructureAvoidanceServiceTest {
         require(remapped.contains(actualVillage),
                 "unique nearby generated village was not accepted as the selected endpoint exit");
 
-        StructureAvoidanceService.StructureOwnerKey competing =
-                new StructureAvoidanceService.StructureOwnerKey(16L, "ctov:small/village_snowy_igloo");
-        Set<StructureAvoidanceService.StructureOwnerKey> ambiguous =
+        StructureOwnerKey competing =
+                new StructureOwnerKey(16L, "ctov:small/village_snowy_igloo");
+        Set<StructureOwnerKey> ambiguous =
                 StructureAvoidanceService.resolveEndpointOwnersForTest(
                         connection,
                         List.of(new StructureInfo(endpoint, "minecraft:village_snowy")),
@@ -124,9 +124,9 @@ public final class StructureAvoidanceServiceTest {
                 "internal protected gap bypassed topology fallback");
     }
 
-    private static StructureAvoidanceService.OwnedStructureBox box(
-            StructureAvoidanceService.StructureOwnerKey owner, int minX, int minZ, int maxX, int maxZ) {
-        return new StructureAvoidanceService.OwnedStructureBox(
+    private static OwnedStructureBox box(
+            StructureOwnerKey owner, int minX, int minZ, int maxX, int maxZ) {
+        return new OwnedStructureBox(
                 owner, new BoundingBox(minX, 60, minZ, maxX, 70, maxZ), Map.of());
     }
 

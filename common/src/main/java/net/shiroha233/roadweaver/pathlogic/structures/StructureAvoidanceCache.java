@@ -32,20 +32,20 @@ public final class StructureAvoidanceCache {
     /** CHUNK_BBOX_CACHE 的 LRU 容量。 */
     static final int CACHE_CAPACITY = 8192;
 
-    static final ConcurrentMap<StructureAvoidanceService.RouteKey, StructureAvoidanceService.PlanningSnapshot> PLANNING_SNAPSHOTS = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.RouteKey, Set<StructureAvoidanceService.StructureOwnerKey>> ROUTE_ENDPOINT_OWNERS = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.PreparedStartKey, List<StructureAvoidanceService.OwnedStructureBox>> PREPARED_START_BOXES = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.PreparedStartKey, List<StructureAvoidanceService.OwnedStructureBox>> STARTUP_PINNED_START_BOXES = new ConcurrentHashMap<>();
+    static final ConcurrentMap<RouteKey, StructureAvoidanceService.PlanningSnapshot> PLANNING_SNAPSHOTS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<RouteKey, Set<StructureOwnerKey>> ROUTE_ENDPOINT_OWNERS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<PreparedStartKey, List<OwnedStructureBox>> PREPARED_START_BOXES = new ConcurrentHashMap<>();
+    static final ConcurrentMap<PreparedStartKey, List<OwnedStructureBox>> STARTUP_PINNED_START_BOXES = new ConcurrentHashMap<>();
     static final ConcurrentMap<StructureAvoidanceService.ObstacleTileKey, List<StructurePredictor.AvoidanceStructureCandidate>> OBSTACLE_TILE_CANDIDATES = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.PreparedStartKey, CompletableFuture<List<StructureAvoidanceService.OwnedStructureBox>>> IN_FLIGHT_STARTS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<PreparedStartKey, CompletableFuture<List<OwnedStructureBox>>> IN_FLIGHT_STARTS = new ConcurrentHashMap<>();
     static final ConcurrentMap<StructureAvoidanceService.ChunkRequestKey, CompletableFuture<ChunkResult<ChunkAccess>>> IN_FLIGHT_CHUNK_REQUESTS = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.RuntimePreloadKey, CompletableFuture<List<StructureAvoidanceService.OwnedStructureBox>>> IN_FLIGHT_RUNTIME_PRELOADS = new ConcurrentHashMap<>();
-    static final ConcurrentMap<StructureAvoidanceService.RouteKey, CompletableFuture<Void>> IN_FLIGHT_ROUTE_CORRIDORS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<StructureAvoidanceService.RuntimePreloadKey, CompletableFuture<List<OwnedStructureBox>>> IN_FLIGHT_RUNTIME_PRELOADS = new ConcurrentHashMap<>();
+    static final ConcurrentMap<RouteKey, CompletableFuture<Void>> IN_FLIGHT_ROUTE_CORRIDORS = new ConcurrentHashMap<>();
     static final Semaphore RUNTIME_CORRIDOR_PERMITS = new Semaphore(2, true);
     static final AtomicReference<ExecutorService> NATIVE_DIRECT_EXECUTOR = new AtomicReference<>();
     static final Set<String> UNSUPPORTED_PIECE_CLASSES = ConcurrentHashMap.newKeySet();
-    static final ConcurrentLinkedQueue<StructureAvoidanceService.RouteKey> PLANNING_SNAPSHOT_ORDER = new ConcurrentLinkedQueue<>();
-    static final ConcurrentLinkedQueue<StructureAvoidanceService.PreparedStartKey> PREPARED_START_ORDER = new ConcurrentLinkedQueue<>();
+    static final ConcurrentLinkedQueue<RouteKey> PLANNING_SNAPSHOT_ORDER = new ConcurrentLinkedQueue<>();
+    static final ConcurrentLinkedQueue<PreparedStartKey> PREPARED_START_ORDER = new ConcurrentLinkedQueue<>();
     static final ConcurrentLinkedQueue<StructureAvoidanceService.ObstacleTileKey> OBSTACLE_TILE_ORDER = new ConcurrentLinkedQueue<>();
     static final ThreadLocal<StructureAvoidanceService.PlanningSnapshot> ACTIVE_PLANNING_SNAPSHOT = new ThreadLocal<>();
     static final ThreadLocal<WorldgenRandom> STRUCTURE_SELECTION_RANDOM =

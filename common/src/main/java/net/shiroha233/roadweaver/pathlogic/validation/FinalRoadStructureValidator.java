@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+import net.shiroha233.roadweaver.pathlogic.structures.StructureOwnerKey;
+import net.shiroha233.roadweaver.pathlogic.structures.OwnedStructureBox;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -173,7 +175,7 @@ public final class FinalRoadStructureValidator {
             // must not turn a passable five-block road into a rejection. Real
             // bridge/template/support volumes remain protected.
             if (!isRoadBodyVolume(volume.kind())) return true;
-            StructureAvoidanceService.OwnedStructureBox owned = switch (volume.kind()) {
+            OwnedStructureBox owned = switch (volume.kind()) {
                 case ROAD_FALLING_CAP, BRIDGE_FALLING_CAP -> snapshot.findFallingCapCollision(
                         volume.x(), volume.z(), volume.minY(), volume.maxY());
                 default -> snapshot.findCollision(volume.x(), volume.z(), volume.minY(), volume.maxY());
@@ -439,7 +441,7 @@ public final class FinalRoadStructureValidator {
                             BlockPos position,
                             int minY,
                             int maxY,
-                            StructureAvoidanceService.StructureOwnerKey owner,
+                            StructureOwnerKey owner,
                             BoundingBox componentBox) {
     }
 
