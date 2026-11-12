@@ -171,8 +171,7 @@ public final class Road {
                 InitialGenerationProgressTracker.advanceCurrentRoadTask(420, "road_span_extraction");
             }
             long spansStartedAt = System.nanoTime();
-            List<RoadSpan> spans = PathSpanExtractor.extractSpans(
-                    segments, level, cache, terrain, streams, routeBridgeMinWaterDepth());
+            List<RoadSpan> spans = extractPhysicalSpans(segments, level, cache, terrain, streams);
             if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
             long spanExtractionNanos = System.nanoTime() - spansStartedAt;
             DetailedRoadGenerationStats.recordSpanExtraction(spanExtractionNanos);
@@ -208,9 +207,10 @@ public final class Road {
                         refinedSpans, segments, streams);
                 if (refinedSpans.equals(spans)) break;
                 spans = refinedSpans;
-                spans = new ArrayList<>(spans);
-                targetY = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);
-                spans = PathSpanExtractor.refineTunnelSpans(spans, segments, targetY, level, cache);
+                SettledProfile settled = settleProfile(segments, spans, level, cache, terrain,
+                        genConfig, streams);
+                spans = settled.spans();
+                targetY = settled.targetY();
             }
             List<RoadSpan> protectedGaps = protectedGapSpans(
                     level, connection, segments);
@@ -253,8 +253,8 @@ public final class Road {
                 // not carry the old bridge/tunnel classification by X/Z only;
                 // recompute physical spans for the new corridor while
                 // retaining metadata that belongs to the original connection.
-                List<RoadSpan> refreshedSpans = PathSpanExtractor.extractSpans(
-                        segments, level, cache, terrain, streams, routeBridgeMinWaterDepth());
+                List<RoadSpan> refreshedSpans =
+                        extractPhysicalSpans(segments, level, cache, terrain, streams);
                 ArrayList<RoadSpan> retainedMetadata = new ArrayList<>(refreshedSpans);
                 for (RoadSpan span : spans) {
                     if (span == null) continue;
@@ -265,9 +265,10 @@ public final class Road {
                     }
                 }
                 spans = List.copyOf(retainedMetadata);
-                spans = new ArrayList<>(spans);
-                targetY = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);
-                spans = PathSpanExtractor.refineTunnelSpans(spans, segments, targetY, level, cache);
+                SettledProfile settled = settleProfile(segments, spans, level, cache, terrain,
+                        genConfig, streams);
+                spans = settled.spans();
+                targetY = settled.targetY();
                 LOGGER.info("RoadWeaver accepted bounded construction-feasibility height repair connection={}->{}",
                         rawStart, rawEnd);
             }
@@ -666,6 +667,45 @@ public final class Road {
         return RoadDataValidator.validateFinalRoad(candidate).valid() ? candidate : road;
     }
     
+    /** 「按当前 spans 结算剖面 + 隧道区间」的结果。 */
+    private record SettledProfile(List<RoadSpan> spans, List<Integer> targetY) {
+    }
+
+    /**
+     * 物理区间提取的<b>唯一入口</b>。
+     *
+     * <p>原先有两处调用，参数完全相同（{@code segments, level, cache, terrain, streams,
+     * routeBridgeMinWaterDepth()}）—— 收成一处，将来接 {@code RoadSpec} 时只改这里。</p>
+     */
+    private List<RoadSpan> extractPhysicalSpans(List<RoadSegmentPlacement> segments, ServerLevel level,
+                                                TerrainSamplingCache cache, PathTerrainField terrain,
+                                                StreamsReflowingCompat.SamplingSession streams) {
+        return PathSpanExtractor.extractSpans(segments, level, cache, terrain, streams,
+                routeBridgeMinWaterDepth());
+    }
+
+    /**
+     * 「按当前 spans 结算剖面 + 隧道区间」的<b>唯一入口</b>。
+     *
+     * <h2>为什么收成一个</h2>
+     * <p>这段三连（复制一份可变列表 → 算剖面 → 按剖面细化隧道区间）出现过两次，
+     * 每次参数一模一样。两份拷贝意味着将来接 {@code RoadSpec} 要改两处、
+     * 漏一处就出现「有的分支读了旧剖面」这类静默错。</p>
+     *
+     * <p><b>注意</b>：收敛的是<b>代码形状</b>，不是计算次数 —— 这两个阶段各自的输入
+     * （{@code spans}）确实不同，所以仍然要各算一次。真正的「只算一次」要靠
+     * S4 把剖面与跨度并进同一张 DP（一次求解同时产出两者），不是在这里省。</p>
+     */
+    private SettledProfile settleProfile(List<RoadSegmentPlacement> segments, List<RoadSpan> spans,
+                                         ServerLevel level, TerrainSamplingCache cache,
+                                         PathTerrainField terrain, RoadGenerationConfig genConfig,
+                                         StreamsReflowingCompat.SamplingSession streams) {
+        List<RoadSpan> mutable = new ArrayList<>(spans);
+        List<Integer> profile = computeTargetY(level, segments, mutable, cache, terrain, genConfig, streams);
+        List<RoadSpan> refined = PathSpanExtractor.refineTunnelSpans(mutable, segments, profile, level, cache);
+        return new SettledProfile(refined, profile);
+    }
+
     List<Integer> computeTargetY(ServerLevel level, List<RoadSegmentPlacement> segments,
                                  List<RoadSpan> spans, TerrainSamplingCache cache,
                                  PathTerrainField terrain,

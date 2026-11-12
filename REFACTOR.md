@@ -187,14 +187,30 @@ rg "待删（批" common/src/main/java
 
 ## 配套守卫 G4：SingleSourceOfTruthTest
 
-统计重算热点的**调用点数量**，只许减少不许新增（基线
-`common/src/test/resources/architecture/recompute-sites-baseline.txt`）：
+统计重算热点的**触发文件数**（排除定义它的文件），只许减少不许新增。
 
-| 热点 | 当前 |
-|---|---|
-| `extractSpans(` 区间提取 | 9 |
-| `computeTargetY(` 剖面计算 | 8 |
-| `refineTunnelSpans(` 隧道区间细化 | 10 |
-| `repairFinalHeightConflict(` 高度冲突修复 | 6 |
+> **口径演进（第一版是错的，记在这里免得再走回头路）**：
+> 第一版数「源码里 `符号(` 出现的次数」，实测没有意义 —— 声明、同族重载委托、
+> 以及收敛后新加的入口全都会被算进去。把两处重复调用收成一个入口时，
+> 数字只降 1 甚至不降。改成「有多少个文件在触发它」之后语义才清晰：
+> 直接对应「重算散落在几个模块里」。
 
-每把一处改成读 `RoadSpec`，就把基线数字改小；归零即说明该热点已收敛到单一来源。
+| 热点 | 触发文件数 | 是谁 |
+|---|---|---|
+| `extractSpans(` 区间提取 | **2** | `Road` / `RoadPlanConsistencyService` |
+| `computeTargetY(` 剖面计算 | **1** | `Road` |
+| `refineTunnelSpans(` 隧道区间细化 | **2** | `Road` / `RoadPlanConsistencyService` |
+| `repairFinalHeightConflict(` 高度冲突修复 | **1** | `Road` |
+
+**S1 的静态验收（全链 ≤2 处）已达成。**
+
+## 本轮在 Road.java 里收敛的两处重复形状
+
+1. 两处 `extractSpans(segments, level, cache, terrain, streams, routeBridgeMinWaterDepth())`
+   参数完全相同 ⇒ 收成 `extractPhysicalSpans(...)` 单一入口。
+2. 「复制可变列表 → 算剖面 → 按剖面细化隧道区间」这段三连出现两次 ⇒
+   收成 `settleProfile(...)` 单一入口。
+
+**但要诚实说明**：收敛的是**代码形状**，不是计算次数 —— 各阶段的输入（`spans`）确实不同，
+所以仍然各算一次。真正的「只算一次」要靠 **S4**：把剖面与跨度并进同一张 DP，
+一次求解同时产出两者。S1 的贡献是「有权威表示 + 有唯一入口 + 有护栏盯着不倒退」。
