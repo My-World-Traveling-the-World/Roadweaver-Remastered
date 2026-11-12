@@ -1,0 +1,34 @@
+# 死代码基线（ratchet：只许缩小，不许新增）
+# 判定：类型名在【全部模块 java 正文 + 全部资源文件】里出现次数 == 自身文件内出现次数
+# 生成：2026-11-13（守卫 G5）
+
+# ── [A] 真死代码：可以删（删掉后把这一行也删了）──────────────
+AccurateTerrainTileBackfillService    # common/net\shiroha233\roadweaver\map\tile\backfill\AccurateTerrainTileBackfillService.java
+ArtificialDecorationSystem    # common/net\shiroha233\roadweaver\decoration\system\ArtificialDecorationSystem.java
+AvoidanceObstacleField    # common/net\shiroha233\roadweaver\bridge\AvoidanceObstacleField.java
+BandRouteSolver    # common/net\shiroha233\roadweaver\pipeline\ab\BandRouteSolver.java
+CruiseSignalsApi    # api/net\shiroha233\roadweaver\api\incoming\CruiseSignalsApi.java
+FenceWaypointDecoration    # common/net\shiroha233\roadweaver\decoration\types\FenceWaypointDecoration.java
+MapSamplingNoticeOverlayRenderer    # common/net\shiroha233\roadweaver\client\map\render\MapSamplingNoticeOverlayRenderer.java
+MapSnapshotAccumulator    # common/net\shiroha233\roadweaver\client\map\data\MapSnapshotAccumulator.java
+MapTerrainSamplingService    # common/net\shiroha233\roadweaver\map\tile\sampling\MapTerrainSamplingService.java
+NaturalDecorationSystem    # common/net\shiroha233\roadweaver\decoration\system\NaturalDecorationSystem.java
+OpenCLAccurateHeightBackend    # common/net\shiroha233\roadweaver\pathfinding\sampling\opencl\OpenCLAccurateHeightBackend.java
+OverlayTileQueryService    # common/net\shiroha233\roadweaver\map\tile\query\OverlayTileQueryService.java
+OverlayTileRenderer    # common/net\shiroha233\roadweaver\map\tile\render\OverlayTileRenderer.java
+PlanningReadinessApi    # api/net\shiroha233\roadweaver\api\incoming\PlanningReadinessApi.java
+PresetConfig    # common/net\shiroha233\roadweaver\config\PresetConfig.java
+RoadDirection    # common/net\shiroha233\roadweaver\pathlogic\core\RoadDirection.java
+SingleplayerOverlayTileManager    # common/net\shiroha233\roadweaver\client\map\tile\SingleplayerOverlayTileManager.java
+TerrainTileRenderer    # common/net\shiroha233\roadweaver\map\tile\render\TerrainTileRenderer.java
+
+# ── [B] 平台实现：Java 侧没有引用是正常的（Architectury @ExpectPlatform 由平台分发），禁止删 ──
+ClientNetBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ClientNetBridgeImpl.java
+MapAccessPlatformBridgeImpl    # fabric/net\shiroha233\roadweaver\map\permission\fabric\MapAccessPlatformBridgeImpl.java
+OpenMapKeyTextBridgeImpl    # fabric/net\shiroha233\roadweaver\client\loading\fabric\OpenMapKeyTextBridgeImpl.java
+RoadWeaverDataGenerator    # fabric/net\shiroha233\roadweaver\RoadWeaverDataGenerator.java
+RouteKeysBridgeImpl    # fabric/net\shiroha233\roadweaver\route\editor\fabric\RouteKeysBridgeImpl.java
+RouteWorldRendererBridgeImpl    # fabric/net\shiroha233\roadweaver\route\editor\fabric\RouteWorldRendererBridgeImpl.java
+ServerMapPatchBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ServerMapPatchBridgeImpl.java
+ServerMapPlanningActivityBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ServerMapPlanningActivityBridgeImpl.java
+WorldDataProviderImpl    # fabric/net\shiroha233\roadweaver\persistence\fabric\WorldDataProviderImpl.java
