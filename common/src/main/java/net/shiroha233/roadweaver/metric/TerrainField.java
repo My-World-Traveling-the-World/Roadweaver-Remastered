@@ -27,11 +27,24 @@ public interface TerrainField {
     /**
      * 该点的高度梯度（每格的水平变化率），返回 {@code [dh/dx, dh/dz]}。
      *
-     * <p>默认用中心差分，步长 1 格。只有需要更精确的坡度时子类才覆写。</p>
+     * <h2>边界必须自己处理</h2>
+     * <p>中心差分要在 {@code x±1} 取样，但边界上会越界。这里把取样点<b>夹回</b>区域内、
+     * 并除以真实的取样距离 —— 于是边界退化成单侧差分，而内部仍是中心差分。</p>
+     *
+     * <p><b>为什么不索性让 {@code height} 越界返回 0</b>：那会把「采样漏了一块」
+     * 变成幽灵 bug（坡度看起来正常、路径却莫名贴边）。越界必须在真正的采样接口处
+     * 快速失败，而梯度是<b>几何量</b>，在区域边界上本来就应该有定义。</p>
      */
     default double[] gradient(int x, int z) {
-        double gx = (height(x + 1, z) - height(x - 1, z)) / 2.0;
-        double gz = (height(x, z + 1) - height(x, z - 1)) / 2.0;
+        int xm = Math.max(minX(), x - 1);
+        int xp = Math.min(maxX(), x + 1);
+        int zm = Math.max(minZ(), z - 1);
+        int zp = Math.min(maxZ(), z + 1);
+
+        double gx = (xp == xm) ? 0.0
+                : (height(xp, z) - height(xm, z)) / (double) (xp - xm);
+        double gz = (zp == zm) ? 0.0
+                : (height(x, zp) - height(x, zm)) / (double) (zp - zm);
         return new double[]{gx, gz};
     }
 

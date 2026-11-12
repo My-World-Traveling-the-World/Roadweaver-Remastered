@@ -28,6 +28,10 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.metric.FinslerMetricTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.metric.ObstaclePotentialTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.metric.GridTerrainFieldTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PathfindingCostConfigTest"),
