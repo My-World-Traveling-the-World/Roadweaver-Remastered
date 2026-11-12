@@ -54,6 +54,14 @@ public final class MaintainabilityReportTest {
     /** 职责头 ratchet 底线（2026-11-13 实测 320）。 */
     private static final int DUTY_HEADER_FLOOR = 595;
 
+    // ── 方法级注释的 ratchet 底线（2026-11-13 实测）──────────────
+    // 这三层是 depth-D 的剩余部分，规模远大于文件头（合计 4,887 个元素），
+    // 短期做不完。先锁成「只许升不许降」，让进度可见、不许倒退；
+    // 具体推进节奏与取舍见 REFACTOR.md。
+    /** 有注释的 public 方法数（实测 906 / 3,338）。 */
+    private static final int PUBLIC_METHOD_DOC_FLOOR = 906;
+    /** 有注释的 private 方法数（实测 271 / 1,549）。 */
+    private static final int PRIVATE_METHOD_DOC_FLOOR = 271;
     /** 长参数表判定：括号内超过 120 个字符。 */
     private static final Pattern LONG_PARAMS = Pattern.compile("\\w+\\s*\\([^)]{120,}\\)");
     private static final Pattern METHOD = Pattern.compile(
@@ -190,5 +198,59 @@ public final class MaintainabilityReportTest {
                 "有效代码行超过 " + VERY_LONG_FILE + " 的文件有 " + veryLong + " 个（上限 3）—— 请拆分");
         int over1000 = (int) rows.stream().filter(r -> r.code > 1000).count();
         assertTrue(over1000 == 0, "有 " + over1000 + " 个文件有效代码行超过 1000（硬约束）");
+
+        // ── 方法级注释覆盖率（depth-D 剩余三层）────────────────────
+        int[] docStats = countMethodDocs(rows);
+        System.out.println("MaintainabilityReport 方法级注释：public " + docStats[1] + "/" + docStats[0]
+                + "，private " + docStats[3] + "/" + docStats[2]);
+        assertTrue(docStats[1] >= PUBLIC_METHOD_DOC_FLOOR,
+                "有注释的 public 方法从 " + PUBLIC_METHOD_DOC_FLOOR + " 掉到 " + docStats[1] + " —— 注释不许倒退");
+        assertTrue(docStats[3] >= PRIVATE_METHOD_DOC_FLOOR,
+                "有注释的 private 方法从 " + PRIVATE_METHOD_DOC_FLOOR + " 掉到 " + docStats[3] + " —— 注释不许倒退");
+    }
+
+    /**
+     * 统计「紧邻上方有注释」的方法数。
+     *
+     * <p>口径刻意宽松：上方有 javadoc 或 {@code //} 就算有注释 ——
+     * 衡量的是「读代码时能否立刻知道它干什么」，不是格式是否规范。</p>
+     *
+     * @return {@code [public总数, 有注释public, private总数, 有注释private]}
+     */
+    private static int[] countMethodDocs(List<Row> rows) throws IOException {
+        java.util.regex.Pattern pub = java.util.regex.Pattern.compile(
+                "^    (?:public|protected)\\s+(?:static\\s+|final\\s+|synchronized\\s+|default\\s+)*"
+                        + "[\\w<>\\[\\],.?\\s]+\\s+\\w+\\s*\\(");
+        java.util.regex.Pattern priv = java.util.regex.Pattern.compile(
+                "^    private\\s+(?:static\\s+|final\\s+|synchronized\\s+)*"
+                        + "[\\w<>\\[\\],.?\\s]+\\s+\\w+\\s*\\(");
+        int pubTotal = 0;
+        int pubDoc = 0;
+        int privTotal = 0;
+        int privDoc = 0;
+        for (Row row : rows) {
+            List<String> lines = Files.readAllLines(srcRoot.resolve(row.rel), StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                boolean isPub = pub.matcher(line).find();
+                boolean isPriv = !isPub && priv.matcher(line).find();
+                if (!isPub && !isPriv) continue;
+                boolean doc = false;
+                for (int j = i - 1; j >= 0 && j >= i - 6; j--) {
+                    String s = lines.get(j).trim();
+                    if (s.startsWith("@")) continue;
+                    if (s.endsWith("*/") || s.startsWith("//")) doc = true;
+                    break;
+                }
+                if (isPub) {
+                    pubTotal++;
+                    if (doc) pubDoc++;
+                } else {
+                    privTotal++;
+                    if (doc) privDoc++;
+                }
+            }
+        }
+        return new int[]{pubTotal, pubDoc, privTotal, privDoc};
     }
 }
