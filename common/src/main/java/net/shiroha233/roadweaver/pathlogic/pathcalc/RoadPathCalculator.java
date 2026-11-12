@@ -1,8 +1,8 @@
 /* 文件职责：组织普通道路的精确量化寻路与最终路径段生成。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
-import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.ensurePlanningSnapshotForPathAsync;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;

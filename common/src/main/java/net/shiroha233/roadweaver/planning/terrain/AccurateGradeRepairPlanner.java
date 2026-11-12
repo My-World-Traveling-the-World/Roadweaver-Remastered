@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -1096,7 +1097,7 @@ public final class AccurateGradeRepairPlanner {
         // one) never re-runs structure discovery — the probe budget must not
         // grow with every detour radius escalation.
         var key = net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(connection);
-        int effectiveRadius = StructureAvoidanceService.clampCircleProbeRadius(Math.max(1, radius));
+        int effectiveRadius = clampCircleProbeRadius(Math.max(1, radius));
         CircleSnapshotEntry cached = CIRCLE_SNAPSHOT_CACHE.get(key);
         if (cached != null && cached.future().isDone()
                 && !cached.future().isCompletedExceptionally()
@@ -1105,7 +1106,7 @@ public final class AccurateGradeRepairPlanner {
         }
         try {
             java.util.concurrent.CompletableFuture<Void> future =
-                    StructureAvoidanceService.ensurePlanningSnapshotForCircleAsync(
+                    ensurePlanningSnapshotForCircleAsync(
                             level, connection, center, effectiveRadius);
             if (future != null) {
                 long centerKey = center.asLong();

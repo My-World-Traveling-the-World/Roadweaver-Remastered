@@ -1,6 +1,7 @@
 /* 文件职责：协调结构发现、连接拓扑规划与道路地形规划用例。 */
 package net.shiroha233.roadweaver.planning;
 
+import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -734,11 +735,11 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         CompletableFuture<Void> circle = CompletableFuture.completedFuture(null);
         if (samplingCenter != null && samplingRadius > 0 && result.paths().size() == 1) {
             StructureConnection connection = result.paths().keySet().iterator().next();
-            circle = StructureAvoidanceService.ensurePlanningSnapshotForCircleAsync(
+            circle = ensurePlanningSnapshotForCircleAsync(
                     level, connection, samplingCenter, samplingRadius);
         }
         return circle.thenCompose(ignored ->
-                StructureAvoidanceService.preparePlanningSnapshotsForPathsAsync(
+                preparePlanningSnapshotsForPathsAsync(
                         level, result.paths(), ThreadPoolManager.TaskRole.INITIAL));
     }
 
@@ -986,7 +987,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                     level, connection, resultMode(level), pathfinding).orElse(List.of());
             return merged.isEmpty()
                     ? CompletableFuture.completedFuture(null)
-                    : StructureAvoidanceService.preparePlanningSnapshotsForPathsAsync(
+                    : preparePlanningSnapshotsForPathsAsync(
                             level, Map.of(connection, merged), ThreadPoolManager.TaskRole.INITIAL);
         });
     }
@@ -1579,7 +1580,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                     }
                     long phaseStartedAt = System.nanoTime();
                     long[] submittedAt = new long[1];
-                    return StructureAvoidanceService.preparePlanningSnapshotsAsync(
+                    return preparePlanningSnapshotsAsync(
                                     level, result.incoming(), prepTiming)
                             .thenCompose(ignored -> {
                                 // 0.9.044（T-7）：快照准备到这一刻为止，单独记账。
@@ -1624,7 +1625,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                                 AdaptiveRound.of(region.incoming(), paths, state.margin()));
                     }
                     long phaseStartedAt = System.nanoTime();
-                    return StructureAvoidanceService.preparePlanningSnapshotsForPathsAsync(
+                    return preparePlanningSnapshotsForPathsAsync(
                                     level, paths, taskRole)
                             .thenApply(ignored -> AdaptiveRound.of(region.incoming(), paths, state.margin()))
                             .whenComplete((ignored, failure) ->
@@ -2042,7 +2043,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                 .thenCompose(result -> result == null || result.paths().isEmpty()
                                 || !ThreadPoolManager.isEpoch(epoch)
                         ? CompletableFuture.completedFuture(null)
-                        : StructureAvoidanceService.preparePlanningSnapshotsForPathsAsync(
+                        : preparePlanningSnapshotsForPathsAsync(
                                 level, result.paths()))
                 .exceptionally(failure -> {
                     if (ThreadPoolManager.isEpoch(epoch)) {
