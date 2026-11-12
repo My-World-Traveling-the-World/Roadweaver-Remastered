@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.validation;
 
 import net.minecraft.server.level.ServerLevel;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
@@ -79,7 +80,7 @@ public final class RoadPlanConsistencyService {
             // service just recomputed into `physical`. Re-adding one whose
             // endpoints merely differ from the merged result resurrects the very
             // duplicate the merge removed — two decks over one crossing, each
-            // interpolated separately by Road.applyCrossingProfiles, which shows
+            // interpolated separately by RoadSpanProfileOps.applyCrossingProfiles, which shows
             // up in game as two parallel bridge decks with a step between them.
             //
             // Endpoints no longer have to match exactly: a recomputed span that
@@ -123,7 +124,7 @@ public final class RoadPlanConsistencyService {
         }
         // 0.9.039（R3）：上面这段追加循环的 `overlaps()` 只要**任一**端点解析不到站点就
         // `return false`（见本类 `overlaps`），于是陈旧跨度会被当成「真新增」放行 ——
-        // 同一个过水点又留下第二段 BRIDGE。建造期 `Road.applyCrossingProfiles` 按 ranges
+        // 同一个过水点又留下第二段 BRIDGE。建造期 `RoadSpanProfileOps.applyCrossingProfiles` 按 ranges
         // 顺序逐段插值、后写覆盖前写，游戏里就是「甲板一块块错开的双层桥」。
         //
         // 追加之后再做最后一次 physical 归一。**实际行为**（勿按名字想象）：
@@ -132,7 +133,7 @@ public final class RoadPlanConsistencyService {
         // ③ 但会做三件注释里不再声称"恒等"的事 —— 相邻(1站)合并、
         //    把与 TUNNEL 重叠的 BRIDGE 裁短或整段丢弃、以及把 BRIDGE 挪到列表末尾
         //    （passthrough 先入、再 TUNNEL、再 BRIDGE），而顺序会影响
-        //    Road.applyCrossingProfiles 的"后写覆盖前写"。
+        //    RoadSpanProfileOps.applyCrossingProfiles 的"后写覆盖前写"。
         // 不动任何高度、不动选线。
         int spanCountBeforeFinalNormalize = merged.size();
         merged = new ArrayList<>(SpanConflictResolver.resolvePhysicalSpanOverlaps(

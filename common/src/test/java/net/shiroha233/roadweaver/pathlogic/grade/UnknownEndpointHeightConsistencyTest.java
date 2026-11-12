@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import org.junit.jupiter.api.AfterEach;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,7 +16,7 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
  * into one endpoint on the agreed height, and an unbuildable stored height
  * degrades per-route with the original surface logic intact for
  * village/spawn endpoints (those never consult the registry — gated in
- * {@code Road.isUnknownStructureEndpoint}, covered by the model regressions).
+ * {@code RoadSpanProfileOps.isUnknownStructureEndpoint}, covered by the model regressions).
  */
 final class UnknownEndpointHeightConsistencyTest {
 

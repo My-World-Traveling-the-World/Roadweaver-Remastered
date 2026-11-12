@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.planning;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -87,12 +88,12 @@ public final class RoadPlanningService {
         Map<Long, BlockPos> endpointPos = new HashMap<>();
         for (StructureConnection conn : tasks) {
             if (conn == null) continue;
-            if (Road.isUnknownStructureEndpoint(level, conn, true)) {
+            if (RoadSpanProfileOps.isUnknownStructureEndpoint(level, conn, true)) {
                 long key = PlanningUtils.pos2dKey(conn.from());
                 byEndpoint.computeIfAbsent(key, k -> new ArrayList<>()).add(conn);
                 endpointPos.putIfAbsent(key, conn.from());
             }
-            if (Road.isUnknownStructureEndpoint(level, conn, false)) {
+            if (RoadSpanProfileOps.isUnknownStructureEndpoint(level, conn, false)) {
                 long key = PlanningUtils.pos2dKey(conn.to());
                 byEndpoint.computeIfAbsent(key, k -> new ArrayList<>()).add(conn);
                 endpointPos.putIfAbsent(key, conn.to());

@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
 import net.minecraft.core.BlockPos;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
@@ -379,7 +380,7 @@ final class CrossingNegotiation {
     }
 
     /**
-     * 与生成期 {@code Road.applyCrossingProfiles} 同一条甲板余量（{@code cfg.bridgeDeckClearance()}
+     * 与生成期 {@code RoadSpanProfileOps.applyCrossingProfiles} 同一条甲板余量（{@code cfg.bridgeDeckClearance()}
      * 经 {@code Math.max(1, ...)}）。**不是新配置面** —— 用的就是既有的 bridge.deckClearance。
      * 读配置失败时退回 1（宁可甲板低一格，也不要因为配置异常把协商整段关掉）。
      */

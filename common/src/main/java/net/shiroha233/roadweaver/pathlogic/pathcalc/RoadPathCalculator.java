@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
+import net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair.ExactStructureRepairOutcome;
 import net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
@@ -331,7 +332,7 @@ public final class RoadPathCalculator {
      */
     /**
      * 0.8.368 (T2 diagnosis): prints the repaired profile's real end heights.
-     * Pairs with {@code Road.logEndpointProfile} around computeTargetY. The
+     * Pairs with {@code EndpointProfileOps.logEndpointProfile} around computeTargetY. The
      * suspected defect is that {@code enforceContinuousSlopePreferCut} only ever
      * lowers stations, so a locked village boundary grade is pulled back down to
      * meet the tunnel chord; a route ending in a TUNNEL span lost 18 blocks this

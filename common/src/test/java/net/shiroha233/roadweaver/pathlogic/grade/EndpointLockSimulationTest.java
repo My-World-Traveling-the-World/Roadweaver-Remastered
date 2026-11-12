@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import net.minecraft.SharedConstants;
+import net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps;
 import net.minecraft.server.Bootstrap;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 
@@ -130,7 +131,7 @@ public final class EndpointLockSimulationTest {
     }
 
     /**
-     * Mirrors {@code Road.applySingleBoundaryGrade}: pin the endpoint and build
+     * Mirrors {@code EndpointProfileOps.applySingleBoundaryGrade}: pin the endpoint and build
      * a one-block ramp from it into the interior.
      */
     private static void reSeatBoundary(int[] profile, int endpoint, int boundaryHeight) {

@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathfinding;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -157,7 +158,7 @@ public final class PathSpanExtractor {
      * 的逐列水掩码**同一套采样**，整段无水返回 {@link Integer#MIN_VALUE}。
      *
      * <h2>为什么要有这个函数</h2>
-     * <p>定甲板（{@code Road.applyCrossingProfiles}）过去**另起一条水面查询**：只问 Streams
+     * <p>定甲板（{@code RoadSpanProfileOps.applyCrossingProfiles}）过去**另起一条水面查询**：只问 Streams
      * 模组的 {@code ColumnPlan.inChannel()/waterSurfaceY()}。Streams 缺席、会话降级或该列
      * 判不出河道时那条查询恒为 {@code inChannel=false}，于是真机 32 个跨度**全部**
      * {@code highestWater=none}（连按定义必过水的 {@code type=ROAD_CROSSING} 也一样），

@@ -67,18 +67,21 @@ import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidato
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadWaterValidator;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadPlanConsistencyService;
+import static net.shiroha233.roadweaver.pathlogic.core.RoadCrossingOps.*;
+import static net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps.*;
+import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
 
 /**
  * 道路生成器
  */
 public final class Road {
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     /** T-21: 短浅滩(ROAD_CROSSING)甲板在水位之上的可涉水余量。 */
-    private static final int FORD_DECK_CLEARANCE = 2;
-    private final ServerLevel level;
-    private final StructureConnection connection;
-    private final PathFeatureConfig featureConfig;
-    private final RoadGenerationConfig genConfig;
+    static final int FORD_DECK_CLEARANCE = 2;
+    final ServerLevel level;
+    final StructureConnection connection;
+    final PathFeatureConfig featureConfig;
+    final RoadGenerationConfig genConfig;
 
     public Road(ServerLevel level, StructureConnection connection, 
                 PathFeatureConfig featureConfig, RoadGenerationConfig genConfig) {
@@ -96,7 +99,7 @@ public final class Road {
         return generateRoad(maxSteps, persistImmediately, 0);
     }
 
-    private RoadData generateRoad(int maxSteps, boolean persistImmediately, int finalStructureAttempt) {
+    RoadData generateRoad(int maxSteps, boolean persistImmediately, int finalStructureAttempt) {
         if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
         long roadStartedAt = System.nanoTime();
         // 逐路计时：本线程一条路一份，阶段代码写、finally 打一行。
@@ -638,95 +641,7 @@ public final class Road {
         }
     }
 
-    private static int getRandomWidth(RandomSource rnd, PathFeatureConfig cfg) {
-        return 0;
-    }
-
-    private static RoadData forceCrossingAtWaterCollision(RoadData road, int collisionIndex) {
-        if (road == null || road.roadSegmentList() == null || road.roadSegmentList().size() < 2
-                || collisionIndex < 0 || collisionIndex >= road.roadSegmentList().size()) return road;
-        int size = road.roadSegmentList().size();
-        int start = Math.max(0, collisionIndex - 1);
-        int end = Math.min(size - 1, collisionIndex + 1);
-        if (end <= start) {
-            start = Math.max(0, Math.min(collisionIndex, size - 2));
-            end = start + 1;
-        }
-        List<RoadSpan> spans = new ArrayList<>();
-        for (RoadSpan span : road.spans()) {
-            if (span == null || span.start() == null || span.end() == null) continue;
-            int a = indexOfCenter(road.roadSegmentList(), span.start());
-            int b = indexOfCenter(road.roadSegmentList(), span.end());
-            int lo = a < 0 || b < 0 ? Integer.MAX_VALUE : Math.min(a, b);
-            int hi = a < 0 || b < 0 ? Integer.MIN_VALUE : Math.max(a, b);
-            if (span.type() == SpanType.TUNNEL || span.type() == SpanType.TUNNEL_JUNCTION
-                    || span.type() == SpanType.NETWORK_REUSE || span.type() == SpanType.PROTECTED_GAP) {
-                spans.add(span);
-                continue;
-            }
-            if (span.type() == SpanType.ROAD_CROSSING && hi >= start && lo <= end) {
-                continue;
-            }
-            spans.add(span);
-        }
-        RoadSegmentPlacement first = road.roadSegmentList().get(start);
-        RoadSegmentPlacement last = road.roadSegmentList().get(end);
-        if (first == null || last == null || first.middlePos() == null || last.middlePos() == null) return road;
-        boolean exists = spans.stream().anyMatch(span -> span.type() == SpanType.BRIDGE
-                && ((span.start().equals(first.middlePos()) && span.end().equals(last.middlePos()))
-                || (span.start().equals(last.middlePos()) && span.end().equals(first.middlePos()))));
-        SpanType crossingType = crossingTypeAtDistance(first.middlePos(), last.middlePos());
-        if (!exists) spans.add(new RoadSpan(first.middlePos(), last.middlePos(), crossingType));
-        RoadData candidate = new RoadData(road.width(), road.roadType(), road.materials(),
-                road.slabMaterials(), road.roadSegmentList(), List.copyOf(spans), road.targetY(),
-                road.ownerA2dKey(), road.ownerB2dKey());
-        return RoadDataValidator.validateFinalRoad(candidate).valid() ? candidate : road;
-    }
-
-    private static SpanType crossingTypeAtCollision(RoadData road, int collisionIndex) {
-        if (road == null || road.roadSegmentList() == null || road.roadSegmentList().size() < 2) {
-            return SpanType.ROAD_CROSSING;
-        }
-        int size = road.roadSegmentList().size();
-        int start = Math.max(0, Math.min(collisionIndex - 1, size - 2));
-        int end = Math.min(size - 1, start + 2);
-        RoadSegmentPlacement a = road.roadSegmentList().get(start);
-        RoadSegmentPlacement b = road.roadSegmentList().get(end);
-        return a == null || b == null ? SpanType.ROAD_CROSSING
-                : crossingTypeAtDistance(a.middlePos(), b.middlePos());
-    }
-
-    private static SpanType crossingTypeAtDistance(BlockPos start, BlockPos end) {
-        if (start == null || end == null) return SpanType.ROAD_CROSSING;
-        long dx = (long) end.getX() - start.getX();
-        long dz = (long) end.getZ() - start.getZ();
-        double distance = Math.sqrt((double) dx * dx + (double) dz * dz);
-        return distance <= 12.0D ? SpanType.ROAD_CROSSING : SpanType.BRIDGE;
-    }
-
-    private static int indexOfCenter(List<RoadSegmentPlacement> segments, BlockPos point) {
-        if (segments == null || point == null) return -1;
-        for (int i = 0; i < segments.size(); i++) {
-            RoadSegmentPlacement segment = segments.get(i);
-            if (segment != null && point.equals(segment.middlePos())) return i;
-        }
-        return -1;
-    }
-
-    static long deterministicRoadSeed(long worldSeed, long ownerA2d, long ownerB2d) {
-        return worldSeed ^ PlanningUtils.edgeKey(ownerA2d, ownerB2d) ^ 0x524F41445F534545L;
-    }
-
-    private static boolean containsPhysicalCrossing(List<RoadSpan> spans) {
-        if (spans == null) return false;
-        for (RoadSpan span : spans) {
-            if (span != null && (span.type() == SpanType.BRIDGE
-                    || span.type() == SpanType.ROAD_CROSSING)) return true;
-        }
-        return false;
-    }
-
-    private RoadData tryRiverRepair(RoadData road,
+    RoadData tryRiverRepair(RoadData road,
                                     TerrainSamplingCache cache,
                                     PathTerrainField terrain,
                                     StreamsReflowingCompat.SamplingSession streams) {
@@ -749,7 +664,7 @@ public final class Road {
         return RoadDataValidator.validateFinalRoad(candidate).valid() ? candidate : road;
     }
     
-    private List<Integer> computeTargetY(ServerLevel level, List<RoadSegmentPlacement> segments,
+    List<Integer> computeTargetY(ServerLevel level, List<RoadSegmentPlacement> segments,
                                                    List<RoadSpan> spans, TerrainSamplingCache cache,
                                                    PathTerrainField terrain,
                                                    RoadGenerationConfig cfg,
@@ -1150,124 +1065,6 @@ public final class Road {
      * shows whether the lock survives the profile passes, or is only lost later
      * inside {@code repairFinalHeightConflict}. Diagnosis only.
      */
-    private static void logEndpointProfile(String stage,
-                                           StructureConnection connection,
-                                           int[] profile,
-                                           int[] terrain,
-                                           int stations,
-                                           int startBoundary,
-                                           int endBoundary) {
-        if (profile == null || profile.length == 0 || !LOGGER.isInfoEnabled()) return;
-        int last = profile.length - 1;
-        int startTerrain = terrain != null && terrain.length > 0 ? terrain[0] : -1;
-        int endTerrain = terrain != null && terrain.length > 0 ? terrain[terrain.length - 1] : -1;
-        LOGGER.info("RoadWeaver endpoint profile stage={} connection={}->{} stations={} "
-                        + "profileStart={} terrainStart={} lockedStart={} startDelta={} "
-                        + "profileEnd={} terrainEnd={} lockedEnd={} endDelta={}",
-                stage,
-                connection == null ? "?" : connection.from(),
-                connection == null ? "?" : connection.to(),
-                stations,
-                profile[0], startTerrain, startBoundary, profile[0] - startTerrain,
-                profile[last], endTerrain, endBoundary, profile[last] - endTerrain);
-    }
-
-    /**
-     * Keeps every route's structure-facing station on the same boundary grade
-     * while limiting the approach to one block per station. This is applied
-     * after tunnel/profile selection so a low tunnel cannot terminate below a
-     * high structure entrance.
-     */
-    /**
-     * Locks one road endpoint to a village-boundary height and ramps toward the
-     * interior. Non-village endpoints (spawn, ordinary road junctions) are never
-     * locked, so their grade stays on the normal smooth slope instead of being
-     * forced into a steep ramp.
-     */
-    private static void applySharedApproachProfile(int[] profile,
-                                                   int endpoint,
-                                                   int[] shared) {
-        if (profile == null || shared == null || shared.length == 0) return;
-        if (endpoint < 0 || endpoint >= profile.length) return;
-        int direction = endpoint == 0 ? 1 : -1;
-        for (int station = 0; station < shared.length; station++) {
-            int index = endpoint + direction * station;
-            if (index < 0 || index >= profile.length) break;
-            profile[index] = shared[station];
-        }
-    }
-
-    private static void applySingleBoundaryGrade(int[] profile,
-                                                 int endpoint,
-                                                 int boundaryHeight) {
-        if (profile == null || endpoint < 0 || endpoint >= profile.length) return;
-        profile[endpoint] = boundaryHeight;
-        int half = Math.max(1, Math.min(96, (profile.length - 1) / 2));
-        constrainEndpointRamp(profile, endpoint, endpoint == 0 ? 1 : -1, half);
-    }
-
-    /**
-     * Unknown-endpoint variant of the boundary lock: pins the endpoint to the
-     * agreed height and descends the approach onto it with
-     * prefer-cut semantics — the high side is pressed down onto the locked
-     * height one block per station, and stations below the ramp line are
-     * never raised. When the chosen height is below the structure surface
-     * this is exactly "the high side comes down to meet the road".
-     */
-    private static void applyPreferCutBoundaryGrade(int[] profile,
-                                                    int endpoint,
-                                                    int boundaryHeight) {
-        if (profile == null || endpoint < 0 || endpoint >= profile.length) return;
-        profile[endpoint] = boundaryHeight;
-        int direction = endpoint == 0 ? 1 : -1;
-        for (int distance = 1; ; distance++) {
-            int index = endpoint + direction * distance;
-            if (index < 0 || index >= profile.length) return;
-            int previous = profile[index - direction];
-            if (profile[index] > previous + 1) profile[index] = previous + 1;
-        }
-    }
-
-    /**
-     * Returns the real terrain surface height at the boundary crossing point,
-     * sampled as a dedicated one-column precise query. The route's bulk
-     * footprint batch often reuses a prefetched/interpolated height; this pins
-     * the anchor to the actual ground the road meets so it cannot float above
-     * or dive below the structure edge.
-     */
-    private static int crossingPreciseHeight(AccurateHeightSampler accurate,
-                                             BlockPos crossing,
-                                             int fallback) {
-        if (crossing == null || accurate == null) return fallback;
-        try {
-            Map<Long, AccurateHeightSample> samples =
-                    accurate.samplePositions(List.of(crossing));
-            AccurateHeightSample sample = samples.get(
-                    AccurateHeightSample.key(crossing.getX(), crossing.getZ()));
-            if (sample != null) return accurate.surfaceHeight(sample);
-        } catch (RuntimeException ignored) {
-            // A transient sampling failure falls back to the profile terrain.
-        }
-        return fallback;
-    }
-
-    /**
-     * The road↔structure crossing anchor: the route's own first/last station
-     * once the path has been trimmed at the structure boundary (village and
-     * other known-structure endpoints stop outside the built area), falling
-     * back to the connection endpoint when the route still reaches it. The
-     * structure center itself must not be used as the height anchor: its
-     * motion-blocking column tops out on the building roof, which locked
-     * endpoints dozens of blocks above the terrain the road actually joins.
-     */
-    private static BlockPos boundaryCrossingAnchor(List<BlockPos> centers,
-                                                    BlockPos connectionEndpoint,
-                                                    boolean start) {
-        if (centers == null || centers.isEmpty()) return connectionEndpoint;
-        BlockPos station = start ? centers.get(0) : centers.get(centers.size() - 1);
-        return station != null ? station : connectionEndpoint;
-    }
-
     /**
      * Bridge depth for this route: a route-level AUTO bridge-first tendency
      * (resolved in {@code RawPathSearch} from the water share) relaxes the
@@ -1275,7 +1072,7 @@ public final class Road {
      * keep the global path. Span extraction still applies the global mode on
      * top, and the two reductions compose correctly.
      */
-    private int routeBridgeMinWaterDepth() {
+    int routeBridgeMinWaterDepth() {
         return RouteProfileTendency.effectiveMode(connection)
                 == PlanningConfig.TerrainProfileMode.BRIDGE_FIRST
                 ? 1
@@ -1295,342 +1092,17 @@ public final class Road {
      * with invalidation hooks at every mutation site of the snapshot list;
      * revisit only if profiling shows this scan matters.
      */
-    private static boolean isSharedElevationEndpoint(ServerLevel level,
-                                                     StructureConnection connection,
-                                                     boolean from) {
-        if (level == null || connection == null) return false;
-        BlockPos endpoint = from ? connection.from() : connection.to();
-        if (endpoint == null) return false;
-        if (isVillageEndpoint(level, connection, from)) return true;
-        BlockPos spawn = level.getSharedSpawnPos();
-        if (spawn != null && spawn.getX() == endpoint.getX()
-                && spawn.getZ() == endpoint.getZ()) {
-            return true;
-        }
-        StructureFileStorage.StructureSnapshot snapshot =
-                StructureFileStorage.getStructureSnapshot(level);
-        if (snapshot == null || snapshot.locations() == null) return false;
-        for (StructureInfo info : snapshot.locations().structureInfos()) {
-            if (info == null || info.pos() == null) continue;
-            // Unknown endpoints negotiate their height through
-            // UnknownEndpointHeightRegistry instead of the surface lock.
-            if (!StructureInfo.isKnownId(info.structureId())) continue;
-            if (info.pos().getX() == endpoint.getX()
-                    && info.pos().getZ() == endpoint.getZ()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * True only for unknown (unnamed) structure nodes: the snapshot lists an
-     * endpoint with no known structure id, it is not a village and not the
-     * shared spawn. Only these endpoints choose their shared height by
-     * construction cost via {@link UnknownEndpointHeightRegistry}; villages
-     * and the spawn keep their existing surface-height lock untouched.
-     */
-    public static boolean isUnknownStructureEndpoint(ServerLevel level,
-                                                     StructureConnection connection,
-                                                     boolean from) {
-        if (level == null || connection == null) return false;
-        BlockPos endpoint = from ? connection.from() : connection.to();
-        if (endpoint == null) return false;
-        if (isVillageEndpoint(level, connection, from)) return false;
-        BlockPos spawn = level.getSharedSpawnPos();
-        if (spawn != null && spawn.getX() == endpoint.getX()
-                && spawn.getZ() == endpoint.getZ()) {
-            return false;
-        }
-        StructureFileStorage.StructureSnapshot snapshot =
-                StructureFileStorage.getStructureSnapshot(level);
-        if (snapshot != null && snapshot.locations() != null) {
-            for (StructureInfo info : snapshot.locations().structureInfos()) {
-                if (info == null || info.pos() == null) continue;
-                if (info.pos().getX() == endpoint.getX()
-                        && info.pos().getZ() == endpoint.getZ()) {
-                    return !StructureInfo.isKnownId(info.structureId())
-                            && !StructureInfo.isVillageId(info.structureId());
-                }
-            }
-        }
-        // Only a node that is definitively not a known structure, not a village,
-        // and not the spawn may use negotiated unknown height. A named/village
-        // structure must keep its real surface height even when its planning
-        // snapshot has not been prepared yet.
-        return !isKnownStructureEndpoint(level, connection, from);
-    }
-
-    private static void constrainEndpointRamp(int[] profile, int endpoint,
-                                              int direction, int limit) {
-        int previous = endpoint;
-        for (int distance = 1, index = endpoint + direction;
-             distance <= limit && index >= 0 && index < profile.length;
-             distance++, index += direction) {
-            int current = profile[index];
-            if (current > profile[previous] + 1) current = profile[previous] + 1;
-            else if (current < profile[previous] - 1) current = profile[previous] - 1;
-            profile[index] = current;
-            previous = index;
-        }
-    }
-
-    private static List<Integer> toIntegerList(int[] values) {
-        if (values == null || values.length == 0) return List.of();
-        List<Integer> result = new ArrayList<>(values.length);
-        for (int value : values) result.add(value);
-        return result;
-    }
-
-    /** Closes the short boundary where a tunnel ends immediately before or after a water crossing.
-     * The two profiles are normally independent: prefer-cut skips crossing stations, so the
-     * tunnel-side bank can remain several blocks above the ford/bridge deck. This pass lowers the
-     * higher tunnel-side stations toward the crossing endpoint one block per station without ever
-     * raising a station or touching the crossing deck itself. */
-    private static int[] closeTunnelWaterBoundary(int[] profile, List<BlockPos> centers,
-                                                  List<RoadSpan> spans) {
-        if (profile == null || profile.length < 2 || centers == null || spans == null) return profile;
-        Map<Long, Integer> stationIndex = new HashMap<>();
-        for (int i = 0; i < centers.size(); i++) {
-            BlockPos pos = centers.get(i);
-            if (pos != null) stationIndex.putIfAbsent(pos.asLong(), i);
-        }
-        boolean[] elevated = new boolean[profile.length];
-        for (RoadSpan span : spans) {
-            if (span == null || span.start() == null || span.end() == null) continue;
-            if (span.type() != SpanType.TUNNEL && span.type() != SpanType.TUNNEL_JUNCTION
-                    && span.type() != SpanType.BRIDGE) continue;
-            Integer start = stationIndex.get(span.start().asLong());
-            Integer end = stationIndex.get(span.end().asLong());
-            if (start == null || end == null) continue;
-            for (int k = Math.min(start, end); k <= Math.max(start, end); k++) elevated[k] = true;
-        }
-        int[] result = profile.clone();
-        int k = 12;
-        int maxBuffer = 2;
-        for (RoadSpan span : spans) {
-            if (span == null || span.start() == null || span.end() == null) continue;
-            if (span.type() != SpanType.BRIDGE && span.type() != SpanType.ROAD_CROSSING) continue;
-            Integer start = stationIndex.get(span.start().asLong());
-            Integer end = stationIndex.get(span.end().asLong());
-            if (start == null || end == null) continue;
-            int lo = Math.min(start, end);
-            int hi = Math.max(start, end);
-            closeSpanSide(result, elevated, lo, -1, k, maxBuffer);
-            closeSpanSide(result, elevated, hi, 1, k, maxBuffer);
-        }
-        return result;
-    }
-
-    /** Lowers elevated tunnel/bridge stations away from a water-span endpoint. `boundary` is the
-     * crossing endpoint index; the adjacent side is boundary + direction. A short run of ordinary
-     * buffer stations is allowed between the water span and the elevated physical span, but the
-     * ordinary buffer itself is only lowered if doing so follows the one-block-per-station grade.
-     * Stations are never raised and the crossing deck itself is never changed. */
-    private static void closeSpanSide(int[] profile, boolean[] elevated, int boundary,
-                                      int direction, int maxDistance, int maxBuffer) {
-        int anchor = profile[boundary];
-        int buffersSeen = 0;
-        boolean sawElevated = false;
-        for (int step = 1, i = boundary + direction; step <= maxDistance && i >= 0 && i < profile.length; i += direction, step++) {
-            if (elevated[i]) {
-                sawElevated = true;
-            } else if (sawElevated) {
-                break;
-            } else {
-                buffersSeen++;
-                if (buffersSeen > maxBuffer) break;
-            }
-            int expected = anchor + step;
-            if (profile[i] <= expected) break;
-            profile[i] = expected;
-        }
-    }
-
-    private static void applyCrossingProfiles(ServerLevel level,
-                                              TerrainSamplingCache cache,
-                                              PathTerrainField terrain,
-                                              List<RoadSegmentPlacement> segments,
-                                              List<BlockPos> centers,
-                                              int[] profile,
-                                              List<SpanRange> ranges,
-                                              RoadGenerationConfig cfg,
-                                              StreamsReflowingCompat.SamplingSession streams,
-                                              int bridgeMinWaterDepth) {
-        int deckClearance = Math.max(1, cfg.bridgeDeckClearance());
-        // 0.9.066（B2）：同一连接上相邻 BRIDGE 跨度甲板连续性。
-        // crossingRanges 按 spans 顺序添加、不一定按站号排序；先按 start 排序算出每个跨度的
-        // 水面/甲板基准，再把 gap <= BRIDGE_SPAN_CONTINUITY_GAP 的相邻 BRIDGE 跨度视为
-        // 「同一片水被切成两段」，后跨甲板不得低于前跨 —— 消除两段桥之间的台阶
-        // （真机曾见相邻跨度甲板 71 -> 73 这类跳变）。应用阶段保持原 spans 顺序，只改甲板值。
-        int nRanges = ranges.size();
-        Integer[] order = new Integer[nRanges];
-        for (int ri = 0; ri < nRanges; ri++) order[ri] = ri;
-        java.util.Arrays.sort(order, java.util.Comparator.comparingInt(ri -> ranges.get(ri).start()));
-        int[] hwByRange = new int[nRanges];
-        int[] deckByRange = new int[nRanges];
-        for (int ri : order) {
-            SpanRange range = ranges.get(ri);
-            hwByRange[ri] = PathSpanExtractor.waterSurfaceYForRange(
-                    segments, level, cache, terrain, streams, bridgeMinWaterDepth,
-                    range.start(), range.end());
-            deckByRange[ri] = BridgeDeckProfile.minimumDeckY(
-                    hwByRange[ri],
-                    centers.get(range.start()).getY(),
-                    centers.get(range.end()).getY(),
-                    deckClearance);
-        }
-        SpanType[] spanTypes = new SpanType[nRanges];
-        int[] spanStarts = new int[nRanges];
-        int[] spanEnds = new int[nRanges];
-        for (int ri = 0; ri < nRanges; ri++) {
-            spanTypes[ri] = ranges.get(ri).type();
-            spanStarts[ri] = ranges.get(ri).start();
-            spanEnds[ri] = ranges.get(ri).end();
-        }
-        BridgeDeckProfile.enforceAdjacentBridgeContinuity(deckByRange, spanTypes, spanStarts, spanEnds);
-        for (int ri = 0; ri < nRanges; ri++) {
-            SpanRange range = ranges.get(ri);
-            throwIfInterrupted();
-            // 0.9.058（缺陷 A）：水面 Y 改由**掩码侧同一套逐列采样**给出。注释保留，语义不变。
-            int highestWater = hwByRange[ri];
-            int minimumDeck = deckByRange[ri];
-            org.slf4j.LoggerFactory.getLogger(Road.class).info(
-                    "RoadWeaver [ROAD-BRIDGE-DECK] range={}..{} type={} highestWater={} minimumDeck={}"
-                            + " stationYStart={} stationYEnd={} clearance={}",
-                    range.start(), range.end(), range.type(),
-                    highestWater == Integer.MIN_VALUE ? "none" : highestWater,
-                    minimumDeck, centers.get(range.start()).getY(), centers.get(range.end()).getY(),
-                    deckClearance);
-            if (highestWater == Integer.MIN_VALUE && isCanyonRange(centers, range.start(), range.end())) {
-                BridgeDeckProfile.applyStableBankRanges(
-                        profile, centers.stream().mapToInt(BlockPos::getY).toArray(),
-                        List.of(new int[]{range.start(), range.end()}), Integer.MIN_VALUE);
-            } else if (range.type() == SpanType.ROAD_CROSSING
-                    && PathSpanExtractor.crossingWidthBlocks(centers, range.start(), range.end())
-                            <= PathSpanExtractor.ROAD_CROSSING_MAX_WIDTH_BLOCKS) {
-                applyShortFordClearance(profile, range, highestWater, minimumDeck, cfg);
-            } else {
-                BridgeDeckProfile.applyFixedRange(profile, range.start(), range.end(), minimumDeck,
-                        cfg.bridgeRampSegments());
-            }
-        }
-    }
-
-    /**
-     * Task 5 / T-21: clears only the ford stations that would dip below the
-     * water surface, then seats both banks onto the deck. The ford deck target
-     * is {@code highestWater + FORD_DECK_CLEARANCE} (a wadable 1..2 blocks
-     * above the water) instead of the bridge fixed deck (water + 16): the old
-     * +16 deck raised both banks by up to 6 blocks and left the boundary step
-     * ((47,-64)y226 -> (48,-65)y232) that prefer-cut could not close because
-     * the deck stations themselves are protected from the slope pass. The bank
-     * stations directly adjacent to the span are cut down onto the deck
-     * (prefer-cut: only ever lowered); the following {@code
-     * enforceContinuousSlopePreferCut} pass then closes the remaining bank
-     * profile at one block per station, so the span boundary participates in
-     * the continuous grade instead of terminating it.
-     */
-    private static void applyShortFordClearance(int[] profile,
-                                                SpanRange range,
-                                                int highestWater,
-                                                int minimumDeck,
-                                                RoadGenerationConfig cfg) {
-        if (highestWater == Integer.MIN_VALUE) return;
-        // T-21: 浅滩甲板 = 水位 + FORD_DECK_CLEARANCE(可涉水)。
-        int required = highestWater + FORD_DECK_CLEARANCE;
-        boolean lifted = false;
-        for (int i = range.start(); i <= range.end(); i++) {
-            if (profile[i] < required) {
-                profile[i] = required;
-                lifted = true;
-            }
-        }
-        // 高岸直接切到甲板(prefer-cut:只降不升)。岸站由后续
-        // enforceContinuousSlopePreferCut 以 1 格/站继续向下收口。
-        int left = range.start() - 1;
-        int right = range.end() + 1;
-        if (left >= 0 && profile[left] > required) {
-            profile[left] = required;
-            lifted = true;
-        }
-        if (right < profile.length && profile[right] > required) {
-            profile[right] = required;
-            lifted = true;
-        }
-        if (!lifted) return;
-        int ramp = Math.max(0, cfg.bridgeRampSegments());
-        rampOntoBank(profile, range.start() - 1, -1, ramp);
-        rampOntoBank(profile, range.end() + 1, +1, ramp);
-    }
-
-    /** Walks away from a lifted span end, raising the bank at most 1 block per station. */
-    private static void rampOntoBank(int[] profile, int from, int direction, int ramp) {
-        int previousIndex = from - direction;
-        if (previousIndex < 0 || previousIndex >= profile.length) return;
-        int previous = profile[previousIndex];
-        for (int step = 0; step < ramp; step++) {
-            int index = from + direction * step;
-            if (index < 0 || index >= profile.length) return;
-            if (profile[index] >= previous) return;
-            profile[index] = Math.min(previous, profile[index] + 1);
-            previous = profile[index];
-        }
-    }
-
-    private static boolean isCanyonRange(List<BlockPos> centers, int start, int end) {
-        if (centers == null || centers.size() < 5) return false;
-        int left = Math.max(0, start - 2);
-        int right = Math.min(centers.size() - 1, end + 2);
-        if (left >= start || right <= end) return false;
-        int bank = Math.min(centers.get(left).getY(), centers.get(right).getY());
-        int lowest = Integer.MAX_VALUE;
-        for (int i = start; i <= end; i++) {
-            throwIfInterrupted();
-            lowest = Math.min(lowest, centers.get(i).getY());
-        }
-        return bank - lowest >= 10;
-    }
-
-    private static void throwIfInterrupted() {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new CancellationException("Road generation interrupted");
-        }
-    }
-
-    private record SpanRange(int start, int end, SpanType type) {
+    record SpanRange(int start, int end, SpanType type) {
     }
 
     /** Compact span breakdown for per-route pipeline diagnostics. */
-    private static String summarizeSpans(List<RoadSpan> spans) {
-        if (spans == null || spans.isEmpty()) return "tunnel=0 bridge=0 crossing=0 netReuse=0";
-        int tunnel = 0;
-        int bridge = 0;
-        int crossing = 0;
-        int netReuse = 0;
-        int protectedGap = 0;
-        for (RoadSpan span : spans) {
-            if (span == null) continue;
-            switch (span.type()) {
-                case TUNNEL, TUNNEL_JUNCTION -> tunnel++;
-                case BRIDGE -> bridge++;
-                case ROAD_CROSSING -> crossing++;
-                case NETWORK_REUSE -> netReuse++;
-                case PROTECTED_GAP -> protectedGap++;
-                default -> { }
-            }
-        }
-        return "tunnel=" + tunnel + " bridge=" + bridge + " crossing=" + crossing
-                + " netReuse=" + netReuse + " protectedGap=" + protectedGap;
-    }
-
     /**
      * Rebinding stores the route under the precision that the local-repair
      * wave later queries. Using the full-route step here leaves the rebound
      * cache under a different key, which made the following local pass report
      * "missing persisted route path".
      */
-    private int localRetryStep() {
+    int localRetryStep() {
         int configured = genConfig == null ? 4 : Math.max(1, genConfig.pathfinding().effectiveAStarStep());
         return RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0);
     }

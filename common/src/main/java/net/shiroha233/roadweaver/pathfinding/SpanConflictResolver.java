@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathfinding;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -113,7 +114,7 @@ public final class SpanConflictResolver {
      *
      * <p>Real case (2026-09-16): one water crossing produced two BRIDGE spans
      * whose endpoints differed by 1..30 stations. Both were persisted, and
-     * {@code Road.applyCrossingProfiles} then ran {@code applyFixedRange} once
+     * {@code RoadSpanProfileOps.applyCrossingProfiles} then ran {@code applyFixedRange} once
      * per range — each doing its own linear bank-to-bank interpolation over the
      * shared stations. The later range overwrote the earlier deck height, so a
      * single bridge came out as two parallel decks a few blocks apart, with a

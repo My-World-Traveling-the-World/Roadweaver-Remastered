@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.planning.path;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
+import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -68,7 +69,7 @@ public final class SharedEndpointPathReuse {
                 if (connections == null || connections.size() < 2) continue;
                 StructureConnection probe = connections.get(0);
                 boolean from = probe.from() != null && key(probe.from()) == endpointKey;
-                if (!Road.isUnknownStructureEndpoint(level, probe, from)) continue;
+                if (!RoadSpanProfileOps.isUnknownStructureEndpoint(level, probe, from)) continue;
                 int unified = Integer.MAX_VALUE;
                 for (StructureConnection connection : connections) {
                     List<BlockPos> path = rewritten.get(connection);
