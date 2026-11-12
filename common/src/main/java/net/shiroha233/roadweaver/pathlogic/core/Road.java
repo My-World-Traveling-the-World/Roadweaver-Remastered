@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
@@ -1029,9 +1030,9 @@ public final class Road {
         // and validation always see a walkable grade. Bridges/crossings keep
         // their own deck profile; ordinary and tunnel stations are only
         // lowered, never raised into a sky road.
-        smoothed = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        smoothed = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 smoothed, isCrossing, cfg.maxSlopeStepPerTwoSegments(), pinnedMask,
-                RoadGradePlanner.configuredStationSpacing(centers));
+                SlopeContinuityEnforcer.configuredStationSpacing(centers));
 
         smoothed = closeTunnelWaterBoundary(smoothed, centers, spans);
 

@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.pathfinding;
 
 import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
+import net.shiroha233.roadweaver.pathlogic.grade.GradeOptimizer;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +24,7 @@ final class AccurateGradeProfileSolverTest {
     void flatTerrainIsLeftAlone() {
         int[] terrain = new int[40];
         java.util.Arrays.fill(terrain, 64);
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, null, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, null, STEP2);
         assertArrayEqualsMessage(terrain, profile, "flat terrain must stay flat");
     }
 
@@ -33,7 +34,7 @@ final class AccurateGradeProfileSolverTest {
         for (int i = 0; i < terrain.length; i++) {
             terrain[i] = 64 + i / 2;
         }
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, null, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, null, STEP2);
         assertArrayEqualsMessage(terrain, profile,
                 "a climb inside the grade limit must not need any cut or fill");
     }
@@ -50,7 +51,7 @@ final class AccurateGradeProfileSolverTest {
                 terrain[i] = 76;
             }
         }
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, null, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, null, STEP2);
         assertTrue(profile[25] < terrain[25],
                 "a short 2-blocks-per-station ramp must be cut, not followed");
         for (int i = 0; i < profile.length; i++) {
@@ -73,7 +74,7 @@ final class AccurateGradeProfileSolverTest {
                 terrain[i] = 88;
             }
         }
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, null, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, null, STEP2);
         assertTrue(profile[25] > terrain[25],
                 "a short steep descent must be filled, not followed");
         for (int i = 0; i < profile.length; i++) {
@@ -90,7 +91,7 @@ final class AccurateGradeProfileSolverTest {
         for (int i = 0; i < terrain.length; i++) {
             terrain[i] = 64 + i / 2;
         }
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, null, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, null, STEP2);
         assertEquals(terrain[0], profile[0], "the profile must stay anchored at the start");
         assertEquals(terrain[terrain.length - 1], profile[profile.length - 1],
                 "the profile must stay anchored at the end");
@@ -104,7 +105,7 @@ final class AccurateGradeProfileSolverTest {
         }
         boolean[] mask = new boolean[terrain.length];
         mask[20] = true;
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(terrain, mask, STEP2);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(terrain, mask, STEP2);
         assertEquals(terrain[20], profile[20],
                 "a protected (water/tunnel) station must keep its exact height");
     }
@@ -118,7 +119,7 @@ final class AccurateGradeProfileSolverTest {
             target[i] = 108;
             flat[i] = true;
         }
-        int[] profile = RoadGradePlanner.solveOptimalGradeProfile(target, null, STEP2, flat);
+        int[] profile = GradeOptimizer.solveOptimalGradeProfile(target, null, STEP2, flat);
         assertEquals(108, profile[30], "the tunnel core must sit on the bore chord");
         for (int i = 1; i < profile.length; i++) {
             assertTrue(Math.abs(profile[i] - profile[i - 1]) <= 1,

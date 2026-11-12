@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 import net.minecraft.core.BlockPos;
+import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
@@ -90,7 +91,7 @@ public final class AccuratePathHeightResolver {
         }
         int[] gradeProfile = RoadGradePlanner.planAccurateGradeProfile(
                 targetY, splitMask, slopeStep(), slopeLimitEnabled(), tunnelHints,
-                RoadGradePlanner.configuredStationSpacing(path));
+                SlopeContinuityEnforcer.configuredStationSpacing(path));
 
         List<BlockPos> resolved = new ArrayList<>(path.size());
         for (int i = 0; i < path.size(); i++) {

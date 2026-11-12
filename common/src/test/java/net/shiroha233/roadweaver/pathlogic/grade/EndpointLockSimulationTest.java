@@ -63,7 +63,7 @@ public final class EndpointLockSimulationTest {
         // --- 1. Reproduce the defect ---------------------------------------
         // The slope closure is "lower, never raise" from both ends, so it pulls
         // the locked start down toward the interior before the fix.
-        int[] withoutFix = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        int[] withoutFix = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 locked.clone(), new boolean[locked.length], STEP2, null);
         int droppedWithoutFix = locked[0] - withoutFix[0];
         require(droppedWithoutFix > 0,
@@ -73,7 +73,7 @@ public final class EndpointLockSimulationTest {
         // --- 2. Verify the fix ---------------------------------------------
         boolean[] pinned = new boolean[locked.length];
         pinned[0] = true;
-        int[] withFix = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        int[] withFix = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 locked.clone(), new boolean[locked.length], STEP2, pinned);
         reSeatBoundary(withFix, 0, LOCKED_START);
 

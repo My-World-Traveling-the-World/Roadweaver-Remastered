@@ -11,13 +11,15 @@ import java.util.Arrays;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
+import static net.shiroha233.roadweaver.pathlogic.grade.GradeOptimizer.*;
+import static net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer.*;
 
 /**
  * Constrains the persisted road profile to real terrain while preserving only
  * complete, sustained mountain cuts as tunnel candidates.
  */
 public final class RoadGradePlanner {
-    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     /**
      * 纵断面填方上限。**直接引用施工端的权威常量**，不再自己写一份。
      *
@@ -39,17 +41,17 @@ public final class RoadGradePlanner {
      * whose surface-following profile stays within it is NOT converted into a
      * tunnel chord.
      */
-    private static final int TUNNEL_SURFACE_CUT_BUDGET = 8;
+    static final int TUNNEL_SURFACE_CUT_BUDGET = 8;
     /** Search far enough to cover long mountain faces without scanning a whole route. */
-    private static final int TUNNEL_ANCHOR_SEARCH_STATIONS = 128;
+    static final int TUNNEL_ANCHOR_SEARCH_STATIONS = 128;
     /** Permit a route endpoint inside a mountain to act as the tunnel mouth. */
-    private static final int ENDPOINT_TUNNEL_ANCHOR_WINDOW = 16;
+    static final int ENDPOINT_TUNNEL_ANCHOR_WINDOW = 16;
     /**
      * A run longer than this stops using one flat two-anchor chord and splits
      * into terrain-anchored segments instead, so the bore climbs with the
      * massif instead of pinning roadY while overburden grows past 17.
      */
-    private static final int TUNNEL_CHORD_SEGMENT_STATIONS = 48;
+    static final int TUNNEL_CHORD_SEGMENT_STATIONS = 48;
 
     private RoadGradePlanner() {
     }
@@ -158,9 +160,9 @@ public final class RoadGradePlanner {
         }
     }
 
-    private static final org.slf4j.Logger LIMIT_LOGGER =
+    static final org.slf4j.Logger LIMIT_LOGGER =
             org.slf4j.LoggerFactory.getLogger("roadweaver");
-    private static volatile long LIMIT_LOG_AT = 0L;
+    static volatile long LIMIT_LOG_AT = 0L;
 
     public static int[] constrainProfile(int[] planned, int[] terrain, boolean[] bridge) {
         if (planned == null || terrain == null || planned.length != terrain.length) {
@@ -169,7 +171,7 @@ public final class RoadGradePlanner {
         return constrainProfile(planned, terrain, bridge, SurfaceGradeLimits.capture());
     }
 
-    private static int[] constrainProfile(int[] planned, int[] terrain, boolean[] bridge,
+    static int[] constrainProfile(int[] planned, int[] terrain, boolean[] bridge,
                                           SurfaceGradeLimits limits) {
         int[] result = planned.clone();
         boolean[] tunnel = findTunnelCorridors(result, terrain, bridge, limits.tunnelCoreOverburden());
@@ -237,7 +239,7 @@ public final class RoadGradePlanner {
                 SurfaceGradeLimits.capture());
     }
 
-    private static int[] constrainProfileToFootprintSupport(int[] planned,
+    static int[] constrainProfileToFootprintSupport(int[] planned,
                                                             int[] footprintSupport,
                                                             boolean[] protectedMask,
                                                             int maxStepPerTwoSegments,
@@ -284,7 +286,7 @@ public final class RoadGradePlanner {
                 slopeEnabled, maxStepPerTwoSegments, SurfaceGradeLimits.capture(effectiveMode));
     }
 
-    private static int[] stabilizeSurfaceProfile(int[] planned,
+    static int[] stabilizeSurfaceProfile(int[] planned,
                                                  int[] centerTerrain,
                                                  int[] footprintSupport,
                                                  boolean[] crossing,
@@ -326,7 +328,7 @@ public final class RoadGradePlanner {
      * （比较压前/压后的逐站高度）。这是判断三档怎么选的唯一依据 ——
      * 如果它长期是 0，说明真正绑住坡度的是别的东西，不是这个剖面档位。</p>
      */
-    private static int[] applyConfiguredGradeCap(int[] profile, boolean[] crossing, boolean slopeEnabled) {
+    static int[] applyConfiguredGradeCap(int[] profile, boolean[] crossing, boolean slopeEnabled) {
         int total = profile == null ? 0 : profile.length;
         GradeCap.Mode mode = GradeCap.current();
         int cappedStations = 0;
@@ -395,7 +397,7 @@ public final class RoadGradePlanner {
         return result;
     }
 
-    private static void lowerRunToGradeCap(int[] profile, int start, int end, int window,
+    static void lowerRunToGradeCap(int[] profile, int start, int end, int window,
                                            GradeCap.Mode mode, boolean[] pinnedMask, double[] stationSpacing) {
         int passes = Math.min(2 * window + 4, 32);
         for (int pass = 0; pass < passes; pass++) {
@@ -431,7 +433,7 @@ public final class RoadGradePlanner {
     }
 
     /** {@return 索引 from→to 之间实际走过的水平距离（{@code spacing == null} 时按 1.0 格/站）} */
-    private static double windowRun(double[] spacing, int from, int to) {
+    static double windowRun(double[] spacing, int from, int to) {
         if (spacing == null) return Math.max(0, to - from);
         double sum = 0.0D;
         for (int i = from + 1; i <= to && i < spacing.length; i++) {
@@ -459,7 +461,7 @@ public final class RoadGradePlanner {
      * <p>等价性边界：输出逐点仍在 {@code [terrain - cut, terrain + fill]} 内且端点不变，
      * 因此不改变起终点高度、不增加任何土方，也不改变「哪条路」这个选线决策。</p>
      */
-    private static int[] smoothProfileWithinBudget(int[] profile, int[] terrain, boolean[] crossing,
+    static int[] smoothProfileWithinBudget(int[] profile, int[] terrain, boolean[] crossing,
                                                    SurfaceGradeLimits limits) {
         int n = profile == null ? 0 : profile.length;
         if (n < 3 || terrain == null || terrain.length != n) return profile;
@@ -733,9 +735,9 @@ public final class RoadGradePlanner {
     static final int ACCURATE_MAX_CUT = 8;
     static final int ACCURATE_MAX_FILL = 6;
     /** 坡度超限的软惩罚（每格）。远大于切方/填方单价，因此除极端地形外坡度约束实际是硬约束。 */
-    private static final int SLOPE_EXCESS_WEIGHT = 60;
+    static final int SLOPE_EXCESS_WEIGHT = 60;
     /** 端点偏离地表的软惩罚（每格）。可行时端点锚定地表，不可行时取最接近的剖面。 */
-    private static final int ENDPOINT_DEVIATION_WEIGHT = 200;
+    static final int ENDPOINT_DEVIATION_WEIGHT = 200;
 
     /**
      * 纵向坡度的最优剖面：分层 DAG 最短路（经典 Viterbi / 有界坡度剖面）。
@@ -753,458 +755,10 @@ public final class RoadGradePlanner {
      *
      * <p>{@code splitMask}（水面/桥面）是硬边界：这些站钉在 {@code targetY} 上并各自断开求解。</p>
      */
-    public static int[] solveOptimalGradeProfile(int[] targetY,
-                                                 boolean[] splitMask,
-                                                 int maxStepPerTwoSegments) {
-        return solveOptimalGradeProfile(targetY, splitMask, maxStepPerTwoSegments, null);
-    }
-
-    /**
-     * @param flatCostMask 洞身站点：偏离期望高度按对称单价计费（上/下同价），
-     *                     否则"洞顶高于洞身"会被当成昂贵填方，洞口坡道反而比台阶更贵。
-     */
-    public static int[] solveOptimalGradeProfile(int[] targetY,
-                                                 boolean[] splitMask,
-                                                 int maxStepPerTwoSegments,
-                                                 boolean[] flatCostMask) {
-        return solveOptimalGradeProfile(targetY, splitMask, maxStepPerTwoSegments, flatCostMask, null);
-    }
-
-    /**
-     * @param stationSpacing 相邻站真实距离（索引 i 是 i-1→i 的距离；{@code null} = 按站号计）
-     */
-    public static int[] solveOptimalGradeProfile(int[] targetY,
-                                                 boolean[] splitMask,
-                                                 int maxStepPerTwoSegments,
-                                                 boolean[] flatCostMask,
-                                                 double[] stationSpacing) {
-        if (targetY == null || targetY.length == 0) {
-            return new int[0];
-        }
-        int[] result = targetY.clone();
-        if (targetY.length < 4) {
-            return result;
-        }
-        int step2 = Math.max(0, Math.min(8, maxStepPerTwoSegments));
-        if (step2 == 0) {
-            return result;
-        }
-        int adjacentStep = Math.max(1, (step2 + 1) / 2);
-        int index = 0;
-        while (index < targetY.length) {
-            if (isBridge(splitMask, index)) {
-                index++;
-                continue;
-            }
-            int start = index;
-            while (index < targetY.length && !isBridge(splitMask, index)) {
-                index++;
-            }
-            solveGradeSegment(targetY, result, start, index - 1, adjacentStep, flatCostMask, stationSpacing);
-        }
-        return result;
-    }
-
-    private static void solveGradeSegment(int[] targetY, int[] out,
-                                          int start, int end,
-                                          int adjacentStep,
-                                          boolean[] flatCostMask,
-                                          double[] stationSpacing) {
-        int length = end - start + 1;
-        if (length < 4) {
-            return;
-        }
-        final int low = -ACCURATE_MAX_CUT;
-        final int high = ACCURATE_MAX_FILL;
-        final int h = high - low + 1;
-        final int inf = Integer.MAX_VALUE / 4;
-
-        int[] previous = new int[h];
-        int[] current = new int[h];
-        byte[] parent = new byte[length * h];
-        java.util.Arrays.fill(previous, inf);
-        for (int o = low; o <= high; o++) {
-            previous[o - low] = deviationCost(o, isBridge(flatCostMask, start))
-                    + ENDPOINT_DEVIATION_WEIGHT * Math.abs(o);
-        }
-
-        for (int k = 1; k < length; k++) {
-            int targetPrev = targetY[start + k - 1];
-            int targetHere = targetY[start + k];
-            java.util.Arrays.fill(current, inf);
-            for (int c = low; c <= high; c++) {
-                int y = targetHere + c;
-                int best = inf;
-                int bestA = low;
-                for (int a = low; a <= high; a++) {
-                    int value = previous[a - low];
-                    if (value >= inf) {
-                        continue;
-                    }
-                    int step = Math.abs(y - (targetPrev + a));
-                    int excess = Math.max(0, step - adjacentStepAt(adjacentStep, stationSpacing, start + k));
-                    int cost = value + excess * SLOPE_EXCESS_WEIGHT;
-                    if (cost < best) {
-                        best = cost;
-                        bestA = a;
-                    }
-                }
-                if (best >= inf) {
-                    continue;
-                }
-                int total = best + deviationCost(c, isBridge(flatCostMask, start + k));
-                if (total < current[c - low]) {
-                    current[c - low] = total;
-                    parent[k * h + (c - low)] = (byte) (bestA - low);
-                }
-            }
-            int[] swap = previous;
-            previous = current;
-            current = swap;
-        }
-
-        int bestC = low;
-        int bestCost = inf;
-        for (int c = low; c <= high; c++) {
-            int total = previous[c - low] + ENDPOINT_DEVIATION_WEIGHT * Math.abs(c);
-            if (total < bestCost) {
-                bestCost = total;
-                bestC = c;
-            }
-        }
-        if (bestCost >= inf) {
-            return;
-        }
-
-        int[] offsets = new int[length];
-        int cursor = bestC;
-        for (int k = length - 1; k >= 0; k--) {
-            offsets[k] = cursor;
-            if (k == 0) {
-                break;
-            }
-            cursor = (parent[k * h + (cursor - low)] & 0xFF) + low;
-        }
-        for (int k = 0; k < length; k++) {
-            out[start + k] = targetY[start + k] + offsets[k];
-        }
-    }
-
-    private static int deviationCost(int offset) {
-        return deviationCost(offset, false);
-    }
-
-    private static int deviationCost(int offset, boolean flat) {
-        if (offset == 0) {
-            return 0;
-        }
-        if (flat) {
-            // 洞身：上下同价，鼓励用洞口坡道代替台阶。
-            return Math.abs(offset) * 2;
-        }
-        if (offset < 0) {
-            int cut = -offset;
-            return cut <= 4 ? cut : 4 + (cut - 4) * 5;
-        }
-        int fill = offset;
-        return fill <= 2 ? fill * 3 : 6 + (fill - 2) * 10;
-    }
-
-    /**
-     * True when the mountain run between the two anchors can be crossed by an
-     * ordinary surface cut: the slope-limited terrain-following profile stays
-     * within the short-grade cut budget ({@link #TUNNEL_SURFACE_CUT_BUDGET}).
-     * The bidirectional slope-clamped propagation mirrors
-     * {@code enforceContinuousSlope} so the feasibility check cannot accept a
-     * surface profile that the final grade pass would reject.
-     */
-    private static boolean surfaceCutFeasible(int[] terrain, boolean[] crossing,
-                                              int leftAnchor, int rightAnchor,
-                                              int maxStepPerTwoSegments,
-                                              int tunnelCoreOverburden) {
-        int adjacentStep = maxStepPerTwoSegments > 0
-                ? Math.max(1, (Math.min(8, maxStepPerTwoSegments) + 1) / 2)
-                : Integer.MAX_VALUE / 2;
-        int from = Math.max(0, Math.min(leftAnchor, rightAnchor));
-        int to = Math.min(terrain.length - 1, Math.max(leftAnchor, rightAnchor));
-        int[] forward = new int[terrain.length];
-        int y = terrain[from];
-        forward[from] = y;
-        for (int i = from + 1; i <= to; i++) {
-            y = clamp(terrain[i], y - adjacentStep, y + adjacentStep);
-            forward[i] = y;
-        }
-        int[] backward = new int[terrain.length];
-        y = terrain[to];
-        backward[to] = y;
-        for (int i = to - 1; i >= from; i--) {
-            y = clamp(terrain[i], y - adjacentStep, y + adjacentStep);
-            backward[i] = y;
-        }
-        int deepest = 0;
-        for (int i = from; i <= to; i++) {
-            if (isBridge(crossing, i)) continue;
-            int upper = Math.min(forward[i], backward[i]);
-            deepest = Math.max(deepest, terrain[i] - upper);
-            if (terrain[i] - upper > TUNNEL_SURFACE_CUT_BUDGET) {
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("RoadWeaver tunnel chord justified: surface cut would reach {} blocks at station {} (anchor span {}..{}) overburden threshold {}",
-                            terrain[i] - upper, i, from, to, tunnelCoreOverburden);
-                }
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static int findLowerAnchorLeft(int[] terrain, boolean[] crossing, int index,
-                                           int tunnelCoreOverburden) {        int lowerBound = Math.max(0, index - TUNNEL_ANCHOR_SEARCH_STATIONS);
-        for (int candidate = index - 1; candidate >= lowerBound; candidate--) {
-            if (isBridge(crossing, candidate)
-                    || terrain[candidate] + tunnelCoreOverburden > terrain[index]) continue;
-            return candidate;
-        }
-        return -1;
-    }
-
-    private static int findLowerAnchorRight(int[] terrain, boolean[] crossing, int index,
-                                            int tunnelCoreOverburden) {
-        int upperBound = Math.min(terrain.length - 1, index + TUNNEL_ANCHOR_SEARCH_STATIONS);
-        for (int candidate = index + 1; candidate <= upperBound; candidate++) {
-            if (isBridge(crossing, candidate)
-                    || terrain[candidate] + tunnelCoreOverburden > terrain[index]) continue;
-            return candidate;
-        }
-        return -1;
-    }
-
-    private static boolean aboveAnchorChord(int[] terrain,
-                                            int leftAnchor,
-                                            int rightAnchor,
-                                            int index,
-                                            int tunnelCoreOverburden) {
-        double ratio = (index - leftAnchor) / (double) (rightAnchor - leftAnchor);
-        double chord = terrain[leftAnchor] + (terrain[rightAnchor] - terrain[leftAnchor]) * ratio;
-        return terrain[index] - chord >= tunnelCoreOverburden;
-    }
-
-    private static boolean[] mergeMasks(boolean[] first, boolean[] second, int length) {
-        boolean[] result = new boolean[Math.max(0, length)];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = isBridge(first, i) || isBridge(second, i);
-        }
-        return result;
-    }
-
     /**
      * Applies the final longitudinal constraint after every terrain clamp.
      * Protected crossings are solved separately by BridgeDeckProfile.
      */
-    public static int[] enforceContinuousSlope(int[] source,
-                                               boolean[] protectedMask,
-                                               int maxStepPerTwoSegments) {
-        if (source == null || source.length == 0) return new int[0];
-        int[] result = source.clone();
-        int step2 = Math.max(0, Math.min(8, maxStepPerTwoSegments));
-        if (step2 == 0) return result;
-
-        int index = 0;
-        while (index < result.length) {
-            while (index < result.length && isBridge(protectedMask, index)) index++;
-            int start = index;
-            while (index < result.length && !isBridge(protectedMask, index)) index++;
-            int end = index - 1;
-            if (start <= end) constrainRun(result, start, end, step2);
-        }
-        return result;
-    }
-
-    /**
-     * Resolves an unavoidable cliff by lowering the high side instead of
-     * raising the low side. The lowered sustained section is then eligible
-     * for tunnel extraction; ordinary terrain is never turned into sky road.
-     */
-    public static int[] enforceContinuousSlopePreferCut(int[] source,
-                                                        boolean[] protectedMask,
-                                                        int maxStepPerTwoSegments) {
-        return enforceContinuousSlopePreferCut(source, protectedMask, maxStepPerTwoSegments, null);
-    }
-
-    /**
-     * 0.8.369 (T2): {@code pinnedMask} names the stations whose height is a hard
-     * structure boundary lock. Every pass here only ever <em>lowers</em> a
-     * station ({@code Math.min}), so a locked endpoint was silently pulled back
-     * down to meet whatever the tunnel chord or terrain clamp wanted.
-     *
-     * <p>Measured on a real save: a route leaving a mountain village locked
-     * {@code targetY[0] = 407} (exactly the sampled village surface) but shipped
-     * with {@code 389}. The other endpoint, whose last span did not cover it,
-     * matched its lock exactly — the only difference was whether the endpoint
-     * fell inside a TUNNEL span. Of 23 connections, 8 ended up 2..25 blocks
-     * below their locked surface.</p>
-     *
-     * <p>Pinned stations are therefore treated as immovable: they are skipped
-     * while lowering and they still act as the fixed end of every gradient
-     * constraint around them, so the approach keeps its legal one-block ramp
-     * and no sky road can appear.</p>
-     */
-    public static int[] enforceContinuousSlopePreferCut(int[] source,
-                                                        boolean[] protectedMask,
-                                                        int maxStepPerTwoSegments,
-                                                        boolean[] pinnedMask) {
-        return enforceContinuousSlopePreferCut(source, protectedMask, maxStepPerTwoSegments, pinnedMask, null);
-    }
-
-    /**
-     * @param stationSpacing 相邻站真实水平距离（索引 i 是 i-1→i 的距离；{@code null} = 按站号计）。
-     *                       斜向一步是 {@code sqrt(2)} 格，按站号限坡会让同一段路在斜向更陡；
-     *                       传真实距离后「每两站允许的高差」按实际走过的长度换算，方向不再影响坡度。
-     *                       只会放宽长边、绝不收紧短边，因此 {@code null} 与旧行为逐位相同。
-     */
-    public static int[] enforceContinuousSlopePreferCut(int[] source,
-                                                        boolean[] protectedMask,
-                                                        int maxStepPerTwoSegments,
-                                                        boolean[] pinnedMask,
-                                                        double[] stationSpacing) {
-        if (source == null || source.length == 0) return new int[0];
-        int[] result = source.clone();
-        int step2 = Math.max(0, Math.min(8, maxStepPerTwoSegments));
-        if (step2 == 0) return result;
-
-        int index = 0;
-        while (index < result.length) {
-            while (index < result.length && isBridge(protectedMask, index)) index++;
-            int start = index;
-            while (index < result.length && !isBridge(protectedMask, index)) index++;
-            int end = index - 1;
-            if (start <= end) lowerRunToSlope(result, start, end, step2, pinnedMask, stationSpacing);
-        }
-        return result;
-    }
-
-    private static void lowerRunToSlope(int[] profile, int start, int end, int step2) {
-        lowerRunToSlope(profile, start, end, step2, null, null);
-    }
-
-    /**
-     * Pinned stations keep their height. They still constrain their neighbours,
-     * because the sweep reads {@code profile[i - 1]} / {@code profile[i + 1]} of
-     * the live array — skipping only the write leaves the ramp anchored on the
-     * lock instead of flattening through it.
-     */
-    private static void lowerRunToSlope(int[] profile, int start, int end, int step2,
-                                        boolean[] pinnedMask) {
-        lowerRunToSlope(profile, start, end, step2, pinnedMask, null);
-    }
-
-    private static void lowerRunToSlope(int[] profile, int start, int end, int step2,
-                                        boolean[] pinnedMask, double[] stationSpacing) {
-        int adjacentStep = Math.max(1, (step2 + 1) / 2);
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = start + 1; i <= end; i++) {
-                if (isPinned(pinnedMask, i)) continue;
-                profile[i] = Math.min(profile[i],
-                        profile[i - 1] + adjacentStepAt(adjacentStep, stationSpacing, i));
-                if (i >= start + 2) {
-                    profile[i] = Math.min(profile[i],
-                            profile[i - 2] + twoStepAt(step2, stationSpacing, i));
-                }
-            }
-            for (int i = end - 1; i >= start; i--) {
-                if (isPinned(pinnedMask, i)) continue;
-                profile[i] = Math.min(profile[i],
-                        profile[i + 1] + adjacentStepAt(adjacentStep, stationSpacing, i + 1));
-                if (i <= end - 2) {
-                    profile[i] = Math.min(profile[i],
-                            profile[i + 2] + twoStepAt(step2, stationSpacing, i + 2));
-                }
-            }
-        }
-    }
-
-    /**
-     * {@return the rise allowed between station {@code index - 1} and {@code index}}
-     *
-     * <p>Only ever relaxes: a longer edge (a diagonal is {@code sqrt(2)} blocks) may rise
-     * proportionally more, exactly so the real grade matches the axial one. With no spacing - the
-     * default - this is the old constant step, bit for bit.
-     */
-    private static int adjacentStepAt(int adjacentStep, double[] spacing, int index) {
-        if (spacing == null || index <= 0 || index >= spacing.length) return adjacentStep;
-        double length = spacing[index];
-        if (!(length > 0.0D) || Double.isNaN(length)) return adjacentStep;
-        return Math.max(adjacentStep, (int) Math.round(adjacentStep * length));
-    }
-
-    /** {@return the rise allowed across two stations, scaled by the real length they span} */
-    private static int twoStepAt(int step2, double[] spacing, int index) {
-        if (spacing == null || index < 2 || index >= spacing.length) return step2;
-        double first = spacing[index];
-        double second = spacing[index - 1];
-        if (!(first > 0.0D) || !(second > 0.0D)) return step2;
-        double average = Math.max(1.0D, Math.min(first, second)) * 0.5D
-                + Math.max(1.0D, Math.max(first, second)) * 0.5D;
-        return Math.max(step2, (int) Math.round(step2 * average));
-    }
-
-    /**
-     * {@return the per-station spacing of a route, or {@code null} when the arc-length model is off}
-     *
-     * <p>Index {@code i} holds the horizontal distance from station {@code i - 1} to station
-     * {@code i}; index 0 is the nominal 1.0. Vertical distance is deliberately not included: the
-     * limit being modelled is a grade (rise over run), so only run belongs in the denominator.
-     */
-    public static double[] configuredStationSpacing(java.util.List<BlockPos> positions) {
-        try {
-            if (!ConfigService.get().slopeByArcLength()) return null;
-        } catch (Throwable ignored) {
-            return null;
-        }
-        return stationSpacing(positions);
-    }
-
-    /** {@return the nominal spacing array for a route; index 0 is 1.0 by construction} */
-    public static double[] stationSpacing(java.util.List<BlockPos> positions) {
-        if (positions == null || positions.isEmpty()) return null;
-        int count = positions.size();
-        double[] spacing = new double[count];
-        spacing[0] = 1.0D;
-        for (int i = 1; i < count; i++) {
-            BlockPos previous = positions.get(i - 1);
-            BlockPos current = positions.get(i);
-            double dx = current.getX() - previous.getX();
-            double dz = current.getZ() - previous.getZ();
-            double horizontal = Math.sqrt(dx * dx + dz * dz);
-            spacing[i] = horizontal > 0.0D ? horizontal : 1.0D;
-        }
-        return spacing;
-    }
-
-    private static void constrainRun(int[] profile, int start, int end, int step2) {
-        int halfLow = Math.max(0, step2 / 2);
-        int halfHigh = Math.max(0, (step2 + 1) / 2);
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = start + 1; i <= end; i++) {
-                int adjacentStep = i == start + 1 ? halfLow : halfHigh;
-                profile[i] = clamp(profile[i], profile[i - 1] - adjacentStep,
-                        profile[i - 1] + adjacentStep);
-                if (i >= start + 2) {
-                    profile[i] = clamp(profile[i], profile[i - 2] - step2,
-                            profile[i - 2] + step2);
-                }
-            }
-            for (int i = end - 1; i >= start; i--) {
-                int adjacentStep = i == end - 1 ? halfLow : halfHigh;
-                profile[i] = clamp(profile[i], profile[i + 1] - adjacentStep,
-                        profile[i + 1] + adjacentStep);
-                if (i <= end - 2) {
-                    profile[i] = clamp(profile[i], profile[i + 2] - step2,
-                            profile[i + 2] + step2);
-                }
-            }
-        }
-    }
-
     /**
      * Removes isolated one-block spikes inside tunnel runs: a station that
      * stands exactly one block above both of its neighbours (which are nearly
@@ -1234,7 +788,7 @@ public final class RoadGradePlanner {
         return result;
     }
 
-    private static int clamp(int value, int minimum, int maximum) {
+    static int clamp(int value, int minimum, int maximum) {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
@@ -1277,21 +831,21 @@ public final class RoadGradePlanner {
         return tunnel;
     }
 
-    private static boolean isTunnelCore(int[] planned, int[] terrain, boolean[] bridge, int index,
+    static boolean isTunnelCore(int[] planned, int[] terrain, boolean[] bridge, int index,
                                         int tunnelCoreOverburden) {
         return !isBridge(bridge, index)
                 && overburden(planned, terrain, index) >= tunnelCoreOverburden;
     }
 
-    private static int overburden(int[] planned, int[] terrain, int index) {
+    static int overburden(int[] planned, int[] terrain, int index) {
         return terrain[index] - planned[index];
     }
 
-    private static boolean isBridge(boolean[] bridge, int index) {
+    static boolean isBridge(boolean[] bridge, int index) {
         return bridge != null && index >= 0 && index < bridge.length && bridge[index];
     }
 
-    private static boolean isPinned(boolean[] pinnedMask, int index) {
+    static boolean isPinned(boolean[] pinnedMask, int index) {
         return pinnedMask != null && index >= 0 && index < pinnedMask.length && pinnedMask[index];
     }
 }

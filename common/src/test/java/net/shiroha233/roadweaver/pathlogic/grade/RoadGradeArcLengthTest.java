@@ -42,8 +42,8 @@ final class RoadGradeArcLengthTest {
             diagonal.add(new BlockPos(i, 0, i));
         }
 
-        double[] alongX = RoadGradePlanner.stationSpacing(axial);
-        double[] alongDiagonal = RoadGradePlanner.stationSpacing(diagonal);
+        double[] alongX = SlopeContinuityEnforcer.stationSpacing(axial);
+        double[] alongDiagonal = SlopeContinuityEnforcer.stationSpacing(diagonal);
 
         assertEquals(1.0D, alongX[0], 1e-9);
         assertEquals(1.0D, alongX[4], 1e-9);
@@ -55,9 +55,9 @@ final class RoadGradeArcLengthTest {
         int[] target = {0, 3, 6, 9, 12, 15, 18, 21};
         boolean[] mask = new boolean[target.length];
 
-        int[] axial = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        int[] axial = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 target, mask, 4, null, unitSpacing(target.length));
-        int[] diagonal = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        int[] diagonal = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 target, mask, 4, null, diagonalSpacing(target.length));
 
         assertEquals(14, axial[axial.length - 1],
@@ -75,8 +75,8 @@ final class RoadGradeArcLengthTest {
         int[] target = {0, 2, 5, 9, 14, 20, 27, 35, 44};
         boolean[] mask = new boolean[target.length];
 
-        int[] withoutSpacing = RoadGradePlanner.enforceContinuousSlopePreferCut(target, mask, 4, null);
-        int[] withUnitSpacing = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        int[] withoutSpacing = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(target, mask, 4, null);
+        int[] withUnitSpacing = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
                 target, mask, 4, null, unitSpacing(target.length));
 
         assertArrayEquals(withoutSpacing, withUnitSpacing);
