@@ -2,8 +2,11 @@
 # 口径：触发该热点的【文件数】，排除定义它的文件（定义文件总在调自己）
 # 格式：符号<TAB>上限    # 说明
 # 演进：第一版数源码字面量次数 —— 声明/重载委托/收敛入口全被算进去，数字几乎不降，已废弃
-# 生成：2026-11-13（守卫 G4，S1 收敛后改为文件口径）
+# 生成：2026-11-13（守卫 G4；补入施工侧热点，为 S2 判定/施工解耦立基线）
 extractSpans(	2    # 区间提取
 computeTargetY(	1    # 剖面计算
 refineTunnelSpans(	2    # 隧道区间细化
 repairFinalHeightConflict(	1    # 高度冲突修复
+BridgeRangeCalculator.compute(	2    # 桥范围计算
+promoteRuntimeBridges(	1    # 运行期桥提升
+SegmentPaver.planGrade(	1    # 施工期坡度重插值

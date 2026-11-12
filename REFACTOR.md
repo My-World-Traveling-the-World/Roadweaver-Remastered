@@ -214,3 +214,48 @@ rg "待删（批" common/src/main/java
 **但要诚实说明**：收敛的是**代码形状**，不是计算次数 —— 各阶段的输入（`spans`）确实不同，
 所以仍然各算一次。真正的「只算一次」要靠 **S4**：把剖面与跨度并进同一张 DP，
 一次求解同时产出两者。S1 的贡献是「有权威表示 + 有唯一入口 + 有护栏盯着不倒退」。
+
+---
+
+# S2 计划：判定 / 施工解耦为纯 BuildPlan（2026-11-13 立）
+
+## 实测：施工期在哪些地方「自己又判了一遍」
+
+| 位置 | 触发频率 | 干什么 |
+|---|---|---|
+| `PathFeature:406` `BridgeRangeCalculator.compute(...)` | **每个区块一次** | 遍历整条中心线重算桥范围 |
+| `PathFeature:407` `promoteRuntimeBridges(...)` | **每个区块一次** | 探世界、按运行期水位再成长桥范围 |
+| `PathFeature` 里 `SegmentPaver.planGrade(...)` | **每个区块一次** | 重新插值坡度 + 压平横断面 |
+| `RoadConstructionVolumePlanner:243/317` `BridgeRangeCalculator.compute(...)` | 每条路一次 | 体积规划与校验各自再算一遍 |
+
+前三条是真正的热点：`O(区块数 × 中心线站数)`。一条 2000 站的路铺满 30×30 区块，
+仅桥范围判定就要把 2000 个站遍历 **900 次**。
+
+## 目标形态
+
+1. **判定侧**（规划/校验期，每条路一次）输出不可变 `BuildPlan`：
+   每列 `(x, z, targetY, kind, spanIndex, protectedMask)`，其中 `kind` ∈
+   `SKIP / PAVE_SURFACE_ONLY / PAVE_NORMAL / BRIDGE_DECK / TUNNEL_BORE`。
+2. **施工侧**（每区块）只做三件事：按 chunk 过滤 `BuildPlan` 里的列 → 放方块 → 记账。
+   **不再调** `BridgeRangeCalculator.compute` / `promoteRuntimeBridges` / `planGrade`。
+
+## 守卫基线（本轮已入 ratchet，只许减少）
+
+| 热点 | 触发文件数 |
+|---|---|
+| `BridgeRangeCalculator.compute(` | 2（`PathFeature` / `RoadConstructionVolumePlanner`）|
+| `promoteRuntimeBridges(` | 1（`PathFeature`）|
+| `SegmentPaver.planGrade(` | 1（`PathFeature`）|
+
+S2 做完时这三个数字应当全部变成 **0**（施工路径上不再出现），
+判定侧则收进 `BuildPlanCompiler` 一处。
+
+## 迁移顺序（每步回归必须全绿）
+
+1. `spec/BuildPlan` + `spec/BuildPlanCompiler`：纯函数，输入 `RoadSpec` + 桥范围 + 保护掩码，
+   输出每列计划。先只被测试用（正控 + 负控）。
+2. `PathFeature` 改为「首次进入某条路时编译一次 BuildPlan 并缓存，后续区块读缓存」。
+   缓存 key = 路指纹（已有 `roadFingerprint`）。
+3. 把 `segmentPaver` 的列决策换成读 `BuildPlan.kind()`，`planGrade` 降级为
+   「没有任何 BuildPlan 时的兜底」（旧存档路径）。
+4. 最后删掉施工期的 `promoteRuntimeBridges` 调用（判定期已把运行期水位考虑进去）。

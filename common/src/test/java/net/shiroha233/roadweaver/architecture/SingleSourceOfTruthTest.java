@@ -52,6 +52,12 @@ public final class SingleSourceOfTruthTest {
             {"computeTargetY(", "TargetYComputation.java", "剖面计算"},
             {"refineTunnelSpans(", "PathSpanExtractor.java", "隧道区间细化"},
             {"repairFinalHeightConflict(", "RoadPathCalculator.java", "高度冲突修复"},
+            // ── 施工侧（S2 判定/施工解耦的基线）──────────────────
+            // PathFeature:406 每区块都调一次 BridgeRangeCalculator.compute，而它遍历整条中心线；
+            // 这是「施工期自己再判一次」的典型，S2 要把它挪出施工路径。
+            {"BridgeRangeCalculator.compute(", "BridgeRangeCalculator.java", "桥范围计算"},
+            {"promoteRuntimeBridges(", "RoadConstructionSafety.java", "运行期桥提升"},
+            {"SegmentPaver.planGrade(", "SegmentPaver.java", "施工期坡度重插值"},
     };
 
     private static Path repoRoot;
