@@ -16,12 +16,13 @@ import java.util.*;
 
 import static net.shiroha233.roadweaver.pathfinding.impl.PathfindingHelper.isWaterLike;
 import static net.shiroha233.roadweaver.postprocess.SplineHelper.*;
+import static net.shiroha233.roadweaver.postprocess.BridgeMaskTool.*;
 
 /**
  * 路径后处理器
  */
 public final class PathPostProcessor {
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("roadweaver");
+    static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("roadweaver");
     /**
      * How far the planned road may stand above the sampled ground before the span counts as a viaduct.
      *
@@ -29,7 +30,7 @@ public final class PathPostProcessor {
      * bridge, so the post-processor and the span classifier agree on what a gorge is.
      */
     /** Columns the height backend refused; see the guard in detectBridgeMask. */
-    private static final java.util.concurrent.atomic.AtomicLong MISSING_HEIGHTS =
+    static final java.util.concurrent.atomic.AtomicLong MISSING_HEIGHTS =
             new java.util.concurrent.atomic.AtomicLong();
 
     static final int DRY_VIADUCT_MIN_DROP = 16;
@@ -149,11 +150,11 @@ public final class PathPostProcessor {
         }
     }
 
-    private static String fmt(double value) {
+    static String fmt(double value) {
         return String.format("%.1f", value);
     }
 
-    private static boolean shapeDiagEnabled() {
+    static boolean shapeDiagEnabled() {
         String raw = System.getProperty("roadweaver.shapeDiag");
         return raw == null || !raw.equalsIgnoreCase("false");
     }
@@ -426,7 +427,7 @@ public final class PathPostProcessor {
         return splinePoints;
     }
 
-    private static List<BlockPos> extractCenters(List<Vec2d> splinePoints,
+    static List<BlockPos> extractCenters(List<Vec2d> splinePoints,
                                                   List<BlockPos> rawPath, int[] rawTargetY,
                                                   List<Double> outCenterDists) {
         List<BlockPos> centers = new ArrayList<>();
@@ -456,7 +457,7 @@ public final class PathPostProcessor {
         return centers;
     }
 
-    private static HeightProjection interpolateYNearPathOrder(int cx,
+    static HeightProjection interpolateYNearPathOrder(int cx,
                                                                int cz,
                                                                List<BlockPos> rawPath,
                                                                int[] rawTargetY,
@@ -492,7 +493,7 @@ public final class PathPostProcessor {
     private record HeightProjection(int y, int segmentIndex) {
     }
 
-    private static List<RoadSegmentPlacement> rasterizeSegments(List<Vec2d> splinePoints,
+    static List<RoadSegmentPlacement> rasterizeSegments(List<Vec2d> splinePoints,
                                                                  List<BlockPos> centers,
                                                                  List<Double> centerDists,
                                                                  int width) {
@@ -535,7 +536,7 @@ public final class PathPostProcessor {
         return out;
     }
 
-    private static void assignToNearestCenter(int x, int z, List<BlockPos> centers,
+    static void assignToNearestCenter(int x, int z, List<BlockPos> centers,
                                                int hint, Map<Integer, Set<BlockPos>> segmentedBlocks) {
         int bestIdx = hint;
         double bestDistSq = Double.MAX_VALUE;
@@ -673,7 +674,7 @@ public final class PathPostProcessor {
         return out;
     }
 
-    private static double perpendicularDistance(BlockPos point, BlockPos a, BlockPos b) {
+    static double perpendicularDistance(BlockPos point, BlockPos a, BlockPos b) {
         double ax = a.getX();
         double az = a.getZ();
         double dx = b.getX() - ax;
@@ -739,102 +740,6 @@ public final class PathPostProcessor {
             if (keep[i]) simplified.add(nodes.get(i));
         }
         return simplified;
-    }
-
-    static boolean[] detectBridgeMask(List<BlockPos> nodes, ServerLevel level,
-                                      TerrainSamplingCache cache, PathTerrainField terrain,
-                                      int bridgeMinWaterDepth,
-                                      AccurateHeightSampler sampler) {
-        int n = nodes.size();
-        boolean[] mask = new boolean[n];
-        List<BlockPos> missing = new ArrayList<>();
-        for (BlockPos node : nodes) {
-            if (terrain == null || !terrain.hasAccurateSample(node.getX(), node.getZ())) {
-                missing.add(node);
-            }
-        }
-        Map<Long, AccurateHeightSample> samples = sampler.samplePositions(missing);
-        int dryViaduct = 0;
-        for (int i = 0; i < n; i++) {
-            BlockPos p = nodes.get(i);
-            // A dry gorge needs a viaduct too. This mask used to ask only "is this water", so a span with
-            // no water in it was never straightened and never grouped: the deck followed the terrain, the
-            // railings wobbled with it, and a deep dry valley carried a road that hugged a wall of rock -
-            // while the bridge right next to it, over water, was dead straight. The planned Y rising far
-            // above the sampled ground is the same signal the span extractor uses for a dry depression.
-            // A column the height backend refused must not take the whole route with it: two of sixteen
-            // connections died here in a measured session, both with "Accurate height backend returned
-            // no chunk" thrown from this line. Treat the ground as level and keep the road.
-            int ground;
-            try {
-                ground = sampler.worldSurfaceWg(p.getX(), p.getZ());
-            } catch (RuntimeException missingHeight) {
-                if (MISSING_HEIGHTS.getAndIncrement() < 8L) {
-                    LOGGER.warn("Height backend refused column {},{}; treating the ground as level and "
-                            + "keeping the route", p.getX(), p.getZ(), missingHeight);
-                }
-                ground = p.getY();
-            }
-            boolean overDryDepression = p.getY() - ground >= DRY_VIADUCT_MIN_DROP;
-            if (terrain != null && terrain.hasAccurateSample(p.getX(), p.getZ())) {
-                mask[i] = terrain.isBridgeWater(p.getX(), p.getZ(), bridgeMinWaterDepth) || overDryDepression;
-                if (overDryDepression) dryViaduct++;
-                continue;
-            }
-            int sea = level.getSeaLevel();
-            AccurateHeightSample sample = samples.get(AccurateHeightSample.key(p.getX(), p.getZ()));
-            int oceanFloor = sample != null ? sample.oceanFloorWg() : sampler.oceanFloorWg(p.getX(), p.getZ());
-            int surfaceY;
-            if (sample != null) {
-                surfaceY = sample.worldSurfaceWg();
-            } else {
-                try {
-                    surfaceY = sampler.worldSurfaceWg(p.getX(), p.getZ());
-                } catch (RuntimeException missingHeight) {
-                    // Same rule as above: no height means "assume the road's own level", which classifies
-                    // the column as dry and leaves the mask unchanged for it.
-                    surfaceY = p.getY();
-                }
-            }
-            boolean waterBiome = isWaterLike(cache, p.getX(), p.getZ(), level);
-            boolean waterColumn = SurfaceWaterClassifier.isWaterColumn(
-                    surfaceY, oceanFloor, waterBiome, sea);
-            int waterDepth = SurfaceWaterClassifier.waterDepth(
-                    surfaceY, oceanFloor, waterBiome, sea, waterColumn);
-            mask[i] = waterDepth >= Math.max(1, bridgeMinWaterDepth) || overDryDepression;
-            if (overDryDepression) dryViaduct++;
-        }
-        if (dryViaduct > 0) {
-            LOGGER.info("RoadWeaver DRY_VIADUCT stations={} minDrop={} of={}",
-                    dryViaduct, DRY_VIADUCT_MIN_DROP, n);
-        }
-        return mask;
-    }
-
-    static List<BlockPos> straightenBridgeRuns(List<BlockPos> nodes, boolean[] bridgeMask) {
-        if (nodes == null || nodes.size() < 3 || bridgeMask == null || bridgeMask.length != nodes.size()) {
-            return nodes;
-        }
-        int n = nodes.size();
-        List<BlockPos> out = new ArrayList<>(nodes);
-        int i = 0;
-        while (i < n) {
-            if (!bridgeMask[i]) { i++; continue; }
-            int runStart = i;
-            while (i < n && bridgeMask[i]) i++;
-            int runEnd = i - 1;
-            int entryIdx = Math.max(0, runStart - 1);
-            int exitIdx = Math.min(n - 1, runEnd + 1);
-            if (exitIdx <= entryIdx) continue;
-            BlockPos a = nodes.get(entryIdx), b = nodes.get(exitIdx);
-            int ax = a.getX(), az = a.getZ(), dx = b.getX() - ax, dz = b.getZ() - az;
-            for (int k = runStart; k <= runEnd; k++) {
-                double t = Math.max(0.0, Math.min(1.0, (k - entryIdx) / (double) (exitIdx - entryIdx)));
-                out.set(k, new BlockPos((int) Math.round(ax + dx * t), out.get(k).getY(),
-                        (int) Math.round(az + dz * t)));
-            }
-        }
-        return out;
     }
 
     /** 平滑迭代轮数。单轮 1-2-1 加权对 8 格锯齿只能削掉约 1/4 幅度，三轮才看得出「顺」。 */
@@ -998,7 +903,7 @@ public final class PathPostProcessor {
     }
 
     /** 桥段本身与紧邻桥的点完全不参与平滑，保证桥面直线与端点对齐。 */
-    private static boolean frozenByBridge(boolean[] bridgeMask, int index) {
+    static boolean frozenByBridge(boolean[] bridgeMask, int index) {
         if (bridgeMask == null) return false;
         return isBridgeAt(bridgeMask, index)
                 || isBridgeAt(bridgeMask, index - 1)
@@ -1021,7 +926,7 @@ public final class PathPostProcessor {
         return RELAX_MAX_DISPLACEMENT;
     }
 
-    private static boolean isBridgeAt(boolean[] bridgeMask, int index) {
+    static boolean isBridgeAt(boolean[] bridgeMask, int index) {
         return index >= 0 && index < bridgeMask.length && bridgeMask[index];
     }
 }

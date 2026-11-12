@@ -203,7 +203,7 @@ class PathPostProcessorCharacterizationTest {
         input.add(new BlockPos(24, 70, 6));
         input.add(new BlockPos(32, 70, 0));   // 桥段出口
         boolean[] mask = new boolean[]{false, true, true, true, false};
-        List<BlockPos> out = PathPostProcessor.straightenBridgeRuns(input, mask);
+        List<BlockPos> out = BridgeMaskTool.straightenBridgeRuns(input, mask);
         assertEquals(input.size(), out.size());
         // 入口 (0,0) → 出口 (32,0)，桥段三个点必须落在该直线上（Z=0）
         for (int i = 1; i <= 3; i++) {
@@ -222,16 +222,16 @@ class PathPostProcessorCharacterizationTest {
     void straightenBridgeRunsIsANoOpWithoutAnyBridge() {
         List<BlockPos> input = zigzag(10, 8, 5, 70);
         boolean[] mask = new boolean[input.size()];
-        assertEquals(input, PathPostProcessor.straightenBridgeRuns(input, mask),
+        assertEquals(input, BridgeMaskTool.straightenBridgeRuns(input, mask),
                 "没有桥时必须逐位不变");
     }
 
     @Test
     void straightenBridgeRunsRejectsMismatchedMask() {
         List<BlockPos> input = straightLine(6, 8, 70);
-        assertEquals(input, PathPostProcessor.straightenBridgeRuns(input, new boolean[3]),
+        assertEquals(input, BridgeMaskTool.straightenBridgeRuns(input, new boolean[3]),
                 "掩码长度不符时必须原样返回");
-        assertEquals(input, PathPostProcessor.straightenBridgeRuns(input, null));
+        assertEquals(input, BridgeMaskTool.straightenBridgeRuns(input, null));
     }
 
     // ── densifyControlPoints ───────────────────────────────────

@@ -91,8 +91,7 @@ class ArchitectureGuardTest {
             "pathlogic.core.Road",
             "generation.RoadGenerationService",
             "pathlogic.junction.ExistingRoadJunctionService",
-            "pathfinding.sampling.AccurateHeightSampler",
-            "postprocess.PathPostProcessor"
+            "pathfinding.sampling.AccurateHeightSampler"
     );
 
     /** 基线：超过 800 行的类（2026-11-12）。只许从这里删，不许往这里加。 */
