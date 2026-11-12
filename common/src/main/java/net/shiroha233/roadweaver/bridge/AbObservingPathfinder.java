@@ -1,0 +1,86 @@
+/* 文件职责：AB 双跑包装器 —— 旧链生效、新链只观察，永不改变输出。 */
+package net.shiroha233.roadweaver.bridge;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
+import net.shiroha233.roadweaver.pathfinding.PathResult;
+import net.shiroha233.roadweaver.pathfinding.Pathfinder;
+import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
+import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
+
+/**
+ * AB 双跑包装器：**旧链生效，新链只观察**。
+ *
+ * <h2>它在 AB 模式下的唯一职责</h2>
+ * <p>先用旧链算出真实结果（这个结果原样返回），再让新链在同一组输入上跑一遍，
+ * 把「两边差多少」记成一行日志。<b>新链的结果永远不生效。</b></p>
+ *
+ * <h2>★ 三道保护，保证观察不会伤害生产</h2>
+ * <ol>
+ *   <li>新链整段包在 try/catch(Throwable) 里 —— 新算法抛任何异常都只记一行 WARN，
+ *       旧链结果照常返回。观察代码绝不允许把主流程带下水。</li>
+ *   <li>比较结果只走日志，不进任何返回值、不进任何缓存。</li>
+ *   <li>日志节流：每 N 次只打一行，避免刷屏拖慢规划。</li>
+ * </ol>
+ *
+ * <h2>★ 为什么 AB 模式下 band 结果不能生效</h2>
+ * <p>AB 存在的目的是「安全地看新算法表现」。如果它在 AB 下生效，
+ * 那这个模式就没法用来观察了 —— 观察者不能改变被观察的系统。</p>
+ */
+public final class AbObservingPathfinder implements Pathfinder {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+
+    /** 每多少次只在日志里报一行（避免逐边刷屏）。 */
+    private static final int LOG_EVERY = 16;
+
+    private final Pathfinder classic;
+    private final Pathfinder band;
+    private final java.util.concurrent.atomic.AtomicLong calls =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    public AbObservingPathfinder(Pathfinder classic, Pathfinder band) {
+        if (classic == null) throw new IllegalArgumentException("classic 不能为 null");
+        this.classic = classic;
+        this.band = band;
+    }
+
+    @Override
+    public PathResult findPath(BlockPos start, BlockPos end, int width,
+                               ServerLevel level, int maxSteps,
+                               TerrainSamplingCache cache, PathTerrainField terrain,
+                               PathfindingCostConfig config) {
+        PathResult authoritative = classic.findPath(start, end, width, level, maxSteps,
+                cache, terrain, config);
+        if (band == null) return authoritative;
+
+        long n = calls.incrementAndGet();
+        boolean log = (n % LOG_EVERY) == 1L;
+        try {
+            PathResult observed = band.findPath(start, end, width, level, maxSteps,
+                    cache, terrain, config);
+            if (log) {
+                LOGGER.info("[ROAD-AB] #{} classic={}({}) band={}({})  (band 结果不生效)",
+                        n,
+                        size(authoritative), ok(authoritative),
+                        size(observed), ok(observed));
+            }
+        } catch (Throwable t) {
+            if (log) {
+                LOGGER.warn("[ROAD-AB] #{} 新链观察失败（已忽略，旧链结果照常生效）：{}", n, t.toString());
+            }
+        }
+        return authoritative;
+    }
+    private static int size(PathResult r) {
+        return r == null || r.rawPath() == null ? -1 : r.rawPath().size();
+    }
+
+    private static boolean ok(PathResult r) {
+        return r != null && r.success() && r.rawPath() != null && !r.rawPath().isEmpty();
+    }
+}

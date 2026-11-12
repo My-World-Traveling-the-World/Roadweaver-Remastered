@@ -26,6 +26,9 @@ public enum SolverMode {
     /** 两套都跑，旧链生效，输出逐项对比。 */
     AB("ab");
 
+    /** 系统属性名：`-Droadweaver.solverMode=classic|band|ab`。 */
+    public static final String PROPERTY = "roadweaver.solverMode";
+
     private final String configKey;
 
     SolverMode(String configKey) {
@@ -50,6 +53,19 @@ public enum SolverMode {
     /** 本模式下哪一套的结果真正生效。 */
     public SolverMode effective() {
         return this == BAND ? BAND : CLASSIC;
+    }
+
+    /**
+     * 从系统属性读当前模式。
+     *
+     * <p>用系统属性而不是配置键，是因为这个开关属于<b>开发期诊断</b>：
+     * 它不该出现在玩家的配置界面里 —— 换算法必须由我们显式决定，
+     * 而不是让玩家在 UI 上点一下就把整片地图的路形改掉。</p>
+     *
+     * <p>没设、设了空、设了不认识的值，一律回落 {@link #CLASSIC}。</p>
+     */
+    public static SolverMode fromProperty() {
+        return parse(System.getProperty(PROPERTY));
     }
 
     /**
