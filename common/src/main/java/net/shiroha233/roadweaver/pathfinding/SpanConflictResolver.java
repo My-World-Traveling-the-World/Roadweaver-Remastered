@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
 import net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;

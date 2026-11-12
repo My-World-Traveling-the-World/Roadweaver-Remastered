@@ -10,7 +10,7 @@
 # So every commit must run both:
 #     .\verify.ps1
 #
-# Exit code 0 = all green; non-zero = failure (stderr says which stage).
+# Exit code 0 = all green; non-zero = failure.
 # Keep this file ASCII-only: Windows PowerShell 5 reads .ps1 as ANSI and would
 # otherwise garble non-ASCII text into parse errors.
 
@@ -28,40 +28,74 @@ if (-not (Test-Path $gradle)) {
     if (-not $found) { Write-Host "[verify] gradle.bat not found"; exit 2 }
     $gradle = $found.FullName
 }
+$opts = @('--no-daemon', '--console=plain', '--dependency-verification=off')
 
-# Keep this file ASCII-only (Windows PowerShell 5 reads .ps1 as ANSI).
+# Known-flaky, NON-CODE failure: the Gradle daemon process starts and listens on
+# 127.0.0.1, but the client cannot connect and the daemon drops its own registry
+# entry about 10 seconds later. Gradle reports it as:
+#     * What went wrong:
+#     Could not connect to the Gradle daemon.
+# It is intermittent (same command, same tree: sometimes passes) and it is NOT a
+# compile error -- but a naive wrapper happily prints "fabric does not compile".
 #
-# -Dorg.gradle.internal.instrumentation.agent=false is a workaround, not a
-# preference: on 2026-11-13 the Gradle daemon started but the client could not
-# connect ("Could not connect to the Gradle daemon", daemon removed its own
-# registry entry ~10s later) with no compile errors at all. Disabling the
-# instrumentation agent made the same build succeed immediately. Keep the flag
-# until the underlying agent issue is understood; removing it re-introduces a
-# failure mode that looks exactly like "fabric does not compile".
-$opts = @(
-    '--no-daemon',
-    '--console=plain',
-    '--dependency-verification=off',
-    '-Dorg.gradle.internal.instrumentation.agent=false'
-)
+# Do NOT treat the instrumentation-agent flag as a fix: on 2026-11-13 a build did
+# succeed once right after adding -Dorg.gradle.internal.instrumentation.agent=false,
+# and that looked like causation; a later run failed again WITH the flag present
+# (daemon context showed applyInstrumentationAgent=false). So the flag is not the
+# answer and the real cause is still unknown.
+#
+# What we do instead: retry the invocation a few times when (and only when) the
+# output carries that daemon-connect signature. A genuine compile error never
+# matches it, so retries cannot mask a real failure.
+$DaemonSignature = 'Could not connect to the Gradle daemon'
+$MaxAttempts = 4
+
+function Invoke-GradleWithRetry {
+    param([string[]]$Arguments, [string]$Label)
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $out = & $gradle @Arguments @opts 2>&1
+        $txt = ($out | Out-String)
+        if ($txt -notmatch [regex]::Escape($DaemonSignature)) {
+            return $out
+        }
+        if ($attempt -lt $MaxAttempts) {
+            Write-Host ("[verify] {0}: gradle daemon did not accept the connection (attempt {1}/{2}); retrying" -f $Label, $attempt, $MaxAttempts)
+            Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 5
+        }
+    }
+    return ($out | Out-String)
+}
 
 Write-Host "[verify] stage 1/2: :fabric:compileJava (not covered by common tests)"
-$out1 = & $gradle :fabric:compileJava @opts 2>&1
-if (($out1 | Out-String) -notmatch 'BUILD SUCCESSFUL') {
-    Write-Host "[verify] FAIL: fabric does not compile"
-    ($out1 | Select-String -Pattern '\.java:\d+: |error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
+$out1 = Invoke-GradleWithRetry -Arguments @(':fabric:compileJava') -Label 'stage 1'
+$txt1 = ($out1 | Out-String)
+if ($txt1 -notmatch 'BUILD SUCCESSFUL') {
+    if ($txt1 -match [regex]::Escape($DaemonSignature)) {
+        # Say what actually happened; do not blame the source tree.
+        Write-Host "[verify] FAIL: gradle daemon unreachable after $MaxAttempts attempts (NOT a compile error)"
+        Write-Host "[verify]       the source tree is unverified; re-run, and if it persists check loopback/firewall"
+    } else {
+        Write-Host "[verify] FAIL: fabric does not compile"
+        ($out1 | Select-String -Pattern '\.java:\d+: |error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
+    }
     exit 1
 }
 Write-Host "[verify] OK: fabric compiles"
 
 Write-Host "[verify] stage 2/2: :common:roadJUnitRegressionSuite"
-$out2 = & $gradle :common:roadJUnitRegressionSuite @opts 2>&1
+$out2 = Invoke-GradleWithRetry -Arguments @(':common:roadJUnitRegressionSuite') -Label 'stage 2'
 $txt = ($out2 | Out-String)
 if ($txt -match 'PASS tests=\d+') {
     Write-Host ("[verify] OK: " + $Matches[0])
 } else {
-    Write-Host "[verify] FAIL: regression suite"
-    ($out2 | Select-String -Pattern 'AssertionFailedError|FAILED|error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
+    if ($txt -match [regex]::Escape($DaemonSignature)) {
+        Write-Host "[verify] FAIL: gradle daemon unreachable after $MaxAttempts attempts (NOT a test failure)"
+    } else {
+        Write-Host "[verify] FAIL: regression suite"
+        ($out2 | Select-String -Pattern 'AssertionFailedError|FAILED|error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
+    }
     exit 1
 }
 

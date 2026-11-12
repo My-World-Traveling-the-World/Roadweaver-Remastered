@@ -1423,3 +1423,86 @@ gradle ... -Dorg.gradle.internal.instrumentation.agent=false
 
 > 验收脚本报"编译失败"时，先看**完整输出**，不要只看它自己打印的那句结论。
 > 那句结论是脚本作者（我）写的猜测，不是编译器说的话。
+
+---
+
+# ★ 更正上一轮的「解法」：instrumentation 开关不是真因（2026-11-13）
+
+## 上一轮我写的
+
+> 真正解法：`-Dorg.gradle.internal.instrumentation.agent=false`。
+> 关掉 instrumentation agent 后同一条命令立刻成功。
+
+## 事实
+
+后来又一次失败时，daemon 日志里的上下文明确写着 **`applyInstrumentationAgent=false`** ——
+**开关已经在生效，照样连不上**。
+
+所以那次「加开关后立刻成功」是**巧合**（这个问题本来就是间歇性的），
+我把「时间相邻」当成了「因果」。
+
+## 真正的处置：重试 + 说清失败原因
+
+`verify.ps1` 里改成：
+
+1. 只在输出**含有 `Could not connect to the Gradle daemon` 签名**时重试（最多 4 次）；
+   真实编译错误永远不含这个签名，所以**重试不可能掩盖真失败**；
+2. 重试用尽后，打印的是
+   `FAIL: gradle daemon unreachable after 4 attempts (NOT a compile error)`，
+   而不再是那句极易误导的 `fabric does not compile`。
+
+## 教训（第二次同类）
+
+> 间歇性故障上，「改了一件事然后它好了」**不构成因果证据**。
+> 必须先能复现、再能证明改动与结果同向变化。
+> 我上一轮就是没做这一步，把一个巧合写成了「解法」。
+
+---
+
+# S5 类级复查：15 个外部 import，只有 1 个真在用（2026-11-13）
+
+## 发现
+
+方法级台账只按 `名字(` 统计，看不见「import 了但只用类型/完全不用」的情况。
+于是补了一次**类级**扫描：
+
+| 类 | 外部 import 数 | 真正用到成员的 |
+|---|---|---|
+| `RoadGradePlanner` | **15** | **1**（`TunnelFootprintSampler` 用 `SurfaceGradeLimits`）|
+| `SlopeContinuityEnforcer` | 4 | 0（全在 `Legacy` 之外，且都不用成员）|
+
+⇒ **13 个文件里的 17 处 import 是纯死的**（去掉 import 行后文件里再无该类出现）。
+已全部删除，`verify.ps1` 全绿。
+
+## ★ 更重要的发现：`RoadGradePlanner` 不能整文件删
+
+`RoadGradePlanner.SurfaceGradeLimits` 被 **4 个文件**引用：
+
+`PathSpanExtractor` / `TargetYComputation` / `TunnelFootprintSampler` / `UnknownEndpointHeightRegistry`
+
+后两个**不在旧链路里**。也就是说：
+
+> **S7 删 `RoadGradePlanner` 时，会连带砸掉两个跟旧算法无关的调用方。**
+
+正确做法：把 `SurfaceGradeLimits` 抬成顶层类型 ——
+**算法（15 道 pass）可以删，配置上限快照必须留。**
+
+## 本次抽取尝试：失败并回滚
+
+尝试用脚本把 record + 4 个常量 + `logReducedLimits` 搬到新文件，编译失败：
+
+```
+SurfaceGradeLimits.java:154: 错误: 在记录 SurfaceGradeLimits 中定义了变量 LIMIT_LOGGER
+TunnelFootprintSampler.java:136: 错误: 找不到符号  cut(boolean)
+PathSpanExtractor.java:288: 错误: 找不到符号  capture()
+```
+
+根因：我的**括号配平扫描把 javadoc 里的 `{@link ...}` 也当成真括号**，
+于是把 record 判短了（只到 167 行），切成两半。
+
+> **同一个坑第二次踩**：之前拆配置界面时也栽在「括号扫描不识别注释」上。
+> 教训不是"下次小心"，而是：**任何基于括号配平的 Java 抽取都必须用 Java 感知的扫描器**，
+> 或者干脆用 IDE/编译器自己的结构信息。手写扫描器在这个项目里已经错了两次。
+
+已 `git checkout --` 回滚那 5 个文件，树恢复绿（`PASS tests=684`）。
+抽取本身留作 S7 第 3 级的**前置步骤**，届时用 AST 而非手写扫描器。

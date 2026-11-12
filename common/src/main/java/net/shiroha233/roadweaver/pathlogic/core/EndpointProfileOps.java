@@ -2,7 +2,6 @@
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
-import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
@@ -56,7 +55,6 @@ import java.util.*;
 import java.util.concurrent.CancellationException;
 import net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlanner;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
 import net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightRegistry;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.metrics.RoadQualityMetrics;

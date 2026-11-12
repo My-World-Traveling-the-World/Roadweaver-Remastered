@@ -11,7 +11,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
