@@ -65,7 +65,7 @@ client / fabric   状态渲染分离 / 平台壳
 | `topology` | `metric`, `foundation`, `api` | `band` / `pipeline` |
 | `band` | `topology`, `foundation`, `api` | `pipeline` |
 | `pipeline` | 全部求解层 | — |
-| `bridge` | foundation + 全部求解层 | —— （**任何求解层不许 import bridge**）|
+| `bridge` | foundation（含 `pathlogic` 避让判据）+ 全部求解层 | —— （**任何求解层不许 import bridge**）|
 | `client` | `pipeline`, `foundation`, `api` | 求解层内部实现 |
 
 **反向依赖 = 测试直接红。**
