@@ -234,7 +234,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.postprocess.SharpTurnFreezeTest"),
                         // 0.9.068：急弯段用直线代替 Catmull-Rom（发卡弯不被样条外冲）
                         DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.postprocess.SharpTurnSplineTest"))
+                                "net.shiroha233.roadweaver.postprocess.SharpTurnSplineTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         Launcher launcher = LauncherFactory.create();
