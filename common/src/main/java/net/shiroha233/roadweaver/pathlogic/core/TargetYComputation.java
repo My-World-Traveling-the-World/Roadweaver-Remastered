@@ -74,6 +74,7 @@ import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
 import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
 
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
 /**
  * 目标高度（纵断面）计算。
@@ -510,6 +511,11 @@ public final class TargetYComputation {
         ProfileAbObserver.observeModes(smoothed, terrainY, isCrossing, tunnelMask,
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
+        // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。
+        // 只在地形、不录旧剖面 —— 我们要比的是「同一地形，两种算法各自算出的解」。
+        ProfileTerrainRecorder.record(
+                connection == null ? "?" : connection.from() + "->" + connection.to(),
+                terrainY, isCrossing);
         return out;
     }
 }
