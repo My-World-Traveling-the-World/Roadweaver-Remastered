@@ -135,4 +135,70 @@ class StructureBoxIndexTest {
         t.join();
         assertEquals(1, hits[0], "case=cross-thread");
     }
+    // ---- fromChunkBuckets：零拷贝复用「区块 → 盒」桶表 ----
+
+    /** 桶键必须与 ChunkPos.asLong 同布局，否则复用现成映射会全部查不到。 */
+    @Test
+    void chunkBucketKeysMatchChunkPosLayout() {
+        OwnedStructureBox owned = box(100, 100, 110, 110);
+        long chunkKey = net.minecraft.world.level.ChunkPos.asLong(100 >> 4, 100 >> 4);
+        java.util.Map<Long, java.util.List<OwnedStructureBox>> buckets = new java.util.HashMap<>();
+        buckets.put(chunkKey, java.util.List.of(owned));
+        StructureBoxIndex idx = StructureBoxIndex.fromChunkBuckets(buckets);
+        assertEquals(1, idx.size(), "case=chunkKey-size");
+        assertEquals(1, idx.query(100, 100, 101, 101).size(), "case=chunkKey-hit");
+        assertTrue(idx.query(0, 0, 10, 10).isEmpty(), "case=chunkKey-miss");
+    }
+
+    /**
+     * 核心不变量：以点为中心查 ±reach 的矩形，必须覆盖所有「到该点水平距离 ≤ reach」的盒。
+     * 这条成立 ⇒ 把「全表扫描 + 距离判据」换成「索引查询 + 同一判据」是等价的。
+     */
+    @Test
+    void reachQueryCoversEveryBoxWithinReach() {
+        Random rnd = new Random(424242L);
+        for (int trial = 0; trial < 50; trial++) {
+            List<OwnedStructureBox> all = new ArrayList<>();
+            java.util.Map<Long, java.util.List<OwnedStructureBox>> buckets = new java.util.HashMap<>();
+            for (int i = 0; i < 120; i++) {
+                int x = rnd.nextInt(400) - 200;
+                int z = rnd.nextInt(400) - 200;
+                int w = rnd.nextInt(24);
+                int d = rnd.nextInt(24);
+                OwnedStructureBox b = box(x, z, x + w, z + d);
+                all.add(b);
+                BoundingBox bb = b.box();
+                for (int cx = bb.minX() >> 4; cx <= bb.maxX() >> 4; cx++) {
+                    for (int cz = bb.minZ() >> 4; cz <= bb.maxZ() >> 4; cz++) {
+                        buckets.computeIfAbsent(
+                                net.minecraft.world.level.ChunkPos.asLong(cx, cz),
+                                k -> new ArrayList<>()).add(b);
+                    }
+                }
+            }
+            StructureBoxIndex idx = StructureBoxIndex.fromChunkBuckets(buckets);
+            int reach = 16;
+            for (int q = 0; q < 40; q++) {
+                int px = rnd.nextInt(440) - 220;
+                int pz = rnd.nextInt(440) - 220;
+                Set<OwnedStructureBox> mustContain = new LinkedHashSet<>();
+                for (OwnedStructureBox owned : all) {
+                    BoundingBox bb = owned.box();
+                    int dx = Math.max(0, Math.max(bb.minX() - px, px - bb.maxX()));
+                    int dz = Math.max(0, Math.max(bb.minZ() - pz, pz - bb.maxZ()));
+                    if ((long) dx * dx + (long) dz * dz <= (long) reach * reach) mustContain.add(owned);
+                }
+                List<OwnedStructureBox> got = idx.query(px - reach, pz - reach, px + reach, pz + reach);
+                assertTrue(got.containsAll(mustContain),
+                        "case=reach-cover trial=" + trial + " px=" + px + " pz=" + pz
+                                + " need=" + mustContain.size() + " got=" + got.size());
+            }
+        }
+    }
+
+    @Test
+    void emptyChunkBucketsYieldEmptyIndex() {
+        assertTrue(StructureBoxIndex.fromChunkBuckets(null).query(0, 0, 10, 10).isEmpty(), "case=null-buckets");
+        assertTrue(StructureBoxIndex.fromChunkBuckets(java.util.Map.of()).query(0, 0, 10, 10).isEmpty(), "case=empty-buckets");
+    }
 }

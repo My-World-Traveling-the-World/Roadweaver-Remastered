@@ -103,6 +103,28 @@ public final class StructureBoxIndex {
     }
 
     /**
+     * 把一份<b>现成的</b>「区块键 → 结构盒」映射直接当桶表用，<b>零拷贝</b>。
+     *
+     * <p>前提：映射的键必须是 {@code ChunkPos.asLong} 布局（见 {@link #cellKey}），
+     * 且其粒度就是 {@link #DEFAULT_CELL_SIZE}。避让快照里的 {@code boxesByChunk}
+     * 恰好满足这两个条件 —— 于是「给已经分好桶的数据加索引」是 O(1) 的。</p>
+     *
+     * <p>由于没有包围盒信息，{@link #query} 不做桶内粗筛、整桶返回：结果依然是
+     * 候选<b>超集</b>，调用方按原判据精判即可得到与全表扫描完全相同的结果。</p>
+     *
+     * <p>{@link #size()} 在这里统计的是<b>桶条目总数</b>（同一个盒跨多个桶会重复计），
+     * 不是去重后的盒数 —— 对「是否为空」判断足够，不要把两者混用。</p>
+     */
+    public static StructureBoxIndex fromChunkBuckets(Map<Long, List<OwnedStructureBox>> buckets) {
+        if (buckets == null || buckets.isEmpty()) return empty();
+        int entries = 0;
+        for (List<OwnedStructureBox> list : buckets.values()) {
+            if (list != null) entries += list.size();
+        }
+        return new StructureBoxIndex(DEFAULT_CELL_SIZE, buckets, null, entries);
+    }
+
+    /**
      * 查询与给定水平矩形可能相交的结构盒。
      *
      * <p>返回的是<b>候选超集</b>，调用方必须自己再做精确相交判定。</p>
@@ -125,10 +147,14 @@ public final class StructureBoxIndex {
                 // 桶内的盒可能整个落在查询矩形之外（桶比矩形大），这里先按包围盒粗筛一遍，
                 // 精判仍留给调用方 —— 索引只保证「不漏」。
                 for (OwnedStructureBox owned : bucket) {
-                    BoundingBox box = boxes.get(owned);
-                    if (box == null) continue;
-                    if (box.maxX() < loX || box.minX() > hiX
-                            || box.maxZ() < loZ || box.minZ() > hiZ) continue;
+                    // boxes == null 表示「索引没有包围盒信息」（零拷贝复用外部桶表的情形），
+                    // 这时不做粗筛，整桶返回 —— 仍然是超集，语义不变。
+                    if (boxes != null) {
+                        BoundingBox box = boxes.get(owned);
+                        if (box == null) continue;
+                        if (box.maxX() < loX || box.minX() > hiX
+                                || box.maxZ() < loZ || box.minZ() > hiZ) continue;
+                    }
                     found.add(owned);
                 }
             }
@@ -151,7 +177,12 @@ public final class StructureBoxIndex {
         return cellSize;
     }
 
+    /**
+     * 桶键。<b>必须与 {@code ChunkPos.asLong} 同布局</b>（低 32 位 = x，高 32 位 = z）——
+     * 这样 {@link #fromChunkBuckets} 才能把现成的「区块 → 盒」映射直接当桶表用，
+     * 一次拷贝都不做。
+     */
     private static long cellKey(int cx, int cz) {
-        return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+        return ((long) cx & 0xFFFFFFFFL) | (((long) cz & 0xFFFFFFFFL) << 32);
     }
 }

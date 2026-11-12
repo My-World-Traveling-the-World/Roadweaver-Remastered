@@ -3145,7 +3145,17 @@ public final class StructureAvoidanceService {
                 || snapshot.boxes() == null || snapshot.boxes().isEmpty()) return false;
         long maxDistanceSquared = (long) ENDPOINT_OWNER_INFERENCE_MATCH_BLOCKS
                 * ENDPOINT_OWNER_INFERENCE_MATCH_BLOCKS;
-        for (OwnedStructureBox owned : snapshot.boxes()) {
+        // 原来是遍历 snapshot.boxes() 全表 —— 每次端点推断都要扫一遍所有结构盒。
+        // 快照自带「区块 → 盒」桶表，这里零拷贝复用成空间索引：只取端点周围
+        // ±ENDPOINT_OWNER_INFERENCE_MATCH_BLOCKS 覆盖的桶。
+        // 3x3 桶 = 每轴 ±16..31 格，必然覆盖「距离 ≤ 16」的全部盒 ⇒ 结果是超集，
+        // 下面的判据一字未改，所以返回值与全表扫描逐位相同。
+        int reach = ENDPOINT_OWNER_INFERENCE_MATCH_BLOCKS;
+        List<OwnedStructureBox> candidates = StructureBoxIndex
+                .fromChunkBuckets(snapshot.boxesByChunk())
+                .query(endpoint.getX() - reach, endpoint.getZ() - reach,
+                        endpoint.getX() + reach, endpoint.getZ() + reach);
+        for (OwnedStructureBox owned : candidates) {
             if (owned == null || owned.box() == null || owned.owner() == null) continue;
             if (!isVillageStructure(owned.owner().structureId())) continue;
             if (horizontalDistanceSquared(owned.box(), endpoint) <= maxDistanceSquared) return true;
