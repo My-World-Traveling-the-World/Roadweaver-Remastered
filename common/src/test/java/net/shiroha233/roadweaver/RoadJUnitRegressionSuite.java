@@ -18,6 +18,11 @@ public final class RoadJUnitRegressionSuite {
                         // 中文注释规范、文档与代码同源。ratchet 机制 —— 只许降不许升。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.ArchitectureGuardTest"),
+                        // 配置元数据表 ↔ 配置类双向一致性（M1 起）：
+                        // 表里的键必须在类里有字段、类里的字段必须在表里有条目，
+                        // 且类型与默认值逐项相等。已废弃/未接线的键必须写明原因。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.meta.ConfigKeyTableConsistencyTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(
