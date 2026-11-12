@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.tuning;
 
 import com.google.gson.JsonArray;
+import net.shiroha233.roadweaver.planning.PlanningBoundsOps;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -513,7 +514,7 @@ public final class TopologyHarness {
     }
 
     /**
-     * 与生产 {@code RoadPlanningService.collectComponentPoints} 同构：seed ∪ 所有边端点，按 2D 去重、
+     * 与生产 {@code PlanningBoundsOps.collectComponentPoints} 同构：seed ∪ 所有边端点，按 2D 去重、
      * Y 归一为 0（顺序：先 seed，后边端点——{@code addUnique2d} 保留首次出现的 Y，归一后 Y 恒为 0）。
      */
     private static List<BlockPos> collectComponentPoints(List<BlockPos> seed, List<StructureConnection> edges) {

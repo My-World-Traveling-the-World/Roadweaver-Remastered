@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.runtime;
 
 import net.minecraft.world.level.Level;
+import net.shiroha233.roadweaver.planning.PlanningBoundsOps;
 import net.shiroha233.roadweaver.pathfinding.sampling.SamplerStatics;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
@@ -175,7 +176,7 @@ public final class CacheManager {
         PendingStructureStorage.clearAll();
         PendingRoadsideVillageStorage.clearAll();
         RoadSpatialIndex.clearAllCache();
-        RoadPlanningService.resetAll();
+        PlanningBoundsOps.resetAll();
         SignTextService.clearPending();
         TerrainSamplingStats.reset();
         TerrainSamplingSessions.clearAll();

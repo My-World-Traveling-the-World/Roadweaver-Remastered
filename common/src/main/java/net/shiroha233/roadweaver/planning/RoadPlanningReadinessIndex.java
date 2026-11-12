@@ -407,7 +407,7 @@ public final class RoadPlanningReadinessIndex {
         long epoch = ThreadPoolManager.currentEpoch();
         LOGGER.info("RoadWeaver preparing Chunky region [{},{}], attempt={}/{} with guaranteed coordinator progress.",
                 key.regionX, key.regionZ, entry.attempts, MAX_PLAN_ATTEMPTS);
-        CompletableFuture<Void> future = RoadPlanningService.planRectForChunkyAsync(
+        CompletableFuture<Void> future = AsyncPlanningOps.planRectForChunkyAsync(
                 level, minChunkX << 4, minChunkZ << 4, (maxChunkX << 4) + 15, (maxChunkZ << 4) + 15)
                 .thenCompose(ignored -> regionPlanningDataReady(level, key.regionX, key.regionZ)
                         ? prewarmRegionStreamsAsync(level, key)

@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.generation;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import net.shiroha233.roadweaver.planning.PlanningBoundsOps;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -187,7 +188,7 @@ public final class RoadGenerationService {
         RUNNING_COUNT.set(0);
         RUNTIME_SLOTS.set(runtimeGenerationLimit());
         PLAYER_LIST_CACHE.clear();
-        RoadPlanningService.resetAll();
+        PlanningBoundsOps.resetAll();
         PlannedPathCache.clearAll();
         CoarseTerrainTileCache.clearAll();
         clearAll();

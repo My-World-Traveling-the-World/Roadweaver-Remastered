@@ -1,6 +1,7 @@
 package net.shiroha233.roadweaver.apiimpl;
 
 import java.util.ArrayList;
+import net.shiroha233.roadweaver.planning.AsyncPlanningOps;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -372,7 +373,7 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())) {
             return;
         }
-        RoadPlanningService.planRectAsync(level, minBlockX, minBlockZ, maxBlockX, maxBlockZ);
+        AsyncPlanningOps.planRectAsync(level, minBlockX, minBlockZ, maxBlockX, maxBlockZ);
     }
 
     private static boolean sameEdge(StructureConnection c, BlockPos a, BlockPos b) {

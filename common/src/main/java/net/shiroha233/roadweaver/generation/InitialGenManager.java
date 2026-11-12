@@ -2,6 +2,8 @@
 package net.shiroha233.roadweaver.generation;
 
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
+import net.shiroha233.roadweaver.planning.RouteRefinementOps;
+import net.shiroha233.roadweaver.planning.ConflictWindowOps;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
@@ -509,7 +511,7 @@ public final class InitialGenManager {
                 List<RoadData> generatedRoads = new ArrayList<>();
                 List<StructureConnection> remaining = new ArrayList<>(roadTasks);
                 int configuredStep = ConfigService.get().pathfindingCost().effectiveAStarStep();
-                int[] startupBounds = RoadPlanningService.initialSamplingBounds(level, roadTasks);
+                int[] startupBounds = ConflictWindowOps.initialSamplingBounds(level, roadTasks);
                 List<Integer> tiers = RoutePrecisionRetryPolicy.initialBatchSteps(configuredStep);
                 int candidateCompleted = 0;
                 int candidateRetained = 0;
@@ -538,7 +540,7 @@ public final class InitialGenManager {
                     // coarse tiles, causing shared sampler contention and
                     // silent waits at progress=0.
                     if (tierIndex == 0) {
-                        await(level, RoadPlanningService.refineInitialBatchAsync(
+                        await(level, RouteRefinementOps.refineInitialBatchAsync(
                                 level, startupBounds, remaining, step));
                         InitialGenerationProgressTracker.setRoutePhaseOperation(
                         InitialGenerationProgressTracker.RoutePhase.ORIGINAL,
@@ -706,7 +708,7 @@ public final class InitialGenManager {
                         // 真机该波次 wallMs=224621，但 24 次 splice 本身只花 14s、统一预取 21s，
                         // 剩余约 190s 都在按 step=2 重生成被交接的路。纯观测。
                         long splicePhaseStartedAt = System.nanoTime();
-                        await(level, RoadPlanningService.refineInitialRoutesAsync(
+                        await(level, RouteRefinementOps.refineInitialRoutesAsync(
                                 level, remaining, step, 100));
                         long splicePhaseMs = elapsedMs(splicePhaseStartedAt);
                         InitialGenerationProgressTracker.setRoutePhaseOperation(
@@ -902,7 +904,7 @@ public final class InitialGenManager {
                                 InitialGenerationStage.ROAD_GENERATION,
                                 "candidate_refinement_step_" + step);
                         InitialGenerationProgressTracker.setCurrentSamplingStep(step);
-                        await(level, RoadPlanningService.refineInitialRoutesAsync(
+                        await(level, RouteRefinementOps.refineInitialRoutesAsync(
                                 level, candidateFailed, step, 100));
                         InitialGenerationProgressTracker.setRoutePhaseOperation(
                                 InitialGenerationProgressTracker.RoutePhase.CANDIDATE, "generating");
