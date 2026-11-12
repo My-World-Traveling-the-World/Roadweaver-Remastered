@@ -17,6 +17,7 @@ import java.util.Map;
 
 // 仍留在 RoadSnapService 里的常量、类型与工具（包内可见）。
 import static net.shiroha233.roadweaver.postprocess.RoadSnapService.*;
+import static net.shiroha233.roadweaver.postprocess.EndpointApproachConnector.*;
 
 /**
  * 路网复用（NETWORK_REUSE）的合并判定。
