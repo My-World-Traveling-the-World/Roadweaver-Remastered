@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <ol>
  *   <li>新架构包必须存在，且带中文 {@code package-info}</li>
  *   <li>层依赖必须单向（反向依赖直接红）</li>
- *   <li>超过 800 行的类必须属于基线集合（不许新增）</li>
+ *   <li>有效代码行超过 800 的类必须属于基线集合（不许新增；注释不计）</li>
  *   <li>超过 60 个方法的类必须属于基线集合（不许新增）</li>
  *   <li>有「文件职责」头注的文件数不得少于基线</li>
  *   <li>{@code ARCHITECTURE.md} 必须列出每个新架构包的职责</li>
@@ -70,7 +70,7 @@ class ArchitectureGuardTest {
     );
 
     /**
-     * 基线：超过 <b>1000 行</b>的文件（2026-11-12 用户硬约束：一个文件不得超过千行）。
+     * 基线：有效代码行超过 <b>1000</b> 的文件（注释不计）（2026-11-12 用户硬约束：一个文件不得超过千行）。
      *
      * <p>这 17 个文件合计 32,257 行，是重构的<b>主要债务</b>。规则是 ratchet：
      * 只能从这里删，不许往这里加。拆完一个就从这里删掉一个，
@@ -210,7 +210,7 @@ class ArchitectureGuardTest {
     void 一个文件不得超过一千行() throws IOException {
         List<String> overLimit = new ArrayList<>();
         for (Path f : allJavaFiles()) {
-            int lines = Files.readAllLines(f, StandardCharsets.UTF_8).size();
+            int lines = effectiveCodeLines(f);
             if (lines <= 1000) continue;
             String name = className(f);
             if (!BASELINE_OVER_1000.contains(name)) {
@@ -218,7 +218,7 @@ class ArchitectureGuardTest {
             }
         }
         assertTrue(overLimit.isEmpty(),
-                "【硬约束】一个文件不得超过 1000 行。新增超限文件必须拆分。\n"
+                "【硬约束】一个文件的有效代码行不得超过 1000（注释不计）。新增超限文件必须拆分。\n"
                         + "新超限文件:\n  " + String.join("\n  ", overLimit)
                         + "\n（当前基线 " + BASELINE_OVER_1000.size()
                         + " 个文件超限，拆完一个就从 BASELINE_OVER_1000 删掉一个）");
@@ -229,7 +229,7 @@ class ArchitectureGuardTest {
         List<String> found = new ArrayList<>();
         List<String> notInBaseline = new ArrayList<>();
         for (Path f : allJavaFiles()) {
-            int lines = Files.readAllLines(f, StandardCharsets.UTF_8).size();
+            int lines = effectiveCodeLines(f);
             if (lines <= 800) continue;
             String name = className(f);
             found.add(name + " (" + lines + " 行)");
@@ -318,5 +318,64 @@ class ArchitectureGuardTest {
         cls = cls.substring(0, cls.length() - ".java".length());
         String prefix = "net.shiroha233.roadweaver.";
         return pkg.startsWith(prefix) ? pkg.substring(prefix.length()) + "." + cls : pkg + "." + cls;
+    }
+    /**
+     * 统计一个 Java 文件的<b>有效代码行</b>：剥掉注释、空行之后再数。
+     *
+     * <h2>为什么不用物理行数</h2>
+     * <p>用户 2026-11-13 明确要求「注释不算代码行数」。注释写多少都不该顶着千行上限 ——
+     * 否则「把代码讲清楚」和「守住文件体积」会互相打架，最后一定是注释先被牺牲。</p>
+     *
+     * <h2>★ 必须真正解析注释，不能只看行首</h2>
+     * <p>一行里既有代码又有行注释（{@code int a = 1; // 说明}）非常常见，
+     * 按「行首是不是 //」来判会把它整行算成注释，等于漏算代码。
+     * 同理 {@code String url = "http://x";} 里的 {@code //} 是字符串内容不是注释。</p>
+     *
+     * <p>所以这里做一次逐字符扫描：跟踪块注释/行注释/字符串/字符字面量四种状态，
+     * 只有落在注释里的字符不算，最后按「该行是否出现过真实代码字符」计数。</p>
+     */
+    private static int effectiveCodeLines(java.nio.file.Path file) throws java.io.IOException {
+        String text = java.nio.file.Files.readString(file, java.nio.charset.StandardCharsets.UTF_8);
+        int count = 0;
+        boolean inBlock = false;
+        boolean inLine = false;
+        boolean sawCode = false;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            char next = i + 1 < text.length() ? text.charAt(i + 1) : '\0';
+            if (inLine) {
+                if (ch == '\n') {
+                    inLine = false;
+                    if (sawCode) { count++; sawCode = false; }
+                }
+                continue;
+            }
+            if (inBlock) {
+                if (ch == '*' && next == '/') { inBlock = false; i++; }
+                else if (ch == '\n' && sawCode) { count++; sawCode = false; }
+                continue;
+            }
+            if (ch == '/' && next == '/') { inLine = true; i++; continue; }
+            if (ch == '/' && next == '*') { inBlock = true; i++; continue; }
+            if (ch == '"' || ch == '\'') {
+                sawCode = true;
+                char quote = ch;
+                i++;
+                while (i < text.length()) {
+                    char d = text.charAt(i);
+                    if (d == '\\') { i += 2; continue; }
+                    if (d == quote || d == '\n') { break; }
+                    i++;
+                }
+                continue;
+            }
+            if (ch == '\n') {
+                if (sawCode) { count++; sawCode = false; }
+            } else if (!Character.isWhitespace(ch)) {
+                sawCode = true;
+            }
+        }
+        if (sawCode) count++;
+        return count;
     }
 }
