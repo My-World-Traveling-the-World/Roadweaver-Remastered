@@ -54,8 +54,12 @@ public final class FastMarchingSolver {
         TerrainField terrain = metric.terrain();
         int minX = terrain.minX();
         int minZ = terrain.minZ();
-        int w = terrain.width();
-        int d = terrain.depth();
+        // 网格尺寸用**采样点数**而不是方块跨度：步长 > 1 时两者不同。
+        // 步长只影响网格间距（等距 1 格关系变成 step 格关系），
+        // 对外仍然是逐格定义的地形。
+        int w = terrain.columns();
+        int d = terrain.rows();
+        int step = terrain.step();
         if (!terrain.contains(sourceX, sourceZ)) {
             throw new IllegalArgumentException(
                     "源点 (" + sourceX + "," + sourceZ + ") 不在可行区域内");
@@ -69,7 +73,7 @@ public final class FastMarchingSolver {
         Arrays.fill(t, UNREACHABLE);
         boolean[] frozen = new boolean[w * d];
 
-        int sourceIndex = (sourceX - minX) + (sourceZ - minZ) * w;
+        int sourceIndex = ((sourceX - minX) / step) + ((sourceZ - minZ) / step) * w;
         t[sourceIndex] = 0.0;
 
         PriorityQueue<Entry> queue = new PriorityQueue<>();
@@ -82,8 +86,8 @@ public final class FastMarchingSolver {
 
             int ix = entry.index % w;
             int iz = entry.index / w;
-            int x = minX + ix;
-            int z = minZ + iz;
+            int x = minX + ix * step;
+            int z = minZ + iz * step;
 
             for (int dir = 0; dir < 4; dir++) {
                 int nix = ix + DX[dir];
@@ -111,8 +115,10 @@ public final class FastMarchingSolver {
                 //    便宜格的代价，墙的代价根本没被收。实测表现为「一道 9 倍代价的
                 //    墙完全透明，T(30,20) 恰好等于直线 10」。
                 //    正确写法是求 (nix,niz) 自己那一格的慢度。
-                double slowness = Math.max(1e-9,
-                        metric.isotropicCost(minX + nix, minZ + niz));
+                // 慢度是「每单位长度的代价」，而网格间距是 step 格 ⇒ 乘 step。
+                // 否则步长变大时到达时间会被系统性低估（step 倍）。
+                double slowness = Math.max(1e-9, step
+                        * metric.isotropicCost(minX + nix * step, minZ + niz * step));
                 double candidate = solveEikonal(t, w, d, nix, niz, slowness);
                 if (candidate < t[nIndex]) {
                     t[nIndex] = candidate;
@@ -121,7 +127,7 @@ public final class FastMarchingSolver {
             }
         }
 
-        return new ArrivalTimeField(t, minX, minZ, w, d, metric);
+        return new ArrivalTimeField(t, minX, minZ, w, d, step, metric);
     }
 
     private static final int[] DX = {1, -1, 0, 0};

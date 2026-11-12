@@ -11,7 +11,21 @@ import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 public final class PathfindingCostConfig implements SubConfig {
 
     /** 寻路算法枚举 */
-    public enum PathfindingAlgorithm { ASTAR_BASIC, ASTAR_BIDIRECTIONAL, GRADIENT_DESCENT, POTENTIAL_FIELD }
+    /**
+ * 寻路算法。
+ *
+ * <p>{@link #BAND} 是 2026-11-12 新架构接入的第一个非 A* 算法：
+ * Finsler 度量 + 快速行进 + 弹性带（见 {@code metric} / {@code topology} / {@code band}）。
+ * 它<b>不是默认值</b> —— 出厂仍是 {@link #POTENTIAL_FIELD}，换算法必须显式选择。</p>
+ */
+    public enum PathfindingAlgorithm {
+        ASTAR_BASIC,
+        ASTAR_BIDIRECTIONAL,
+        GRADIENT_DESCENT,
+        POTENTIAL_FIELD,
+        /** 新架构：Finsler 度量 + Fast Marching + 弹性带。 */
+        BAND
+    }
 
     private double orthoStepCost = RoadConstants.DEFAULT_ORTHO_STEP_COST;
     private double diagStepCost = RoadConstants.DEFAULT_DIAG_STEP_COST;

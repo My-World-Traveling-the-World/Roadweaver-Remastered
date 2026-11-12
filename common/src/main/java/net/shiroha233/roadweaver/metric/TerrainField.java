@@ -60,12 +60,37 @@ public interface TerrainField {
     /** 可行区域的最大 z（含）。 */
     int maxZ();
 
-    /** 可行区域宽度（格）。 */
+    /**
+     * 采样步长（格）。默认为 1（逐格）。
+     *
+     * <h2>为什么需要步长</h2>
+     * <p>真实路线的包围盒动辄 1500×1500，逐格采样是 225 万列 —— 既采不完也存不下。
+     * 而旧实现的 A\* 本来就是 {@code aStarStep=8} 的粗网格。
+     * 步长让新内核既能粗搜（拓扑决策）也能细算（单条路线几何）。</p>
+     *
+     * <p><b>关键约定</b>：{@link #height} 与 {@link #gradient} 收的是<b>方块坐标</b>，
+     * 步长只影响内部采样密度与求解器的网格间距 —— 调用方看到的仍然是逐格定义的地形。</p>
+     */
+    default int step() {
+        return 1;
+    }
+
+    /** 沿 x 的采样点数 = ⌊(maxX−minX)/step⌋ + 1。 */
+    default int columns() {
+        return (maxX() - minX()) / step() + 1;
+    }
+
+    /** 沿 z 的采样点数 = ⌊(maxZ−minZ)/step⌋ + 1。 */
+    default int rows() {
+        return (maxZ() - minZ()) / step() + 1;
+    }
+
+    /** 可行区域宽度（格，含两端）。 */
     default int width() {
         return maxX() - minX() + 1;
     }
 
-    /** 可行区域高度（格）。 */
+    /** 可行区域高度（格，含两端）。 */
     default int depth() {
         return maxZ() - minZ() + 1;
     }

@@ -143,6 +143,47 @@ min ∫|γ''|² + μ∫|γ−γ₀|²     ⇒  五对角稀疏系统，一次 PC
 
 ---
 
+## 新架构已接进真实规划链（2026-11-12）
+
+`PathfindingAlgorithm.BAND` 是第 5 个寻路算法实现，由 `PathfinderFactory` 选择。
+**出厂默认仍是 `POTENTIAL_FIELD`** —— 换算法必须显式选择。
+
+```
+PathfindingCostConfig.pathfindingAlgorithm = BAND
+        ↓ PathfinderFactory
+bridge/BandPathfinder implements pathfinding/Pathfinder      ← 第 5 个实现
+        ↓
+PathTerrainField（旧链已预热好的量化地形）→ StridedTerrainField
+StructureAvoidanceService.blocksPlanningObstacle（判据一字不改）→ 硬挡掩码
+        ↓
+FinslerMetric → FastMarchingSolver → ArrivalTimeField.pathTo → ElasticBandSolver
+        ↓
+PathResult.raw(List<BlockPos>)   ← 旧链照常消费
+```
+
+### 两条必须记录的架构决定
+
+**① `PathterrainField` 而不是重新采样。**
+旧链已经把地形预热成量化场（带缓存、带水体标记）。重建采样会把预热成本再付一次，
+而且两边看到的地形可能不一致 —— 那会让 AB 对比失去意义。
+
+**② 步长只是搜索粒度，不再是几何粒度。**
+旧 A* 的 `aStarStep` 同时决定了搜索粒度和几何粒度，所以 8 格步长直接让路变成
+8 格折线。新架构里步长只影响场求解的网格；几何由弹性带在**方块坐标**里做。
+
+### 唯一被放行的 foundation → bridge 跨界
+
+`pathfinding/PathfinderFactory`（foundation）要构造 `BandPathfinder`（bridge）。
+这是全仓唯一的 foundation → 求解侧依赖，已在 `ArchitectureGuardTest` 的白名单里
+显式声明。旧链对求解层内部结构一无所知，只知道 `Pathfinder` 这一个契约。
+
+### 第一版的已知边界
+
+- 不做纵断面：`RoadGradePlanner` 保留，吃本类输出的中心线
+- 不做桥隧判定：`PathSpanExtractor` 保留，同样吃站序列
+
+---
+
 ## 求解链已端到端打通（2026-11-12）
 
 `pipeline/` 落地后，从节点到路网可以完整跑通：

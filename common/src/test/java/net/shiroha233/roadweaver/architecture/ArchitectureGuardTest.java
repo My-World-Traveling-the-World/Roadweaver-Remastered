@@ -66,7 +66,7 @@ class ArchitectureGuardTest {
             new String[]{"pipeline", "metric,topology,band,foundation-core,api,util"},
             // bridge 是适配器层：唯一同时认识 foundation 与求解层的地方。
             // 反向（求解层 import bridge）会被上面四条规则拦住。
-            new String[]{"bridge", "metric,topology,band,pipeline,core,util,api,pathfinding,pathlogic"}
+            new String[]{"bridge", "metric,topology,band,pipeline,core,util,api,pathfinding,pathlogic,config"}
     );
 
     /**

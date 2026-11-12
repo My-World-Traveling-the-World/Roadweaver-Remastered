@@ -34,15 +34,17 @@ public final class ArrivalTimeField {
     private final int minZ;
     private final int width;
     private final int depth;
+    private final int step;
     private final FinslerMetric metric;
 
     ArrivalTimeField(double[] times, int minX, int minZ,
-                     int width, int depth, FinslerMetric metric) {
+                     int width, int depth, int step, FinslerMetric metric) {
         this.times = times;
         this.minX = minX;
         this.minZ = minZ;
         this.width = width;
         this.depth = depth;
+        this.step = Math.max(1, step);
         this.metric = metric;
     }
 
@@ -52,6 +54,9 @@ public final class ArrivalTimeField {
         return times[indexOf(x, z)];
     }
 
+    /** 采样步长（格）。 */
+    public int step() { return step; }
+
     /** 是否可达。 */
     public boolean reachable(int x, int z) {
         return Double.isFinite(at(x, z));
@@ -59,13 +64,13 @@ public final class ArrivalTimeField {
 
     /** 点是否在场内。 */
     public boolean contains(int x, int z) {
-        return x >= minX && x < minX + width && z >= minZ && z < minZ + depth;
+        return x >= minX && x < minX + width * step && z >= minZ && z < minZ + depth * step;
     }
 
-    /** 场宽。 */
+    /** 场宽（采样点数）。 */
     public int width() { return width; }
 
-    /** 场高。 */
+    /** 场高（采样点数）。 */
     public int depth() { return depth; }
 
     /** 最小 x。 */
@@ -88,7 +93,7 @@ public final class ArrivalTimeField {
 
         int x = targetX;
         int z = targetZ;
-        reversed.add(new int[]{x, z});
+        reversed.add(new int[]{x, z});   // 对外一律方块坐标
 
         // 步数上限：防止数值异常导致死循环（每步 T 严格下降，正常远小于此值）
         int guard = width * depth + 16;
@@ -97,8 +102,8 @@ public final class ArrivalTimeField {
             int bestZ = z;
             double bestTime = at(x, z);
             for (int dir = 0; dir < 8; dir++) {
-                int nx = x + DX[dir];
-                int nz = z + DZ[dir];
+                int nx = x + DX[dir] * step;
+                int nz = z + DZ[dir] * step;
                 if (!contains(nx, nz)) continue;
                 double nt = at(nx, nz);
                 if (nt < bestTime - 1e-12) {
@@ -124,7 +129,12 @@ public final class ArrivalTimeField {
     /** 度量（供上层计算路径代价）。 */
     public FinslerMetric metric() { return metric; }
 
+    /** 方块坐标 → 场下标（按步长取整到最近的采样点）。 */
     private int indexOf(int x, int z) {
-        return (x - minX) + (z - minZ) * width;
+        int ix = (x - minX) / step;
+        int iz = (z - minZ) / step;
+        ix = Math.max(0, Math.min(width - 1, ix));
+        iz = Math.max(0, Math.min(depth - 1, iz));
+        return ix + iz * width;
     }
 }
