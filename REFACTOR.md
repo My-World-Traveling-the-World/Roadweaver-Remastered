@@ -481,3 +481,52 @@ DP 不再只是测试里的东西 —— 它现在**跑在真实规划链上**�
 - 开启后只观察不改输入（对 terrain / legacy 做快照比对）。
 
 回归 PASS tests=649。
+
+---
+
+# S5：后处理降级为网络缝合器 —— 先分类（2026-11-13）
+
+## ★ 先澄清一个命名误解
+
+任务里写「后处理降级为网络缝合器」，但 `postprocess` 包里装的**不是「修路」**，
+而是 **raw path → 站点 → 栅格化** 的几何流水线（`PathPostProcessor.process(...)`，
+每个寻路器都调它）。这条流水线不存在「降级」的余地 —— 没有它就没有站序列。
+
+真正在做「修路」的是这三处：
+
+| 位置 | 干什么 |
+|---|---|
+| `pathlogic/grade/RoadGradePlanner` | 15 道剖面 pass |
+| `pathlogic/grade/GradeOptimizer` + `SlopeContinuityEnforcer` | 局部优化与坡率强制 |
+| `planning/terrain/AccurateGradeRepairPlanner` | 精确高度修复，必要时整条改线 |
+| `pathlogic/pathcalc/RoadPathCalculator.repairFinalHeightConflict` | 跑完之后补救各 pass 的冲突 |
+
+所以 **S5 的真实内容** = 把上面这些「事后修」降级/移除，让 `RoadSpec` + 全局 DP 一次算对；
+`postprocess` 里只保留与**网络缝合**有关的部分。
+
+## 台账（`docs/S5-POSTPROCESS-LEDGER.md`，机器校验）
+
+| 类别 | 数量 | 含义 |
+|---|---|---|
+| `KEEP_SEAM` | 10 | 网络缝合：路口 / 端点引道 / 吸附 / 复用。**永远保留** |
+| `KEEP_INPUT` | 5 | 给判定提供输入：地形采样、保护判定、几何工具。**保留** |
+| `REPLACE_BY_DP` | 3 | `RoadGradePlanner` / `GradeOptimizer` / `SlopeContinuityEnforcer` |
+| `DELETE_LATER` | 2 | `AccurateGradeRepairPlanner` / `RoadPathCalculator` 的补救入口 |
+
+## 三条机器校验（`PostprocessLedgerTest`）
+
+1. **覆盖面**：受管目录下每个 `.java` 必须在台账里出现**恰好一次**（新增文件忘登记会红）；
+2. **存在性**：台账每行的文件必须真实存在 —— **删了文件就必须删台账行**；
+3. **词汇表封闭**：类别只能是四选一，且 `REPLACE_BY_DP` **必须写明由谁取代**
+   ——「将来再说」这种没有信息量的话过不了检。
+
+> 第 3 条的理由：写清「被谁取代」才让人能判断那件事到底做完了没有。
+> 这是把「可维护性」落到可执行层面的最小手段。
+
+## 为什么现在不删
+
+直接删 `REPLACE_BY_DP` / `DELETE_LATER` 会立刻改变世界生成结果，而新的全局 DP
+还没切默认（`roadweaver.profileAb` 还在收集数据）。顺序必须是：
+**先分类 → 等数据 → 差异可解释 → 逐块删**。
+
+回归 PASS tests=650。
