@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "roadweaver_gametest",
+	"version": "1.0.0",
+	"name": "RoadWeaver GameTests",
+	"environment": "server",
+	"entrypoints": {
+		"fabric-gametest": [
+			"net.shiroha233.roadweaver.gametest.RoadQualityGameTests"
+		]
+	},
+	"depends": {
+		"roadweaver": "*",
+		"fabric-gametest-api-v1": "*"
+	}
+}

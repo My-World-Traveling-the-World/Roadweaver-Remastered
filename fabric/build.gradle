@@ -1,0 +1,199 @@
+plugins {
+	id 'com.gradleup.shadow' version '8.3.6'
+}
+
+architectury {
+	platformSetupLoomIde()
+	fabric()
+}
+
+configurations {
+	common
+	shadowCommon
+	shadowLwjglNatives
+	compileClasspath.extendsFrom common
+	runtimeClasspath.extendsFrom common
+	developmentFabric.extendsFrom common
+}
+
+repositories {
+	maven {
+		url = "https://api.modrinth.com/maven"
+	}
+	maven {
+		url "https://maven.shedaniel.me/"
+		name "Shedaniel Maven"
+	}
+}
+
+dependencies {
+	implementation project(":api")
+	implementation project(":common")
+	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
+	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
+
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	modImplementation("dev.architectury:architectury-fabric:${project.architectury_version}") {
+		exclude group: "net.fabricmc.fabric-api"
+	}
+	include("dev.architectury:architectury-fabric:${project.architectury_version}")
+
+	modApi("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+		exclude group: "net.fabricmc.fabric-api"
+	}
+	include("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}")
+
+	modLocalRuntime("maven.modrinth:mOgUt4GM:${project.modmenu_version}")
+	modRuntimeOnly("maven.modrinth:mOgUt4GM:${project.modmenu_version}")
+
+	// Dedicated servers omit LWJGL. Bundle its Java API and core JNI; the system GPU driver still provides the OpenCL ICD.
+	compileOnly("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+	include("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+	include("org.lwjgl:lwjgl:3.3.3") { transitive = false }
+	modLocalRuntime("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+	runtimeOnly("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-windows") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-windows-arm64") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-linux") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-linux-arm64") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-macos") { transitive = false }
+	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-macos-arm64") { transitive = false }
+
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version
+	}
+}
+
+// D1: a real GameTest harness. The eleven quality numbers live in common and are already unit-tested;
+// what was missing is a place where they run against a live server with Minecraft's own classes, so a
+// regression that only shows up under the real generator has somewhere to fail.
+//
+// Architectury Loom 1.7 predates `fabricApi.configureTests`, so the source set, the mod entry and the
+// run are wired by hand — the same three pieces that helper would have created.
+sourceSets {
+	gametest {
+		compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+		runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+	}
+}
+
+loom {
+	mods {
+		roadweaver_gametest {
+			sourceSet sourceSets.gametest
+		}
+	}
+	runs {
+		gametest {
+			server()
+			name = "GameTest"
+			source sourceSets.gametest
+			runDir "build/run/gametest"
+			vmArg "-Dfabric-api.gametest"
+			vmArg "-Dfabric-api.gametest.report-file=${project.buildDir}/reports/gametest/results.xml"
+		}
+	}
+}
+
+tasks.named('runGametest') {
+	doFirst {
+		layout.buildDirectory.dir('reports/gametest').get().asFile.mkdirs()
+		def runDir = layout.buildDirectory.dir('run/gametest').get().asFile
+		runDir.mkdirs()
+		new File(runDir, 'eula.txt').text = 'eula=true\n'
+	}
+}
+
+shadowJar {
+	exclude "architectury.common.json"
+	configurations = [project.configurations.shadowCommon, project.configurations.shadowLwjglNatives]
+	archiveClassifier.set("dev-shadow")
+
+	exclude 'META-INF/versions/**'
+	mergeServiceFiles()
+	exclude 'module-info.class'
+}
+
+// ── 把 roadweaver_api 契约 mod 作为**嵌套 jar** 嵌进本 jar ────────────────────────
+//
+// ## 为什么要有这一步
+// 道路对外契约（`roadweaver_api`）本来是**单独部署的一个 mod**。分成两个部署件的原因是
+// 历史事故：`api.interop` 当年在道路 jar 里，0.8.406 删实现时**契约跟着一起被删**，
+// 五个外部 mod 静默失效，而它们的测试吃着同一份幽灵 jar 所以永远是绿的。
+//
+// 但分成两个**发布件**是错的 —— 一个仓库发布时不可能发两个 jar。
+// 所以改成 **Jar-in-Jar**：发布物仍然只有一个 jar，但 Fabric 会从 `META-INF/jars/`
+// 里把 `roadweaver_api` 当成独立 mod 发现，于是：
+//   · 消费方的 `depends: {"roadweaver_api": ">=1"}` **照旧成立**（7 个下游一行都不用改）；
+//   · 契约仍然是**独立的 class 树 + 独立的 fabric.mod.json + 独立的版本号**，
+//     「删实现 ≠ 删契约」这条物理保障还在；
+//   · 发布/分发只有一个文件。
+//
+// ## 为什么用「后处理 Zip」而不是 Loom 的 include
+// `include(...)` 期待**未 remap 的 named 产物**，会自己再 remap 一遍；而
+// `:api-fabric:remapJar` 的产物**已经是 intermediary 口径**，交给 include 会被二次
+// remap，类名直接毁掉。这里直接把两个成品 jar 拼在一起 —— 零 remap、完全确定。
+//
+// 产物落在 `build/final/`，文件名与 `remapJar` 完全一致，便于部署脚本复用。
+tasks.register('embedApiJar', Zip) {
+	group = 'build'
+	description = 'Merge roadweaver_api into this jar as a nested (JiJ) jar; single publishable artifact.'
+	dependsOn tasks.named('remapJar')
+	dependsOn project(':api-fabric').tasks.named('remapJar')
+
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+	from({ zipTree(tasks.named('remapJar').get().archiveFile.get().asFile) }) {
+		// 万一 remapJar 产物里已经有同名嵌套件，先剔掉，避免重复条目
+		exclude 'META-INF/jars/roadweaver-api.jar'
+	}
+	from({ project(':api-fabric').tasks.named('remapJar').get().archiveFile.get().asFile }) {
+		into 'META-INF/jars'
+		rename { 'roadweaver-api.jar' }
+	}
+
+	// 文件名与 remapJar 完全一致，只是目录换成 build/final
+	archiveFileName = tasks.named('remapJar').get().archiveFile.get().asFile.name
+	destinationDirectory = layout.buildDirectory.dir('final')
+}
+
+remapJar {
+	inputFile.set shadowJar.archiveFile
+	dependsOn shadowJar
+	archiveClassifier.set(null)
+}
+
+jar {
+	archiveClassifier.set("dev")
+	from("${rootProject.projectDir}/LICENSE") {
+		rename { "${it}_${base.archivesName.get()}" }
+	}
+}
+
+sourcesJar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	def commonSources = project(':common').sourcesJar
+	dependsOn commonSources
+	from commonSources.archiveFile.map { zipTree(it) }
+}
+
+components.java {
+	withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
+		skip()
+	}
+}
+
+sourceSets {
+	main {
+		resources {
+			exclude 'pack.mcmeta'
+		}
+	}
+}

@@ -1,0 +1,296 @@
+// 文件职责：配置 common 模块的共享源码、资源与单元测试依赖。
+architectury {
+    common("fabric")
+}
+
+dependencies {
+    // Architectury API（作为 mod 依赖以启用 Loom 重映射）
+    modImplementation("dev.architectury:architectury:${project.architectury_version}")
+    compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
+    // 对外契约模块。**必须用 implementation 而不是 compileOnly**：
+    // 测试（roadJUnitRegressionSuite）要能真的加载 api 里的枚举与接口，
+    // 历史上 api.interop 的失败正是「依赖方拿 compile-only 幽灵 jar 编译和测试，
+    // 测试永远绿而运行时必炸」。这里让测试吃真件。
+    // **必须显式取 namedElements**：直接写 project(":api") 在 architectury 下会解析到
+    // transformProductionFabric 的 intermediary 变体，测试运行时就会出现
+    // NoClassDefFoundError: net/minecraft/class_3218（测试 classpath 是 named）。
+    implementation(project(path: ":api", configuration: "namedElements")) { transitive = false }
+    // 长城接口（只有 api 包的极小 jar；不参与部署，构建顺序：先编长城 -> 再编道路）
+    compileOnly(files(rootProject.file("../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar")))
+
+    // LWJGL OpenCL - 编译时依赖，运行时 native 由平台模块提供
+    compileOnly("org.lwjgl:lwjgl-opencl:3.3.3")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
+    testImplementation("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.lwjgl:lwjgl:3.3.3")
+    testRuntimeOnly("org.lwjgl:lwjgl-opencl:3.3.3")
+    testRuntimeOnly("org.lwjgl:lwjgl:3.3.3:natives-windows")
+    testRuntimeOnly("org.lwjgl:lwjgl:3.3.3:natives-linux")
+    testRuntimeOnly("org.lwjgl:lwjgl:3.3.3:natives-macos")
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    exclude '**/*'
+}
+
+def registerMainRegression = { String taskName, String testClass ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = testClass
+    }
+}
+
+registerMainRegression('sharedEndpointReuseRegression',
+        'net.shiroha233.roadweaver.planning.path.SharedEndpointPathReuseTest')
+registerMainRegression('connectionFallbackPolicyRegression',
+        'net.shiroha233.roadweaver.planning.ConnectionFallbackPolicyTest')
+registerMainRegression('structureAvoidanceRegression',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.StructureAvoidanceServiceTest')
+registerMainRegression('roadDataValidatorRegression',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadDataValidatorTest')
+registerMainRegression('roadTopologyWaterSimulation',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadTopologyWaterSimulationTest')
+registerMainRegression('roadWholeFlowSimulation',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadWholeFlowSimulationTest')
+registerMainRegression('tunnelJunctionGradeRegression',
+        'net.shiroha233.roadweaver.postprocess.TunnelJunctionGradeSimulationTest')
+registerMainRegression('parallelCorridorReuseAudit',
+        'net.shiroha233.roadweaver.postprocess.ParallelCorridorReuseAuditTest')
+registerMainRegression('plannedReuseMatch',
+        'net.shiroha233.roadweaver.planning.path.PlannedReuseMatchTest')
+registerMainRegression('parallelCorridorHeadingTest',
+        'net.shiroha233.roadweaver.postprocess.ParallelCorridorHeadingTest')
+registerMainRegression('savedEndpoint528Simulation',
+        'net.shiroha233.roadweaver.postprocess.SavedEndpoint528SimulationTest')
+registerMainRegression('endpointLockSimulation',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.EndpointLockSimulationTest')
+registerMainRegression('waterOnlyBridgePolicy',
+        'net.shiroha233.roadweaver.pathfinding.WaterOnlyBridgePolicyTest')
+registerMainRegression('roadConstructionSafetyPolicy',
+        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadConstructionSafetyPolicyTest')
+registerMainRegression('roadJUnitRegressionSuite',
+        'net.shiroha233.roadweaver.RoadJUnitRegressionSuite')
+
+// 玩家手绘路线（route editor）的平滑 / 分段硬切 / 撤销栈自测。
+// 不依赖任何 Minecraft 世界，纯数据模型验证，可离线跑。
+registerMainRegression('routeSmootherRegression',
+        'net.shiroha233.roadweaver.route.RouteSmootherTest')
+
+// 手绘路线的 Codec 序列化往返（存档读写最容易静默丢数据的一环）。
+registerMainRegression('routeCodecRegression',
+        'net.shiroha233.roadweaver.route.RouteCodecTest')
+
+// 手绘路线 → 施工参数映射（桥/隧道高度必须保住玩家值，不被地形吸附覆盖）。
+registerMainRegression('routeSegmentMapperRegression',
+        'net.shiroha233.roadweaver.route.RouteSegmentMapperTest')
+
+// 玩家意图覆盖 RoadData（桥隧高度、桥隧 span、保护间隙保留）。
+registerMainRegression('routeRoadDataPatcherRegression',
+        'net.shiroha233.roadweaver.route.RouteRoadDataPatcherTest')
+
+// 施工进度汇总（差值算法的边界：全失败/全冗余/混合/进度夹取）。
+registerMainRegression('routeBuildProgressRegression',
+        'net.shiroha233.roadweaver.route.RouteBuildProgressTest')
+
+// 审计修复的回归（P1-1 span 保留 / P1-2 单点 span / P2-11 高度钳制 /
+// P2-13 键含 Y 且方向无关）。
+registerMainRegression('auditFixRegression',
+        'net.shiroha233.roadweaver.route.AuditFixRegressionTest')
+
+// Chunky 预热期修复的回归（堆压力分档 / 泄漏看门狗 / 巡航分支语义）。
+registerMainRegression('chunkyPreheatFixRegression',
+        'net.shiroha233.roadweaver.runtime.ChunkyPreheatFixRegressionTest')
+
+// 第三轮审计的**缺陷复现**（Catmull-Rom 超调 / 段类型规则不一致 /
+// 闭合回路丢平滑 / 退化输入 / 长段采样过疏）。
+// ★ 2026-09-25：5 项缺陷已全部修复，本回归已挂进 test 聚合任务成为常驻回归 ——
+// 前两轮的教训就是「修了但没测，下一版又回归」。
+registerMainRegression('routeAuditRound3Regression',
+        'net.shiroha233.roadweaver.route.RouteAuditRound3Test')
+
+// ★ 2026-09-26：手绘路线「预加载就绪判定」的时序仿真回归。
+//   0.8.391 的强制加载在**同一处连出过两次 P1**，根因都是
+//   「用触发次数推断连接状态」这个错误映射：
+//     ① 过早预加载 ⇒ 空计划被永久标记为"无需施工"；
+//     ② 等待上限永不可达（失败连接不触发）⇒ 整条路线永不预加载。
+//   真机上"恰好某条连接失败"极难复现，所以把判定抽成纯函数后在此穷举钉住。
+registerMainRegression('routePreloadTimingRegression',
+        'net.shiroha233.roadweaver.route.RoutePreloadTimingTest')
+
+// ★ 2026-09-26：「IO 失败 ≠ 数据损坏」不变量的回归。
+//   WorkBuddy 分析出的两个 P1（R-4 结构表 / R-5 道路索引）根因相同 ——
+//   把 IOException 误判成"文件损坏"，用空数据覆盖真数据。
+//   修法都是「IO 失败 → 只读降级」。本测试钉住该修法依赖的两个底层性质：
+//     ① 原子写不留半成品/临时残留
+//     ② quarantineCorrupt 只重命名、内容逐字节不变（⇒ 误隔离仍可人工恢复）
+registerMainRegression('ioNotCorruptionRegression',
+        'net.shiroha233.roadweaver.persistence.files.IoNotCorruptionTest')
+
+// ★ 2026-09-26（WorkBuddy I-2）：**架构假设的静态守卫**。
+//   RoutePreloadTimingTest 只钉住了 decideReadiness 这个纯函数，但它赖以成立的
+//   调用点事实（预加载只在连接**成功**回调里触发）没有任何测试守护 ——
+//   若有人将来在失败分支也加一次触发，纯函数测试仍会全绿。
+//   本守卫读源码文本断言调用点仍位于 `road() != null` 分支内。
+registerMainRegression('routePreloadCallSiteGuard',
+        'net.shiroha233.roadweaver.route.RoutePreloadCallSiteGuardTest')
+
+// ★ 2026-09-26（WorkBuddy W-1/W-3）：手绘连接待施工数的**口径**回归。
+//   原先数 QUEUE，但 QUEUE 只在未暂停时填充 ⇒ 「是否豁免暂停」自锁（W-1）。
+//   本测试用静态断言钉住「必须查 provider、禁止出现 QUEUE」。
+registerMainRegression('playerRoutePendingCountRegression',
+        'net.shiroha233.roadweaver.route.PlayerRoutePendingCountTest')
+
+// ★ 2026-09-26（WorkBuddy I-3）：「IO 失败 ⇒ 只读降级」**行为链**的回归。
+//   IoNotCorruptionTest 只钉了两个底层原语；「置位 ⇒ save 拒绝 ⇒ 复位可写」
+//   这条链没测 —— 若有人把 catch(Exception) 写回去、或删掉复位，测试挡不住。
+//   真实 save() 需要 ServerLevel（离线无法构造），故用结构性断言覆盖该链条。
+registerMainRegression('ioDegradedReadOnlyChainRegression',
+        'net.shiroha233.roadweaver.persistence.files.IoDegradedReadOnlyChainTest')
+
+// ★ 0.8.400：手绘路线**预加载兜底链路**的静态守卫。
+//   「提交后强制加载区块」在同一处连出过三次 P1，前两次是判据错，
+//   第三次是**触发链静默断裂**（4 跳异步链里 epoch 失效会丢弃整个动作，
+//   路能建好但区块一次都不加载，且日志无任何错误）。
+//   0.8.400 改为 tick 驱动兜底后，本测试钉住三条易被重构破坏的架构事实：
+//     ① submit 必须登记待办（否则兜底永不唤醒）
+//     ② drainPending 必须在暂停 return 之前（否则开地图时兜底永不执行 —— W-1 同形状）
+//     ③ 检测间隔必须是 10 tick = 0.5 秒（用户要求，降低性能压力）
+registerMainRegression('routePreloadFallbackGuard',
+        'net.shiroha233.roadweaver.route.RoutePreloadFallbackGuardTest')
+
+// ★ 0.8.401：checkpoint 内存缓存的回归。
+//   真机 3× jstack 证明 Chunky 预热期服务端线程**全部**卡在
+//   InitialGenerationCheckpointStore 的磁盘读取上（每 tick 约 1.1 万次文件打开）。
+//   本测试钉住修复依赖的三条不变量：重复读不触盘 / 写后失效 / 按 key 隔离。
+registerMainRegression('checkpointCacheRegression',
+        'net.shiroha233.roadweaver.persistence.files.CheckpointCacheTest')
+
+// ★ 0.8.401：Chunky 预热期「不得被压力限速」的静态守卫。
+//   该不变量已被反复破坏三次（0.8.372 开满 12 lanes / 0.8.373 readyAhead 互锁 /
+//   0.8.399 之前预热分支根本不存在、被 clampGameplayThreadCap 钳在 2）。
+//   缺陷本质是**分支顺序**，顺序错了代码依然编译通过、看起来正常 —— 故用文本断言钉住。
+registerMainRegression('preflightExemptionGuard',
+        'net.shiroha233.roadweaver.runtime.PreflightExemptionGuardTest')
+
+// ★ 0.8.402：GPU 粗采样 lane 数的整数截断边界回归。
+//   真机 RTX 4060 上报 8188 MiB = 7.996 GiB，(int)(7.996/4) = 1 —— 差 4 MiB 少一半并行度。
+//   本测试钉住「必须四舍五入」+ 「源码不得退回截断写法」。
+registerMainRegression('coarseLaneCountBoundary',
+        'net.shiroha233.roadweaver.pathfinding.cache.opencl.CoarseLaneCountBoundaryTest')
+
+// ★ 0.8.412：合成地形离线寻路质量测量台（参数细化/调优 M1 基线 + M2 搜索用）。
+//   不依赖 Minecraft 世界：势场法 findRawPath 的 level/cache 传 null，走纯地形分支。
+//   输出 CSV（贴地度/突兀度/涉水/回头弯/直线效率）。单独跑：:common:routeQualityHarness。
+//   不作为 test 依赖（只打印无断言），由 M1/M2 驱动脚本消费 CSV 打分。
+registerMainRegression('routeQualityHarness',
+        'net.shiroha233.roadweaver.tuning.RouteQualityHarness')
+// 允许 -PrqArgs="--dump-seed 10 --seed-from 10 --seed-to 10" 传参（调试/自定义种子范围）。
+tasks.named('routeQualityHarness', JavaExec).configure {
+    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
+    if (!rqArgs.isEmpty()) {
+        args rqArgs.split('\\s+').toList()
+    }
+}
+
+// ★ 0.8.417：地形语料扫参（10 种地形原型 × 种子 × 全配置矩阵）。同样不依赖 MC 世界。
+//   跑法示例：:common:routeQualityCorpus -PrqArgs="--corpus --seed-from 0 --seed-to 199"
+//             :common:routeQualityCorpus -PrqArgs="--archetypes --seed-from 0 --seed-to 4"
+registerMainRegression('routeQualityCorpus',
+        'net.shiroha233.roadweaver.tuning.RouteQualityHarness')
+tasks.named('routeQualityCorpus', JavaExec).configure {
+    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
+    if (!rqArgs.isEmpty()) {
+        args rqArgs.split('\\s+').toList()
+    }
+}
+
+// ★ 0.8.420：路网拓扑离线测量台（哪些结构之间连路这一层）。
+//   语料可用真实存档：saves/<世界>/data/roadweaver/persistence/structures/<dim>/state.json
+//   跑法示例：:common:topologyHarness -PrqArgs="--corpus <state.json> --list"
+//             :common:topologyHarness -PrqArgs="--corpus <dir> --compare --out build/tuning/topo.csv"
+registerMainRegression('topologyHarness',
+        'net.shiroha233.roadweaver.tuning.TopologyHarness')
+tasks.named('topologyHarness', JavaExec).configure {
+    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
+    if (!rqArgs.isEmpty()) {
+        args rqArgs.split('\\s+').toList()
+    }
+}
+
+// ★ 0.9.027：落盘中心线审计台（离线回归尺子）。
+//   读存档里 RoadWeaver 持久化的路面 NBT，把「这条路实际长成什么样」压成可比较的数字：
+//   弯曲系数 / 横向抖动 / 转向角 / DP 剥离 / 宏观反转。在此之前后处理改动没有任何客观尺子 ——
+//   `route SHAPE` 只覆盖当次规划、`route QUALITY` 没有弯曲系数与横向抖动、
+//   唯一的角度判据 SHARP_TURN_DEG=90 又是严格大于 90 而实际转向角恰好 45/90 ⇒ 结构性抓不到。
+//   跑法示例：:common:roadCenterlineAudit -PrqArgs="--save <存档目录> --all"
+//             :common:roadCenterlineAudit -PrqArgs="--save <存档目录> --window -700,-560,180,340 --ascii"
+registerMainRegression('roadCenterlineAudit',
+        'net.shiroha233.roadweaver.tuning.RoadCenterlineAudit')
+tasks.named('roadCenterlineAudit', JavaExec).configure {
+    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
+    if (!rqArgs.isEmpty()) {
+        args rqArgs.split('\\s+').toList()
+    }
+}
+
+tasks.named('test').configure {
+    dependsOn tasks.named('roadJUnitRegressionSuite')
+    dependsOn tasks.named('routeSmootherRegression')
+    dependsOn tasks.named('routeCodecRegression')
+    dependsOn tasks.named('routeSegmentMapperRegression')
+    dependsOn tasks.named('routeRoadDataPatcherRegression')
+    dependsOn tasks.named('routeBuildProgressRegression')
+    dependsOn tasks.named('auditFixRegression')
+    dependsOn tasks.named('chunkyPreheatFixRegression')
+    // ★ 第三轮审计的 5 项几何/曲线缺陷回归（修完后从"已知红"转为常驻）
+    dependsOn tasks.named('routeAuditRound3Regression')
+    dependsOn tasks.named('sharedEndpointReuseRegression')
+    dependsOn tasks.named('connectionFallbackPolicyRegression')
+    dependsOn tasks.named('structureAvoidanceRegression')
+    dependsOn tasks.named('roadDataValidatorRegression')
+    dependsOn tasks.named('roadTopologyWaterSimulation')
+    dependsOn tasks.named('roadWholeFlowSimulation')
+    dependsOn tasks.named('tunnelJunctionGradeRegression')
+    dependsOn tasks.named('parallelCorridorReuseAudit')
+    dependsOn tasks.named('waterOnlyBridgePolicy')
+    dependsOn tasks.named('roadConstructionSafetyPolicy')
+    // ★ 2026-09-25（第三轮外部审计发现）：以下 4 个 regression 任务**注册了却没挂进聚合**，
+    //    因此长期不参与全量回归 —— 其中 savedEndpoint528Simulation 甚至一直在失败
+    //    （它回放的特定真机存档已被删除）而无人察觉。现已全部接线。
+    //    savedEndpoint528Simulation 已改为「缺存档则 SKIP 并正常退出」，可安全常驻。
+    dependsOn tasks.named('plannedReuseMatch')
+    dependsOn tasks.named('parallelCorridorHeadingTest')
+    dependsOn tasks.named('endpointLockSimulation')
+    dependsOn tasks.named('savedEndpoint528Simulation')
+    // ★ 2026-09-26：预加载就绪判定的时序回归
+    dependsOn tasks.named('routePreloadTimingRegression')
+    // ★ 2026-09-26：「IO 失败 ≠ 数据损坏」不变量回归
+    dependsOn tasks.named('ioNotCorruptionRegression')
+    // ★ 2026-09-26：预加载调用点的静态守卫（钉住「只挂成功分支」这个架构假设）
+    dependsOn tasks.named('routePreloadCallSiteGuard')
+    // ★ 2026-09-26：手绘连接待施工数的口径回归（防 W-1 死锁复现）
+    dependsOn tasks.named('playerRoutePendingCountRegression')
+    // ★ 2026-09-26：IO 只读降级行为链回归
+    dependsOn tasks.named('ioDegradedReadOnlyChainRegression')
+    // ★ 0.8.400：预加载兜底链路守卫（submit 登记 / 暂停前检测 / 0.5 秒节流）
+    dependsOn tasks.named('routePreloadFallbackGuard')
+    // ★ 0.8.401：checkpoint 缓存回归 + 预热豁免守卫
+    dependsOn tasks.named('checkpointCacheRegression')
+    dependsOn tasks.named('preflightExemptionGuard')
+    // ★ 0.8.402：GPU lane 边界
+    dependsOn tasks.named('coarseLaneCountBoundary')
+}
+ 
+sourceSets {
+    main {
+        java {
+            exclude 'net/shiroha233/roadweaver/client/gui/**'
+        }
+        resources {
+            exclude 'pack.mcmeta'
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "roadweaver_api",
+	"version": "${version}",
+	"name": "RoadWeaver API",
+	"description": "Stable cross-mod contract for RoadWeaver. Contains no implementation; all calls are forwarded to RoadWeaver when it is installed and degrade safely when it is not.",
+	"authors": [
+		"shiroha233"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"depends": {
+		"fabricloader": ">=0.16.10",
+		"java": ">=21"
+	}
+}

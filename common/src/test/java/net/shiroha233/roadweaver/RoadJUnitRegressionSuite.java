@@ -1,0 +1,213 @@
+package net.shiroha233.roadweaver;
+
+import org.junit.platform.engine.discovery.DiscoverySelectors;
+import org.junit.platform.launcher.Launcher;
+import org.junit.platform.launcher.LauncherDiscoveryRequest;
+import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
+import org.junit.platform.launcher.core.LauncherFactory;
+import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
+
+/** Runs JUnit checks in the same Minecraft-aware runtime used by model regressions. */
+public final class RoadJUnitRegressionSuite {
+    private RoadJUnitRegressionSuite() {}
+
+    public static void main(String[] args) {
+        LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+                .selectors(
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.sub.PathfindingCostConfigTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.sub.PlanningConfigTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.PlannerOutputDiagnosticTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.ExistingRoadAttachmentTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.EndpointReuseStatusTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.RoadOverlapDetectionTest"),
+                                                                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.VillageEndpointMergeTest"),
+                                                                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.tunnel.TunnelStationIndexFallbackTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.PathPostProcessorCharacterizationTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfileCharacterizationTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.grade.GradeConstantSingleSourceTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.api.ExternalReflectionContractTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.apiimpl.ApiModulePurityTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.apiimpl.ApiLifecycleAndLoadBridgeTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.grade.RoadCutFillAsymmetryTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.TunnelRunLengthCapTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.tuning.TerrainArchetypeTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.generation.RoutePrecisionRetryPolicyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTrackerTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.TerrainProfileModeGradeLimitsTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.AccurateGradeProfileSolverTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.TerrainProfileModeSearchBehaviorTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainTileCacheConcurrencyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainTileSubmitIntervalBillingTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerCacheTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlannerFindViolationTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.TerrainProfileModeAUTOBehaviorTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.path.PlannedPathCacheBatchWriteTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.RouteLevelAutoTendencyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.RoadSnapServiceTailTrimTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.DensifyControlPointsTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.SimplifyDensityTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.RelaxCapInvariantTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.SawtoothMetricTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.impl.SlopePenaltyBasisTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.impl.HeadingContinuityCostTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.RoadBraidDetectorTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareDetectorTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareAbsorberTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.validation.ProtectedGapHeightContinuityTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightConsistencyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.RoadSnapServiceReuseExtendTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.StationGapDensifyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.files.StructureFileStorageSnapshotConcurrencyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.files.StructureFileStorageQueryRectTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.files.InitialGenerationCheckpointStoreTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.opencl.GpuMemoryProbeTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.worldgen.road.RoadChunkPlanCompilerReuseOwnershipTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.runtime.ThreadPoolCapacityDebounceTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.compat.GreatWallReadinessApiTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.tunnel.RoadDeckAndTunnelGeometryTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.grade.RoadGradeArcLengthTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlannerTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.metrics.RoadQualityMetricsTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.sub.RoadAppearanceWaterAndSlopeConfigTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.WaterCrossingGateTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.config.ConfigKnobHonestyTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.construction.ProtectedColumnActionTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.WaterTierAlignmentTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareServiceStatsTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareEndpointFallbackTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckGeometryTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.CrossingNegotiatorTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.CrossingSharedDeckTest"),
+                        // 0.9.059：拆解快照耗时（①）+ 自适应候选范围等价性（②）+ 长度界收紧（③）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.structures.PrepareTimingSplitTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.AdaptiveCandidateBoundsTest"),
+                        // 0.9.060：候选余量相对化 + 预热规模保护（256/512/1024/2048 区块四档）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.AdaptiveCandidateBoundsScaleTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.LengthCapRegressionTest"),
+                        // 0.9.061：最大坡度三档（tight/normal/loose + maxRise 纯函数 + 窗口约束）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.core.constants.GradeCapTest"),
+                        // 0.9.061：盘山路专用度量（发卡弯 / 半径 / 腿长 / 坡度分位 / 斜着硬爬长度）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.metrics.SwitchbackMetricsTest"),
+                        // 0.9.062：①长度界策略感知（steep→2.6 / 缓地形 1.6）+ ②坡罚按长度收
+                        //        + ③默认档 loose + ④findLocalRoute 返回 null 时保留原候选
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.SteepLengthCapTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.impl.GradePenaltyLengthBasisTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.core.constants.GradeCapDefaultLooseTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.RepairNullKeepsCandidateTest"),
+                        // 0.9.063：①坡罚刻度重标定（两参照点 ≥ 0.9.061 旧值 + 平路仍为 0）
+                        //        + ②隧道判据重写（下包络突起度纯函数 / 窄脊必须判出）
+                        //        + ③why 四个分支 + elected 各一条
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.impl.GradePenaltyCalibrationTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.TunnelProminencePureFunctionTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.TunnelCandidateWhyBranchTest"),
+                        // 0.9.063：管线级证据 —— 生产入口 refineTunnelSpans 真的会吐出 TUNNEL span
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.TunnelPipelineIntegrationTest"),
+                        // 0.9.064：洞口段长改按坡度推（平缓→短 / 陡→长 / 上限 32 站 / 无地形退回 14 带 reason）
+                        //        + 0.9.063 管线用例真实产出的 16 站隧道作负控（openCutOnly 必须为 false）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.tunnel.TunnelPortalAdvanceTest"),
+                        // 0.9.065：洞身站禁止向上清空（洞身 / 普通路段 / 洞口明挖段三档 + [TUNNEL-CLEAR] 台账）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.tunnel.TunnelBodyClearScopeTest"),
+                        // 0.9.066：相邻 BRIDGE 跨度甲板连续性（两段桥之间的台阶）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeSpanContinuityTest"),
+                        // 0.9.067：急弯冻结（发卡弯顶点不参与 relax 平滑）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.SharpTurnFreezeTest"),
+                        // 0.9.068：急弯段用直线代替 Catmull-Rom（发卡弯不被样条外冲）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.postprocess.SharpTurnSplineTest"))
+                .build();
+        SummaryGeneratingListener summary = new SummaryGeneratingListener();
+        Launcher launcher = LauncherFactory.create();
+        launcher.registerTestExecutionListeners(summary);
+        launcher.execute(request);
+        if (summary.getSummary().getTotalFailureCount() > 0) {
+            summary.getSummary().printFailuresTo(new java.io.PrintWriter(System.err, true));
+            throw new AssertionError("JUnit regressions failed: " + summary.getSummary().getTotalFailureCount());
+        }
+        System.out.println("RoadJUnitRegressionSuite: PASS tests="
+                + summary.getSummary().getTestsSucceededCount());
+    }
+}

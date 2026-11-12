@@ -1,0 +1,59 @@
+// 文件职责：定义多加载器 Gradle 工程的仓库与按任务裁剪的子项目装配规则。
+pluginManagement {
+	repositories {
+		gradlePluginPortal()
+
+		maven {
+			name = 'Architectury'
+			url = 'https://maven.architectury.dev/'
+		}
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		maven {
+			name = 'ForgeBuildTools'
+			url = 'https://maven.minecraftforge.net/'
+		}
+		mavenCentral()
+
+		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+		maven { url = 'https://maven.aliyun.com/repository/public/' }
+		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
+	}
+}
+
+dependencyResolutionManagement {
+	repositories {
+		maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+		maven { url = 'https://maven.aliyun.com/repository/public/' }
+		maven { url = 'https://repo.huaweicloud.com/repository/maven/' }
+
+		mavenCentral()
+		maven { url = 'https://maven.fabricmc.net/' }
+		maven { url = 'https://maven.architectury.dev/' }
+		maven { url = 'https://api.modrinth.com/maven' }
+		maven { url = 'https://maven.minecraftforge.net/' }
+		maven { url = 'https://bmclapi2.bangbang93.com/maven/' }
+
+		exclusiveContent {
+			forRepository {
+				maven {
+					name = 'ForgeBuildTools'
+					url = 'https://maven.minecraftforge.net/'
+				}
+			}
+			filter {
+				includeGroup 'net.minecraftforge'
+				includeGroupByRegex 'net\\.minecraftforge\\..*'
+				includeGroup 'de.oceanlabs.mcp'
+			}
+		}
+	}
+}
+
+rootProject.name = 'roadweaver'
+
+// PlainCraft ships Fabric only. Keep the upstream NeoForge sources as a
+// reference directory, but never configure or resolve that platform.
+include 'api', 'api-fabric', 'common', 'fabric'

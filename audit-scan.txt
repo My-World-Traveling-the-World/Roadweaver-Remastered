@@ -1,0 +1,493 @@
+fabric/src/main/java\net\shiroha233\roadweaver\network\fabric\MapNetworkFabric.java:99:                            if (!ThreadPoolManager.isEpoch(epoch)) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\SpawnConnectivityValidator.java:75:        if (road == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\SpawnConnectivityValidator.java:85:            return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\SpawnConnectivityValidator.java:87:        if (first == null || last == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\config\MaterialPresetEditorScreen.java:266:        if (p == null || p.type != PresetService.RoadType.NATURAL) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\config\MaterialPresetEditorScreen.java:267:        if (p.id == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\config\MaterialPresetEditorScreen.java:268:        if (!p.id.startsWith("natural_")) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\config\MaterialPresetEditorScreen.java:270:        if (rest.isBlank()) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:110:        ALL_RUNNING.forEach(f -> { try { if (f != null) f.cancel(true); } catch (Throwable ignored) {} });
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:112:        RUNNING_TASKS.values().forEach(task -> { try { if (task.future != null) task.future.cancel(true); } catch (Throwable ignored) {} });
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:204:            } catch (Throwable submitFailure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:231:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:419:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:502:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:528:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:567:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:791:        if (q.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\RoadGenerationService.java:833:            if (server == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\render\SafeGuiItemRenderer.java:39:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\client\render\SafeGuiItemRenderer.java:59:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\client\render\SafeGuiItemRenderer.java:74:        } catch (Throwable ignored) {
+fabric/src/main/java\net\shiroha233\roadweaver\client\fabric\OpenStructureSelectionEntry.java:29:        return null;
+fabric/src/main/java\net\shiroha233\roadweaver\client\fabric\OpenPresetEditorEntry.java:29:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\config\StructureListWidget.java:54:        if (modId == null || modId.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:82:            } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:100:        ALL_RUNNING.forEach(f -> { try { if (f != null) f.cancel(true); } catch (Throwable ignored) {} });
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:102:        RUNNING_TASKS.values().forEach(task -> { try { if (task.future != null) task.future.cancel(true); } catch (Throwable ignored) {} });
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:237:            } catch (Throwable submitFailure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:277:        } catch (Throwable submitFailure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:351:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:368:            } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:402:        if (conns == null || conns.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:405:        if (owned.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\generation\IdleRoadGenerationService.java:409:        if (perLevel.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\MapInputHandler.java:211:        if (snapshot == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\MapInputHandler.java:235:        return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\tyg\TreeFromStructureNBTFeatureV2Mixin.java:23:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\worldgen\road\RoadChunkPlanCompiler.java:431:        if (segments == null || segments.size() < 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\worldgen\road\RoadChunkPlanCompiler.java:434:        if (first == null || last == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\worldgen\road\RoadChunkPlanCompiler.java:686:        if (spans == null || spans.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:69:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:154:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:267:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:300:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:313:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\compat\StreamsReflowingCompat.java:350:                } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\InitialRouteTaskDiagnostics.java:60:        return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\tyg\TreeFromStructureNBTFeatureMixin.java:31:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\config\ConfigService.java:59:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\config\ConfigService.java:63:            LOGGER.info("Migrated legacy RoadWeaver performance settings with safe initial limits; RoadWeaver OpenCL remains disabled.");
+common/src/main/java\net\shiroha233\roadweaver\generation\progress\InitialGenerationProgressTracker.java:659:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\generation\progress\InitialGenerationProgressTracker.java:667:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\generation\progress\InitialGenerationProgressTracker.java:684:        } catch (Throwable ignored) {
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\TreeFeatureMixin.java:25:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\generation\InitialGenManager.java:136:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\InitialGenManager.java:525:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\generation\InitialGenManager.java:634:        if (future == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:116:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:142:            return null;
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:219:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:237:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:253:            return null;
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:265:            return null;
+common/src/main/java\net\shiroha233\roadweaver\config\PresetService.java:267:            return null;
+common/src/main/java\net\shiroha233\roadweaver\map\MapPatchService.java:96:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\bridge\BridgeSegment.java:86:        return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:158:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:177:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:192:                || level == null || cache == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:195:        if (rebuilt == null || rebuilt.size() != profile.size()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:224:        if (connection == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:627:        if (server == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:631:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:645:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:685:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:709:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:731:                if (working == null || working.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:742:        return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\pathfinding\RoadPathCalculator.java:914:        return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\rtf\RTFTemplateFeatureMixin.java:31:        } catch (Throwable ignored) {}
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\rtf\RTFBushFeatureMixin.java:32:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:185:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:200:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:205:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:212:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:218:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\config\structure\StructureDiscoveryService.java:225:                return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\types\SpawnCabinStructure.java:117:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\types\SeaQuestionSignDecoration.java:54:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\types\LamppostDecoration.java:51:        } catch (Throwable t) {
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\HugeMushroomFeatureMixin.java:26:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\types\DistanceSignDecoration.java:54:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\types\LanternPostDecoration.java:48:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapSnapshotCache.java:31:        if (dimensionId == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapSnapshotCache.java:33:        if (wid == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapSnapshotCache.java:35:        if (bucket == null) return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\HugeFungusFeatureMixin.java:26:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\structures\types\RoadsideStructure.java:186:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadStructureValidator.java:106:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadStructureValidator.java:121:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadStructureValidator.java:124:            if (!RoadDataValidator.validateFinalRoad(current).valid()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadStructureValidator.java:126:        return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\GenericVegetationFeatureMixin.java:50:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadWaterValidator.java:124:                || index < 0 || index >= road.roadSegmentList().size()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\FinalRoadWaterValidator.java:126:        if (point == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\text\SignTextService.java:83:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\text\SignTextService.java:119:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:233:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:238:                || primarySegments.size() < 5 || secondarySegments.size() < 6) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:253:        if (!joinsStart && !joinsEnd) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:258:        if (intersection <= 0 || intersection >= secondarySegments.size() - 1) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:261:        if (primaryIntersection < 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\ExistingRoadJunctionService.java:265:        if (toExclusive - from < 5) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadConstructionVolumePlanner.java:458:        if (ranges == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadConstructionVolumePlanner.java:462:        return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:69:        if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:81:        if (!allowA && !allowN) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:116:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:117:            if (rawSegments == null || rawSegments.size() < 5) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:121:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:122:            if (segments == null || segments.size() < 5) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:127:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:138:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:153:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:160:                if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:194:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:224:                if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:238:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:256:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:262:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:307:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:312:            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:352:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:358:            if (!RoadLifecycle.allowsWrites() || ConnectionDeletionService.shouldAbort(level, connection)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:364:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:376:                        return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\Road.java:385:                        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\tile\ClientMapTileTextureCache.java:57:            return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\tile\ClientMapTileTextureCache.java:100:            return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\tile\ClientMapTileTextureCache.java:104:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\tile\ClientMapTileTextureCache.java:199:            } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\client\map\tile\ClientMapTileTextureCache.java:241:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadDataValidator.java:295:        if (road == null || road.roadSegmentList() == null || road.roadSegmentList().size() < 5) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadDataValidator.java:300:                    || segment.positions() == null || segment.positions().isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadTunnelBuilder.java:429:        if (segment == null || segment.positions() == null || segment.positions().isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadTunnelBuilder.java:431:        if (heights.length != segment.positions().size()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadTunnelBuilder.java:438:        if (nx == 0 && nz == 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadTunnelBuilder.java:464:        if (spans == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\RoadTunnelBuilder.java:473:        return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\registry\RoadsideStructureRegistry.java:72:            return null;
+common/src/main/java\net\shiroha233\roadweaver\map\RoadMapGeometry.java:73:        if (segments == null || spans == null || spans.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\map\tile\sampling\MapTerrainSamplingService.java:129:            return null;
+common/src/main/java\net\shiroha233\roadweaver\map\tile\sampling\MapTerrainSamplingService.java:142:            return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\RoadMapScreen.java:597:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\client\map\RoadMapScreen.java:888:        if (minecraft == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\RoadMapScreen.java:890:        if (level == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\registry\BridgeTemplateStructureRegistry.java:85:                return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\registry\BridgeTemplateStructureRegistry.java:211:            return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\registry\BridgeTemplateStructureRegistry.java:216:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:387:            if (chunk == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:398:                    if (startChunk == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:405:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:445:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:557:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:904:        if (snapshot == null || pos == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:943:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2142:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2208:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2456:        if (endpoint == null || boxes == null || boxes.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2691:            if (level == null || piece == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2716:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2722:            if (!available || blocks == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2749:            if (!available || blocks == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2775:            if (!available || shapes == null || shapes.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:2791:            if (!Double.isFinite(minX) || !Double.isFinite(maxX)) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3124:            if (boxesByChunk.isEmpty() || minY > maxY) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3126:            if (candidates == null || candidates.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3142:                if (solidStop) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3145:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3149:            if (boxesByChunk.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3151:            if (candidates == null || candidates.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3163:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3168:            if (boxesByChunk.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3170:            if (candidates == null || candidates.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3180:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3185:            if (boxesByChunk.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3187:            if (candidates == null || candidates.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3192:            return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3262:                return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3306:            if (connection == null || position == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3325:            if (segments == null || village == null || village.isEmpty() || step == 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\pathlogic\core\StructureAvoidanceService.java:3341:            return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:43:        if (worldId == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:51:        if (mc == null || mc.level == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:58:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:100:        if (parts.length != 3) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:108:            return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:113:        if (dimension == null || pos == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:118:        if (key == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:120:        if (separator <= 0 || separator >= key.length() - 1) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\data\MapDataStorage.java:126:            return null;
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\BeardifierMixin.java:81:        return null;
+common/src/main/java\net\shiroha233\roadweaver\runtime\ThreadPoolManager.java:355:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\runtime\ThreadPoolManager.java:515:            try { exec.shutdownNow(); } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\runtime\ThreadPoolManager.java:539:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\runtime\ThreadPoolManager.java:560:        } catch (Throwable ignored) {
+fabric/src/main/java\net\shiroha233\roadweaver\mixin\fabric\BambooFeatureMixin.java:26:        } catch (Throwable ignored) {}
+common/src/main/java\net\shiroha233\roadweaver\runtime\CacheManager.java:133:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:210:            if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:212:                return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:221:            return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:226:            return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:232:            return null;
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideVillagePrecomputer.java:474:            return null;
+common/src/main/java\net\shiroha233\roadweaver\runtime\RuntimeLoadPolicy.java:424:            if (target == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\runtime\RuntimeLoadPolicy.java:429:                return null;
+common/src/main/java\net\shiroha233\roadweaver\runtime\RuntimeLoadPolicy.java:462:            if (target == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\runtime\RuntimeLoadPolicy.java:467:                return null;
+common/src/main/java\net\shiroha233\roadweaver\search\StructureVerificationService.java:57:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\search\StructureVerificationService.java:123:                } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\structures\precompute\RoadsideStructurePrecomputer.java:256:            return null;
+common/src/main/java\net\shiroha233\roadweaver\search\StructureIndexService.java:99:            } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\search\StructurePredictor.java:526:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:258:        if (!isUsable(primary) || !isUsable(secondary)) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:260:        if (best == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:289:        if (connected == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:298:            return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:640:        if (best == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:727:                || secondary.roadSegmentList().size() < OVERLAP_MERGE_MIN_RUN) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:739:        if (corridor == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:747:            return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:755:                primary, primaryTo, primaryBlocked, secondary, secTo, secondaryBlocked)) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:761:                || !corridorCoverageCompatible(primary, primaryFrom, primaryTo, secondary)) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:774:            return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:787:                    sec.get(secTo), targetAt(secondary, secTo))) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:791:        if (!validMergedSequence(merged, mergedY)) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:906:        if (targets == null || runs == null || runs.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:967:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:985:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1012:        if (targets == null || runs == null || runs.size() < 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1065:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1096:        if (primary == null || secondary == null || targets == null || runs == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1099:        if (pri == null || sec == null || sec.size() < OVERLAP_MERGE_MIN_RUN * 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1145:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1346:        if (junction == null || increasingTargets == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1360:        if (anchor == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1378:                return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1387:            if (connectedSegments.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1393:                return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1421:            return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1563:        if (targets == null || run == null || run.length < 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1571:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1599:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1837:                || lastIndex < 0 || lastIndex >= primarySegments.size()) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1844:                    || (primarySpecial != null && index < primarySpecial.length && primarySpecial[index])) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1846:            if (segment == null || segment.middlePos() == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1908:        if (runs == null || runs.isEmpty() || size <= 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1913:            return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1919:        return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:1926:        if (targets == null || run == null || run.length < 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:2014:        if (previous == next) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:2020:        if (length < 1.0D) return null;
+common/src/main/java\net\shiroha233\roadweaver\postprocess\RoadSnapService.java:2282:        if (target == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\features\path\decoration\system\DecorationExecutor.java:30:            } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BasicAStarPathfinder.java:70:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BasicAStarPathfinder.java:77:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BasicAStarPathfinder.java:87:                    if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BasicAStarPathfinder.java:108:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BasicAStarPathfinder.java:194:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\MapViewportController.java:172:        if (mc == null || mc.level == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\MapViewportController.java:174:        if (server == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:79:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:87:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:105:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:122:        if (current == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:126:            if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:155:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:238:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\BidirectionalAStarPathfinder.java:250:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\render\MapDockRenderer.java:32:            if (!bounds.contains(x, y)) return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\render\MapDockRenderer.java:37:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\GradientDescentPathfinder.java:84:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\GradientDescentPathfinder.java:91:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\GradientDescentPathfinder.java:123:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\GradientDescentPathfinder.java:209:        return null;
+common/src/main/java\net\shiroha233\roadweaver\client\map\MapLoadSession.java:41:        if (responseIndex < 0 || responseIndex >= requests.size()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:38:            return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:40:        if (isManualEndpoint(level, original.from()) || isManualEndpoint(level, original.to())) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:48:        if (planned.isEmpty() || planned.get().size() < 4) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:51:        if (connections == null || connections.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:70:        if (best == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\ExistingRoadEndpointReuse.java:92:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\AccurateHeightBackends.java:22:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\PotentialFieldPathfinder.java:81:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\PotentialFieldPathfinder.java:88:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\PotentialFieldPathfinder.java:104:                    if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\PotentialFieldPathfinder.java:130:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\impl\PotentialFieldPathfinder.java:250:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\PlannedPathCache.java:200:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainRegion.java:138:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainRegion.java:200:        if (tiles == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\impl\SnapBranchPlanner.java:328:        if (len2 <= 1e-9) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainRegionSampler.java:278:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\GlobalStructureReroutePlanner.java:30:        if (level == null || connection == null || config == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningReadinessIndex.java:197:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningReadinessIndex.java:508:            if (key == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningReadinessIndex.java:512:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:383:        if (original == null || original.size() < 3) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:389:            if (previous == null || current == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:393:        if (total <= 0.001D) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:603:        if (path == null || path.size() < 2) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:625:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:740:        if (requests.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:756:        if (startY == null || goalY == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:820:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:896:        if (path == null || path.isEmpty() || lakes == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:907:        if (path == null || path.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:920:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:994:        if (path == null || path.isEmpty() || lakes == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1008:        if (first < 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1023:        if (path == null || path.isEmpty() || channels == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1034:        if (first < 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1096:        if (path == null || path.size() < 2 || lakes == null || terrain == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1106:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1134:        if (path == null || path.isEmpty() || mask == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\AccurateGradeRepairPlanner.java:1147:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:221:            return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:410:            if (!ThreadPoolManager.isEpoch(epoch)) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:419:            if (!ThreadPoolManager.isEpoch(epoch)) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:1055:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:1101:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:1114:                || !ThreadPoolManager.isEpoch(epoch)) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:1117:        if (mode == null || mode == TerrainSamplingMode.LEGACY_DIRECT) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\RoadPlanningService.java:1124:        if (!ThreadPoolManager.isEpoch(epoch)) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\AccurateHeightSampler.java:483:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\AccurateHeightSampler.java:539:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\AccurateHeightSampler.java:604:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\AccurateHeightSampler.java:636:                return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:127:                || secondary.size() < MIN_REUSABLE_STATIONS) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:216:            return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:220:        if (join == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:235:        if (connections == null || connections.isEmpty()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:276:        if (path == null || path.size() < MIN_REUSABLE_STATIONS || endpoint == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\path\SharedEndpointPathReuse.java:331:        if (connection == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:61:        if (level == null || key == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:75:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:76:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:87:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:88:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileCache.java:91:            return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\RawPathSearch.java:42:            return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\RawPathSearch.java:51:            if (!result.success() || !result.hasRawPath()) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\MountainSwitchbackPlanner.java:126:        if (path == null || path.size() < 3) return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\MountainSwitchbackPlanner.java:142:        return null;
+common/src/main/java\net\shiroha233\roadweaver\planning\terrain\TerrainSamplingSessions.java:65:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileSampler.java:59:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileSampler.java:92:            if (expandedHeights == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\terrain\region\CoarseTerrainTileSampler.java:96:                if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\RoadSpatialIndex.java:72:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:33:        String reason = OpenCLAvailability.disabledReason();
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:48:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:51:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:58:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:65:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:78:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CoarseHeightBatchSamplers.java:80:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:31:        if (level == null || key == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:34:        return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:61:            if (!Files.exists(file)) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:71:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:110:            if (magic != PAYLOAD_MAGIC) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:114:            if (sampleWidth != key.sampleWidth() || sampleHeight != key.sampleHeight()) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:116:            if (expected <= 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\CoarseTerrainTileFileStorage.java:127:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkKey.java:41:        if (fileName == null || !fileName.endsWith(".json")) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkKey.java:44:        if (separator <= 0 || separator >= stem.length() - 1 || separator != stem.lastIndexOf('_')) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkKey.java:50:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:518:        if (fileName == null || fileName.isBlank()) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:524:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:549:        if (!Files.isRegularFile(file)) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:553:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:559:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadChunkStore.java:567:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:293:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:301:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:307:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:333:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:402:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:405:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:410:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:414:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:418:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:421:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:425:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:430:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:434:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:441:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:445:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:515:                        return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:587:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\FileBackedAccurateSampleStore.java:600:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadFingerprint.java:64:        return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\chunk\RoadFingerprint.java:72:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CpuCoarseHeightBatchSampler.java:29:            if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\CpuCoarseHeightBatchSampler.java:31:            if (Thread.currentThread().isInterrupted()) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:85:        if (!Files.isRegularFile(path)) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:90:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:130:                if (id == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:134:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:173:                if (placement == null || structure == null || villageStyle == null) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:185:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\PendingRoadsideContentFileStorage.java:211:                return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\StructureFileStorage.java:437:            if (!Files.exists(path)) return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\StructureFileStorage.java:444:            return null;
+common/src/main/java\net\shiroha233\roadweaver\persistence\files\StructureFileStorage.java:529:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphCompiler.java:72:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphCompiler.java:114:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphCompiler.java:209:        if (node < 0) return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphCompiler.java:744:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:41:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:99:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:117:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:121:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:144:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:236:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:327:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\bridge\OpenCLBridge.java:360:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:14:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:26:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:37:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:49:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:53:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:59:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:60:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:76:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:98:                } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:99:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:104:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:130:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:131:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:134:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:146:            } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:147:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:150:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:296:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\DensityGraphReflection.java:297:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\LithostitchedKernelSupport.java:58:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:51:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:55:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:62:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:122:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:185:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:232:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:276:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:307:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:354:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:538:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateHeightBackend.java:566:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateProgram.java:113:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateProgram.java:150:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateProgram.java:215:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLAccurateProgram.java:288:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:83:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:86:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:94:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:98:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:115:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:120:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:164:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:175:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:188:                LOGGER.info("OpenCL 粗采样已禁用，当前请求直接使用 CPU: {}", OpenCLAvailability.disabledReason());
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:190:            InitialGenerationProgressTracker.setBackend("CPU", "CPU", OpenCLAvailability.disabledReason());
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:266:        } catch (Throwable t) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:268:            InitialGenerationProgressTracker.setBackend("CPU", "CPU", OpenCLAvailability.disabledReason());
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLCoarseHeightBatchSampler.java:423:        } catch (Throwable ignored) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLDensityProgramBuffers.java:42:        } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLDensityProgramPayload.java:82:        double[] amplitudes = toDoubleArray(amplitudeValues);
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLDensityProgramPayload.java:127:                toDoubleArray(splineLocationValues),
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLDensityProgramPayload.java:129:                toDoubleArray(splineDerivativeValues),
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLDensityProgramPayload.java:185:    private static double[] toDoubleArray(List<Double> values) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:51:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:64:                    OpenCLAvailability.logDisabledOnce(null);
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:65:                    return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:73:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:75:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:93:            } catch (Throwable failure) {
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:95:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:137:        return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:245:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\OpenCLRuntime.java:284:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\RuntimeCoarseGpuBudget.java:55:            return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\RuntimeCoarseGpuBudget.java:59:                return null;
+common/src/main/java\net\shiroha233\roadweaver\pathfinding\cache\opencl\RuntimeCoarseGpuBudget.java:183:        } catch (Throwable ignored) {

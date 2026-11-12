@@ -1,0 +1,540 @@
+package net.shiroha233.roadweaver.pathlogic.bridge;
+
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.WorldGenLevel;
+import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.core.constants.RoadConstants;
+import net.shiroha233.roadweaver.config.ConfigService;
+import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
+import net.shiroha233.roadweaver.structures.registry.BridgeTemplateStructureRegistry;
+import net.shiroha233.roadweaver.structures.registry.BridgeTemplateStructureRegistry.BridgeTemplate;
+import net.shiroha233.roadweaver.util.Line;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Places the bundled RoadWeaver bridge template along a long water span.
+ * Template coordinates outside the saved voxel volume are never projected
+ * downward, and each invocation writes only blocks owned by the chunk that is
+ * currently being generated.
+ */
+public final class BridgeSegmentPlannerNew {
+    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final Set<String> LOGGED_BRIDGES = ConcurrentHashMap.newKeySet();
+    /** Support columns added under template bridges; a template bridge with 0 of these has no piers. */
+    private static final java.util.concurrent.atomic.AtomicLong PIERS_PLACED =
+            new java.util.concurrent.atomic.AtomicLong();
+    /** 0.9.033：陆侧桥口靠桥身映射补出甲板的次数（O-14「陆侧桥口缺甲板」的取证计数）。 */
+    private static final java.util.concurrent.atomic.AtomicLong LANDING_MOUTHS_FILLED =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /** {@return how many template-bridge support columns this process has placed} */
+    public static long piersPlaced() {
+        return PIERS_PLACED.get();
+    }
+
+    /** {@return how many land-side bridge mouths this process had to fill from the body mapping} */
+    public static long landingMouthsFilled() {
+        return LANDING_MOUTHS_FILLED.get();
+    }
+
+    private BridgeSegmentPlannerNew() {
+    }
+
+    public static boolean processSegment(
+            WorldGenLevel world,
+            ChunkPos currentChunk,
+            RoadData road,
+            Line line,
+            RoadSegmentPlacement segment,
+            BlockPos middle,
+            BlockPos previous,
+            int deckY,
+            boolean landingStation) {
+        double bridgeLength = line.getTotalLength();
+        var bridge = BridgeTemplateStructureRegistry.chooseOriginal(world.getLevel(), stableBridgeSeed(line));
+        if (bridge == null) {
+            return false;
+        }
+        String logKey = world.getLevel().dimension().location() + "|" + Math.round(bridgeLength)
+                + "|" + bridge.getId();
+        if (LOGGED_BRIDGES.add(logKey)) {
+            LOGGER.info("RoadWeaver original bridge template={} lengthBlocks={} deckY={}",
+                    bridge.getId(), Math.round(bridgeLength), deckY);
+        }
+
+        int minX = Math.max(currentChunk.getMinBlockX(), Math.min(previous.getX(), middle.getX()) - 10);
+        int maxX = Math.min(currentChunk.getMaxBlockX(), Math.max(previous.getX(), middle.getX()) + 10);
+        int minZ = Math.max(currentChunk.getMinBlockZ(), Math.min(previous.getZ(), middle.getZ()) - 10);
+        int maxZ = Math.min(currentChunk.getMaxBlockZ(), Math.max(previous.getZ(), middle.getZ()) + 10);
+
+        List<TemplatePlacement> placements = new ArrayList<>();
+        boolean[] blocked = {false};
+        TemplateBlockConsumer collect = (pos, state) -> {
+            if (!ownsTarget(currentChunk, pos)) {
+                return false;
+            }
+            // Per-voxel wall veto: the bridge stops at the wall instead of overwriting it.
+            if (isWallOwned(pos)) return false;
+            if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, pos, road)) {
+                blocked[0] = true;
+                return false;
+            }
+            placements.add(new TemplatePlacement(pos, state));
+            return true;
+        };
+        boolean clampToBody = isOpenWaterColumn(world, middle);
+        TemplateVisit visit = visitTemplateBlocks(
+                bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collect);
+
+        // 0.9.033（O-14「陆侧桥口缺甲板」）：模板的**桥台段**在甲板高度上是空的
+        // （{@link #visitTemplateBlocks} 里的原文：the abutment layers are empty exactly
+        // where a deck would be）。水上桥口靠「把列映射压回桥身」绕开了这一点，陆侧桥口
+        // 没有 —— 于是陆侧落桥站永远拿不到 road-column 甲板体素 ⇒ handles(landing)=false
+        // ⇒ processSegment 返回 false ⇒ PathFeature 在「本 chunk 不拥有该站」时直接
+        // continue，那一站在邻接 chunk 里就完全没有甲板，正好是一个 1 站宽的桥口缺口。
+        // 修法：陆侧落桥站第一次拿不到甲板时，改用水上桥口那套桥身映射再走一遍；
+        // 若仍拿不到，逐字节退回第一次的结果（行为与 0.9.032 完全一致）。
+        if (!blocked[0] && landingStation && !clampToBody && !visit.handles(landingStation)) {
+            List<TemplatePlacement> firstAttempt = List.copyOf(placements);
+            placements.clear();
+            blocked[0] = false;
+            TemplateVisit forced = visitTemplateBlocks(
+                    bridge, line, segment, deckY, minX, maxX, minZ, maxZ, true, collect);
+            if (!blocked[0] && forced.handles(landingStation)) {
+                visit = forced;
+                long filled = LANDING_MOUTHS_FILLED.incrementAndGet();
+                if (filled <= 8 || filled % 32 == 0) {
+                    LOGGER.info("RoadWeaver bridge landing mouth had no deck in the template abutment; "
+                                    + "used the body column mapping instead deckY={} placedBlocks={} "
+                                    + "coveredRoadColumns={} count={}",
+                            deckY, forced.placedBlocks(), forced.coveredRoadColumns(), filled);
+                }
+            } else {
+                placements.clear();
+                placements.addAll(firstAttempt);
+                blocked[0] = false;
+            }
+        }
+
+        if (blocked[0] || !visit.handles(landingStation)) return false;
+
+        // 0.9.005：模板桥过去一行 clear 都没有 —— 只把模板 voxel 贴上去，桥面及其上方的山体/树
+        // 原样留着（真机就是"桥两侧有板、中间是石墙"）。这里在贴之前把桥面列的竖向净空带清掉：
+        // 只清 [桥面+1, 桥面+1+净空)，向下不动，所以不会挖成峡谷；清在贴之前，且跳过本段模板
+        // 自己要占的格子，避免削掉本段的栏杆/桥面。受保护方块由 roadAppearance.forcedClearProtected
+        // 决定是否强清（关掉即完全回到 0.9.004 行为）。
+        net.shiroha233.roadweaver.config.ModConfig bridgeCfg =
+                net.shiroha233.roadweaver.config.ConfigService.get();
+        if (bridgeCfg.roadAppearance().forcedClearProtected()) {
+            net.shiroha233.roadweaver.decoration.system.AboveColumnClearer
+                    .clearTemplateBridgeHeadroom(world, segment, deckY, road, bridgeCfg);
+        }
+
+        for (TemplatePlacement placement : placements) {
+            if (isWallOwned(placement.pos())) continue;
+            world.setBlock(placement.pos(), placement.state(), 3);
+            BlockState updatedState = Block.updateFromNeighbourShapes(
+                    world.getBlockState(placement.pos()), world, placement.pos());
+            world.setBlock(placement.pos(), updatedState, 3);
+        }
+
+        placeTemplateCenterLight(world, currentChunk, road, line, deckY, placements);
+        placeTemplatePiers(world, currentChunk, road, line, deckY);
+
+        // A bridge block elsewhere in this chunk does not prove that the
+        // current station reaches the bridge. Let the normal bridge fallback
+        // pave an uncovered bank transition instead of leaving a one-block gap.
+        return true;
+    }
+
+    /** {@return whether the top block of this column is open fluid, i.e. the bridge mouth is over water} */
+    private static boolean isWallOwned(BlockPos pos) {
+        return pos != null && net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
+                net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
+                pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    private static boolean isOpenWaterColumn(WorldGenLevel world, BlockPos pos) {
+        if (world == null || pos == null) return false;
+        int top = world.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG,
+                pos.getX(), pos.getZ()) - 1;
+        if (top <= world.getMinBuildHeight()) return false;
+        return !world.getBlockState(new BlockPos(pos.getX(), top, pos.getZ())).getFluidState().isEmpty();
+    }
+
+    /** How far a template bridge's support column may descend when the config leaves it open. */
+    private static final int DEFAULT_PIER_DESCENT_CAP = 48;
+
+    /**
+     * Carries a template bridge down to solid ground under every pier interval.
+     *
+     * <p>The bundled templates are eight blocks tall: their piers are three logs that end on the template's
+     * bottom row, which maps to roughly the water surface. Nothing below that row is ever placed, so a
+     * template bridge over anything deeper than a ford has no support at all - the logs hang in the water
+     * and stop exactly at the surface, which is what the measured renderings showed. This walks the span and
+     * fills a support column from just under the deck down to the first solid block, honouring the configured
+     * pier interval, the pier height cap, chunk ownership and protected blocks.
+     */
+    private static void placeTemplatePiers(WorldGenLevel world, ChunkPos currentChunk, RoadData road,
+                                           Line line, int deckY) {
+        int interval = Math.max(2, ConfigService.get().bridge().pierInterval());
+        int cap = ConfigService.get().bridge().pierMaxHeight();
+        if (cap <= 0) cap = DEFAULT_PIER_DESCENT_CAP;
+        BlockState support = BridgeMaterialPalette.forRange(road, 0, 0).support();
+        double length = Math.max(1.0D, line.getTotalLength());
+        for (double at = interval * 0.5D; at < length; at += interval) {
+            Vec3 point = line.pointAt(Math.min(1.0D, at / length));
+            int x = (int) Math.floor(point.x);
+            int z = (int) Math.floor(point.z);
+            boolean placed = false;
+            for (int depth = 1; depth <= cap; depth++) {
+                int y = deckY - 1 - depth;
+                if (y <= world.getMinBuildHeight()) break;
+                BlockPos pos = new BlockPos(x, y, z);
+                if (!ownsTarget(currentChunk, pos)) break;
+                BlockState existing = world.getBlockState(pos);
+                if (existing.blocksMotion()) break;
+                if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, pos, road)) break;
+                if (isWallOwned(pos)) break;
+                world.setBlock(pos, support, 3);
+                placed = true;
+            }
+            if (placed) {
+                PIERS_PLACED.incrementAndGet();
+            }
+        }
+    }
+
+    /**
+     * Replaces the template deck's center block with a sea lantern every
+     * {@code DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS} blocks of bridge span:
+     * one at 0, one at 16, one at 32, and so on up to the deck length. The
+     * offset is measured along the bridge's own geometry line (0..span
+     * length), not along the whole route, so short bridges get lanterns
+     * across their entire length instead of only at the two landings.
+     * Columns owned by another chunk are not present in {@code placements},
+     * so every chunk place only its own share of the lanterns.
+     */
+    private static void placeTemplateCenterLight(
+            WorldGenLevel world,
+            ChunkPos currentChunk,
+            RoadData road,
+            Line line,
+            int deckY,
+            List<TemplatePlacement> placements) {
+        int interval = RoadConstants.DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS;
+        if (interval <= 0 || placements == null || placements.isEmpty()) return;
+        double length = line.getTotalLength();
+        if (!(length > 0.0D)) return;
+        for (double spanDistance = 0.0D; spanDistance <= length; spanDistance += interval) {
+            BlockPos lightPos = deckCenterColumn(line, spanDistance / length, deckY, placements);
+            if (lightPos == null) continue;
+            if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, lightPos, road)) continue;
+            if (isWallOwned(lightPos)) continue;
+            BlockState existing = world.getBlockState(lightPos);
+            if (existing.isAir() || !existing.getFluidState().isEmpty()) continue;
+            if (existing.is(Blocks.SEA_LANTERN)) continue;
+            // O-14（0.9.027）：「海晶灯抢栏杆」。
+            // 这一格是**桥面中心列**上的模板体素，可能是桥板（整格实心），也可能是栏杆/栅栏/墙。
+            // 原来只判「非空气且非流体」就把整块换成海晶灯 —— 撞上栏杆时等于把栏杆挖掉一段。
+            // 栏杆类方块的碰撞体不是整格，用碰撞体是否填满整格来区分：只允许替换桥板。
+            if (!existing.isCollisionShapeFullBlock(world, lightPos)) continue;
+            // 斜向桥:海晶灯沿桥中心线每 interval 格放一个,但斜向投影到世界
+            // XZ 时相邻灯会紧挨(斜对角相邻)。放灯前查周围 3x3 是否已有海晶
+            // 灯,有则跳过,避免斜向桥桥面出现紧挨/重叠的灯。海晶灯数量极少,
+            // 每灯多查 8 格 getBlockState,O(1) 成本可忽略,且仅在 worldgen
+            // 后台线程执行。
+            if (hasNearbySeaLantern(world, lightPos)) continue;
+            world.setBlock(lightPos, Blocks.SEA_LANTERN.defaultBlockState(), 3);
+        }
+    }
+
+    /**
+     * 斜向桥海晶灯去重:检查中心格周围 3x3(上下左右+斜对角)是否已有海晶
+     * 灯。桥面海晶灯只会是本模组放置(替换 deck 中心方块),周围若已有海晶灯
+     * 即视为本模组已放,跳过当前灯以避免斜向紧挨。
+     */
+    private static boolean hasNearbySeaLantern(WorldGenLevel world, BlockPos center) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                if (world.getBlockState(center.offset(dx, 0, dz)).is(Blocks.SEA_LANTERN)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The template voxel at the deck center for one span offset, or null when
+     * this invocation did not write that column. Uses the actual template
+     * voxel written for the current chunk, which avoids guessing the deck Y
+     * when a template has a height offset.
+     */
+    private static BlockPos deckCenterColumn(Line line,
+                                             double t,
+                                             int deckY,
+                                             List<TemplatePlacement> placements) {
+        Vec3 center = line.pointAt(Math.max(0.0D, Math.min(1.0D, t)));
+        int columnX = (int) Math.floor(center.x);
+        int columnZ = (int) Math.floor(center.z);
+        BlockPos exact = null;
+        double exactScore = Double.POSITIVE_INFINITY;
+        BlockPos near = null;
+        double nearScore = Double.POSITIVE_INFINITY;
+        for (TemplatePlacement placement : placements) {
+            BlockPos pos = placement.pos();
+            int dx = pos.getX() - columnX;
+            int dz = pos.getZ() - columnZ;
+            if (dx == 0 && dz == 0) {
+                double score = Math.abs(pos.getY() - deckY);
+                if (score < exactScore) {
+                    exactScore = score;
+                    exact = pos;
+                }
+                continue;
+            }
+            double lateral = dx * dx + dz * dz;
+            if (lateral > 2.25D) continue;
+            double score = lateral + Math.abs(pos.getY() - deckY) * 0.25D;
+            if (score < nearScore) {
+                nearScore = score;
+                near = pos;
+            }
+        }
+        return exact != null ? exact : near;
+    }
+
+    /** Exact non-air template voxels used by save-time structure validation. */
+    public static List<BlockPos> plannedBlocks(
+            net.minecraft.server.level.ServerLevel level,
+            Line line,
+            RoadSegmentPlacement segment,
+            BlockPos middle,
+            BlockPos previous,
+            int deckY,
+            boolean landingStation) {
+        return plannedBridge(level, line, segment, middle, previous, deckY, landingStation).blocks();
+    }
+
+    /** Full template geometry plus whether the middle point's chunk will suppress procedural fallback. */
+    public static PlannedBridge plannedBridge(
+            net.minecraft.server.level.ServerLevel level,
+            Line line,
+            RoadSegmentPlacement segment,
+            BlockPos middle,
+            BlockPos previous,
+            int deckY,
+            boolean landingStation) {
+        if (level == null || line == null || segment == null || middle == null || previous == null) {
+            return PlannedBridge.none();
+        }
+        double bridgeLength = line.getTotalLength();
+        var bridge = BridgeTemplateStructureRegistry.chooseOriginal(level, stableBridgeSeed(line));
+        if (bridge == null) return PlannedBridge.none();
+        int minX = Math.min(previous.getX(), middle.getX()) - 10;
+        int maxX = Math.max(previous.getX(), middle.getX()) + 10;
+        int minZ = Math.min(previous.getZ(), middle.getZ()) - 10;
+        int maxZ = Math.max(previous.getZ(), middle.getZ()) + 10;
+        List<BlockPos> blocks = new ArrayList<>();
+        TemplateBlockConsumer collectAll = (pos, state) -> {
+            blocks.add(pos);
+            return true;
+        };
+        boolean clampToBody = isOpenWaterColumn(level, middle);
+        TemplateVisit visit = visitTemplateBlocks(
+                bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collectAll);
+        // 0.9.033：与 processSegment 保持**逐条一致**的重试，否则存档期校验算出的
+        // centerChunkHandles 会和真正生成的体素对不上（退回程序化桥面会双铺）。
+        if (landingStation && !clampToBody && !visit.handles(landingStation)) {
+            List<BlockPos> firstAttempt = List.copyOf(blocks);
+            blocks.clear();
+            TemplateVisit forced = visitTemplateBlocks(
+                    bridge, line, segment, deckY, minX, maxX, minZ, maxZ, true, collectAll);
+            if (forced.handles(landingStation)) {
+                visit = forced;
+            } else {
+                blocks.clear();
+                blocks.addAll(firstAttempt);
+            }
+        }
+        if (!visit.handles(landingStation)) return PlannedBridge.none();
+
+        ChunkPos centerChunk = new ChunkPos(middle);
+        Set<Long> roadColumns = footprintColumns(segment);
+        int centerBlocks = 0;
+        int centerRoadColumns = 0;
+        for (BlockPos block : blocks) {
+            if (!ownsTarget(centerChunk, block)) continue;
+            centerBlocks++;
+            if (block.getY() >= deckY - 4 && block.getY() <= deckY + 3
+                    && roadColumns.contains(columnKey(block.getX(), block.getZ()))) {
+                centerRoadColumns++;
+            }
+        }
+        boolean centerChunkHandles = centerBlocks > 0 && (!landingStation || centerRoadColumns > 0);
+        return new PlannedBridge(List.copyOf(blocks), centerChunkHandles);
+    }
+
+    private static TemplateVisit visitTemplateBlocks(
+            BridgeTemplateStructureRegistry.BridgeTemplate bridge,
+            Line line,
+            RoadSegmentPlacement segment,
+            int deckY,
+            int minX,
+            int maxX,
+            int minZ,
+            int maxZ,
+            boolean clampColumnToBody,
+            TemplateBlockConsumer consumer) {
+        double bridgeLength = line.getTotalLength();
+        int placedBlocks = 0;
+        int coveredRoadColumns = 0;
+        Set<Long> roadColumns = footprintColumns(segment);
+        // The bundled templates put their deck body in the middle and their abutments at the ends; the
+        // abutment layers are empty exactly where a deck would be, so the first and last few columns of every
+        // template bridge have no surface at all. On land the abutment sits in the bank and nobody notices.
+        // Over open water it is a hole straight into the river, so there the body is used all the way to the
+        // mouth - the piers added by placeTemplatePiers are what carries it down.
+        //
+        // 0.9.033：同一件事在**陆侧**桥口也是缺口，只是被「邻接 chunk 不拥有该站就 continue」
+        // 藏住了（见 processSegment 里的说明）。所以 clampColumnToBody 现在有两个来源：
+        // 水上桥口，以及陆侧桥口第一次拿不到甲板时的重试。
+        double bodyLow = bridge.getStartLength();
+        double bodyHigh = Math.max(bodyLow, bridge.getTotalLength() - bridge.getEndLength() - 1.0E-4D);
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                Vec3 testPos = new Vec3(x, deckY, z);
+                Line.Frame frame = line.getFrame(testPos);
+                Vec3 horizontalOffset = testPos.subtract(frame.closestPoint);
+                double testX = horizontalOffset.dot(frame.tangent0);
+                double testZ = horizontalOffset.dot(frame.binormal0);
+                if (Math.abs(testX) > 2 || !bridge.isInVoxelGrid(0, 0, testZ)) continue;
+
+                double columnX = Math.min(Math.max(0, frame.globalT), 1) * bridgeLength;
+                columnX = mapTemplateX(columnX, bridgeLength, bridge.getStartLength(),
+                        bridge.getEndLength(), bridge.getDeckLength(), bridge.getTotalLength());
+                if (clampColumnToBody) {
+                    columnX = Math.max(bodyLow, Math.min(bodyHigh, columnX));
+                }
+
+                for (int y = deckY + 20; y >= deckY - 60; y--) {
+                    Vec3 local = new Vec3(x, y, z).subtract(frame.closestPoint);
+                    double localY = local.dot(frame.normal0);
+                    double localZ = local.dot(frame.binormal0);
+                    BlockState state = bridge.getBlock(columnX, localY, localZ);
+                    if (state == null || state.is(Blocks.AIR)) continue;
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (!consumer.accept(pos, state)) continue;
+                    placedBlocks++;
+                    if (y >= deckY - 4 && y <= deckY + 3 && roadColumns.contains(columnKey(x, z))) {
+                        coveredRoadColumns++;
+                    }
+                }
+            }
+        }
+        return new TemplateVisit(placedBlocks, coveredRoadColumns);
+    }
+
+    @FunctionalInterface
+    private interface TemplateBlockConsumer {
+        boolean accept(BlockPos pos, BlockState state);
+    }
+
+    private record TemplateVisit(int placedBlocks, int coveredRoadColumns) {
+        private boolean handles(boolean landingStation) {
+            return placedBlocks > 0 && (!landingStation || coveredRoadColumns > 0);
+        }
+    }
+
+    private record TemplatePlacement(BlockPos pos, BlockState state) {
+    }
+
+    public record PlannedBridge(List<BlockPos> blocks, boolean centerChunkHandles) {
+        public PlannedBridge {
+            blocks = blocks == null || blocks.isEmpty() ? List.of() : List.copyOf(blocks);
+        }
+
+        public static PlannedBridge none() {
+            return new PlannedBridge(List.of(), false);
+        }
+    }
+
+    static double mapTemplateX(double localX,
+                               double bridgeLength,
+                               int startLength,
+                               int endLength,
+                               int deckLength,
+                               int totalLength) {
+        double mapped = localX;
+        double repeatEnd = bridgeLength - endLength;
+        if (mapped >= startLength && mapped < repeatEnd && deckLength > 0) {
+            double offset = (mapped - startLength) % deckLength;
+            if (offset < 0.0D) offset += deckLength;
+            mapped = startLength + offset;
+        } else if (mapped >= repeatEnd) {
+            mapped = totalLength - (bridgeLength - mapped);
+        }
+        // The endpoint at t=1 previously mapped to sizeX exactly, which is one
+        // column outside the template and made the bridge stop before the bank.
+        double maximum = Math.max(0.0D, totalLength - 1.0E-4D);
+        return Math.max(0.0D, Math.min(maximum, mapped));
+    }
+
+    private static Set<Long> footprintColumns(RoadSegmentPlacement segment) {
+        Set<Long> columns = new HashSet<>();
+        if (segment == null) return columns;
+        if (segment.middlePos() != null) {
+            columns.add(columnKey(segment.middlePos().getX(), segment.middlePos().getZ()));
+        }
+        if (segment.positions() != null) {
+            for (BlockPos position : segment.positions()) {
+                if (position != null) columns.add(columnKey(position.getX(), position.getZ()));
+            }
+        }
+        return columns;
+    }
+
+    private static long columnKey(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xffffffffL);
+    }
+
+    static boolean ownsTarget(ChunkPos chunk, BlockPos pos) {
+        return pos.getX() >= chunk.getMinBlockX() && pos.getX() <= chunk.getMaxBlockX()
+                && pos.getZ() >= chunk.getMinBlockZ() && pos.getZ() <= chunk.getMaxBlockZ();
+    }
+
+    /**
+     * Derives a stable template seed from the bridge's endpoints, independent of the bridge length
+     * that a chunk happens to observe at generation time. The old seed was {@code (int) bridgeLength},
+     * and because the runtime bridge range could grow differently per chunk, the same bridge could
+     * pick different templates in different chunks ("two templates" across a chunk border). Endpoints
+     * are fixed for a given bridge, so the seed is deterministic regardless of which chunk generates
+     * first.
+     */
+    private static int stableBridgeSeed(Line line) {
+        if (line == null) return 0;
+        Vec3 start = line.pointAt(0.0D);
+        Vec3 end = line.pointAt(1.0D);
+        long minX = Math.round(Math.min(start.x, end.x));
+        long minZ = Math.round(Math.min(start.z, end.z));
+        long maxX = Math.round(Math.max(start.x, end.x));
+        long maxZ = Math.round(Math.max(start.z, end.z));
+        long h = minX * 3129871L ^ minZ * 116129781L ^ maxX * 42319L ^ maxZ * 97L;
+        return (int) (h ^ (h >>> 32));
+    }
+}
