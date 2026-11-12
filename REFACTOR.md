@@ -998,3 +998,54 @@ tag 	 地形高度(逗号) 	 跨水(0/1 逗号)
 - `录制格式可以原样往返` ✅（含坏行跳过）
 - `关闭时一条都不写` ✅
 - `有真实录制就重放对比` ⏸ **跳过中** —— 等上面那个文件
+
+---
+
+# S5 方法级删除边界（2026-11-13）
+
+S5 台账（文件级）已经标出 3 个 `REPLACE_BY_DP` 文件。这一轮把粒度推进到**方法级**：
+`docs/S5-METHOD-MAP.md` + `S5MethodMapTest`。
+
+## 结果：44 个方法里 36 个会随旧链路一起消失（82%）
+
+| 分类 | 数量 | 含义 |
+|---|---|---|
+| `DELETE_WITH_LEGACY` | **17** | 外部**零**引用，只被同包旧链路内部调用 |
+| `LEGACY_ONLY` | **19** | 有外部调用，但调用方全在旧链路内 |
+| `KEEP_INPUT` | 2 | 旧链路之外也在用（`RoadGradePlanner` 类本身被 `TunnelFootprintSampler` 引用；`deviationCost` 被 `PotentialFieldPathfinder` 用）|
+| `AMBIGUOUS` | 6 | 通用名，按名统计会误判，需人工核 |
+
+## 守卫怎么钉
+
+`S5MethodMapTest` 两条断言：
+
+1. **覆盖面**：3 个受管文件里每个方法必须在台账里出现，且分类合法；
+   台账里登记了不存在的方法也算违规（**删方法要删台账行**）。
+2. **可删边界恒为零**：分类为 `DELETE_WITH_LEGACY` 的方法，全模块外部引用数必须恒为 0。
+
+> 第 2 条的意义：删旧实现最容易踩的坑不是删错，而是
+> **以为某个方法没人用了，结果半个月后别处开始调它** —— 它就从「可删」悄悄变回
+> 「不可删」，而没人会注意。守卫会在那一刻红。
+
+## 为什么现在不删
+
+这 17 个方法在同包内部还被互相调用（例如 `constrainProfileToFootprintSupport`
+被 `stabilizeSurfaceProfile` 调）。**单独删任何一个都会编译失败** ——
+它们必须与旧链路整体一起下线。台账的作用就是把这个整体圈出来。
+
+## ★ 口径的诚实说明
+
+按**方法名**统计全模块引用，这是不完美口径：通用名会被同名方法污染
+（`fill` 命中 46 次，绝大多数是 UI 的 `fill(...)`；`clamp` 18 次同理）。
+所以台账单列了 `AMBIGUOUS` 交人工核。
+
+但 `DELETE_WITH_LEGACY` 的分类**恰恰不受这个缺陷影响** ——
+它们外部引用是 0，通用名不可能把它们误判成 0。
+
+## 第一波删除的顺序（等 DP 切默认后）
+
+1. 先删 `DELETE_WITH_LEGACY` 里**叶子**那些（如 `windowRun` / `lowerRunToGradeCap`），
+   每删一个跑一次 `verify.ps1`；
+2. 再删 `LEGACY_ONLY` 的入口方法（`stabilizeSurfaceProfile` 等）——
+   它们被 `TargetYComputation` 调，必须等 `TargetYComputation` 整体下线；
+3. 最后删 3 个文件本体与对应台账行。
