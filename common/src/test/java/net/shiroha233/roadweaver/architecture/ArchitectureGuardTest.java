@@ -94,7 +94,6 @@ class ArchitectureGuardTest {
             "client.map.RoadMapScreen",
             "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler",
-            "worldgen.road.RoadChunkPlanCompiler",
             "postprocess.PathPostProcessor"
     );
 
@@ -114,7 +113,6 @@ class ArchitectureGuardTest {
             "client.map.RoadMapScreen",
             "pathlogic.junction.ExistingRoadJunctionService",
             "pathfinding.sampling.AccurateHeightSampler",
-            "worldgen.road.RoadChunkPlanCompiler",
             "postprocess.PathPostProcessor",
             "route.editor.RouteEditorSession",
             "runtime.RuntimeLoadPolicy",

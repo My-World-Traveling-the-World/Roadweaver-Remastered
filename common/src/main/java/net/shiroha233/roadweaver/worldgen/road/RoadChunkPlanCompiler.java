@@ -29,19 +29,14 @@ import java.util.Set;
 public final class RoadChunkPlanCompiler {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int COLUMN_COUNT = 256;
-    private static final int BANK_WIDTH = 2;
-    private static final int BRIDGE_TEMPLATE_MARGIN_BLOCKS = 10;
+    static final int BANK_WIDTH = 2;
+    static final int BRIDGE_TEMPLATE_MARGIN_BLOCKS = 10;
     private static final int FILL_DEPTH = 6;
     private static final float MAX_FILL = 0.5F;
     private static final float MAX_CARVE = 0.6F;
     /** A road is a swept corridor, not only its centre stations. */
-    private static final int PHYSICAL_REUSE_MIN_RUN = 4;
     /** Maximum centre-line separation for a continuous five-block corridor. */
-    private static final int PHYSICAL_REUSE_MAX_CENTER_DISTANCE = 5;
     /** Nearby parallel corridors need a longer run than an exact crossing. */
-    private static final int PHYSICAL_REUSE_CORRIDOR_MIN_RUN = 8;
-    private static final int PHYSICAL_REUSE_MAX_HEIGHT_DELTA = 1;
-    private static final int PHYSICAL_REUSE_MAX_PRIMARY_INDEX_STEP = 8;
 
     private RoadChunkPlanCompiler() {
     }
@@ -75,7 +70,7 @@ public final class RoadChunkPlanCompiler {
             // span 掩码、不做 markOccupied、不输出 produced 0 localIndices。
             // 预筛条件是主循环所有触达判定的上界,因此真正相交的 chunk 的
             // 编译结果不变。
-            if (!roadTouchesChunk(placements, chunkPos, halfWidth)) continue;
+            if (!RoadChunkIntersection.roadTouchesChunk(placements, chunkPos, halfWidth)) continue;
 
             boolean[] bridgeMask = buildSpanMask(placements, road.spans(), SpanType.BRIDGE);
             boolean[] directCrossingMask = buildSpanMask(
@@ -122,14 +117,14 @@ public final class RoadChunkPlanCompiler {
                 // to either neighbour crosses it - two placements can sit in
                 // adjacent chunks while their connecting edge passes through
                 // this one, and the raster pass stamps by edge.
-                boolean touches = intersectsChunk(placement, chunkMinX, chunkMinZ, chunkMaxX, chunkMaxZ, featureMargin);
+                boolean touches = RoadChunkIntersection.intersectsChunk(placement, chunkMinX, chunkMinZ, chunkMaxX, chunkMaxZ, featureMargin);
                 if (!touches && i > 0 && placements.get(i - 1) != null) {
-                    touches = segmentIntersectsChunk(placements.get(i - 1).middlePos(),
+                    touches = RoadChunkIntersection.segmentIntersectsChunk(placements.get(i - 1).middlePos(),
                             placement.middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
                             chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
                 }
                 if (!touches && i + 1 < placements.size() && placements.get(i + 1) != null) {
-                    touches = segmentIntersectsChunk(placement.middlePos(),
+                    touches = RoadChunkIntersection.segmentIntersectsChunk(placement.middlePos(),
                             placements.get(i + 1).middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
                             chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
                 }
@@ -156,13 +151,13 @@ public final class RoadChunkPlanCompiler {
                                     + "chunkIntersects={}",
                             chunkPos.x, chunkPos.z, fp, placements.size(),
                             road.spans() == null ? 0 : road.spans().size(),
-                            countMaskHits(placements, chunkPos, networkReuseMask),
-                            countMaskHits(placements, chunkPos, protectedGapMask),
-                            countMaskHits(placements, chunkPos, tunnelJunctionMask),
-                            countMaskHits(placements, chunkPos, tunnelMask),
-                            countMaskHits(placements, chunkPos, bridgeMask),
-                            countMaskHits(placements, chunkPos, directCrossingMask),
-                            anyPlacementIntersectsChunk(placements, chunkPos));
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, networkReuseMask),
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, protectedGapMask),
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, tunnelJunctionMask),
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, tunnelMask),
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, bridgeMask),
+                            RoadChunkIntersection.countMaskHits(placements, chunkPos, directCrossingMask),
+                            RoadChunkIntersection.anyPlacementIntersectsChunk(placements, chunkPos));
                 }
             }
 
@@ -375,360 +370,10 @@ public final class RoadChunkPlanCompiler {
      */
     public static List<RoadData> normalizeForPhysicalOwnership(Collection<RoadData> roads) {
         List<RoadData> valid = validRoads(roads);
-        return normalizePhysicalOverlaps(valid);
+        return RoadPhysicalReuseNormalizer.normalizePhysicalOverlaps(valid);
     }
 
     /** Construction-side ownership guard for overlapping route footprints. */
-    private static List<RoadData> normalizePhysicalOverlaps(List<RoadData> roads) {
-        // ★ 2026-10-15: 单条路也要走一遍 —— 原先 size() < 2 直接返回，会让「这条
-        // 路让出的那一段，编译集合里根本没有主人」这种最坏情况被跳过（孤儿让出
-        // 恰恰常出现在主人已被删除、只剩它自己触到该区块的时候）。
-        if (roads == null || roads.isEmpty()) return List.of();
-        // Query order changes after a road replacement and is not a durable
-        // ownership contract. Use the canonical road fingerprint so every
-        // chunk compile selects the same physical owner.
-        List<RoadData> ordered = new ArrayList<>(roads);
-        ordered.sort(Comparator.comparingLong(RoadFingerprint::compute));
-        List<RoadData> normalized = new ArrayList<>(roads.size());
-        for (RoadData secondary : ordered) {
-            if (secondary == null || secondary.roadSegmentList() == null
-                    || secondary.roadSegmentList().size() < PHYSICAL_REUSE_MIN_RUN) {
-                normalized.add(secondary);
-                continue;
-            }
-            boolean[] reused = new boolean[secondary.roadSegmentList().size()];
-            for (RoadData primary : normalized) markPhysicalReuse(primary, secondary, reused);
-            RoadData body = hasTrue(reused) ? withPhysicalReuseSpans(secondary, reused) : secondary;
-            normalized.add(verifySurrenderedReuse(body, secondary, ordered, reused));
-        }
-        return List.copyOf(normalized);
-    }
-
-    /** ★ 2026-10-15: see {@link #verifySurrenderedReuse}. Total, for the rate-limited log. */
-    private static final java.util.concurrent.atomic.AtomicLong RECLAIMED_REUSE_STATIONS =
-            new java.util.concurrent.atomic.AtomicLong();
-    private static volatile long lastReclaimLogNanos;
-
-    /**
-     * ★ 2026-10-15：**让出必须有人接** —— 不可兑现的 NETWORK_REUSE 由本路自己铺。
-     *
-     * <h2>缺陷</h2>
-     * NETWORK_REUSE 是规划期写在**后一条路**上的元数据，含义是「这段由主路铺」，
-     * 但它匹配的是主路的**规划期中心线快照**
-     * （{@code PlannedPathCache.plannedReuseSpans}），而主路随后可能：
-     * <ul>
-     *   <li>在 abort / roadside 失败时被 {@code RoadShardStorage.deleteRoad} 删掉
-     *       （{@code Road.java} 的清理路径），此后没有任何代码回头检查依赖它的路；</li>
-     *   <li>在四次几何处理与 {@code trimPathNearStructure} 之后被裁短，末端比
-     *       让出的那一段短几十格。</li>
-     * </ul>
-     * 两种情况下这段路**两头都不铺**：本路见到自己的 NETWORK_REUSE 站点就
-     * {@code continue}（{@code PathFeature} 的所有权契约），主路却压根没覆盖到。
-     * 玩家看到的就是「地图上有蓝线、世界里断一截」。
-     *
-     * <h2>修法（fail-safe：多铺一段，好过留个洞）</h2>
-     * 一次编译里，对每个让出站点问一句：**本次编译集合里真有别的路铺到这儿吗？**
-     * 有 ⇒ 保持让出（原有的单次铺设契约不变）；没有 ⇒ 撤销让出，本路自己铺。
-     * 判据复用完全相同的匹配几何（Chebyshev 距离、高差、方向、区间长度），
-     * 只是允许让出站点参与匹配 —— 原来的匹配恰恰把它们排除在外，于是**在最需要
-     * 验证的地方是瞎的**。
-     *
-     * <p>代价：当主人路不在本次编译集合里（区块级查询）时可能重复铺一次同一段
-     * 路面；两个方向都比「整段缺失」轻。确定性与世界兼容性不受影响：只改内存里
-     * 的编译结果，落盘的 spans/placements 与指纹都不动。</p>
-     */
-    private static RoadData verifySurrenderedReuse(RoadData body, RoadData original,
-                                                   List<RoadData> all, boolean[] reused) {
-        if (original.spans() == null || original.spans().isEmpty()) return body;
-        boolean[] surrendered = buildSpanMask(
-                original.roadSegmentList(), original.spans(), SpanType.NETWORK_REUSE);
-        if (surrendered == null || !hasTrue(surrendered)) return body;
-        boolean[] claimed = new boolean[surrendered.length];
-        for (RoadData other : all) {
-            if (other == null || other == original) continue;
-            markPhysicalReuse(other, original, claimed, true);
-        }
-        boolean[] keep = new boolean[surrendered.length];
-        int dropped = 0;
-        for (int i = 0; i < keep.length; i++) {
-            boolean owned = reused != null && i < reused.length && reused[i];
-            keep[i] = owned || (surrendered[i] && claimed[i]);
-            if (surrendered[i] && !keep[i]) dropped++;
-        }
-        if (dropped == 0) return body;
-        reportReclaimedReuse(dropped);
-        return rebuildReuseSpans(body, keep);
-    }
-
-    private static void reportReclaimedReuse(int dropped) {
-        long total = RECLAIMED_REUSE_STATIONS.addAndGet(dropped);
-        long now = System.nanoTime();
-        if (now - lastReclaimLogNanos < 10_000_000_000L) return;
-        lastReclaimLogNanos = now;
-        LOGGER.info("RoadWeaver reclaimed {} station(s) of NETWORK_REUSE that nobody paves "
-                        + "(total {} this session); the marking road lays them itself instead of a gap.",
-                dropped, total);
-    }
-
-    /** Rebuilds the road's NETWORK_REUSE spans from {@code keep}; other span types pass through. */
-    private static RoadData rebuildReuseSpans(RoadData road, boolean[] keep) {
-        List<RoadSpan> spans = new ArrayList<>();
-        for (RoadSpan span : road.spans()) {
-            if (span != null && span.type() != SpanType.NETWORK_REUSE) spans.add(span);
-        }
-        List<RoadSegmentPlacement> segments = road.roadSegmentList();
-        int start = -1;
-        for (int i = 0; i <= keep.length; i++) {
-            boolean value = i < keep.length && keep[i];
-            if (value && start < 0) start = i;
-            if (!value && start >= 0) {
-                BlockPos from = segments.get(start).middlePos();
-                BlockPos to = segments.get(i - 1).middlePos();
-                if (from != null && to != null) {
-                    spans.add(new RoadSpan(from, to, SpanType.NETWORK_REUSE));
-                }
-                start = -1;
-            }
-        }
-        return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
-                segments, spans, road.targetY(), road.ownerA2dKey(), road.ownerB2dKey());
-    }
-
-    private static boolean hasTrue(boolean[] values) {
-        if (values == null) return false;
-        for (boolean value : values) if (value) return true;
-        return false;
-    }
-
-    private static void markPhysicalReuse(RoadData primary, RoadData secondary, boolean[] reused) {
-        markPhysicalReuse(primary, secondary, reused, false);
-    }
-
-    /**
-     * ★ 2026-10-15：同一个匹配过程，两种用途。
-     *
-     * <p>{@code matchReuseStations == false}（原有语义）：次路的 NETWORK_REUSE 站点
-     * 视作「已让出」，不参与匹配 —— 它已经不属于自己，不能被别的路再认领一次。</p>
-     *
-     * <p>{@code matchReuseStations == true}（新增）：**反过来问「这段让出去的
-     * 路，真的有人铺吗」**。让出是规划期写下的元数据（
-     * {@code PlannedPathCache.plannedReuseSpans} 匹配的是主路的**规划期中心线快照**），
-     * 而主路可能随后被删（{@code Road.java} 的 abort 路径会
-     * {@code RoadShardStorage.deleteRoad}）或在四次几何处理里被裁短。那样这段路
-     * **两头都不铺**：次路在这里跳过（{@code PathFeature} 见 NETWORK_REUSE 即
-     * continue），主路却根本没有覆盖到 —— 地图上有蓝线，世界里是空的。</p>
-     */
-    private static void markPhysicalReuse(RoadData primary, RoadData secondary, boolean[] reused,
-                                          boolean matchReuseStations) {
-        if (primary == null || secondary == null || reused == null
-                || primary.roadSegmentList() == null || primary.roadSegmentList().size() < 2
-                || primary.roadType() != secondary.roadType()) return;
-        // A primary NETWORK_REUSE span still describes the physical corridor
-        // owned by an earlier road and may be used as the canonical owner.
-        // A secondary NETWORK_REUSE span is already non-owning and must not be
-        // claimed again by another later route.
-        boolean[] primaryBlocked = physicalReuseBlocked(primary, false);
-        boolean[] secondaryBlocked = physicalReuseBlocked(secondary, !matchReuseStations);
-        List<RoadSegmentPlacement> pri = primary.roadSegmentList();
-        List<RoadSegmentPlacement> sec = secondary.roadSegmentList();
-        SpanKind[] primaryKinds = spanKinds(primary);
-        SpanKind[] secondaryKinds = spanKinds(secondary, !matchReuseStations);
-        int[] matches = new int[sec.size()];
-        boolean[] corridorMatches = new boolean[sec.size()];
-        Arrays.fill(matches, -1);
-        for (int i = 0; i < sec.size(); i++) {
-            if (secondaryBlocked[i]) continue;
-            RoadSegmentPlacement candidate = sec.get(i);
-            if (candidate == null || candidate.middlePos() == null) continue;
-            int best = -1;
-            int bestDistance = Integer.MAX_VALUE;
-            boolean bestCorridorMatch = false;
-            for (int j = 0; j < pri.size(); j++) {
-                if (primaryBlocked[j]) continue;
-                RoadSegmentPlacement owner = pri.get(j);
-                if (owner == null || owner.middlePos() == null) continue;
-                int distance = Math.max(Math.abs(candidate.middlePos().getX() - owner.middlePos().getX()),
-                        Math.abs(candidate.middlePos().getZ() - owner.middlePos().getZ()));
-                boolean sameTunnel = primaryKinds[j] == SpanKind.TUNNEL
-                        && secondaryKinds[i] == SpanKind.TUNNEL;
-                if (distance > 64 || !physicalSpanKindCompatible(primaryKinds[j], secondaryKinds[i])
-                        || !physicalDirectionCompatible(sec, i, pri, j)) continue;
-                // Tunnel entrances can be vertically offset while still being
-                // the same directional passage. Once the two tunnel routes
-                // are near each other and point the same way, reuse the
-                // existing tunnel instead of excavating a second upper/lower
-                // tunnel. Surface roads retain the strict footprint/grade
-                // checks below.
-                boolean exactFootprint = footprintsIntersect(owner, candidate);
-                if (!sameTunnel && ((!exactFootprint
-                        && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)
-                        || Math.abs(targetAt(secondary.targetY(), i,
-                        candidate.middlePos().getY()) - targetAt(primary.targetY(), j,
-                        owner.middlePos().getY())) > PHYSICAL_REUSE_MAX_HEIGHT_DELTA)) continue;
-                // Two tunnels that only happen to be within 64 blocks in the
-                // same direction are separate excavations. Reusing the primary
-                // there would suppress the secondary's tunnel without the
-                // primary actually building this chunk, leaving a gap. Only
-                // treat them as the same passage when the footprints overlap.
-                if (sameTunnel && !exactFootprint) continue;
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    best = j;
-                    bestCorridorMatch = !sameTunnel && !exactFootprint;
-                }
-            }
-            matches[i] = best;
-            corridorMatches[i] = best >= 0 && bestCorridorMatch;
-        }
-
-        int runStart = -1;
-        int previousPrimary = -1;
-        boolean corridorRun = false;
-        for (int i = 0; i <= matches.length; i++) {
-            int current = i < matches.length ? matches[i] : -1;
-            boolean contiguous = current >= 0 && (runStart < 0
-                    || Math.abs(current - previousPrimary) <= PHYSICAL_REUSE_MAX_PRIMARY_INDEX_STEP);
-            if (contiguous) {
-                if (runStart < 0) runStart = i;
-                corridorRun |= corridorMatches[i];
-                previousPrimary = current;
-                continue;
-            }
-            int requiredRun = corridorRun
-                    ? PHYSICAL_REUSE_CORRIDOR_MIN_RUN : PHYSICAL_REUSE_MIN_RUN;
-            if (runStart >= 0 && i - runStart >= requiredRun) {
-                for (int index = runStart; index < i; index++) reused[index] = true;
-            }
-            runStart = current >= 0 ? i : -1;
-            corridorRun = current >= 0 && corridorMatches[i];
-            previousPrimary = current;
-        }
-    }
-
-    private static boolean physicalDirectionCompatible(List<RoadSegmentPlacement> first, int firstIndex,
-                                                        List<RoadSegmentPlacement> second, int secondIndex) {
-        double[] a = localDirection(first, firstIndex);
-        double[] b = localDirection(second, secondIndex);
-        return a == null || b == null || Math.abs(a[0] * b[0] + a[1] * b[1]) >= 0.75D;
-    }
-
-    private static double[] localDirection(List<RoadSegmentPlacement> segments, int index) {
-        if (segments == null || segments.size() < 2) return null;
-        BlockPos first = segments.get(Math.max(0, index - 1)).middlePos();
-        BlockPos last = segments.get(Math.min(segments.size() - 1, index + 1)).middlePos();
-        if (first == null || last == null) return null;
-        double dx = last.getX() - first.getX();
-        double dz = last.getZ() - first.getZ();
-        double length = Math.hypot(dx, dz);
-        return length < 1.0D ? null : new double[]{dx / length, dz / length};
-    }
-
-    private static boolean[] physicalReuseBlocked(RoadData road, boolean blockNetworkReuse) {
-        boolean[] blocked = new boolean[road.roadSegmentList().size()];
-        if (road.spans() == null) return blocked;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < road.roadSegmentList().size(); i++) {
-            RoadSegmentPlacement segment = road.roadSegmentList().get(i);
-            if (segment != null && segment.middlePos() != null) indices.put(xzKey(segment.middlePos()), i);
-        }
-        for (RoadSpan span : road.spans()) {
-            if (span == null || span.start() == null || span.end() == null) continue;
-            boolean blocksReuse = switch (span.type()) {
-                case BRIDGE, ROAD_CROSSING, PROTECTED_GAP -> true;
-                case NETWORK_REUSE -> blockNetworkReuse;
-                // Tunnel spans can be physical owners. They are filtered by
-                // physicalSpanKindCompatible before a secondary is claimed.
-                default -> false;
-            };
-            if (!blocksReuse) continue;
-            Integer start = indices.get(xzKey(span.start()));
-            Integer end = indices.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
-            for (int i = Math.min(start, end); i <= Math.max(start, end); i++) blocked[i] = true;
-        }
-        return blocked;
-    }
-
-    private static boolean physicalSpanKindCompatible(SpanKind first, SpanKind second) {
-        if (first == SpanKind.TUNNEL || second == SpanKind.TUNNEL) {
-            return first == SpanKind.TUNNEL && second == SpanKind.TUNNEL;
-        }
-        return first == SpanKind.ORDINARY && second == SpanKind.ORDINARY;
-    }
-
-    private static SpanKind[] spanKinds(RoadData road) {
-        return spanKinds(road, true);
-    }
-
-    /**
-     * @param networkReuseIsOther 为 true（原有语义）时 NETWORK_REUSE 站点算
-     *        {@link SpanKind#OTHER}，于是既不能当主人、也不能被认领；
-     *        为 false 时它们保留物理类别（通常是 ORDINARY）—— 只用于
-     *        {@code matchReuseStations == true} 那一问：「这段让出去的路，
-     *        真的有人铺吗」。让出这个标记本身不该成为「没人能铺」的理由。
-     */
-    private static SpanKind[] spanKinds(RoadData road, boolean networkReuseIsOther) {
-        int size = road == null || road.roadSegmentList() == null ? 0 : road.roadSegmentList().size();
-        SpanKind[] kinds = new SpanKind[size];
-        Arrays.fill(kinds, SpanKind.ORDINARY);
-        markSpanKind(kinds, road, SpanType.TUNNEL, SpanKind.TUNNEL);
-        markSpanKind(kinds, road, SpanType.TUNNEL_JUNCTION, SpanKind.TUNNEL);
-        markSpanKind(kinds, road, SpanType.BRIDGE, SpanKind.OTHER);
-        markSpanKind(kinds, road, SpanType.ROAD_CROSSING, SpanKind.OTHER);
-        markSpanKind(kinds, road, SpanType.PROTECTED_GAP, SpanKind.OTHER);
-        if (networkReuseIsOther) {
-            markSpanKind(kinds, road, SpanType.NETWORK_REUSE, SpanKind.OTHER);
-        }
-        return kinds;
-    }
-
-    private static void markSpanKind(SpanKind[] kinds, RoadData road,
-                                     SpanType type, SpanKind kind) {
-        if (road == null || road.spans() == null || kinds.length == 0) return;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < road.roadSegmentList().size(); i++) {
-            RoadSegmentPlacement segment = road.roadSegmentList().get(i);
-            if (segment != null && segment.middlePos() != null) {
-                indices.putIfAbsent(xzKey(segment.middlePos()), i);
-            }
-        }
-        for (RoadSpan span : road.spans()) {
-            if (span == null || span.type() != type || span.start() == null || span.end() == null) continue;
-            Integer start = indices.get(xzKey(span.start()));
-            Integer end = indices.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
-            for (int i = Math.min(start, end); i <= Math.max(start, end) && i < kinds.length; i++) {
-                kinds[i] = kind;
-            }
-        }
-    }
-
-    private enum SpanKind {
-        ORDINARY,
-        TUNNEL,
-        OTHER
-    }
-
-    private static RoadData withPhysicalReuseSpans(RoadData road, boolean[] reused) {
-        List<RoadSpan> spans = new ArrayList<>(road.spans());
-        List<RoadSegmentPlacement> segments = road.roadSegmentList();
-        int start = -1;
-        for (int i = 0; i <= reused.length; i++) {
-            boolean value = i < reused.length && reused[i];
-            if (value && start < 0) start = i;
-            if (!value && start >= 0) {
-                int end = i - 1;
-                if (end - start + 1 >= PHYSICAL_REUSE_MIN_RUN) {
-                    BlockPos from = segments.get(start).middlePos();
-                    BlockPos to = segments.get(end).middlePos();
-                    if (from != null && to != null) spans.add(new RoadSpan(from, to, SpanType.NETWORK_REUSE));
-                }
-                start = -1;
-            }
-        }
-        return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
-                segments, spans, road.targetY(), road.ownerA2dKey(), road.ownerB2dKey());
-    }
 
     private static List<JunctionMarker> collectTunnelJunctions(List<RoadData> roads) {
         List<JunctionMarker> markers = new ArrayList<>();
@@ -762,7 +407,7 @@ public final class RoadChunkPlanCompiler {
                 // below it. The junction section must still be opened so the
                 // two tunnel volumes connect instead of leaving a sealed wall.
                 if (marker.owner() == road) continue;
-                if (!footprintsIntersect(placement, marker.placement())
+                if (!RoadPhysicalReuseNormalizer.footprintsIntersect(placement, marker.placement())
                         && horizontalDistance(placement.middlePos(), marker.placement().middlePos()) > 8) continue;
                 for (int delta = -1; delta <= 1; delta++) {
                     int candidate = i + delta;
@@ -804,160 +449,10 @@ public final class RoadChunkPlanCompiler {
         return mask;
     }
 
-    private static boolean footprintsIntersect(RoadSegmentPlacement first, RoadSegmentPlacement second) {
-        Set<Long> footprint = new HashSet<>();
-        addFootprint(footprint, first);
-        if (second.middlePos() != null && footprint.contains(xzKey(second.middlePos()))) return true;
-        if (second.positions() != null) {
-            for (BlockPos pos : second.positions()) {
-                if (pos != null && footprint.contains(xzKey(pos))) return true;
-            }
-        }
-        return false;
-    }
-
-    private static void addFootprint(Set<Long> footprint, RoadSegmentPlacement placement) {
-        if (placement.middlePos() != null) footprint.add(xzKey(placement.middlePos()));
-        if (placement.positions() != null) {
-            for (BlockPos pos : placement.positions()) {
-                if (pos != null) footprint.add(xzKey(pos));
-            }
-        }
-    }
-
-    private static long xzKey(BlockPos pos) {
-        return ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
-    }
-
     private record JunctionMarker(RoadData owner, RoadSegmentPlacement placement, int y) {
     }
 
     /** Task 3 diagnostic helper kept private: 1-block sampling of one centre edge. */
-    private static boolean segmentIntersectsChunk(BlockPos from, BlockPos to,
-                                                  int minX, int minZ, int maxX, int maxZ) {
-        if (from == null || to == null) return false;
-        int dx = to.getX() - from.getX();
-        int dz = to.getZ() - from.getZ();
-        int samples = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
-        for (int i = 0; i <= samples; i++) {
-            double t = i / (double) samples;
-            int x = (int) Math.round(from.getX() + dx * t);
-            int z = (int) Math.round(from.getZ() + dz * t);
-            if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) return true;
-        }
-        return false;
-    }
-
-    /** Task 16 diagnostic: stations of one span mask inside the chunk bounds. */
-    private static int countMaskHits(List<RoadSegmentPlacement> placements,
-                                     ChunkPos chunkPos,
-                                     boolean[] mask) {
-        if (mask == null) return 0;
-        int hits = 0;
-        int minX = chunkPos.getMinBlockX();
-        int minZ = chunkPos.getMinBlockZ();
-        int maxX = chunkPos.getMaxBlockX();
-        int maxZ = chunkPos.getMaxBlockZ();
-        for (int i = 0; i < placements.size() && i < mask.length; i++) {
-            if (!mask[i]) continue;
-            RoadSegmentPlacement placement = placements.get(i);
-            if (placement == null || placement.middlePos() == null) continue;
-            int x = placement.middlePos().getX();
-            int z = placement.middlePos().getZ();
-            if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) hits++;
-        }
-        return hits;
-    }
-
-    /** Task 16 diagnostic: whether any placement footprint touches the chunk. */
-    private static boolean anyPlacementIntersectsChunk(List<RoadSegmentPlacement> placements,
-                                                       ChunkPos chunkPos) {
-        for (RoadSegmentPlacement placement : placements) {
-            if (placement == null) continue;
-            if (intersectsChunk(placement,
-                    chunkPos.getMinBlockX(), chunkPos.getMinBlockZ(),
-                    chunkPos.getMaxBlockX(), chunkPos.getMaxBlockZ(), 0)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * T-20C: 单遍位置预筛。一条道路可能影响本 chunk 的全部途径及其上界:
-     * <ul>
-     *   <li>站点触达(localIndices)——margin 0,桥模板站 margin
-     *       {@value #BRIDGE_TEMPLATE_MARGIN_BLOCKS};</li>
-     *   <li>占用标记(markOccupied)——足迹列在 chunk 内,或中点圆盘半径
-     *       min(16, halfWidth+1);</li>
-     *   <li>密度光栅(rasterSegments)——中点对 bbox 外扩 halfWidth+BANK_WIDTH。</li>
-     * </ul>
-     * 预筛 margin 取上述上界,因此被拒绝的道路对这些产物的影响全部为空,
-     * 真正相交 chunk 的编译结果不变。单次 O(站位+足迹+邻接边采样)。
-     */
-    private static boolean roadTouchesChunk(List<RoadSegmentPlacement> placements,
-                                            ChunkPos chunkPos, int halfWidth) {
-        int margin = Math.max(BRIDGE_TEMPLATE_MARGIN_BLOCKS, halfWidth + BANK_WIDTH + 1);
-        int minBoundaryX = chunkPos.getMinBlockX() - margin;
-        int minBoundaryZ = chunkPos.getMinBlockZ() - margin;
-        int maxBoundaryX = chunkPos.getMaxBlockX() + margin;
-        int maxBoundaryZ = chunkPos.getMaxBlockZ() + margin;
-        int chunkMinX = chunkPos.getMinBlockX();
-        int chunkMinZ = chunkPos.getMinBlockZ();
-        int chunkMaxX = chunkPos.getMaxBlockX();
-        int chunkMaxZ = chunkPos.getMaxBlockZ();
-        BlockPos previousMiddle = null;
-        for (RoadSegmentPlacement placement : placements) {
-            if (placement == null) {
-                previousMiddle = null;
-                continue;
-            }
-            BlockPos middle = placement.middlePos();
-            if (middle != null
-                    && middle.getX() >= minBoundaryX && middle.getX() <= maxBoundaryX
-                    && middle.getZ() >= minBoundaryZ && middle.getZ() <= maxBoundaryZ) {
-                return true;
-            }
-            List<BlockPos> positions = placement.positions();
-            if (positions != null) {
-                for (BlockPos position : positions) {
-                    if (position != null
-                            && position.getX() >= chunkMinX && position.getX() <= chunkMaxX
-                            && position.getZ() >= chunkMinZ && position.getZ() <= chunkMaxZ) {
-                        return true;
-                    }
-                }
-            }
-            if (previousMiddle != null && middle != null
-                    && segmentIntersectsChunk(previousMiddle, middle,
-                    minBoundaryX, minBoundaryZ, maxBoundaryX, maxBoundaryZ)) {
-                return true;
-            }
-            previousMiddle = middle;
-        }
-        return false;
-    }
-
-    private static boolean intersectsChunk(RoadSegmentPlacement placement,
-                                           int minX, int minZ, int maxX, int maxZ,
-                                           int margin) {        int safeMargin = Math.max(0, margin);
-        int queryMinX = minX - safeMargin;
-        int queryMinZ = minZ - safeMargin;
-        int queryMaxX = maxX + safeMargin;
-        int queryMaxZ = maxZ + safeMargin;
-        if (placement.positions() != null) {
-            for (BlockPos position : placement.positions()) {
-                if (position != null && position.getX() >= queryMinX && position.getX() <= queryMaxX
-                        && position.getZ() >= queryMinZ && position.getZ() <= queryMaxZ) {
-                    return true;
-                }
-            }
-        }
-        BlockPos middle = placement.middlePos();
-        return middle != null && middle.getX() >= queryMinX && middle.getX() <= queryMaxX
-                && middle.getZ() >= queryMinZ && middle.getZ() <= queryMaxZ;
-    }
-
     private static void addNeighborIndices(List<Integer> indices, int size, boolean[] excluded) {
         Set<Integer> expanded = new HashSet<>(indices);
         for (int index : indices) {
@@ -978,12 +473,12 @@ public final class RoadChunkPlanCompiler {
                 && placement.positions() != null && !placement.positions().isEmpty();
     }
 
-    private static int targetAt(List<Integer> targetY, int index, int fallback) {
+    static int targetAt(List<Integer> targetY, int index, int fallback) {
         return targetY != null && index >= 0 && index < targetY.size() && targetY.get(index) != null
                 ? targetY.get(index) : fallback;
     }
 
-    private static boolean[] buildSpanMask(List<RoadSegmentPlacement> segments,
+    static boolean[] buildSpanMask(List<RoadSegmentPlacement> segments,
                                            List<RoadSpan> spans,
                                            SpanType type) {
         if (spans == null || spans.isEmpty()) return null;
@@ -991,15 +486,15 @@ public final class RoadChunkPlanCompiler {
         for (int i = 0; i < segments.size(); i++) {
             RoadSegmentPlacement segment = segments.get(i);
             if (segment != null && segment.middlePos() != null) {
-                indexByPosition.put(xzKey(segment.middlePos()), i);
+                indexByPosition.put(RoadPhysicalReuseNormalizer.xzKey(segment.middlePos()), i);
             }
         }
         boolean[] mask = new boolean[segments.size()];
         boolean found = false;
         for (RoadSpan span : spans) {
             if (span == null || span.type() != type || span.start() == null || span.end() == null) continue;
-            Integer start = indexByPosition.get(xzKey(span.start()));
-            Integer end = indexByPosition.get(xzKey(span.end()));
+            Integer start = indexByPosition.get(RoadPhysicalReuseNormalizer.xzKey(span.start()));
+            Integer end = indexByPosition.get(RoadPhysicalReuseNormalizer.xzKey(span.end()));
             if (start == null || end == null) continue;
             int from = Math.max(0, Math.min(start, end));
             int to = Math.min(mask.length - 1, Math.max(start, end));
