@@ -14,6 +14,10 @@ public final class RoadJUnitRegressionSuite {
     public static void main(String[] args) {
         LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                 .selectors(
+                        // 架构守卫（2026-11-12 重构起）：钉死层依赖单向、类规模、
+                        // 中文注释规范、文档与代码同源。ratchet 机制 —— 只许降不许升。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.architecture.ArchitectureGuardTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(
