@@ -154,8 +154,13 @@ public final class SingleSourceOfTruthTest {
      * <ul>
      *   <li>{@code BridgeRangeCalculator.compute(} —— <b>已迁出</b>，改走 {@code BuildFrame}
      *       （内容指纹缓存，每条路算一次）；</li>
-     *   <li>{@code promoteRuntimeBridges(} —— 仍在。它依赖运行期水位与当前区块，
-     *       属于「按区块合法的工作」，S2 的后续目标是把它在判定期一次性考虑进去；</li>
+     *   <li>{@code promoteRuntimeBridges(} —— <b>仍在，且应当保留</b>。2026-11-13 复核
+     *       了它的真实成本，推翻了本文早先的判断：它并不是「每区块重扫全路」——
+     *       内部有 {@code inWindow(processingChunk, pos)} 只探测**当前区块附近**的站，
+     *       并把已探结果增量累积进 {@code RUNTIME_BRIDGES}（按路线身份去重）。
+     *       所以它是 O(窗口) 的增量探测，不是 O(路线×区块)。
+     *       它的存在理由是信息差：没有 Streams 时，规划期无法预知某些水体会在
+     *       区块生成时才出现；它是「别把半边河床填平」的安全网，不是技术债；</li>
      *   <li>{@code SegmentPaver.planGrade(} —— 仍在，属于 S3 切默认后才能移除的那批。</li>
      * </ul>
      */

@@ -1049,3 +1049,57 @@ S5 台账（文件级）已经标出 3 个 `REPLACE_BY_DP` 文件。这一轮把
 2. 再删 `LEGACY_ONLY` 的入口方法（`stabilizeSurfaceProfile` 等）——
    它们被 `TargetYComputation` 调，必须等 `TargetYComputation` 整体下线；
 3. 最后删 3 个文件本体与对应台账行。
+
+---
+
+# ★ 自我更正：`promoteRuntimeBridges` 不是重算热点（2026-11-13）
+
+## 我之前的判断（错的）
+
+在 S2 计划里我写过：
+
+> `PathFeature:407 promoteRuntimeBridges` —— **每个区块一次** —— 探世界按运行期水位再成长桥范围
+
+并把它列进「施工期自己又判了一遍」的热点列表，暗示它属于该被消除的技术债。
+
+## 复核源码后的实际情况
+
+```java
+if (StreamsReflowingCompat.isAvailable()) return original;      // 有 Streams 直接短路
+...
+for (int i = 0; i < centers.size(); ) {
+    if (original.isBridge()[i]) { i++; continue; }              // 已规划的桥不重探
+    if (!inWindow(processingChunk, centers.get(i)) || !hasWatercourseAcrossRoad(...)) {
+        i++; continue;                                          // ★ 只探当前区块窗口内的站
+    }
+    ...
+}
+List<RuntimeRange> stableRanges = RUNTIME_BRIDGES.compute(key, ...);   // ★ 增量累积去重
+```
+
+三点关键事实：
+
+1. **`inWindow` 限定范围**：只对「距当前处理区块 `RUNTIME_BRIDGE_CHUNK_RADIUS` 以内」的站做世界探测；
+2. **增量 + 去重**：探到的区间累积进 `RUNTIME_BRIDGES`（按维度 + 路线身份 + 端点 + 站数做 key），
+   后面的区块是合并而不是重算；
+3. **已规划的桥跳过**：不会对同一段反复探测。
+
+所以它是 **O(窗口) 的增量探测**，不是 O(路线 × 区块)。O(n) 那部分只是一次数组遍历
+（跳过已规划桥 + 整数窗口比较），代价可以忽略。
+
+## 结论：应当保留，且已从「待消除」改判为「设计必需」
+
+它的存在理由是**信息差**，不是设计缺陷：
+
+> 没有 Streams 时，规划期无法预知某些水体会在区块生成**之后**才出现。
+> 这时若把半边河床填平，就是玩家能直接看到的错误。
+> 它是「别把河床填成半边」的安全网。
+
+这条更正的意义：**如果我当时没复核就按错误的判断去"优化"它，会删掉一个真正的安全网。**
+也是为什么 S2 的台账必须逐条核对真实成本，而不是凭调用位置推断。
+
+## 连带影响
+
+- `SingleSourceOfTruthTest` 里那段描述已同步更正；
+- S2 剩下的热路径项只剩 `SegmentPaver.planGrade`（施工期重插值坡度），
+  它才是真正等 S3 切默认后才能移除的那一个。
