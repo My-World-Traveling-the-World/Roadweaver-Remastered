@@ -131,6 +131,27 @@ final class ProfileDpSourceTest {
     }
 
     @Test
+    void 模式观察器默认关闭时不做事() {
+        int before = ProfileAbObserver.modeCalls();
+        ProfileAbObserver.observeModes(new int[]{70, 70, 70, 70}, new int[]{70, 70, 70, 70},
+                new boolean[4], new boolean[4], 1, "test");
+        assertEquals(before, ProfileAbObserver.modeCalls(), "case=disabled-no-mode-call");
+    }
+
+    @Test
+    void 模式观察器开启后只观察不修改输入() {
+        System.setProperty("roadweaver.profileAb", "on");
+        int[] legacy = new int[]{70, 70, 64, 58, 58, 58, 64, 70};
+        int[] snapshot = legacy.clone();
+        int[] terrain = new int[]{70, 70, 64, 58, 58, 58, 64, 70};
+        boolean[] banned = new boolean[]{false, false, false, true, true, true, false, false};
+        boolean[] tunnel = new boolean[8];
+        ProfileAbObserver.observeModes(legacy, terrain, banned, tunnel, 6, "test");
+        assertArrayEquals(snapshot, legacy, "case=mode-input-untouched");
+        assertTrue(ProfileAbObserver.modeCalls() > 0, "case=mode-observed");
+    }
+
+    @Test
     void 观察器开启后只观察不修改输入() {
         System.setProperty("roadweaver.profileAb", "on");
         int[] legacy = new int[]{70, 71, 70, 69};

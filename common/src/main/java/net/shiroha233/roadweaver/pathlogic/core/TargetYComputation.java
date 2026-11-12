@@ -504,6 +504,12 @@ public final class TargetYComputation {
                 PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL,
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
+        // S4：在同样的物理约束下让联合 DP 自己重新决定桥/隧道/地面。
+        // groundBanned 喂的是「这里不能铺地面」这条物理事实（水面 / 已有公路 / 保护区），
+        // **不喂**旧版判出来的桥/隧道选择 —— 否则 DP 只是在复现旧决策。
+        ProfileAbObserver.observeModes(smoothed, terrainY, isCrossing, tunnelMask,
+                Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
+                connection == null ? "?" : connection.from() + "->" + connection.to());
         return out;
     }
 }

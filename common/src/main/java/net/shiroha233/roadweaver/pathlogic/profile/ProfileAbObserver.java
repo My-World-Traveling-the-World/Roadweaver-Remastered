@@ -93,6 +93,85 @@ public final class ProfileAbObserver {
         }
     }
 
+    // ── S4：模式联合求解的 AB 观察 ─────────────────────────────
+
+    /** 模式 AB 实验参数。单价是实验值，不是生产值 —— 见各字段注释。 */
+    private static final ModeDpSolver.Settings MODE_AB_SETTINGS = new ModeDpSolver.Settings(
+            24, 12, 16, 48, 6,
+            // 桥每站 / 隧道每站 / 桥台 / 洞口：取「桥明显比隧道便宜」的真实直觉。
+            5.0, 14.0, 3.0, 6.0,
+            CostModel.Settings.defaults());
+
+    private static final AtomicInteger MODE_CALLS = new AtomicInteger();
+    private static final AtomicInteger MODE_INFEASIBLE = new AtomicInteger();
+    private static final AtomicInteger MODE_FAILED = new AtomicInteger();
+
+    /**
+     * 模式 AB：在<b>同样的物理约束</b>下，让联合 DP 自己重新决定桥/隧道/地面。
+     *
+     * <h2>它回答什么问题</h2>
+     * <p>旧版先判桥再算剖面。这里把旧版判出来的「不可铺地面」当作
+     * <b>物理事实</b>喂进去（水面、已有公路、保护区），然后问一个问题：</p>
+     *
+     * <blockquote>在同样的物理约束下，联合求解认为需要几座桥、几条隧道？</blockquote>
+     *
+     * <p>如果联合求解认为「完全不需要桥」，而旧版判了 3 座，那 3 座就是
+     * 判定与剖面互相打架的产物 —— 这就是 S4 可能的收益。</p>
+     *
+     * <h2>为什么不喂旧版的桥/隧道选择</h2>
+     * <p>那会让 DP 复现旧版的决策，对比就没意义了。喂进去的只有
+     * <b>「这里不能铺地面」</b>这一条物理约束，桥还是隧道由 DP 自己权衡。</p>
+     *
+     * @param groundBanned 旧版认为不可铺地面的站（水面 / 已有公路 / 保护区）
+     * @param legacyTunnel 旧版判为隧道的站（仅用于对比展示，不参与求解）
+     */
+    public static void observeModes(int[] legacyProfile, int[] terrainY, boolean[] groundBanned,
+                                    boolean[] legacyTunnel, int maxStep, String tag) {
+        if (!enabled()) return;
+        if (terrainY == null || legacyProfile == null || legacyProfile.length != terrainY.length) return;
+        try {
+            java.util.Optional<ModeDpSolver.Solution> dp =
+                    ModeDpSolver.solve(terrainY, Math.max(1, maxStep), MODE_AB_SETTINGS, groundBanned);
+            int call = MODE_CALLS.incrementAndGet();
+            if (dp.isEmpty()) {
+                int bad = MODE_INFEASIBLE.incrementAndGet();
+                if (bad <= 3 || bad % 32 == 0) {
+                    LOGGER.info("[PROFILE-AB-MODE] infeasible stations={} tag={} (累计 {} 条)",
+                            terrainY.length, tag, bad);
+                }
+                return;
+            }
+            ModeDpSolver.Solution s = dp.get();
+            int legacyBridge = 0;
+            int legacyTunnelCount = 0;
+            for (int i = 0; i < legacyTunnel.length; i++) {
+                if (legacyTunnel[i]) legacyTunnelCount++;
+            }
+            for (int i = 0; i < groundBanned.length; i++) {
+                if (groundBanned[i]) legacyBridge++;
+            }
+            if (call <= 8 || call % 16 == 0) {
+                LOGGER.info("[PROFILE-AB-MODE] #{} stations={} tag={} "
+                                + "legacy[bannedGround={} tunnel={}] dp[bridge={}({}座) tunnel={}({}条) cost={}]",
+                        call, terrainY.length, tag,
+                        legacyBridge, legacyTunnelCount,
+                        s.stationCount(ModeDpSolver.Mode.BRIDGE), s.runCount(ModeDpSolver.Mode.BRIDGE),
+                        s.stationCount(ModeDpSolver.Mode.TUNNEL), s.runCount(ModeDpSolver.Mode.TUNNEL),
+                        String.format("%.1f", s.totalCost()));
+            }
+        } catch (Throwable t) {
+            int bad = MODE_FAILED.incrementAndGet();
+            if (bad <= 3) {
+                LOGGER.warn("[PROFILE-AB-MODE] 观察失败（已忽略，不影响主流程）：{}", t.toString());
+            }
+        }
+    }
+
+    /** 模式观察的累计次数（诊断/测试用）。 */
+    public static int modeCalls() {
+        return MODE_CALLS.get();
+    }
+
     /** 累计调用次数（诊断/测试用）。 */
     public static int calls() {
         return CALLS.get();
