@@ -50,6 +50,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.map.MapSearchControllerTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.client.map.MapRoutePreloadEstimatorTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PerformanceSchedulingConfigTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PathfindingCostConfigTest"),

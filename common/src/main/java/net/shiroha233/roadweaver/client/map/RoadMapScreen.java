@@ -832,63 +832,14 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
             routeEditor.state().submitForBuild();
             return;
         }
-        var points = route.points();
-        int n = points.size();
-        // 分段按"段的起点 kind"分类（与 RouteKindResolver 的规则 A 一致）
-        int road = 0, bridge = 0, tunnel = 0;
-        double length = 0;
-        java.util.Set<Long> chunks = new java.util.HashSet<>();
-        // ★ 采样预算：确认框跑在**渲染线程**（mouseClicked）里，不能为超长路线
-        //   卡住一帧。全路线最多采这么多次 —— 超过就按比例放大步长
-        //   （区块数只是"量级提示"，精确值由服务端预加载时精算）。
-        int budget = 4000;
-        int wanted = 0;
-        for (int i = 0; i + 1 < n; i++) {
-            net.minecraft.core.BlockPos a = points.get(i).pos();
-            net.minecraft.core.BlockPos b = points.get(i + 1).pos();
-            wanted += (int) Math.ceil(Math.max(
-                    Math.abs(b.getX() - a.getX()), Math.abs(b.getZ() - a.getZ())) / 8.0) + 1;
-        }
-        double stride = wanted <= budget ? 1.0 : (double) wanted / budget;
-
-        for (int i = 0; i + 1 < n; i++) {
-            net.minecraft.core.BlockPos a = points.get(i).pos();
-            net.minecraft.core.BlockPos b = points.get(i + 1).pos();
-            switch (points.get(i).kind()) {
-                case ROAD -> road++;
-                case BRIDGE -> bridge++;
-                case TUNNEL -> tunnel++;
-            }
-            double dx = b.getX() - a.getX();
-            double dz = b.getZ() - a.getZ();
-            length += Math.sqrt(dx * dx + dz * dz);
-            // 沿线段按 ~8 格步进采区块（受上面的总预算约束）
-            double stepLen = 8.0 * stride;
-            int steps = (int) Math.max(1, Math.ceil(
-                    Math.max(Math.abs(dx), Math.abs(dz)) / stepLen));
-            for (int s = 0; s <= steps; s++) {
-                double t = (double) s / steps;
-                int x = (int) Math.round(a.getX() + dx * t);
-                int z = (int) Math.round(a.getZ() + dz * t);
-                chunks.add(net.minecraft.world.level.ChunkPos.asLong(x >> 4, z >> 4));
-            }
-            // 保险：即使预算估算失准也不至于无限循环
-            if (chunks.size() > 20000) {
-                break;
-            }
-        }
-        // 扩 1 圈（与服务端预加载口径一致，让玩家看到真实的量级）
-        java.util.Set<Long> expanded = new java.util.HashSet<>();
-        for (long key : chunks) {
-            int cx = net.minecraft.world.level.ChunkPos.getX(key);
-            int cz = net.minecraft.world.level.ChunkPos.getZ(key);
-            for (int dz = -1; dz <= 1; dz++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    expanded.add(net.minecraft.world.level.ChunkPos.asLong(cx + dx, cz + dz));
-                }
-            }
-        }
-        // 未探索：当前不在内存里的数量
+        var estimate = MapRoutePreloadEstimator.estimate(route.points());
+        int n = estimate.segments();
+        int road = estimate.roads();
+        int bridge = estimate.bridges();
+        int tunnel = estimate.tunnels();
+        double length = estimate.lengthBlocks();
+        java.util.Set<Long> expanded = estimate.chunkKeys();
+        // 未探索：当前不在内存里的数量（会触发生成，慢）
         int unexplored = 0;
         var server = this.minecraft == null ? null : this.minecraft.getSingleplayerServer();
         var level = server == null ? null : server.overworld();
@@ -1035,53 +986,13 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
                                                   ServerLevel level,
                                                   int requestSeq,
                                                   List<MapLoadSession.ResponseRequest> requests) {
-        ResourceLocation dimensionId = level.dimension().location();
-        for (int responseIndex = 0; responseIndex < requests.size(); responseIndex++) {
-            MapLoadSession.ResponseRequest request = requests.get(responseIndex);
-            MapViewportController.RequestRect rect = request.rect();
-            scheduleSingleplayerPhase(mc, requestSeq, dimensionId, request.phase(), responseIndex,
-                    () -> buildSnapshotForPhase(level, request.phase(), rect));
-        }
-    }
-
-    private MapSnapshot buildSnapshotForPhase(ServerLevel level,
-                                             MapLoadPhase phase,
-                                             MapViewportController.RequestRect rect) {
-        return switch (phase) {
-            case STRUCTURES -> MapDataCollector.buildStructuresSnapshot(level, rect.minX(), rect.minZ(), rect.maxX(), rect.maxZ());
-            case ROADS -> MapDataCollector.buildRoadsSnapshot(level, rect.minX(), rect.minZ(), rect.maxX(), rect.maxZ());
-            case CONNECTIONS -> MapDataCollector.buildConnectionsSnapshot(level, rect.minX(), rect.minZ(), rect.maxX(), rect.maxZ());
-        };
-    }
-
-    private int scheduleSingleplayerPhase(Minecraft mc,
-                                          int requestSeq,
-                                          ResourceLocation dimensionId,
-                                          MapLoadPhase phase,
-                                          int responseIndex,
-                                          java.util.function.Supplier<MapSnapshot> supplier) {
-        final int currentIndex = responseIndex;
-        final String worldId = MapSnapshotCache.getCurrentWorldId();
-        final ServerLevel expectedLevel = MapViewportController.resolveSingleplayerLevel(mc);
-        CompletableFuture
-                .supplyAsync(supplier, ComputeService.mapReadExecutor())
-                .thenAccept(snap -> mc.execute(() -> {
-                    if (!java.util.Objects.equals(worldId, MapSnapshotCache.getCurrentWorldId())) return;
-                    if (expectedLevel == null || MapViewportController.resolveSingleplayerLevel(mc) != expectedLevel) return;
-                    acceptSnapshotPart(requestSeq, dimensionId, phase, currentIndex, snap);
-                }));
-        return responseIndex + 1;
+        MapSnapshotLoading.scheduleSingleplayer(mc, level, requestSeq, requests, this::acceptSnapshotPart);
     }
 
     private void dispatchRemoteSnapshotLoad(int requestSeq,
                                             ResourceLocation dimensionId,
                                             List<MapLoadSession.ResponseRequest> requests) {
-        for (int responseIndex = 0; responseIndex < requests.size(); responseIndex++) {
-            MapLoadSession.ResponseRequest request = requests.get(responseIndex);
-            MapViewportController.RequestRect rect = request.rect();
-            ClientNetBridge.requestSnapshot(requestSeq, dimensionId, request.phase(), responseIndex,
-                    rect.minX(), rect.minZ(), rect.maxX(), rect.maxZ());
-        }
+        MapSnapshotLoading.dispatchRemote(requestSeq, dimensionId, requests);
     }
 
     // ========== 辅助方法 ==========
@@ -1094,19 +1005,16 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
     }
 
     private static int workspaceBottomLimit(MapDockRenderer.DockLayout layout) {
-        return Math.max(1, layout.bounds().y() - WORKSPACE_DOCK_GAP);
+        return MapLayoutMetrics.workspaceBottomLimit(layout.bounds().y());
     }
 
     private int computeThickness() {
-        int contentW = mapW;
-        int contentH = mapH;
-        double ppb = Math.min(view.pxPerBlockX(contentW), view.pxPerBlockZ(contentH));
-        int t = (int) Math.round(ppb);
-        return Math.max(MapTheme.MIN_THICKNESS, Math.min(t, MapTheme.MAX_THICKNESS));
+        double ppb = Math.min(view.pxPerBlockX(mapW), view.pxPerBlockZ(mapH));
+        return MapLayoutMetrics.thickness(ppb);
     }
 
     private int computePointSize() {
-        return MapTheme.BASE_POINT_SIZE + computeThickness();
+        return MapLayoutMetrics.pointSize(computeThickness());
     }
 
     private void openContextMenuFor(BlockPos target, int x, int y) {
