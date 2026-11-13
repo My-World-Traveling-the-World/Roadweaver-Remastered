@@ -1,0 +1,50 @@
+# 双向依赖基线（ratchet：只许减少，不许新增）
+#
+# 格式：包A <-> 包B    次数A->B / 次数B->A
+#
+# 为什么单独守这一条：
+#   ArchitectureGuardTest 的 LAYER_RULES 只对 5 个求解包（metric/topology/band/
+#   pipeline/bridge）做了**方向性**约束，其余 24 个顶层包没有方向规则 ——
+#   它们的依赖由 deps-baseline.txt 做「边 + 次数」ratchet，但**边 ratchet 管不了循环**：
+#   A->B 和 B->A 各自都是合法边，加起来却是一个环。
+#
+# 2026-11-13 独立审计实测：全仓有 34 对互相 import 的包，而当时没有任何守卫能发现
+# 「新形成一对循环」。这份基线把现状固定下来，之后**只许减少**。
+#
+# 消除某一对的办法：把其中一个方向改成「只在运行时/事件层交互」，
+# 然后把该行从本文件删掉。
+
+bridge           <-> pathfinding        11 / 2
+client           <-> config             20 / 1
+client           <-> map                25 / 1
+client           <-> network            2 / 9
+client           <-> route              3 / 2
+config           <-> pathfinding        1 / 26
+config           <-> pathlogic          2 / 87
+config           <-> persistence        3 / 2
+decoration       <-> pathlogic          3 / 23
+generation       <-> pathfinding        17 / 15
+generation       <-> pathlogic          74 / 84
+generation       <-> planning           85 / 30
+generation       <-> runtime            18 / 1
+map              <-> network            1 / 3
+map              <-> pathfinding        18 / 16
+map              <-> planning           3 / 5
+map              <-> postprocess        1 / 8
+map              <-> search             1 / 1
+network          <-> planning           1 / 5
+pathfinding      <-> pathlogic          35 / 89
+pathfinding      <-> persistence        3 / 6
+pathfinding      <-> postprocess        4 / 28
+pathfinding      <-> runtime            9 / 10
+pathlogic        <-> persistence        26 / 6
+pathlogic        <-> planning           68 / 84
+pathlogic        <-> postprocess        20 / 17
+pathlogic        <-> runtime            22 / 3
+pathlogic        <-> structures         12 / 2
+pathlogic        <-> worldgen           3 / 1
+persistence      <-> planning           1 / 29
+persistence      <-> runtime            5 / 5
+persistence      <-> structures         3 / 4
+persistence      <-> worldgen           4 / 4
+planning         <-> runtime            18 / 5

@@ -239,6 +239,9 @@ class ArchitectureGuardTest {
      *
      * <p>要消除某条边：改代码，然后把该行从基线文件里删掉。</p>
      */
+    /** 双向依赖基线（ratchet：只许减少）。边 ratchet 管不了循环，这份专门管。 */
+    private static final Path BIDIRECTIONAL_BASELINE =
+            Paths.get("src", "test", "resources", "architecture", "bidirectional-baseline.txt");
     private static final Path DEPS_BASELINE =
             Paths.get("src", "test", "resources", "architecture", "deps-baseline.txt");
 
@@ -325,6 +328,61 @@ class ArchitectureGuardTest {
                 String.join("\n\n", problems)
                         + "\n\n改基线文件：common/src/test/resources/architecture/deps-baseline.txt"
                         + "（新增/变多必须在提交信息里说明理由）。");
+    }
+
+    @Test
+    void 双向依赖不许新增() throws IOException {
+        // ★ 2026-11-13 补：deps-baseline 的「边 ratchet」管不了循环 ——
+        // A->B 与 B->A 各自都是合法边，加起来却是一个环。而 LAYER_RULES 只对 5 个
+        // 求解包做了方向约束，其余 24 个顶层包没有方向规则 ⇒ 此前「新形成一对循环」
+        // 完全无人看守（独立审计实测：全仓已有 34 对）。
+        assertTrue(Files.isRegularFile(BIDIRECTIONAL_BASELINE),
+                "缺双向依赖基线: " + BIDIRECTIONAL_BASELINE.toAbsolutePath());
+        java.util.Set<String> allowed = new java.util.TreeSet<>();
+        for (String line : Files.readAllLines(BIDIRECTIONAL_BASELINE, StandardCharsets.UTF_8)) {
+            String s = line.trim();
+            if (s.isEmpty() || s.startsWith("#")) continue;
+            int arrow = s.indexOf("<->");
+            if (arrow <= 0) continue;
+            String a = s.substring(0, arrow).trim();
+            String rest = s.substring(arrow + 3).trim();
+            int sep = rest.indexOf(' ');
+            String b = sep > 0 ? rest.substring(0, sep).trim() : rest;
+            allowed.add(a.compareTo(b) <= 0 ? a + " <-> " + b : b + " <-> " + a);
+        }
+
+        java.util.Map<String, Integer> edges = crossPackageEdges();
+        java.util.Set<String> current = new java.util.TreeSet<>();
+        for (String edge : edges.keySet()) {
+            int arrow = edge.indexOf(" -> ");
+            if (arrow <= 0) continue;
+            String a = edge.substring(0, arrow).trim();
+            String b = edge.substring(arrow + 4).trim();
+            if (edges.containsKey(b + " -> " + a)) {
+                current.add(a.compareTo(b) <= 0 ? a + " <-> " + b : b + " <-> " + a);
+            }
+        }
+
+        List<String> added = new ArrayList<>();
+        for (String pair : current) {
+            if (!allowed.contains(pair)) added.add(pair);
+        }
+        assertTrue(added.isEmpty(),
+                "新形成了双向依赖（循环）—— 这是比「多一条 import」严重得多的问题：\n  "
+                        + String.join("\n  ", added)
+                        + "\n要么改掉其中一个方向，要么（若确实无法避免）把它加进 "
+                        + "common/src/test/resources/architecture/bidirectional-baseline.txt "
+                        + "并在提交信息里说明理由。");
+
+        // 反向：基线里已经不再互相依赖的对必须删掉，否则等于给它留后门
+        List<String> stale = new ArrayList<>();
+        for (String pair : allowed) {
+            if (!current.contains(pair)) stale.add(pair);
+        }
+        assertTrue(stale.isEmpty(),
+                "基线里这些对已经不再双向依赖了，请从基线删除（否则以后重新加回来守卫不会响）：\n  "
+                        + String.join("\n  ", stale)
+                        + "\n文件：common/src/test/resources/architecture/bidirectional-baseline.txt");
     }
 
     @Test
