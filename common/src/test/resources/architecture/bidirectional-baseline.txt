@@ -31,7 +31,6 @@ map              <-> planning           3 / 5
 network          <-> planning           1 / 5
 pathfinding      <-> pathlogic          35 / 89
 pathfinding      <-> persistence        3 / 6
-pathfinding      <-> postprocess        4 / 28
 pathfinding      <-> runtime            9 / 10
 pathlogic        <-> persistence        26 / 6
 pathlogic        <-> planning           68 / 84

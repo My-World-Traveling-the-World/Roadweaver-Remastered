@@ -5,10 +5,6 @@ import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig.PathfindingAlg
 import net.shiroha233.roadweaver.pipeline.ab.SolverMode;
 import net.shiroha233.roadweaver.bridge.AbObservingPathfinder;
 import net.shiroha233.roadweaver.bridge.BandPathfinder;
-import net.shiroha233.roadweaver.pathfinding.impl.BasicAStarPathfinder;
-import net.shiroha233.roadweaver.pathfinding.impl.BidirectionalAStarPathfinder;
-import net.shiroha233.roadweaver.pathfinding.impl.GradientDescentPathfinder;
-import net.shiroha233.roadweaver.pathfinding.impl.PotentialFieldPathfinder;
 
 /**
  * 寻路器工厂。

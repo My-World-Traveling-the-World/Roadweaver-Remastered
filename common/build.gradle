@@ -206,45 +206,6 @@ registerMainRegression('preflightExemptionGuard',
 registerMainRegression('coarseLaneCountBoundary',
         'net.shiroha233.roadweaver.pathfinding.sampling.opencl.CoarseLaneCountBoundaryTest')
 
-// ★ 0.8.412：合成地形离线寻路质量测量台（参数细化/调优 M1 基线 + M2 搜索用）。
-//   不依赖 Minecraft 世界：势场法 findRawPath 的 level/cache 传 null，走纯地形分支。
-//   输出 CSV（贴地度/突兀度/涉水/回头弯/直线效率）。单独跑：:common:routeQualityHarness。
-//   不作为 test 依赖（只打印无断言），由 M1/M2 驱动脚本消费 CSV 打分。
-registerMainRegression('routeQualityHarness',
-        'net.shiroha233.roadweaver.tuning.RouteQualityHarness')
-// 允许 -PrqArgs="--dump-seed 10 --seed-from 10 --seed-to 10" 传参（调试/自定义种子范围）。
-tasks.named('routeQualityHarness', JavaExec).configure {
-    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
-    if (!rqArgs.isEmpty()) {
-        args rqArgs.split('\\s+').toList()
-    }
-}
-
-// ★ 0.8.417：地形语料扫参（10 种地形原型 × 种子 × 全配置矩阵）。同样不依赖 MC 世界。
-//   跑法示例：:common:routeQualityCorpus -PrqArgs="--corpus --seed-from 0 --seed-to 199"
-//             :common:routeQualityCorpus -PrqArgs="--archetypes --seed-from 0 --seed-to 4"
-registerMainRegression('routeQualityCorpus',
-        'net.shiroha233.roadweaver.tuning.RouteQualityHarness')
-tasks.named('routeQualityCorpus', JavaExec).configure {
-    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
-    if (!rqArgs.isEmpty()) {
-        args rqArgs.split('\\s+').toList()
-    }
-}
-
-// ★ 0.8.420：路网拓扑离线测量台（哪些结构之间连路这一层）。
-//   语料可用真实存档：saves/<世界>/data/roadweaver/persistence/structures/<dim>/state.json
-//   跑法示例：:common:topologyHarness -PrqArgs="--corpus <state.json> --list"
-//             :common:topologyHarness -PrqArgs="--corpus <dir> --compare --out build/tuning/topo.csv"
-registerMainRegression('topologyHarness',
-        'net.shiroha233.roadweaver.tuning.TopologyHarness')
-tasks.named('topologyHarness', JavaExec).configure {
-    String rqArgs = (project.findProperty('rqArgs') ?: '').toString().trim()
-    if (!rqArgs.isEmpty()) {
-        args rqArgs.split('\\s+').toList()
-    }
-}
-
 // ★ 0.9.027：落盘中心线审计台（离线回归尺子）。
 //   读存档里 RoadWeaver 持久化的路面 NBT，把「这条路实际长成什么样」压成可比较的数字：
 //   弯曲系数 / 横向抖动 / 转向角 / DP 剥离 / 宏观反转。在此之前后处理改动没有任何客观尺子 ——

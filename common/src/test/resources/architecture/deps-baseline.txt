@@ -81,7 +81,6 @@ pathfinding -> map                       16
 pathfinding -> pathlogic                 35
 pathfinding -> persistence               3
 pathfinding -> pipeline                  1
-pathfinding -> postprocess               4
 pathfinding -> runtime                   9
 pathlogic -> compat                      18
 pathlogic -> config                      87

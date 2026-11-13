@@ -236,9 +236,6 @@ public final class PathfindingCostConfig implements SubConfig {
         if (hardGradeLimit < softGradeLimit) hardGradeLimit = softGradeLimit;
         softGradePenalty = finiteNonNegative(softGradePenalty, RoadConstants.DEFAULT_SOFT_GRADE_PENALTY);
         hardGradePenalty = finiteNonNegative(hardGradePenalty, RoadConstants.DEFAULT_HARD_GRADE_PENALTY);
-        // 0.9.062（②）：启动期一次性确认坡罚量纲（[GRADE-PENALTY]）。放在夹取之后，
-        // 打出来的就是真正生效的那组数。
-        net.shiroha233.roadweaver.pathfinding.impl.PotentialFieldPathfinder.logPenaltyBasisOnce(this);
         gradientAlignPenalty = finiteNonNegative(gradientAlignPenalty, RoadConstants.DEFAULT_GRADIENT_ALIGN_PENALTY);
         pfWaterBasePenalty = finiteNonNegative(pfWaterBasePenalty, RoadConstants.DEFAULT_PF_WATER_BASE_PENALTY);
         // 蜿蜒/群系走向：代价允许负数（=偏好），仅保证有限；等高线强度非负。

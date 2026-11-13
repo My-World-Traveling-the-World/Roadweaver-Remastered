@@ -166,8 +166,6 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.SawtoothMetricTest"),
                         DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.pathfinding.impl.SlopePenaltyBasisTest"),
-                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.impl.HeadingContinuityCostTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.RoadBraidDetectorTest"),
@@ -246,16 +244,13 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.SteepLengthCapTest"),
                         DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.pathfinding.impl.GradePenaltyLengthBasisTest"),
-                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.core.constants.GradeCapDefaultLooseTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.RepairNullKeepsCandidateTest"),
-                        // 0.9.063：①坡罚刻度重标定（两参照点 ≥ 0.9.061 旧值 + 平路仍为 0）
-                        //        + ②隧道判据重写（下包络突起度纯函数 / 窄脊必须判出）
+                        // 0.9.063：②隧道判据重写（下包络突起度纯函数 / 窄脊必须判出）
                         //        + ③why 四个分支 + elected 各一条
-                        DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.pathfinding.impl.GradePenaltyCalibrationTest"),
+                        //   （①坡罚刻度重标定的 GradePenaltyCalibrationTest 随
+                        //     旧 A* 系寻路器于 2026-11-13 一并删除）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.TunnelProminencePureFunctionTest"),
                         DiscoverySelectors.selectClass(
