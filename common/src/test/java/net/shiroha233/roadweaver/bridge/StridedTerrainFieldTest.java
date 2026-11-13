@@ -125,10 +125,10 @@ class StridedTerrainFieldTest {
     }
 
     @Test
-    void 出厂默认算法必须仍是旧链() {
+    void 出厂默认算法必须是新内核() {
         var config = new net.shiroha233.roadweaver.config.sub.PathfindingCostConfig();
-        assertEquals(PathfindingAlgorithm.POTENTIAL_FIELD, config.pathfindingAlgorithm(),
-                "出厂默认必须仍是 POTENTIAL_FIELD —— 换算法必须显式选择，"
-                        + "不能因为新增了 BAND 就让所有玩家的道路形态悄悄变掉");
+        assertEquals(PathfindingAlgorithm.BAND, config.pathfindingAlgorithm(),
+                "2026-11-13 起出厂默认是 BAND —— 用户拍板「全用最新的」；"
+                        + "老配置里的旧枚举名由 sanitize() 迁移到 BAND");
     }
 }

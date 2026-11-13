@@ -64,7 +64,7 @@ public final class PlanningKeys {
                     "波次之间的推进距离",
                     "区块", "sanitize 会重算：max(PLAN_TILE_MIN, min(PLAN_TILE_MAX, max(1,半径)/2)) —— 写大了不生效"),
 
-            ConfigKey.enumeration("planningAlgorithm", "RNG",
+            ConfigKey.enumeration("planningAlgorithm", "PIPELINE",
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "路网拓扑算法", "Planning algorithm",
                     "决定结构节点之间怎么连边。RNG 是离线最小生成树基线，KNN/ALPHA_MODEL 会生成更多环路",

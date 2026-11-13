@@ -56,7 +56,7 @@ public final class PlanningConfig implements SubConfig {
     private boolean dynamicPlanEnabled = true;
     private int dynamicPlanRadiusChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_RADIUS_CHUNKS;
     private int dynamicPlanStrideChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_STRIDE_CHUNKS;
-    private PlanningAlgorithm planningAlgorithm = PlanningAlgorithm.RNG;
+    private PlanningAlgorithm planningAlgorithm = PlanningAlgorithm.PIPELINE;
     private TerrainSamplingMode terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
     /** Radius of the conflict-centred circle used by local route repair. */
     private int localConflictRadiusBlocks = 100;
@@ -350,7 +350,13 @@ public final class PlanningConfig implements SubConfig {
             dynamicPlanStrideChunks = dynamicPlanRadiusChunks;
         }
         dynamicPlanStrideChunks = Math.min(RoadConstants.PLAN_TILE_MAX, dynamicPlanStrideChunks);
-        if (planningAlgorithm == null) planningAlgorithm = PlanningAlgorithm.RNG;
+        if (planningAlgorithm == null) planningAlgorithm = PlanningAlgorithm.PIPELINE;
+        // 2026-11-13：旧规划算法全部退役（用户拍板「全用最新的，旧的全部删除」）。
+        // 老配置里写着的 KNN/DELAUNAY/RNG/MST/SNAP_BRANCH/ALPHA_MODEL 一律迁移到
+        // PIPELINE（测地距离 MST）—— 枚举名暂留是为了 GSON 不炸，行为上只剩一种。
+        if (planningAlgorithm != PlanningAlgorithm.PIPELINE) {
+            planningAlgorithm = PlanningAlgorithm.PIPELINE;
+        }
         if (terrainSamplingMode == null) terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
         localConflictRadiusBlocks = Math.max(16, Math.min(512, localConflictRadiusBlocks));
         structureDetourRadiusStartBlocks = Math.max(16, Math.min(512, structureDetourRadiusStartBlocks));

@@ -31,15 +31,9 @@ public final class PathfinderFactory {
 
     /** 只按算法枚举建实例 —— 不含 SolverMode 的影响。 */
     public static Pathfinder createClassic(PathfindingAlgorithm algorithm) {
-        return switch (algorithm) {
-            case ASTAR_BASIC -> new BasicAStarPathfinder();
-            case ASTAR_BIDIRECTIONAL -> new BidirectionalAStarPathfinder();
-            case GRADIENT_DESCENT -> new GradientDescentPathfinder();
-            case POTENTIAL_FIELD -> new PotentialFieldPathfinder();
-            // 新架构（2026-11-12）：Finsler 度量 + Fast Marching + 弹性带。
-            // 构造在 bridge 层 —— 那是唯一同时认识 foundation 与求解层的地方。
-            case BAND -> new BandPathfinder();
-        };
+        // 2026-11-13：旧 A* 系全部退役（用户拍板）。无论枚举写什么，
+        // 都返回新内核 —— 枚举名暂留仅为老配置的 GSON 解析不炸。
+        return new BandPathfinder();
     }
 
     /** 生产入口：算法枚举 + SolverMode 一起决定最终实例。 */

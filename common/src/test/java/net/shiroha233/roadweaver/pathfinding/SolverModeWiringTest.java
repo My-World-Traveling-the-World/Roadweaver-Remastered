@@ -1,4 +1,4 @@
-/* 文件职责：钉住 SolverMode 开关的接线 —— 默认必须走旧链，AB 绝不改变输出。 */
+/* 文件职责：钉住 SolverMode 开关的接线 —— 2026-11-13 起新内核 BAND 是唯一生产实现。 */
 package net.shiroha233.roadweaver.pathfinding;
 
 import org.junit.jupiter.api.AfterEach;
@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 import net.shiroha233.roadweaver.bridge.AbObservingPathfinder;
 import net.shiroha233.roadweaver.bridge.BandPathfinder;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig.PathfindingAlgorithm;
-import net.shiroha233.roadweaver.pathfinding.impl.BasicAStarPathfinder;
-import net.shiroha233.roadweaver.pathfinding.impl.PotentialFieldPathfinder;
 import net.shiroha233.roadweaver.pipeline.ab.SolverMode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,11 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * SolverMode 接线回归。
  *
- * <p>核心不变式（这三条任意一条破了都等于「静默换了算法」）：</p>
+ * <h2>2026-11-13 语义更新（旧 A* 系退役）</h2>
+ * <p>用户拍板「全用最新的，旧的全部删除」。此后：</p>
  * <ol>
- *   <li>没设系统属性 ⇒ 走旧链，且与重构前的实例类型完全一致；</li>
- *   <li>设了不认识的值 ⇒ 回落 CLASSIC，不许抛异常、不许换算法；</li>
- *   <li>AB 模式下 classic 侧仍按 algorithm 建（band 只是旁挂观察）。</li>
+ *   <li>无论配置枚举写什么，工厂都只产出 {@link BandPathfinder}；</li>
+ *   <li>枚举名（ASTAR_BASIC 等）保留仅为老配置的 GSON 解析不炸；</li>
+ *   <li>AB 双跑仍可用，但 classic 侧也是 BandPathfinder（两臂同型，
+ *       AB 观测只剩「新内核自身稳定性」的意义）。</li>
  * </ol>
  */
 final class SolverModeWiringTest {
@@ -46,11 +46,12 @@ final class SolverModeWiringTest {
     }
 
     @Test
-    void noPropertyMeansClassic() {
+    void noPropertyMeansBand() {
         assertEquals(SolverMode.CLASSIC, SolverMode.fromProperty(), "case=no-property-default");
-        assertInstanceOf(PotentialFieldPathfinder.class,
+        // 2026-11-13：CLASSIC 模式下也是新内核 —— 旧 A* 实现已退役。
+        assertInstanceOf(BandPathfinder.class,
                 PathfinderFactory.create(PathfindingAlgorithm.POTENTIAL_FIELD),
-                "case=no-property-keeps-old-chain");
+                "case=old-enum-yields-band");
     }
 
     @Test
@@ -66,12 +67,12 @@ final class SolverModeWiringTest {
     }
 
     @Test
-    void classicModeKeepsEveryAlgorithmIntact() {
+    void everyAlgorithmEnumYieldsBand() {
+        // 旧枚举名只是配置兼容层：全部映射到新内核。
         for (PathfindingAlgorithm algo : PathfindingAlgorithm.values()) {
             Pathfinder byDecision = PathfinderFactory.decide(algo, SolverMode.CLASSIC);
-            Pathfinder byCreate = PathfinderFactory.createClassic(algo);
-            assertEquals(byCreate.getClass(), byDecision.getClass(),
-                    "case=classic-passthrough-" + algo.name());
+            assertInstanceOf(BandPathfinder.class, byDecision,
+                    "case=legacy-enum-maps-to-band-" + algo.name());
         }
     }
 
@@ -103,8 +104,9 @@ final class SolverModeWiringTest {
         assertEquals(SolverMode.CLASSIC, SolverMode.AB.effective(), "case=ab-effective-is-classic");
         assertEquals(SolverMode.BAND, SolverMode.BAND.effective(), "case=band-effective-is-band");
         assertEquals(SolverMode.CLASSIC, SolverMode.CLASSIC.effective(), "case=classic-effective-is-classic");
-        assertInstanceOf(BasicAStarPathfinder.class,
+        // classic 侧也是 BandPathfinder（旧实现已删，AB 只剩同型对照）。
+        assertInstanceOf(BandPathfinder.class,
                 PathfinderFactory.createClassic(PathfindingAlgorithm.ASTAR_BASIC),
-                "case=classic-astar-type");
+                "case=classic-side-is-band");
     }
 }

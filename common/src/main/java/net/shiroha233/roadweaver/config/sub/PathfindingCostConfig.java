@@ -50,7 +50,7 @@ public final class PathfindingCostConfig implements SubConfig {
      * 而且看不出原因。同一份配置在两套算法下含义不同，同一个种子换台机器形状会不一样。
      * 现在与生产、与 {@code RouteQualityHarness} 的调参基线统一。</p>
      */
-    private PathfindingAlgorithm pathfindingAlgorithm = PathfindingAlgorithm.POTENTIAL_FIELD;
+    private PathfindingAlgorithm pathfindingAlgorithm = PathfindingAlgorithm.BAND;
 
     // ── POTENTIAL_FIELD（势场法）晋升常量（0.8.411 起可调）──────────────────
     // 原为 RoadConstants 硬编码，现晋升为可配置项，以便在势场法真实调参面上调优。
@@ -221,7 +221,14 @@ public final class PathfindingCostConfig implements SubConfig {
                 Math.min(RoadConstants.ASTAR_STEP_MAX, aStarStep));
         aStarMaxSteps = Math.max(RoadConstants.ASTAR_MAX_STEPS_MIN,
                 Math.min(RoadConstants.ASTAR_MAX_STEPS_MAX, aStarMaxSteps));
-        if (pathfindingAlgorithm == null) pathfindingAlgorithm = PathfindingAlgorithm.POTENTIAL_FIELD;
+        if (pathfindingAlgorithm == null) pathfindingAlgorithm = PathfindingAlgorithm.BAND;
+        // 2026-11-13：旧 A* 系寻路器全部退役（用户拍板「全用最新的，旧的全部删除」）。
+        // 老配置里的 ASTAR_BASIC/ASTAR_BIDIRECTIONAL/GRADIENT_DESCENT/POTENTIAL_FIELD
+        // 一律迁移到 BAND（Finsler 度量 + Fast Marching + 弹性带）。
+        // 枚举名暂留是为了 GSON 不炸，行为上只剩一种。
+        if (pathfindingAlgorithm != PathfindingAlgorithm.BAND) {
+            pathfindingAlgorithm = PathfindingAlgorithm.BAND;
+        }
         // POTENTIAL_FIELD 晋升常量：折扣/阈值落 [0,1]，惩罚非负；硬阈值不得低于软阈值（单调）。
         contourDiscount = finiteFraction(contourDiscount, RoadConstants.DEFAULT_CONTOUR_DISCOUNT);
         softGradeLimit = finiteFraction(softGradeLimit, RoadConstants.DEFAULT_SOFT_GRADE_LIMIT);

@@ -65,7 +65,7 @@ public final class PathfindingCostKeys {
                     "单次搜索的节点上限，到上限就放弃这条连接",
                     "步", ""),
 
-            ConfigKey.enumeration("pathfindingAlgorithm", "POTENTIAL_FIELD",
+            ConfigKey.enumeration("pathfindingAlgorithm", "BAND",
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "寻路算法", "Pathfinding algorithm",
                     "决定用哪套求解器选线",
