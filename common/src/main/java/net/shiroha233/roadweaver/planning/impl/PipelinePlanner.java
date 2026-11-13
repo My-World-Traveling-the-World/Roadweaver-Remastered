@@ -10,6 +10,9 @@ import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.bridge.SampledTerrainField;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
@@ -19,6 +22,7 @@ import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pipeline.RoadNetworkPlan;
+import net.shiroha233.roadweaver.pipeline.QualityGate;
 import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 import net.shiroha233.roadweaver.planning.NetworkPlanner;
 import net.shiroha233.roadweaver.topology.RoadNode;
@@ -68,6 +72,8 @@ import net.shiroha233.roadweaver.topology.RoadNode;
 public final class PipelinePlanner implements NetworkPlanner {
 
     /** 拓扑决策的采样步长（格）。8 与旧 A* 的 {@code effectiveAStarStep()} 同量级。 */
+    private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver");
+
     public static final int DEFAULT_STEP = 8;
 
     /** 包围盒在结构点外侧额外留的余量（格）—— 给绕行留空间。 */
@@ -153,7 +159,27 @@ public final class PipelinePlanner implements NetworkPlanner {
             return MSTPlanner.planMST(points, maxEdgeLenBlocks);
         }
 
-        // ⑤ 拓扑 → StructureConnection（长度上限沿用配置口径）
+        // ⑤ 质量门 —— 只测不拦
+        //
+        // QualityGate 的设计初衷是「把质量指标接到接受/拒绝的决策上，而不是只打日志」
+        // （它的类注释举了真机例子：fine regenerate 把 17 条路里的 8 条变长、9 条 dupXz
+        // 增加，却无条件全部接受）。但那套判据的阈值来自**旧链**的真机基线，
+        // 而本规划器走的是测地距离，绕行比的分布本来就不同 —— 直接拿旧阈值去拦，
+        // 很可能把整张路网判成不合格、然后一条路都不生成。
+        //
+        // 所以第一版**只测不拦**：把 Report 打进日志，让真实数据先出来。
+        // 等看过几局 nodes/edges/isolated/weightedDetour 的实际分布，再决定要不要拦、
+        // 以及阈值该定多少。用 lenient()（绕行比 3.0、允许孤立、不查曲率）而不是
+        // defaults()（1.5、不许孤立、曲率不增）就是为了让日志有信息量而不是满屏 FAIL。
+        QualityGate.Report report = QualityGate.evaluate(plan, QualityGate.Thresholds.lenient());
+        if (report.passed()) {
+            LOGGER.info("RoadWeaver network quality: {}", report.describe());
+        } else {
+            LOGGER.warn("RoadWeaver network quality below gate (REPORT-ONLY, result still adopted): {}",
+                    report.describe());
+        }
+
+        // ⑥ 拓扑 → StructureConnection（长度上限沿用配置口径）
         long maxD2 = maxEdgeLenBlocks > 0
                 ? (long) maxEdgeLenBlocks * (long) maxEdgeLenBlocks
                 : Long.MAX_VALUE;

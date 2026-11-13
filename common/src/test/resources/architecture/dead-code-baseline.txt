@@ -19,6 +19,12 @@
 #                    守卫会**自动校验**：类名须是 XxxImpl 且主类 Xxx 里真声明了
 #                    @ExpectPlatform。不符合的判为「藏匿」，直接红。
 #   [C] 测试孤岛     生产零引用、只有测试在用。要么接进生产，要么连测试一起删。
+#
+# 2026-11-13：[C] 已清空。最后两个成员的去向 ——
+#   RoadPipeline -> 接进生产（planningAlgorithm=PIPELINE 用它做测地距离 MST）
+#   QualityGate  -> 接进生产（PipelinePlanner 每次规划后评估并打质量报告）
+# 这一节留着不删：以后新增的「生产零引用 + 测试有引用」类型仍然往这里放，
+# 它会重新长出来 —— 空着才是正常状态。
 #   （生产零引用 + 测试有引用 = 待办：接线，或连测试一起删）
 #   （2026-11-13：ConfigKeyTable 已接进生产 —— ConfigScreenFactoryImpl 打开界面时
 #     用 ConfigKeyTable.all() / byCategory() 打一行元数据自证日志，不再是孤岛。）
@@ -62,7 +68,6 @@ ServerMapPlanningActivityBridgeImpl    # fabric/src/main/java/net/shiroha233/roa
 WorldDataProviderImpl                  # fabric/src/main/java/net/shiroha233/roadweaver/persistence/fabric/WorldDataProviderImpl.java
 
 # ── [C] 测试孤岛（接线，或连测试一起删）────────────────────
-QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
 
 # ── [D] 对外契约（禁止删：删了会让下游 mod 崩）────────────────
 CruiseSignalsApi                       # api/src/main/java/net/shiroha233/roadweaver/api/incoming/CruiseSignalsApi.java   测试引用 0 次

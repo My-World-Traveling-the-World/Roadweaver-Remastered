@@ -124,7 +124,7 @@ planning -> network                      5
 planning -> pathfinding                  53
 planning -> pathlogic                    84
 planning -> persistence                  29
-planning -> pipeline                     2
+planning -> pipeline                     3
 planning -> runtime                      18
 planning -> search                       5
 planning -> topology                     1
