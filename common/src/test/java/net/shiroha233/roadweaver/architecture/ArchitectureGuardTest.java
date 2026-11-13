@@ -274,25 +274,57 @@ class ArchitectureGuardTest {
     }
 
     @Test
-    void 跨包依赖不许新增() throws IOException {
+    void 跨包依赖不许新增也不许变多() throws IOException {
         assertTrue(Files.isRegularFile(DEPS_BASELINE),
                 "缺跨包依赖基线文件: " + DEPS_BASELINE.toAbsolutePath());
-        java.util.Set<String> baseline = new java.util.LinkedHashSet<>();
+        // ★ 2026-11-13 修正：旧版用 replaceAll("\\s+\\d+$", "") 把次数抹掉，只比对「边是否存在」。
+        // 于是同一条边上的 import 翻倍膨胀完全不被发现（独立审计实测：core->postprocess
+        // 从 2 涨到 3，回归仍 689 全绿）。现在改成真计数 ratchet。
+        java.util.Map<String, Integer> baseline = new java.util.TreeMap<>();
         for (String line : Files.readAllLines(DEPS_BASELINE, StandardCharsets.UTF_8)) {
             String s = line.trim();
             if (s.isEmpty() || s.startsWith("#")) continue;
-            baseline.add(s.replaceAll("\\s+\\d+$", ""));
+            int sep = s.lastIndexOf(' ');
+            if (sep <= 0) continue;
+            baseline.put(s.substring(0, sep).trim(),
+                    Integer.parseInt(s.substring(sep + 1).trim()));
         }
         java.util.Map<String, Integer> current = crossPackageEdges();
+
         List<String> added = new ArrayList<>();
-        for (String edge : current.keySet()) {
-            if (!baseline.contains(edge)) added.add(edge + "  (" + current.get(edge) + " 处)");
+        List<String> grown = new ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> e : current.entrySet()) {
+            Integer allowed = baseline.get(e.getKey());
+            if (allowed == null) {
+                added.add(e.getKey() + "  (" + e.getValue() + " 处)");
+            } else if (e.getValue() > allowed) {
+                grown.add(e.getKey() + "  " + allowed + " -> " + e.getValue() + " 处");
+            }
         }
-        assertTrue(added.isEmpty(),
-                "新增了不允许的跨包依赖（28 个包的依赖图是 ratchet，只许缩小）：\n  "
-                        + String.join("\n  ", added)
-                        + "\n如确属必要，请先把该边加入 "
-                        + "common/src/test/resources/architecture/deps-baseline.txt 并说明理由。");
+        // 基线里有、代码里已经没有了 —— 必须同步删掉，否则以后有人把这条边加回来
+        // 守卫会以为「它一直在」，等于给已消除的反向依赖留了一道后门。
+        List<String> stale = new ArrayList<>();
+        for (String edge : baseline.keySet()) {
+            if (!current.containsKey(edge)) stale.add(edge);
+        }
+
+        List<String> problems = new ArrayList<>();
+        if (!added.isEmpty()) {
+            problems.add("新增了跨包依赖（28 个包的依赖图是 ratchet，只许缩小）：\n    "
+                    + String.join("\n    ", added));
+        }
+        if (!grown.isEmpty()) {
+            problems.add("已有依赖边上的 import 变多了（次数也是 ratchet）：\n    "
+                    + String.join("\n    ", grown));
+        }
+        if (!stale.isEmpty()) {
+            problems.add("基线里这些边在代码中已不存在，请从基线删除（否则等于给它留后门）：\n    "
+                    + String.join("\n    ", stale));
+        }
+        assertTrue(problems.isEmpty(),
+                String.join("\n\n", problems)
+                        + "\n\n改基线文件：common/src/test/resources/architecture/deps-baseline.txt"
+                        + "（新增/变多必须在提交信息里说明理由）。");
     }
 
     @Test
