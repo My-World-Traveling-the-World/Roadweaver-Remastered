@@ -1,535 +1,224 @@
-# B 组：跨度提取/路径计算/道路吸附 —— 方法体逻辑等价性核查
+# B 组：路径跨度提取与道路吸附 行为等价性核查
 
-- 旧仓库（oracle）：`D:\云游四海-Mod源码\roadweaver` @ `2c6547a`
-- 新仓库（重构版）：`D:\云游四海-Mod源码\roadweaver-next` @ `7bc6023`
-- 核查范围：`pathfinding/PathSpanExtractor`、`pathlogic/pathcalc/RoadPathCalculator`、`postprocess/RoadSnapService`，及其全部拆分类（`FillBridgeExtender` / `SpanConflictResolver` / `TunnelFootprintSampler` / `UnderseaTunnelPlanner` / `JunctionConnector` / `JunctionTrimOps` / `EndpointConnectOps` / `EndpointApproachConnector` / `NetworkReuseMerger` / `SegmentGrid` / `RoadIndex` / `SnapInternals`）与被它们调用的 `BridgeDeckProfile`、`BridgeSegment`、`util/Line`、`TunnelEnvelopeCriterion`、`SurfaceWaterClassifier`、`RoadConstants`
-- 方式：**全程只读**。未改/建/删任何 `.java`，未 git 操作，未编译。唯一的写入物就是本文件。
+- 旧仓库（oracle，冻结）：`D:\云游四海-Mod源码\roadweaver` @ `2c6547a`
+- 新仓库（重构版，任务给定基线）：`D:\云游四海-Mod源码\roadweaver-next` @ `7bc6023`
+- 核查范围：`pathfinding/PathSpanExtractor`、`pathlogic/pathcalc/RoadPathCalculator`、`postprocess/RoadSnapService`，以及这三份代码拆分出来的 `UnderseaTunnelPlanner` / `FillBridgeExtender` / `SpanConflictResolver` / `TunnelFootprintSampler` / `PathMetricsOps` / `PathFinalizeOps` / `JunctionConnector` / `JunctionTrimOps` / `EndpointConnectOps` / `EndpointApproachConnector` / `NetworkReuseMerger` / `RoadIndex` / `SegmentGrid` / `SnapInternals`，和被它们调用的 `Road` / `TargetYComputation` / `RoadSpanProfileOps` / `RoadCrossingOps` / `BridgeDeckProfile` / `BridgeSegment` / `BridgeBuilder` / `BridgeRangeCalculator` / `RoadTunnelBuilder` / `TunnelEnvelopeCriterion` / `RoadGradePlanner` / `AccurateHeightSampler` / `SurfaceWaterClassifier` / `StreamsReflowingCompat` / `RoadConstants` / `AccurateGradeRepairPlanner` / `StructureAvoidanceService` / `FinalRoadStructureValidator` / `FinalRoadWaterValidator`。
+- 方式：**纯只读静态核查**。未改/建/删任何 `.java`，未 `git add/commit/checkout/stash`，未跑 gradle、未编译、未运行测试。本文件是本轮唯一写入物。
+- 核查手法（可复现）：对每个 `.java` 用「声明 `(` 参数表 `)` 花括号配平」抽出**整个方法体**，抹掉 `//` 与 `/* */`（保留字符串/字符字面量的占位）后折叠所有空白，做**方法体字符串精确比对**；再对剩余差异做「类限定前缀不敏感」比对，区分**真正的表达式变化**与**跨类搬家**。所以「等价（逐字节）」= 去注释去空白后方法体完全相同，任何增删一个字符、换一个比较符、换一个常量都会被抓出来。
+
+> **基线漂移（必须先说）**：任务说新仓在 `7bc6023`，但核查期间该仓 HEAD 前进了两次 —— `46ee02e`（2026-11-13 17:11:39，「纵断面求解器默认从 DP 切回 LEGACY」）和 `e82bea0`（17:17:26，「桥面水位下界改为 DP 的求解约束」）；核查中途工作区还有 5 个文件未提交改动（`TargetYComputation` / `ProfileDpSource` / `ProfileSolverMode` / `ProfileDpSourceTest` / `D-生成与规划链.md`），17:17 已被 `e82bea0` 一并提交。
+> **本文所有行号与结论以 `7bc6023` 及其工作树（17:15 前）为准**；凡涉及 DP 的结论都另外标注了 `46ee02e`/`e82bea0` 的状态。
+> 另外：本路径下原有一份同名报告（提交于 `46ee02e`），本文是**独立重跑的第二次核查**，不引用其结论；如需对比可用 `git show 46ee02e -- "docs/audit-20261113/B-路径跨度与吸附.md"` 取回。
 
 ---
 
 ## 结论摘要
 
-- **方法级账目（三个旧文件共 249 个类级成员）：逐字节等价 237 / 机械改写 10 / 记录迁移 2（内容逐字相同）/ 真正的逻辑改变 0**
-- **逻辑点级（本文「逐项对照」共 42 行）：逻辑等价 41 项 / 逻辑改变 1 项（**条件性**：仅当显式 `-Droadweaver.profileSolver=dp` 时才发生；**默认路径已于 2026-11-13 17:09:20 切回 LEGACY**，见 ★B-1 与文末「核查期间工作树变更」）/ 无法判定 3 项**（见文末「无法判定的地方」）
-- **长桥 ±5 格正弦弯：在。** `BridgeSegment.java:55-62`（旧）↔ `BridgeSegment.java:56-63`（新）逐字节相同；`Line.withHorizontalBend`/`pointAt` 中的 `Math.sin(Math.PI * t)`（旧 `Line.java:28-57` ↔ 新 `Line.java:29-58`）逐字节相同；建造侧落地 `BridgeBuilder.java:74-78`（旧）↔ `BridgeBuilder.java:79-83`（新）也逐字节相同。**注意**：弯是水平几何、只依赖站点 XZ 与哈希，与剖面求解器选 LEGACY 还是显式 DP 无关。
-- **水面判定（逐 footprint 列 OR）：一致。** `PathSpanExtractor.java:1521-1557`（旧）↔ `PathSpanExtractor.java:685-721`（新）方法体逐字节相同；核心循环 旧 `1539-1549` ↔ 新 `703-713`，语义是「footprint 里任一列是水 ⇒ 整站记为水」（`found = true`，`wetColumns++`，`Math.max` 取水面 / `Math.min` 取河床）；原注释 `Samples every rasterized road column, not just the center station` 两侧都在（旧 1521 / 新 685）。
-- **桥面稳定岸线扩展：一致。** `BridgeDeckProfile.findStableBankRange` 旧 `236-250` ↔ 新 `237-251`，`findStableLeft/Right` 旧 `252-270` ↔ 新 `253-271`，`stableWindow` 旧 `272-281` ↔ 新 `273-282`；`STABLE_SEARCH_SEGMENTS=32 / STABLE_WINDOW_SEGMENTS=4 / STABLE_WINDOW_VARIATION=2` 旧 `11-13` ↔ 新 `12-14`。整份 `BridgeDeckProfile.java` 新旧只差文件头注释 1 行（`diff` 仅 `+/* 文件职责：… */`）。**已知的「向外扩到稳定岸线」膨胀行为被完整保留**（`left/right` 向两侧找 32 站内的 4 站稳定台地，找不到才退回水区间端点）。
-- **最高风险**：B 组三个文件本身**没有**逻辑改变。唯一能让「同一输入算出不同结果」的是**跨组**的剖面求解器：**默认已是 LEGACY（与旧版等价）**；只有玩家/集成包显式加 `-Droadweaver.profileSolver=dp` 时，`targetY` 才改由 DP 求解，而 `refineTunnelSpans` / `refineFinalFillBridgeSpans` / `retainVerticallyRelevantCrossings` 都以 `targetY` 为判据输入 ⇒ 最终落盘的桥/隧道 span 集合与桥面 Y 可能不同（水掩码决定的初始 BRIDGE/ROAD_CROSSING 的 XZ 范围不受影响）。**注意：核查期间该默认值被改动过一次（17:09:20 从 DP 切回 LEGACY），详见 ★B-1 与「核查期间工作树变更」。**
+- **等价 31 项 / 移动 22 项 / 删除 0 项 / 改变 1 项**（另有**新增 4 项**，不计入等价/改变，见 §★B-2）。
+- **最高风险**：B 组三个文件本身**没有**判据/常量/边界条件变化（249 个成员全部落地、方法体逐字节相同）；唯一能让桥/隧道结果改变的是**跨组**的 `TargetYComputation` 新增了旧版根本不存在的 DP 纵断面求解路径，**在任务基线 `7bc6023` 上它是默认开启的**，而 `refineFinalFillBridgeSpans`（干洼地桥）与 `retainVerticallyRelevantCrossings` 都以 `targetY` 为判据输入 ⇒ 桥的数量/位置/桥面 Y 会变。该默认值在核查期间已被提交 `46ee02e` 切回 LEGACY，随后又在新提交 `e82bea0` 里连同「桥面水位下界」一起重新设计。**详见 ★B-1。**
+- **桥/隧道判据是否被改动：否（判据本体逐字相同）**。证据：
+  1. `TunnelEnvelopeCriterion.java` 新旧 **535 行 / 23 个方法体逐字相同**（窗口 24 站、10% 分位、种子突起 2、最小突起 4、目标覆土 7、密封核心 3、最长 256 站、站距 8.0、端口坡度 0.08 全同）；
+  2. 水掩码判据 `segmentWaterSample`/`bridgeWaterSample` 方法体逐字相同（旧 `PathSpanExtractor.java:1522-1630` ↔ 新 `:686-794`），水深比较仍是 `waterDepth >= Math.max(1, minWaterDepth)`（不是 `>`），水面来源优先级仍是 `Streams 河道 → Streams 湖泊 → PathTerrainField 精确列 → 高度图兜底`；
+  3. `crossingTypeForWidth` 仍是 `widthBlocks <= 12 ? ROAD_CROSSING : BRIDGE`（旧 `:1648-1652` ↔ 新 `:812-816`，`ROAD_CROSSING_MAX_WIDTH_BLOCKS=12` 旧 `:67` ↔ 新 `:72`）；
+  4. 陆上隧道接线 `boolean buried = landTunnelSwitch && newBuried;` 位置与表达式未变（旧 `:322` ↔ 新 `:327`）。
+- **长桥 ±5 格正弦弯是否还在：在（三处全链路都在，且逐字节相同）**。
+  - 阈值：`RoadConstants.BRIDGE_CURVE_MIN_LENGTH_BLOCKS = 96`、`BRIDGE_CURVE_MAX_OFFSET_BLOCKS = 5.0D`（旧 `RoadConstants.java:99/101` ↔ 新 `:98/100`，`RoadConstants.java` 两版 `diff` 只有 1 行 import 删除）；
+  - 取弯：`BridgeSegment.java` 构造器里 `if (length >= 96) offset = (hash & 1) == 0 ? +5.0 : -5.0;`（旧 `:52-63` ↔ 新 `:53-64`，整份文件只差第 1 行文件头注释）；
+  - 几何：`Line.pointAt` 里 `double offset = horizontalBend * Math.sin(Math.PI * t);`（旧 `Line.java:46-57` ↔ 新 `:47-58`，整份 `util/Line.java` 只差文件头注释）；
+  - 落地：`BridgeBuilder` 里 `if (geometryLine != null && geometryLine.isCurved()) { seg = new RoadSegmentPlacement(line.mapRoadPosition(...), line.mapRoadPositions(...)); }`（旧 `BridgeBuilder.java:72` ↔ 新 `:77`；`BridgeBuilder` 22/22 方法体逐字相同）。
+  - 也就是说：**正弦弯是纯水平几何（只依赖站点 XZ 与哈希），与纵断面求解器选谁无关**，重构没有动它。
+
+### 先说一个量化事实：这三个包不是「缩水」，而是「搬家 + 变长」
+
+| 维度 | 旧 | 新 | 说明 |
+|---|---|---|---|
+| `PathSpanExtractor.java` | 1816 行 | 980 行 | 方法被拆到 4 个新类 |
+| `pathfinding/` 顶层包 | 6 文件 / 94 方法 / 2476 行 | 10 文件 / **96 方法** / **2738 行** | 方法数 +2，行数 +262 |
+| `RoadPathCalculator.java` | 1709 行 | 872 行 | 拆到 `PathFinalizeOps`/`PathMetricsOps` |
+| `pathlogic/pathcalc/` 包 | 3 文件 / 66 方法 / 1961 行 | 5 文件 / **66 方法** / **2136 行** | 方法数相等，行数 +175 |
+| `RoadSnapService.java` | 3708 行 | 995 行 | 拆到 9 个新类 |
+| `postprocess/` 包 | 4 文件 / 195 方法 / 5111 行 | 13 文件 / **195 方法** / **5621 行** | 方法数**精确相等 195=195**，行数 +510 |
+
+三个包的行数全部**增加**，方法数没有一处减少 ⇒ 「`RoadSnapService` −73%」是**同包内重新分工**，不是删除。
 
 ---
 
-## 0. 方法级全覆盖账目（先说清楚「数是怎么数出来的」）
+## 逐项对照表
 
-抽取算法：按「声明 → `(` 参数表 `)` → 花括号配平」抽出**整个方法体**；把 `//`、`/* */` 全部抹成空格（保留字符串/字符字面量），再把所有空白折叠成单空格后比对。因此「逐字节等价」= **去注释、去空白后方法体字符串完全一致**（缩进、换行、注释不影响判定；任何增删一个字符、换一个比较符、换一个常量都会被抓出来）。
+> 判定口径：**等价**＝去注释/空白后方法体逐字相同（含跨文件的搬家）；**移动**＝整段逻辑搬到别的类且方法体逐字相同；**改变**＝真的会算出不同结果；**新增**＝旧版没有的新代码。
+> 「旧版位置」用旧仓库相对路径+行号；「重构版位置」用 `roadweaver-next/common/src/main/java/net/shiroha233/roadweaver/` 下的相对路径+行号。
 
-| 旧文件 | 旧成员数 | 新落点 | 等价 | 机械改写 | 记录迁移 |
+| # | 旧版功能点 | 旧版位置 | 重构版位置 | 判定 | 说明 |
 |---|---|---|---|---|---|
-| `pathfinding/PathSpanExtractor.java`（1816 行） | 60 | 本体 980 行 + `UnderseaTunnelPlanner`(250) + `FillBridgeExtender`(297) + `SpanConflictResolver`(326) + `TunnelFootprintSampler`(186) | **60** | 0 | 0 |
-| `pathlogic/pathcalc/RoadPathCalculator.java`（1709 行） | 54 | 本体 872 行 + `PathFinalizeOps`(517) + `PathMetricsOps`(494) | **46** | **8** | 0 |
-| `postprocess/RoadSnapService.java`（3708 行） | 135 | 本体 995 行 + `JunctionConnector`(556) + `JunctionTrimOps`(425) + `EndpointConnectOps`(529) + `EndpointApproachConnector`(633) + `NetworkReuseMerger`(800) + `SegmentGrid`(79) + `RoadIndex`(89) + `SnapInternals`(68) | **131** | **2** | **2** |
-| 合计 | **249** | — | **237** | **10** | **2** |
+| 1 | `extractSpans` 三重载（采样补缺 → 有效水深门槛 → 水掩码） | `pathfinding/PathSpanExtractor.java:95-149` | `pathfinding/PathSpanExtractor.java:100-154` | 等价 | 60 个方法体逐字相同；`effectiveBridgeMinDepth(...)` 后再进 `collectBridgeSpans` |
+| 2 | `effectiveBridgeMinDepth`（BRIDGE_FIRST ⇒ 门槛 1） | `:88-93` | `:93-98` | 等价 | 三元表达式一字不差 |
+| 3 | `waterSurfaceYForRange`（甲板侧与掩码侧同口径） | `:175-218` | `:180-223` | 等价 | 逐列跑 `segmentWaterSample`，同一份 terrain/samples/streams |
+| 4 | `refineTunnelSpans`（两组重载；桥掩码排除 + 包络 + `landTunnelEnabled`） | `:225-386` | `:230-391` | 等价 | `buried = landTunnelSwitch && newBuried`；`TUNNEL_RUN_MIN_LENGTH=3` 旧 `:39` ↔ 新 `:44` |
+| 5 | `TunnelEnvelopeCriterion` 包络突起度判据（23 方法） | `pathfinding/TunnelEnvelopeCriterion.java` 535 行 | 同名 535 行 | 等价 | 全部阈值常量与方法体逐字相同 |
+| 6 | `tunnelCosts`（坡罚单价/阈值快照，失败回默认） | `:528-543` | `:533-548` | 等价 | `try/catch(Throwable)` 回 `Costs.defaults()` 相同 |
+| 7 | 突起度取证 `prominences`/`lowQuantile`/`logBumpRuns`（默认关） | `:412-520` | `:417-525` | 等价 | 仅 `-Droadweaver.bumpDiag=true` 生效，默认 `false` 两侧一致 |
+| 8 | `centerStationOverburden` / `isWetStation` | `:545-567` | `:550-572` | 等价 | 中心站覆土、湿站判定同式 |
+| 9 | `collectBridgeSpans` 水掩码主循环 | `:1439-1510` | `:603-674` | 等价 | 水区间起止、`highestWaterSurface` 累积同式 |
+| 10 | `segmentWaterSample` / `bridgeWaterSample`（逐 footprint 列 OR；四级水面来源） | `:1522-1630` | `:686-794` | 等价 | 水深 `>=`、`Math.max(1, minWaterDepth)`、`stream.inChannel` 优先等全同 |
+| 11 | `appendWaterCrossingSpan` / `crossingTypeForWidth` | `:1632-1652` | `:796-816` | 等价 | 稳定岸线 `BridgeDeckProfile.findStableBankRange` 调用参数相同 |
+| 12 | `crossingWidthBlocks` 口径 | `:1655-1671` | `:819-835` | 等价 | **口径未变**：沿路弧长求和 + 首尾半步补偿 `max(1, round(distance + representedBlockWidth))`；仍是「沿路长度」而非「直线河宽」，两版一致（历史坑未被本次重构引入，也未被修掉） |
+| 13 | `appendNormalizedWaterSpan`（桥吃掉重叠浅滩 / 浅滩被桥裁剪） | `:1685-1756` | `:849-920` | 等价 | 裁剪/插入顺序与边界（`left+1 < start`、`right > end+1`）相同 |
+| 14 | `refineRoadTunnels`（修剪/合并后重建隧道） | `:771-786` | `:579-594` | 等价 | 仍先 `refineTunnelSpans` 再 `refineFinalFillBridgeSpans` |
+| 15 | `dryDepressionBridgeDepth`（配置夹 2..16，默认 6） | `:1809-1816` | `:972-979` | 等价 | `DEFAULT_DRY_DEPRESSION_BRIDGE_DEPTH=6` 同值 |
+| 16 | 18 个跨度阈值常量 | `:39-79` | `:44-84` | 等价 | 逐个核对：3 / 6 / 8 / 10 / 5 / 256 / 8 / 0.5D / 128 / 12 / 3 / 32 / 16 / 2 全同（仅可见性 `private`→包内） |
+| 17 | 诊断日志 `[ROAD-BRIDGE-MASK]` / `[ROAD-LANDTUNNEL]` / `[ROAD-BUMP]` | 分散 | 分散 | 等价 | 方法体逐字相同，连占位符顺序都没变 |
+| 18 | `convertLongOceanBridgesToUnderseaTunnels`（≥256 格长海桥转海底隧道） | `:573-651` | `pathfinding/UnderseaTunnelPlanner.java:54-132` | 移动 | 方法体逐字相同（含 `oceanColumns < max(3, ceil(3/4·span))` 判据） |
+| 19 | `chooseUnderseaTunnel`（哈希种子 + 配置概率，默认 0.50） | `:653-661` | `UnderseaTunnelPlanner.java:134-142` | 移动 | `SplittableRandom` 种子常量 `0x554E444552534541L` 未变 |
+| 20 | `extendIndexByDistance`（陆侧引道 128 格） | `:663-673` | `UnderseaTunnelPlanner.java:144-155` | 移动 | 逐字相同 |
+| 21 | `applyUnderseaTunnelProfile` / `underseaRoadY` / `smoothUnderseaApproach` | `:676-768` | `UnderseaTunnelPlanner.java:157-243` | 移动 | `safeClear` 夹 2..16、`smoothUnderseaApproach` 的 `max(16,min(128,2·Δ+16))` 同式 |
+| 22 | `refineFinalFillBridgeSpans` 两组 + `specialSpanMask` + `appendFinalFillBridgeSpans` + `findDryDepressionBank` | `:794-1036` | `pathfinding/FillBridgeExtender.java:54-297` | 移动 | 干洼地判据 `targetY - lowestFootprintSurface >= dryBridgeDepth` 同式；深 16 强升桥、端点边界回退同式 |
+| 23 | `extendExistingStreamsBridgeApproaches` / `extendExistingBridgesIntoCorridor` / `extendBridgeBank` / `corridorResumes` | `:838-931` | `FillBridgeExtender.java:98-191` | 移动 | 桥头延伸「含 1 个稳定岸站」与 `STREAMS_BRIDGE_CORRIDOR_GAP_SEGMENTS=2` 同值 |
+| 24 | `resolvePhysicalSpanOverlaps` / `normalizeTunnelSpans` / `mergeRangesInto` | `:1039-1128` | `pathfinding/SpanConflictResolver.java:59-159` | 移动 | 隧道/桥分别合并、`range[0] <= end+1` 邻接合并同式 |
+| 25 | `resolveOverlappingWaterSpans`（隧道优先，桥/浅滩被裁或丢弃） | `:1141-1210` | `SpanConflictResolver.java:161-235` | 移动 | 单站桥余量丢弃、单站浅滩保留的规则相同 |
+| 26 | `retainVerticallyRelevantCrossings` / `tunnelFitsBelowWaterBed` | `:1217-1305` | `SpanConflictResolver.java:237-323` | 移动 | 10 参签名与「隧道完全在水下才撤水面跨度」判据相同 |
+| 27 | `appendTunnelWithSurfaceMouths` / `sampleTunnelFootprints` / `fullWidthSurfaceConnected` / `maximumFootprintOverburden` / `overburden` | `:1307-1437` | `pathfinding/TunnelFootprintSampler.java:55-186` | 移动 | 洞口向外找满宽地表站的循环、找不到时「保留深挖隧道」的回退相同 |
+| 28 | `calculateAStarRoadPath` / `calculateAStarRoadPathDetailed` / `buildSegments` | `pathlogic/pathcalc/RoadPathCalculator.java:909-1020`、`:1591` | `pathlogic/pathcalc/PathMetricsOps.java:387-...`、`:211` | 移动 | 8 处差异经「限定前缀不敏感」比对**全部只是类名搬家**（例：`StructureAvoidanceService.ensurePlanningSnapshotForPathAsync` → 静态导入 `SnapshotOrchestrator.ensurePlanningSnapshotForPathAsync`） |
+| 29 | `calculateFromPlannedPath` / `finalizePath` / 三个 `repair*WithCorridorRefresh` / `repairRiverRouteSegments` / `refreshPlanningSnapshot` | `:1023-1580` | `pathlogic/pathcalc/PathFinalizeOps.java:83-...` | 移动 | 同上，全部为类名搬家；`finalizePath` 的段构建、结构与村庄截断顺序未变 |
+| 30 | `repairFinalHeightConflict` / `repairAfterNetworkMerge` / `rebuildRoadDataFromProfile` / `shouldSkipExpensiveNetworkMergeHeightRepair` / 冲突提示 API | `:144-908` | `RoadPathCalculator.java:154-...` | 等价 | 47/55 个方法体逐字相同 |
+| 31 | `RoadPathCalculator` 常量与缓存 | `:58-124`、`:1461` | 同文件 `:57-135`、`:864` | 等价 | `TERRAIN_PLANNING`、`RIVER_LOCAL_DETOUR_BLOCKS=50`、`MAX_EXACT_CONSTRAINT_CYCLES=4`、`NETWORK_MERGE_*=512/64/24`、`ENDPOINT_APPROACH_STATIONS=24`、`LOCAL_DETOUR_MAX_LENGTH_RATIO=1.6`、`REBUILD_MAX_CENTER_STEP=2`、`UNSMOOTHED_MAX_LENGTH_RATIO=1.15`、`CONSTRUCTION_CONFLICT_HINTS`、`SNAPSHOT_WAIT_CACHE` 全部同值同初始化 |
+| 32 | `Road.generateRoad` 里的跨度交付链（提取 → 剖面 → 细化 → 3 轮桥细化 → 保护区 → 复用） | `pathlogic/core/Road.java:161-270` | `pathlogic/core/Road.java:177-238`（`extractPhysicalSpans`/`settleProfile`） | 等价 | 语句级 diff 只显示：3 处类名前缀、2 处 `extractPhysicalSpans(...)`、2 处 `settleProfile(...)`、`StructureRepair`、静态导入、以及 1 行新增的 `logSpecIntegrity(...)`；**顺序与循环次数（`bridgeRefinement < 3`）未变** |
+| 33 | `snapAllRoads` / `snapAroundConnection` / `snapAroundConnectionAsync` / `snapAllRoadsAsync` | `postprocess/RoadSnapService.java:111-330` | `postprocess/RoadSnapService.java:123-...` | 等价 | 方法体逐字相同 |
+| 34 | `snapRoadList`（吸附主循环） | `:182-330` | `RoadSnapService.java`（`static void snapRoadList`） | 等价 | 唯一差异：`catch (StructureAvoidanceService.PlanningSnapshotUnavailableException)` → `catch (PlanningSnapshotUnavailableException)`（嵌套类提升为顶层类，构造器签名同为 `String`） |
+| 35 | `connectSecondaryToPrimary` / `connectSecondaryToPrimaryOnce` | `:332-516` | `postprocess/JunctionConnector.java:71`、`:340` | 移动 | 方法体逐字相同 |
+| 36 | `createSecondaryReuseAtCorridor` | `:517-666` | `JunctionConnector.java:256` | 移动 | 逐字相同 |
+| 37 | `lowerPrimaryTunnelGradeAtJunction` | `:667-864` | `JunctionConnector.java:406` | 移动 | 逐字相同 |
+| 38 | `networkReuseStationCount` | `:1329` | `JunctionConnector.java:76-...` | 移动 | 逐字相同；调用点仍在 `connectSecondaryToPrimary` 内 |
+| 39 | `deduplicateExactSpans` / `enforceNetworkReuseConstructionOwnership`（两个重载） | `:865-1328` | `RoadSnapService.java:391-...` | 等价 | 方法体逐字相同 |
+| 40 | `markSnapTargets`（`SNAP_DIST2` 进 / `SPLIT_DIST2` 出 / 端点隧道口例外） | `:3094-3133` | `postprocess/EndpointConnectOps.java:489-528` | 移动 | 仅 `nearest.index`/`nearest.dist2`（record 私有字段）→ `nearest.index()`/`nearest.dist2()`；比较符与短路顺序不变 |
+| 41 | `NearestResult` / `ConnectionOption`（record 及其比较器） | `:3577-3605` | `postprocess/SnapInternals.java:51-84` | 移动 | `betterThan` 四级比较（复用站数↑、构造长度↓、段数↓、mode 字典序）逐字相同 |
+| 42 | 嵌套类 `RoadIndex` / `SegmentGrid` | `:3334-3370`、`:3593-3623` | `postprocess/RoadIndex.java`、`SegmentGrid.java` | 移动 | 结构与方法体相同（`masks = new EnumMap<>(SpanType.class)`、`cells = new HashMap<>()`） |
+| 43 | `roadBounds` / `spanMaskView` / `RoadBounds`（含 `gap`） | `:3661-3700` | `RoadSnapService.java:948-995` | 等价 | 逐字相同 |
+| 44 | 24 个吸附常量（`SNAP_THRESHOLD`…`HEAD_TRIM_TOLERANCE`） | `:42-368` | 同名文件 | 等价 | `SNAP_THRESHOLD=RoadConstants.ROAD_SNAP_THRESHOLD`、`SPLIT=24`、`MIN_RUN=3`、`GRID_SHIFT=3`、`SNAP_DIST2=(long)SNAP*SNAP` 等全部同表达式；`RoadConstants.java` 只差 1 行 import |
+| 45 | 连接/修剪/复用主体（`tryAbsorbEndpointCorridor`、`tryConnectEndpoint`、`tryMergeOverlappingRun`、`trimSecondaryHead/Tail`、`EndpointApproachConnector` 全套） | `:1352-3098` 各方法 | `EndpointConnectOps.java`、`JunctionTrimOps.java`、`EndpointApproachConnector.java`、`NetworkReuseMerger.java` | 移动 | 这 4 个新类共 70 个方法，**全部**能在旧 `RoadSnapService` 里找到方法体逐字相同的对应 |
+| 46 | **长桥 ±5 格正弦弯（弦长 ≥96）** | `pathlogic/bridge/BridgeSegment.java:48-71` | `BridgeSegment.java:49-72` | 等价 | 整份文件只差文件头注释；`RoadConstants` 96/5.0 未变 |
+| 47 | `Line.pointAt` / `mapRoadPosition`（正弦偏移与列映射） | `util/Line.java:45-82` | `util/Line.java:46-83` | 等价 | `horizontalBend * Math.sin(Math.PI * t)` 同式 |
+| 48 | `BridgeDeckProfile`（14 方法：`minimumDeckY`/`applyFixedRange`/`enforceAdjacentBridgeContinuity`/稳定岸线搜索…） | 297 行 | 298 行 | 等价 | 14/14 方法体逐字相同；`STABLE_SEARCH_SEGMENTS=32`、`STABLE_WINDOW_SEGMENTS=4` 等同值 |
+| 49 | 桥包其余（`BridgeBuilder`/`BridgeRangeCalculator`/`BridgePierPolicy`/`BridgeShare*`/`CulvertPlanner`/`Buoy*`） | `pathlogic/bridge/` 14 文件 | 同 14 文件 | 等价 | **整包 131/131 个方法体逐字相同，0 个方法体在旧仓找不到对应** |
+| 50 | `RoadTunnelBuilder`（门户、灯笼、景观点、安全检查） | 1519 行 / 88 方法 | 1002 行 / 88 方法 | 等价 | 86 个方法体逐字相同；2 个「差异」是 record（`TunnelPlan`、`SafetyCheck`）**只改了可见性**，字段/顺序一个没变；其余为 `private static final`→`static final` 与拆分到 `PlannedSectionBuilder`/`PortalSafetyRules`/`ScenicDomeBuilder` |
+| 51 | `Road.applyCrossingProfiles`（定甲板：稳定岸线 / 干峡谷 / 短浅滩 / 固定桥面 / 相邻桥连续性） | `pathlogic/core/Road.java:1442-...` | `pathlogic/core/RoadSpanProfileOps.java:245-...` | 移动 | `RoadSpanProfileOps` 12 个方法里 10 个在旧仓有逐字相同方法体，另 2 个（`isSharedElevationEndpoint`/`isUnknownStructureEndpoint`）只差类名前缀 |
+| 52 | `isVillageEndpoint`（端点归属推断，决定端点高度锁） | `pathlogic/structures/StructureAvoidanceService.java` | `pathlogic/structures/EndpointOwnerResolver.java:148-177` | 等价 | 判据（村庄结构 + 水平距² ≤ 16² + 出生点排除）一字未改；全表扫描换成 `StructureBoxIndex.fromChunkBuckets(snapshot.boxesByChunk())` 的桶查询，桶表按盒 AABB±roadRadius 逐区块入桶（`PlanningSnapshot.java:118-129`）⇒ 候选必为超集，结果不变（细节见「我不确定的地方」） |
+| 53 | `StructureAvoidanceService` 4766 → 998 行的拆分（`SnapshotOrchestrator`/`ProtectedGapEvaluator`/`PreparedStartResolver`/`EndpointOwnerResolver`/…） | 4766 行 / 238 方法 | 998 行 + 多个新类 | 移动 | 238 个方法里 236 个方法体逐字相同；2 个「差异」是 `PlanningSnapshot` record 组件搬家与 §52 的索引化 |
+| 54 | **纵断面求解器：旧版没有「DP 求解」这条路** | 无 | `pathlogic/core/TargetYComputation.java:452-465`、`:567-660`；`pathlogic/profile/ProfileDpSource.java`、`ProfileSolverMode.java` | **改变** | 见 ★B-1 |
+| 55 | —— 新增自检日志 `logSpecIntegrity` | 无 | `pathlogic/core/Road.java:641`、`:795-810` | 新增 | 每条路结束时打一行 `road spec OK/VIOLATION`，全包在 `try/catch(Throwable)` 里，只写日志不改数据 |
+| 56 | —— 新增桥范围缓存 `BuildFrame` | 无 | `pathlogic/construction/BuildFrame.java` | 新增 | 把「每区块重算 `BridgeRangeCalculator.compute`」变成按「路内容指纹 + 4 个桥配置标量」缓存，取用时深拷贝掩码。见「我不确定的地方」 |
+| 57 | —— 新增结构盒网格索引 `StructureBoxIndex` | 无 | `pathlogic/structures/StructureBoxIndex.java` | 新增 | 供 §52 与避让判定使用；注释明确「只保证不漏，精判归调用方」 |
+| 58 | —— 新增 `pathlogic/profile/` 整包（DP 求解器、AB 观测器、指标） | 无 | `pathlogic/profile/*`（9 文件） | 新增 | 与 §54 同源特性 |
 
-- 交叉验证：`PathSpanExtractor` 旧文件按「方法声明行」直接 grep 也是 60 条，`RoadSnapService` 133 条（脚本 135 = 133 方法 + 2 record 头），两边对得上，未漏方法。
-- **新 `PathSpanExtractor.java` 里 0 个「新方法体」**：对新仓做反向扫描（新方法体在旧仓找不到对应）时，`pathfinding/` 下只有 A* 实现、`PathfinderFactory`、`AccuratePathHeightResolver` 等非本组文件；`pathlogic/bridge/` 整包 **0 个新方法体**。也就是说桥相关的类**整包只有文件头注释和 import 变化**。
-- 10 处「机械改写」的逐条清单见附录 A。**没有任何一处改写了条件、比较符、循环边界、早退顺序或常量。**
-- 主控点名要搜的 `WaterTierAlignment`：**新旧两仓都不存在**（`grep -rn "WaterTierAlignment"` 两边均 0 命中）。水位/水列判定实际落在 `SurfaceWaterClassifier`（整文件仅差文件头）、`StreamsReflowingCompat`（仅差文件头 1 行）、`PathTerrainField.SampleBundle`（整文件字节相同）三处，本次均等价——也就是说旧版 `PathSpanExtractor` 注释里提到的「高度图兜底」链路没有被换实现。
-
----
-
-## 逐项对照
-
-> 判定口径：**等价（逐字节）**＝去注释/空白后方法体完全相同；**等价（机械改写）**＝只差「跨类限定前缀 / 静态导入 / record 访问器 / 异常类搬家」，无表达式变化；**等价（索引重写）**＝控制流重写但已逐条证明判定集合相同。
-
-| # | 逻辑点 | 旧版位置 | 新版位置 | 判定 | 依据 |
-|---|---|---|---|---|---|
-| 1 | `extractSpans` 主流程（采样 → 有效水深门槛 → 水掩码） | `PathSpanExtractor.java:111-149` | `PathSpanExtractor.java:116-154` | 等价（逐字节） | 方法体相同；两侧都调 `effectiveBridgeMinDepth(...)` 后进 `collectBridgeSpans` |
-| 2 | **水面判定：逐 footprint 列采样后取 OR** | `PathSpanExtractor.java:1521-1557`（循环 1539-1549） | `PathSpanExtractor.java:685-721`（循环 703-713） | 等价（逐字节） | `for (BlockPos position : footprint)` 逐列调 `bridgeWaterSample`；`if (!sample.water()) continue;` 后 `wetColumns++; found=true;` |
-| 3 | 水面来源优先级（Streams 河道 → Streams 湖泊 → `PathTerrainField` 精确列 → 高度图兜底） | `PathSpanExtractor.java:1570-1630` | `PathSpanExtractor.java:734-794` | 等价（逐字节） | 四个分支的 `return new BridgeWaterSample(...)` 参数一字不差 |
-| 4 | 水深门槛比较方向 | `:1608-1609`、`:1622-1624` | `:772-773`、`:786-788` | 等价（逐字节） | 两处都是 `waterDepth >= Math.max(1, minWaterDepth)`，**不是 `>`** |
-| 5 | `BRIDGE_FIRST` 下有效水深门槛降为 1 | `:89-96` | `:94-101` | 等价（逐字节） | `mode == BRIDGE_FIRST ? 1 : configuredMinDepth` |
-| 6 | 桥/浅滩宽度阈值（决定 BRIDGE 还是 ROAD_CROSSING） | `:1648-1652`（`ROAD_CROSSING_MAX_WIDTH_BLOCKS = 12`，`:67`） | `:812-816`（常量 `:72`） | 等价（逐字节） | `widthBlocks <= 12 ? ROAD_CROSSING : BRIDGE`，`<=` 未变 |
-| 7 | 跨度宽度计算 `crossingWidthBlocks`（含两端半站修正） | `:1655-1671` | `:819-835` | 等价（逐字节） | `Math.max(1, (int)Math.round(distance + representedBlockWidth))` 相同 |
-| 8 | 隧道判据常量与阈值组合 | `TunnelEnvelopeCriterion.java`（26961 字节） | 同名文件（26961 字节） | 等价（逐字节） | `cmp` 完全相同；`ENVELOPE_HALF_WINDOW_STATIONS=24`(:56)、`ENVELOPE_QUANTILE=0.10`(:59)、`SEED_PROMINENCE_BLOCKS=2`(:64)、`MIN_PROMINENCE_BLOCKS=4`(:75)、`TARGET_BURIAL_BLOCKS=7`(:81)、`MIN_OVERBURDEN_MARGIN_BLOCKS=1`(:87)、`MIN_SEALED_CORE_STATIONS=3`(:100)、`MAX_TUNNEL_RUN_STATIONS=256`(:110) 两版同文件同值 |
-| 9 | `refineTunnelSpans`（桥掩码排除 + 包络突起度 + `landTunnelEnabled` 开关） | `PathSpanExtractor.java:231-393` | `PathSpanExtractor.java:232-…` | 等价（逐字节） | `boolean buried = landTunnelSwitch && newBuried;` 在两侧同一位置；`TUNNEL_RUN_MIN_LENGTH=3` 旧 `:39` ↔ 新 `:44` |
-| 10 | 干洼地被判成「填方桥」（`refineFinalFillBridgeSpans`） | `PathSpanExtractor.java:798-839`、`:936-955` | `FillBridgeExtender.java:58-99`、`:196-215` | 等价（逐字节） | `targetY.get(index) - lowestFootprintSurface[index] >= dryBridgeDepth` 相同（新 `:210`） |
-| 11 | 桥头/Streams 走廊延伸（`extendExistingStreamsBridgeApproaches` / `extendExistingBridgesIntoCorridor` / `extendBridgeBank`） | `:840-935` | `FillBridgeExtender.java:100-215` | 等价（逐字节） | 三个方法体归一化后相同；`STREAMS_BRIDGE_CORRIDOR_GAP_SEGMENTS=2` 旧 `:79` ↔ 新 `:84` |
-| 12 | 相邻水域跨度重叠归一（桥吃掉浅滩） | `:1040-1147`、`:1148-1226` | `SpanConflictResolver.java:60-161`、`:162-246` | 等价（逐字节） | `appendNormalizedWaterSpan` 的「BRIDGE 保留、裁剪 ROAD_CROSSING」逻辑相同（旧 `:1685-1757` ↔ 新 `:849-921`） |
-| 13 | 竖直相关跨度保留（`retainVerticallyRelevantCrossings`，10 参） | `:1227-1299` | `SpanConflictResolver.java:247-319` | 等价（逐字节） | 参数表、判据、日志占位符全同 |
-| 14 | 跨海隧道（长度 ≥256、深 ≥8、概率 0.5、陆侧引道 128） | `:578-772` | `UnderseaTunnelPlanner.java:59-250` | 等价（逐字节） | 常量旧 `:61-65` ↔ 新同名类；`chooseUnderseaTunnel`/`applyUnderseaTunnelProfile` 等 7 个方法体相同 |
-| 15 | 隧道足迹满列采样（端口闭合） | `:1313-1447` | `TunnelFootprintSampler.java:61-…` | 等价（逐字节） | `fullWidthSurfaceConnected`/`maximumFootprintOverburden`/`overburden` 相同 |
-| 16 | **长桥 ±5 格正弦横弯** | `BridgeSegment.java:55-64` | `BridgeSegment.java:56-65` | 等价（逐字节） | `if (length >= BRIDGE_CURVE_MIN_LENGTH_BLOCKS)` → 哈希奇偶取 `±BRIDGE_CURVE_MAX_OFFSET_BLOCKS` → `Line.withHorizontalBend` |
-| 17 | 正弦弯几何实现 | `util/Line.java:28-30`、`:46-57`、`:60-80` | `util/Line.java:29-31`、`:47-58`、`:61-81` | 等价（逐字节） | `offset = horizontalBend * Math.sin(Math.PI * t)` 两侧同式；整份 `Line.java` diff 只有文件头 1 行 |
-| 18 | 弯在建造侧真正落地 | `BridgeBuilder.java:74-78`；`RoadConstructionVolumePlanner.java:252-257` | `BridgeBuilder.java:79-83`；`RoadConstructionVolumePlanner.java:251-256` | 等价（逐字节） | `if (geometryLine != null && geometryLine.isCurved()) { seg = new RoadSegmentPlacement(line.mapRoadPosition(...), line.mapRoadPositions(...)); }` |
-| 19 | 弯判定用的桥掩码来源 | `BridgeRangeCalculator.java`（整文件） | 同文件 | 等价（逐字节） | `diff` 仅文件头注释 1 行 |
-| 20 | **桥面稳定岸线扩展** | `BridgeDeckProfile.java:236-250`（及 `:152`、`:233`） | `BridgeDeckProfile.java:237-251`（及 `:153`、`:234`） | 等价（逐字节） | 整文件 diff 仅文件头 1 行；`findStableLeft/Right` 32 站搜索、4 站窗口、`|Δ|>1` 早退、median≥`minimumBankY` 全同 |
-| 21 | 桥面甲板高度 `minimumDeckY`/`applyFixedRange`/`enforceAdjacentBridgeContinuity` | `BridgeDeckProfile.java:1-234` | 同文件 `:1-235` | 等价（逐字节） | 同上（本项只判方法体；它在 DP 路径（仅显式开启时）上是否被使用见 ★B-1 与 C 组） |
-| 22 | 吸附入口（`snapAllRoads`/`snapAroundConnection`/`snapAllRoadsAsync`） | `RoadSnapService.java:111-181` | `RoadSnapService.java:123-193` | 等价（逐字节） | 方法体相同 |
-| 23 | 吸附主循环 `snapRoadList` | `:182-317` | `:194-329` | 等价（机械改写） | 全方法仅 `catch (StructureAvoidanceService.PlanningSnapshotUnavailableException …)` → `catch (PlanningSnapshotUnavailableException …)`（异常类从嵌套类搬到顶层文件，构造器同 `String message`） |
-| 24 | 吸附半径/网格常量 | `:42-109`（源自 `RoadConstants:427-432`） | `:54-121`（源自 `RoadConstants:426-431`） | 等价（逐字节） | `ROAD_SNAP_THRESHOLD=12`、`ROAD_SNAP_SPLIT_THRESHOLD=24`、`ROAD_SNAP_MIN_RUN_LENGTH=3`、`ROAD_SNAP_GRID_SHIFT=3`；`RoadConstants.java` 两版 diff 只有 1 行 import 删除 |
-| 25 | 头部裁剪 `HEAD_TRIM_TOLERANCE` / `tryConnect` / `trimSecondaryHead/Tail` | `:982-1258`、`:1058`、`:1073`、`:1173` | `JunctionTrimOps.java:66-342`、`:142`、`:157`、`:257` | 等价（逐字节） | 头部判据「切比雪夫 ≤2 且不是任何 span 端点」相同；`HEAD_TRIM_TOLERANCE=2` 同值 |
-| 26 | 复用已有路 `REUSE_EXTEND_*`（容差 2、最短连续 3、高差 ≤1） | `:364-368`、`:384-600` | `JunctionConnector.java:103-107`、`:123-339` | 等价（逐字节） | `matchesPrimaryCorridor` 旧 `:489-501` ↔ 新 `:229-240`：`Math.abs(donorY - targetY) <= REUSE_EXTEND_MAX_HEIGHT_DELTA(1)` |
-| 27 | 走廊复用延伸（0.8.366 M2：收集**每一段**合格走廊，不再 `break`） | `:418-470` | `JunctionConnector.java:157-200` | 等价（逐字节） | 同为「逐段收集 + `REUSE_EXTEND_MIN_RUN` 门槛 + 校验失败保留原 candidate」 |
-| 28 | 吸附目标标记 `markSnapTargets`（`SNAP_DIST2` 进入 / `SPLIT_DIST2` 退出 / 端点隧道口例外面） | `:3099-3133` | `EndpointConnectOps.java:494-528` | 等价（机械改写） | 仅 `nearest.index`/`nearest.dist2`（record 私有字段，旧版靠 nestmate 访问）→ `nearest.index()`/`nearest.dist2()`；表达式与短路顺序不变 |
-| 29 | 交叉点连接候选（`tryAbsorbEndpointCorridor`/`tryConnectEndpoint`/`tryMergeOverlappingRun` 等） | `:1352-3098` 内各方法 | `EndpointConnectOps.java` / `EndpointApproachConnector.java` / `NetworkReuseMerger.java` | 等价（逐字节） | 见附录 B「迁移落点」；逐方法体比对全部相同 |
-| 30 | `NearestResult` / `ConnectionOption` record | `:3574-3605` | `SnapInternals.java:51-84` | 等价（迁移） | 组件名/类型/顺序相同；`betterThan` 的四级比较（reuse↑、构造长度↓、段数↓、mode 字典序）逐字节相同 |
-| 31 | 嵌套类 `SegmentGrid` / `RoadIndex` | `:3593-3623`、`:3334-3370` | `SegmentGrid.java`、`RoadIndex.java` | 等价（迁移） | 旧类体归一化后是新文件内容的**子串**（长度 1319 / 942 字符，`in` 判定 True） |
-| 32 | 失败标记 `LAST_SEGMENT_FAILURE` 及三种取值 | `RoadPathCalculator.java:1583-1592`、`:1609`、`:1658`、`:1672` | `PathMetricsOps.java:203-215`、`:229`、`:277`、`:291` | 等价（逐字节） | `curved_null` / `linear_null` / `still_intersects_protected_structure` 三串相同；`consume` 后 `remove()` 相同 |
-| 33 | 重建失败标记 `LAST_REBUILD_FAILURE` | `RoadPathCalculator.java:597-603`、`:619`、`:630` | `RoadPathCalculator.java:607-613`、`:629`、`:640` | 等价（逐字节） | `null_input` / `segments_rejected:<reason>` / `segment_count_mismatch` 相同 |
-| 34 | 失败后的重试链路 | `Road.java:298/315/421/476/574` → `RoadPlanningService.java:245-264` → `Road.java:1625-1628` | `Road.java:315/332/438/493/591` → `RoadPlanningService.java:252-271` → `Road.java:767-770` | 等价（逐字节） | `rebindGeneratedRouteForRetry` 两版 20 行 diff 为空；`localRetryStep()` 相同（`RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0)`） |
-| 35 | 路径计算入口分派（`calculateFromPlannedPath` / `calculateAStarRoadPathDetailed`） | `Road.java:133-138` | `Road.java:149-154` | 等价（机械改写） | 仅 `RoadPathCalculator.` → `PathFinalizeOps.`/`PathMetricsOps.` 前缀 |
-| 36 | 跨度提取接线（两处调用参数必须一致） | `Road.java:161-162`、`:243-244` | `Road.java:684-689`（唯一入口 `extractPhysicalSpans`） | 等价（逐字节） | 新方法体就是 `PathSpanExtractor.extractSpans(segments, level, cache, terrain, streams, routeBridgeMinWaterDepth())`，与旧两处实参相同 |
-| 37 | 剖面/隧道结算三连（复制 → `computeTargetY` → `refineTunnelSpans`） | `Road.java:181-182`、`:198-200`、`:254-257` | `Road.java:703-711`（`settleProfile`） | 等价（逐字节） | `new ArrayList<>(spans)` → `computeTargetY(...)` → `PathSpanExtractor.refineTunnelSpans(...)` 顺序与实参相同 |
-| 38 | `Road.generateRoad` 全方法体 | 旧 `:91-631`（534 行） | 新 `:107-649`（536 行） | 等价（机械改写 + 1 处纯诊断插入） | 行级 diff 只有：3 处类名前缀、2 处 `extractPhysicalSpans`、2 处 `settleProfile`、1 处 `StructureRepair`、3 处静态导入、1 行 `logSpecIntegrity(rd, rawStart, rawEnd)`（只打日志，见 §可观测性） |
-| 39 | 精确高度采样器（水面兜底高度来源） | `AccurateHeightSampler.java`（1090 行） | 同名（981 行）+ `SamplerStatics.java` | 等价（机械改写） | 全文件只有 `private`→包可见、静态辅助搬到 `SamplerStatics`；`inFlightTimeoutMs`/`uniquePositions`/`orderedChunks` 等搬迁体逐字节相同 |
-| 40 | 水面/地形判定辅助 | `SurfaceWaterClassifier.java`、`PathTerrainField.java`、`PathfindingHelper.isWaterLike`、`StreamsReflowingCompat.java` | 同 | 等价（逐字节） | 前两者与 `isWaterLike` diff 仅文件头；`StreamsReflowingCompat` diff 仅文件头 1 行 |
-| 41 | 村庄端点判定 `isVillageEndpoint` | `StructureAvoidanceService.java:3251-3270` | `EndpointOwnerResolver.java:148-177` | 等价（索引重写） | 判据 `isVillageStructure(...) && 水平距 ≤16²` 一字未改；全表扫描→`boxesByChunk` 桶索引，桶表覆盖整个盒 AABB（`PlanningSnapshot.java:118-129` 按 `minX/maxX±roadRadius` 逐区块入桶）⇒ 候选必为超集（详见 A 组报告同一结论） |
-| 42 | **剖面求解器模式（跨组）** | 旧版无此概念（`computeTargetY` 直接返回自己的结果） | `ProfileSolverMode.java:86-92`（当前默认 LEGACY）、`TargetYComputation.java:452-464`、`:567-621` | **条件性改变**（仅显式 `-Droadweaver.profileSolver=dp`；默认已切回 LEGACY） | 见 ★B-1 |
-
----
-
-## 逐项证据（必须两边都对照的部分）
-
-### §1 水面判定：`segmentWaterSample` 是逐 footprint 列采样后取 OR —— 一致
-
-**旧** `roadweaver/.../pathfinding/PathSpanExtractor.java:1521-1557`：
-
-```java
-1521    /** Samples every rasterized road column, not just the center station. */
-1522    private static BridgeWaterSample segmentWaterSample(ServerLevel level,
-...
-1530                                                        int[] wetColumnsOut) {
-1531        if (segment == null) return new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
-1532        List<BlockPos> footprint = segment.positions();
-1533        if (footprint == null || footprint.isEmpty()) footprint = List.of(segment.middlePos());
-1534        boolean found = false;
-1535        int surface = Integer.MIN_VALUE;
-1536        int bed = Integer.MAX_VALUE;
-1537        int columns = 0;
-1538        int wetColumns = 0;
-1539        for (BlockPos position : footprint) {
-1540            if (position == null) continue;
-1541            columns++;
-1542            BridgeWaterSample sample = bridgeWaterSample(
-1543                    level, cache, terrain, accurate, samples, streams, position, minWaterDepth);
-1544            if (!sample.water()) continue;
-1545            wetColumns++;
-1546            found = true;
-1547            surface = Math.max(surface, sample.waterSurfaceY());
-1548            bed = Math.min(bed, sample.bedY());
-1549        }
-1550        if (wetColumnsOut != null && wetColumnsOut.length >= 2) {
-1551            wetColumnsOut[0] = columns;
-1552            wetColumnsOut[1] = wetColumns;
-1553        }
-1554        return found
-1555                ? new BridgeWaterSample(true, surface, bed == Integer.MAX_VALUE ? Integer.MIN_VALUE : bed)
-1556                : new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
-1557    }
-```
-
-**新** `roadweaver-next/.../pathfinding/PathSpanExtractor.java:685-721`：
-
-```java
-685    /** Samples every rasterized road column, not just the center station. */
-686    static BridgeWaterSample segmentWaterSample(ServerLevel level,
-...
-694                                                        int[] wetColumnsOut) {
-695        if (segment == null) return new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
-696        List<BlockPos> footprint = segment.positions();
-697        if (footprint == null || footprint.isEmpty()) footprint = List.of(segment.middlePos());
-698        boolean found = false;
-699        int surface = Integer.MIN_VALUE;
-700        int bed = Integer.MAX_VALUE;
-701        int columns = 0;
-702        int wetColumns = 0;
-703        for (BlockPos position : footprint) {
-704            if (position == null) continue;
-705            columns++;
-706            BridgeWaterSample sample = bridgeWaterSample(
-707                    level, cache, terrain, accurate, samples, streams, position, minWaterDepth);
-708            if (!sample.water()) continue;
-709            wetColumns++;
-710            found = true;
-711            surface = Math.max(surface, sample.waterSurfaceY());
-712            bed = Math.min(bed, sample.bedY());
-713        }
-714        if (wetColumnsOut != null && wetColumnsOut.length >= 2) {
-715            wetColumnsOut[0] = columns;
-716            wetColumnsOut[1] = wetColumns;
-717        }
-718        return found
-719                ? new BridgeWaterSample(true, surface, bed == Integer.MAX_VALUE ? Integer.MIN_VALUE : bed)
-720                : new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
-721    }
-```
-
-**判定**：`private static` → `static`（可见性），**其余逐字符相同**。对外部可观察行为而言：OR 语义（任一步 footprint 列湿 ⇒ 整站湿）完全保留；`wetColumnsOut[0]/[1]` 仍只喂给 `[ROAD-BRIDGE-MASK]` 诊断日志（旧 `logWaterMaskDiag:1512-1519` ↔ 新 `:676-683`），不参与判定。
-
-### §2 桥/隧道阈值：常量值同、比较方向同
-
-- 水深门槛（**比较方向关键**）：旧 `:1608-1609` / `:1622-1624` ↔ 新 `:772-773` / `:786-788`：
-
-```java
-// 旧 1608-1609（PathTerrainField 精确列分支） / 新 772-773
-boolean water = sample.columnWater()
-        && sample.waterDepth() >= Math.max(1, minWaterDepth);
-// 旧 1622-1624 / 新 786-788（高度图兜底分支）
-boolean bridgeWater = waterColumn && waterDepth >= Math.max(1, minWaterDepth);
-```
-
-  两版都是 `>=`，下界都是 `Math.max(1, …)`。`minWaterDepth` 来自 `effectiveBridgeMinDepth`（旧 `:89-96` ↔ 新 `:94-101`）：`BRIDGE_FIRST` 时恒为 1，其它模式取配置 `bridgeMinWaterDepth`。`routeBridgeMinWaterDepth()`（旧 `Road.java:1270-1275` ↔ 新 `:737-742`）是同一个表达式。
-
-- 桥/浅滩宽度（旧 `:1648-1652` ↔ 新 `:812-816`）：
-
-```java
-static SpanType crossingTypeForWidth(int widthBlocks) {
-    return widthBlocks <= ROAD_CROSSING_MAX_WIDTH_BLOCKS   // 12
-            ? SpanType.ROAD_CROSSING
-            : SpanType.BRIDGE;
-}
-```
-
-  仍是 `<=`（12 格宽仍算 ROAD_CROSSING，第 13 格才变 BRIDGE）。
-
-- 隧道：`TunnelEnvelopeCriterion.java` 两版**字节相同**（26961 字节），阈值组合（24 站窗口 / 10% 分位 / 种子突起 2 / 最小突起 4 / 目标覆土 7 / 密封核心 3 / 最长 256 站 / 站距 8.0 / 端口坡度 0.08）无一处变化；`refineTunnelSpans` 方法体逐字节相同（旧 `:231-393` ↔ 新 `:232-…`），`TUNNEL_RUN_MIN_LENGTH=3`（旧 `:39` ↔ 新 `:44`）与 `landTunnelEnabled` 接线（`boolean buried = landTunnelSwitch && newBuried;`）同位置同表达式。
-
-### §3 长桥（弦长 ≥96 格）±5 格正弦横弯 —— 在
-
-**旧** `roadweaver/.../pathlogic/bridge/BridgeSegment.java:52-64` ↔ **新** `roadweaver-next/.../pathlogic/bridge/BridgeSegment.java:53-65`（整份文件只差第 1 行文件头注释，故新行号 = 旧 +1）：
-
-```java
-52/53        double length = Math.sqrt((end.x - start.x) * (end.x - start.x)
-53/54                + (end.z - start.z) * (end.z - start.z));
-54/55        double offset = 0.0D;
-55/56        if (length >= RoadConstants.BRIDGE_CURVE_MIN_LENGTH_BLOCKS) {      // 96
-56/57            long hash = Double.doubleToLongBits(start.x) * 31L
-57/58                    + Double.doubleToLongBits(start.z) * 17L
-58/59                    + Double.doubleToLongBits(end.x) * 13L
-59/60                    + Double.doubleToLongBits(end.z);
-60/61            offset = (hash & 1L) == 0L
-61/62                    ? RoadConstants.BRIDGE_CURVE_MAX_OFFSET_BLOCKS          // +5.0
-62/63                    : -RoadConstants.BRIDGE_CURVE_MAX_OFFSET_BLOCKS;        // -5.0
-63/64        }
-64/65        var line = Line.withHorizontalBend(start, end, offset);
-```
-
-常量：`BRIDGE_CURVE_MIN_LENGTH_BLOCKS = 96`（旧 `RoadConstants.java:99` ↔ 新 `:98`）、`BRIDGE_CURVE_MAX_OFFSET_BLOCKS = 5.0D`（旧 `:101` ↔ 新 `:100`）。
-
-正弦形状在 `util/Line.java`（两版 diff 仅文件头 1 行）：
-
-```java
-// 旧 46-57 / 新 47-58
-public Vec3 pointAt(double t) {
-    t = Math.max(0.0D, Math.min(1.0D, t));
-    Vec3 point = chordPoint(t);
-    if (!isCurved()) return point;
-    double dx = end.x - start.x;
-    double dz = end.z - start.z;
-    double length = Math.sqrt(dx * dx + dz * dz);
-    double nx = -dz / length;
-    double nz = dx / length;
-    double offset = horizontalBend * Math.sin(Math.PI * t);   // ±5 的正弦横弯
-    return new Vec3(point.x + nx * offset, point.y, point.z + nz * offset);
-}
-```
-
-落地（施工期真把站点映射到弯线上）：旧 `BridgeBuilder.java:74-78` ↔ 新 `:79-83`
-
-```java
-if (geometryLine != null && geometryLine.isCurved()) {
-    seg = new RoadSegmentPlacement(
-            geometryLine.mapRoadPosition(seg.middlePos()),
-            geometryLine.mapRoadPositions(seg.positions()));
-    ...
-}
-```
-
-以及旧 `RoadConstructionVolumePlanner.java:252-257` ↔ 新 `:251-256`（桥墩中心、前/后站同样过 `mapRoadPosition`）。**该弯是 XZ 平面几何，只依赖首末站 XZ 与哈希，不读 `targetY`**，因此与「剖面切 DP」无关——用户拍板要保留的 ±5 正弦弯在新版**完整保留**。
-
-### §4 桥面稳定岸线扩展（已知膨胀源）—— 完整保留
-
-**旧** `BridgeDeckProfile.java:236-250` ↔ **新** `:237-251`（整文件 diff 仅文件头 1 行）：
-
-```java
-public static int[] findStableBankRange(int[] terrain,
-                                        int waterStart,
-                                        int waterEnd,
-                                        int minimumBankY) {
-    if (terrain == null || terrain.length == 0) return new int[]{0, 0};
-    int start = Math.max(0, Math.min(waterStart, terrain.length - 1));
-    int end = Math.max(start, Math.min(waterEnd, terrain.length - 1));
-    int left = findStableLeft(terrain, start - 1, minimumBankY);
-    int right = findStableRight(terrain, end + 1, minimumBankY);
-    if (left < 0) left = start;
-    if (right < 0) right = end;
-    if (left > start) left = start;
-    if (right < end) right = end;
-    return new int[]{left, right};
-}
-```
-
-**旧** `:252-281` ↔ **新** `:253-282`：
-
-```java
-private static int findStableLeft(int[] terrain, int from, int minimumBankY) {
-    int lower = Math.max(0, from - STABLE_SEARCH_SEGMENTS + 1);          // 32
-    for (int edge = Math.min(from, terrain.length - 1); edge >= lower; edge--) {
-        int windowStart = edge - STABLE_WINDOW_SEGMENTS + 1;             // 4
-        if (windowStart < 0) continue;
-        if (stableWindow(terrain, windowStart, edge, minimumBankY)) return edge;
-    }
-    return -1;
-}
-...
-private static boolean stableWindow(int[] terrain, int start, int end, int minimumBankY) {
-    int min = Integer.MAX_VALUE;
-    int max = Integer.MIN_VALUE;
-    for (int i = start; i <= end; i++) {
-        min = Math.min(min, terrain[i]);
-        max = Math.max(max, terrain[i]);
-        if (i > start && Math.abs(terrain[i] - terrain[i - 1]) > 1) return false;
-    }
-    return max - min <= STABLE_WINDOW_VARIATION && median(terrain, start, end) >= minimumBankY;
-}
-```
-
-常量 `STABLE_SEARCH_SEGMENTS = 32` / `STABLE_WINDOW_SEGMENTS = 4` / `STABLE_WINDOW_VARIATION = 2`：旧 `:11-13` ↔ 新 `:12-14`。膨胀链路也在：`appendWaterCrossingSpan` 用 `minimumBankY = waterSurfaceY + 1` 调 `findStableBankRange`（旧 `:1632-1646` ↔ 新 `:796-810`），随后 `appendNormalizedWaterSpan(spans, centers, stable[0], stable[1], type)` —— **即水区间先被向外扩到稳定岸线，再按扩张后的站数落 BRIDGE**（旧的真实案例 `width=74 water=266..337 stable=258..363` 的 72→106 站膨胀，在新版同一函数、同一搜索窗口下会得到同一结果）。`applyStableBankMask`（桥区掩码也按稳定岸线扩）旧 `:152-233` ↔ 新 `:153-234` 同样逐字节相同。
-
-### §5 道路吸附/复用/头部裁剪 —— 常数、判据、顺序全同
-
-- 常量：`SNAP_DIST2 = SNAP_THRESHOLD²`（12²=144）、`SPLIT_DIST2 = SPLIT_THRESHOLD²`（24²=576）旧 `RoadSnapService.java:101-102` ↔ 新 `:113-114`；底层 `RoadConstants`（旧 `:427-432` ↔ 新 `:426-431`）：`ROAD_SNAP_THRESHOLD=12`、`ROAD_SNAP_SPLIT_THRESHOLD=24`、`ROAD_SNAP_MIN_RUN_LENGTH=3`、`ROAD_SNAP_GRID_SHIFT=3`。
-- 入口：`snapAllRoads` / `snapAroundConnection` / `snapAroundConnectionAsync` / `snapAllRoadsAsync` 旧 `:111-181` ↔ 新 `:123-193`，方法体逐字节相同。
-- 主循环 `snapRoadList`：旧 `:182-317` ↔ 新 `:194-329`，唯一差异是异常类型前缀（旧 `StructureAvoidanceService.PlanningSnapshotUnavailableException` → 新顶层 `PlanningSnapshotUnavailableException`）。新异常类 `PlanningSnapshotUnavailableException.java:5-9` 与原嵌套类（旧 `StructureAvoidanceService.java:1943-1947`）同为 `extends RuntimeException` + `String message` 构造器，`catch` 语义不变。
-- 头部裁剪：`HEAD_TRIM_TOLERANCE = 2`（旧 `:1058` ↔ 新 `JunctionTrimOps.java:142`）；`trimSecondaryHeadAtJunction` 旧 `:1073-1146` ↔ 新 `:157-230`，`nearPrimaryStation` 旧 `:1148-1157` ↔ 新 `:232-241`，`trimSecondaryTailAtJunction` 旧 `:1173-1254` ↔ 新 `:257-338`，三处方法体逐字节相同（判据：「切比雪夫 ≤2 且不是任何 span 端点」）。
-- 复用扩展：`REUSE_EXTEND_TOLERANCE=2` / `REUSE_EXTEND_MIN_RUN=3` / `REUSE_EXTEND_MAX_HEIGHT_DELTA=1`（旧 `:364-368` ↔ 新 `JunctionConnector.java:103-107`）。`extendSecondaryReuseAtJunction`（旧 `:384-489` ↔ 新 `:123-228`）的「只从 lastReuse 之后找、连续 ≥3 站、站不能是已有 span 端点」逐字节相同；`matchesPrimaryCorridor`（旧 `:489-501` ↔ 新 `:229-240`）：
-
-```java
-for (int dx = -REUSE_EXTEND_TOLERANCE; dx <= REUSE_EXTEND_TOLERANCE; dx++) {
-    for (int dz = -REUSE_EXTEND_TOLERANCE; dz <= REUSE_EXTEND_TOLERANCE; dz++) {
-        Integer donorY = primaryHeights.get(xzKey(new BlockPos(pos.getX() + dx, 0, pos.getZ() + dz)));
-        if (donorY != null && Math.abs(donorY - targetY) <= REUSE_EXTEND_MAX_HEIGHT_DELTA) {
-            return true;
-        }
-    }
-}
-return false;
-```
-
-  以及 0.8.366(M2) 的「收集每一段走廊 run、不再在第一段后 break」（旧 `:418-453` ↔ 新 `:157-192`）同样逐字节相同；失败时 `RoadDataValidator.validateFinalRoad(extended)` 不通过就**原样返回 candidate**（旧 `:466-473` ↔ 新 `:205-212`）也一样。
-- 吸附目标 `markSnapTargets`：旧 `:3099-3133` ↔ 新 `EndpointConnectOps.java:494-528`，唯一差异是 record 访问器（`nearest.index`→`nearest.index()`、`nearest.dist2`→`nearest.dist2()`）。旧版能写字段是因为 `NearestResult` 是**同一个顶层类的嵌套 record**（nestmate 可访问私有字段）；搬到另一个顶层类后必须改用访问器。**表达式、短路顺序、`SNAP_DIST2`/`SPLIT_DIST2` 的进出边界都没变。**
-
-### §6 路径计算的失败处理：标记还在，失败后是「重绑路径 + 局部重试」而不是静默放弃
-
-- `LAST_SEGMENT_FAILURE`（ThreadLocal）**仍在**：旧 `RoadPathCalculator.java:1583-1592` ↔ 新 `PathMetricsOps.java:203-215`；三处置值点旧 `:1609`（`curved_null`）/`:1658`（`linear_null`）/`:1672`（`still_intersects_protected_structure`）↔ 新 `:229`/`:277`/`:291`。`consumeSegmentFailureReason()` 旧 `:1585-1591` ↔ 新 `:205-211`，都是「取出后 `remove()`」。
-- 消费点：旧 `RoadPathCalculator.java:631` ↔ 新 `RoadPathCalculator.java:641`，拼进 `segments_rejected:` 前缀后交给 `LAST_REBUILD_FAILURE`/日志。即：**失败原因只做观测，不参与判定**（原注释「纯观测」保留）。
-- `LAST_REBUILD_FAILURE` 同族：旧 `:597-603` ↔ 新 `:607-613`，置值点旧 `:619`/`:630` ↔ 新 `:629`/`:640`。
-- 失败后的动作（不是放弃）：`rebuildRoadDataFromProfileInternal` 返回 `null` → 调用方（`Road.generateRoad` / `Road.repairFinalHeightConflict`）在失败分支调 `RoadPlanningService.rebindGeneratedRouteForRetry(level, connection, rd, localRetryStep())` 并返回 `null`，由规划层按「重绑后的路径 + 局部修复精度」再生成。这条链路两版**逐字节相同**：
-  - `rebindGeneratedRouteForRetry`：旧 `RoadPlanningService.java:245-264` ↔ 新 `:252-271`（20 行 `diff` 为空）；
-  - 调用点：旧 `Road.java:298/315/421/476/574` ↔ 新 `:315/332/438/493/591`（数量、位置一一对应）；
-  - `localRetryStep()`：旧 `Road.java:1625-1628` ↔ 新 `:767-770`（`RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0)`）。
-
-### §7 跨度提取的接线：两处调用收成一处，实参不变
-
-- 旧 `Road.java:161-162`（首次）与 `:243-244`（高度重路由后重算）都是
-  `PathSpanExtractor.extractSpans(segments, level, cache, terrain, streams, routeBridgeMinWaterDepth())`；
-- 新 `Road.java:177` / `:260` 都调 `extractPhysicalSpans(segments, level, cache, terrain, streams)`，其定义（新 `Road.java:684-689`）就是同一行调用，实参顺序与个数完全一致（含 `routeBridgeMinWaterDepth()`），**没有少传/多传/换默认值**；
-- 旧 `spans = new ArrayList<>(spans); targetY = computeTargetY(...); spans = refineTunnelSpans(...)`（旧 `:181-182`、`:198-200`、`:254-257`）↔ 新 `settleProfile`（新 `:703-711`），三条语句顺序、实参相同（多类型 `SettledProfile` 只是打包返回值）；
-- `Road.generateRoad` 全方法 diff 见附录 A 第 38 行说明；除命名与 1 行 `logSpecIntegrity` 外无逻辑差异。
+**行数统计：等价 31（#1-17、#30-34、#39、#43、#44、#46-50、#52）/ 移动 22（#18-29、#35-38、#40-42、#45、#51、#53）/ 删除 0 / 改变 1（#54）/ 新增 4（#55-58）。**
 
 ---
 
-## ★ 逻辑改变清单
+## ★ 行为改变清单
 
-### ★B-1（跨组；核查期间从「默认改变」变为「条件性改变」）：剖面求解器默认 LEGACY（=旧版），仅显式 `-Droadweaver.profileSolver=dp` 时改由 DP 求解
+### ★B-1 新版多了一条「DP 求纵断面」路径，且在任务基线 `7bc6023` 上默认开启
 
-> 这一项不在 `PathSpanExtractor` / `RoadPathCalculator` / `RoadSnapService` 里，但它位于 B 组判定的**上游**：`PathSpanExtractor.refineTunnelSpans`、`FillBridgeExtender.refineFinalFillBridgeSpans`、`SpanConflictResolver.retainVerticallyRelevantCrossings` 全部以 `targetY` 为判据输入。C 组报告 `C-纵断面与坡度.md` 已对 DP 本体（★C1–★C14）做了完整清单，这里只列与 B 组结果相接的部分，避免重复。
-
-**旧**（`roadweaver/.../pathlogic/core/Road.java:744-1135`，`computeTargetY` 末尾直接返回自己的结果）：
+**旧版怎么写**（`pathlogic/core/Road.java:1442-` 的 `computeTargetY` 收尾，全文 397 行，`/tmp/old_cty.txt` 可复现）：
 
 ```java
-// 旧：15 道 pass 全部算完后，直接把 smoothed 逐站填进 out 返回
+applyCrossingProfiles(level, cache, terrain, segments, centers, smoothed, crossingRanges, cfg,
+        streams, routeBridgeMinWaterDepth());
+List<RoadSpan> underseaSpans = PathSpanExtractor.convertLongOceanBridgesToUnderseaTunnels(
+        spans, segments, level, cache, footprintSamples);
+...
+smoothed = RoadGradePlanner.enforceContinuousSlopePreferCut(
+        smoothed, isCrossing, cfg.maxSlopeStepPerTwoSegments(), pinnedMask,
+        RoadGradePlanner.configuredStationSpacing(centers));
 List<Integer> out = new ArrayList<>(n);
 for (int v : smoothed) out.add(v);
-...
-return out;
+// ← 到此为止：smoothed 就是最终剖面，没有任何「求解器」概念
 ```
 
-**新**（`roadweaver-next/.../pathlogic/core/TargetYComputation.java:452-464` + `:567-621`，旧流水线算完后被 DP 覆盖）：
+**新版怎么写**（`pathlogic/core/TargetYComputation.java`，`computeTargetY` 搬到此处后加了分派）：
 
 ```java
-452        // ── 剖面求解器模式分派（S7 第 1 级）──────────────────────────────
-453        // ★ 默认已是 DP；{@code -Droadweaver.profileSolver=legacy} 可显式回退。
-...
-463        smoothed = applyProfileSolver(smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
-464                startBoundary, endBoundary, cfg, gradeLimits, connection);
-...
-567    private static int[] applyProfileSolver(...) {
-573        if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
-574            return smoothed;                       // LEGACY：原样返回，逐字节不变
-575        }
-...
-601        var solved = ProfileDpSource.solve(terrainY, isCrossing,
-602                maxCut, maxFill, maxStep, perTwo, constraints);
-603        if (solved.isEmpty()) {                    // 不可行 ⇒ 回落旧流水线
-604            LOGGER.warn("RoadWeaver profile solver=dp infeasible, falling back to legacy" ...);
-609            return smoothed;
-610        }
-611        LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} ...");
-615        return solved.get();
+// ── 剖面求解器模式分派（S7 第 1 级）────
+int[] legacySnapshot = smoothed.clone();
+RoadGradePlanner.SurfaceGradeLimits gradeLimits = RoadGradePlanner.SurfaceGradeLimits.capture();
+smoothed = applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask,
+        pinnedMask, startBoundary, endBoundary, cfg, gradeLimits, connection);
+List<Integer> out = new ArrayList<>(n);
+for (int v : smoothed) out.add(v);
 ```
 
-**两态记录（同一个文件在本次核查期间被改过一次，见文末「核查期间工作树变更」）**：
-
-> 注：上面新代码块第 453 行的注释「★ 默认已是 DP」写于「默认 DP」时期；17:09 默认改回 LEGACY 后该注释未同步（`TargetYComputation.java` mtime 未变），现与实现相反——见「非逻辑但值得记录」#3。
-
-- **态 A：核查开始时读到的实现（默认 DP）**
-
 ```java
-// 17:00 左右工作树中的 ProfileSolverMode.parse（当前文件已不是这样）
-public static ProfileSolverMode parse(String raw) {
-    if (raw == null || raw.isBlank()) return DP;         // ← 未设置属性 = DP
-    String v = raw.trim().toLowerCase(java.util.Locale.ROOT);
-    if ("dp".equals(v)) return DP;
-    if ("legacy".equals(v) || "classic".equals(v)) return LEGACY;
-    return DP;                                           // ← 写错也回落 DP
+private static int[] applyProfileSolver(...) {
+    if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
+        return smoothed;                       // LEGACY：原样返回，行为与旧版一致
+    }
+    ...
+    var solved = ProfileDpSource.solve(terrainY, isCrossing,
+            maxCut, maxFill, maxStep, perTwo, constraints);
+    if (solved.isEmpty()) { LOGGER.warn("... infeasible, falling back to legacy"); return smoothed; }
+    return solved.get();                       // ← 整条剖面被 DP 解替换
 }
 ```
 
-- **态 B：当前工作树（`ProfileSolverMode.java` mtime = 2026-11-13 17:09:20，默认 LEGACY）**
+**基线状态（关键）**：`git show 7bc6023:.../ProfileSolverMode.java` 的 `parse()` 是 `if (raw == null || raw.isBlank()) return DP; ... return DP;`，注释写着「2026-11-13 起为默认」⇒ **任务基线里 DP 是默认**。
 
-```java
-81    public static ProfileSolverMode fromProperty() {
-82        return parse(System.getProperty(PROPERTY));
-83    }
-84
-85    /** 解析字符串（大小写不敏感）；未设或非法返回 {@link #LEGACY}（默认）。 */
-86    public static ProfileSolverMode parse(String raw) {
-87        if (raw == null || raw.isBlank()) return LEGACY;     // ← 未设置属性 = LEGACY
-88        String v = raw.trim().toLowerCase(java.util.Locale.ROOT);
-89        if ("dp".equals(v)) return DP;
-90        if ("legacy".equals(v) || "classic".equals(v)) return LEGACY;
-91        return LEGACY;                                       // ← 写错也回落 LEGACY
-92    }
-```
+**为什么这会改变 B 组的产出**（三条传导链，全部以 `targetY` 为输入）：
 
-- 分派点 `TargetYComputation.applyProfileSolver` 本身**两态下都没有改**（该文件 mtime 未变）：`if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) { return smoothed; }`（`:573-575`）。所以在**态 B（当前默认）下，`applyProfileSolver` 直接返回旧流水线算好的 `smoothed`，与旧版逐字节相同**；DP 只在显式开关 + `slopeLimitEnabled` 为真时才介入（`:576-579`）。
+1. **干洼地桥数量/位置**：`FillBridgeExtender.refineFinalFillBridgeSpans` 的判据是 `targetY.get(i) - lowestFootprintSurface[i] >= dryBridgeDepth`（旧 `PathSpanExtractor.java:950`、新 `FillBridgeExtender.java:210`）。DP 以「最小土方」为目标、且受 `maxCut/maxFill` 施工窗口约束，剖面的填方深度分布与旧 15 道 pass 的结果不同 ⇒ 同一地形下被判成「需要架桥的深填区」的站段会变（一般是变少），最终落盘的 BRIDGE 集合随之改变。
+2. **桥面高度不再是 `applyFixedRange` 的结果**：`RoadSpanProfileOps.applyCrossingProfiles` 在 DP 之前先把桥面写成 `BridgeDeckProfile.applyFixedRange(profile, ..., minimumDeck, cfg.bridgeRampSegments())`（`RoadSpanProfileOps.java:309`），随后 DP 用「整条最优剖面」**整体覆盖**这个数组。`7bc6023` 版 `applyProfileSolver` 是 10 参版本、**没有把桥面水位下界喂进去**（`ProfileDpSource.Constraints` 只有 `(pin, mustBeCovered, minCover)`）⇒ DP 完全可以把桥面压到水面附近甚至水下。
+3. **短浅滩 `applyShortFordClearance` 的效果同样被覆盖**（`RoadSpanProfileOps.java:307` 写入 → `:463` 被 DP 覆盖）。
 
-**同样输入下结果会怎么不同**：
+**可观察差异**：桥/浅滩数量与位置变化；桥面 Y 与河面净空变化（极端情况「路泡在水里」）；土方量显著下降。
+**仓库自己的证据**：提交 `46ee02e`（17:11:39，核查期间产生）标题即「**纵断面求解器默认从 DP 切回 LEGACY —— 三份独立核查证明 DP 会插水**」；`ProfileSolverMode` 文档自述「真实地形 AB 数据：57 次观测、土方 325,346 → 8,996」。这两条都指向「DP 与旧版输出不同」这一结论（提交信息是仓库作者自述，不是我实测）。
+**回退开关**：`-Droadweaver.profileSolver=legacy`（`7bc6023`）或 `dp`（`46ee02e` 之后）可切换；非法值在 `7bc6023` 落 DP、在 `46ee02e` 落 LEGACY —— **默认值在核查期间被改了两次**（见文末「我不确定的地方」）。
 
-1. `terrainY`/`isCrossing`/`tunnelMask`/`pinnedMask` 相同、且**显式 `-Droadweaver.profileSolver=dp`** 时，新版返回 DP 的最优解（最小土方；2026-11-13 早些时候的 AB 记录为 57 次观测、土方 325,346 → 8,996），旧版返回 15 道 pass 的结果，两者逐站 Y 通常不同。**不设属性时（当前默认，态 B）`applyProfileSolver` 直接 `return smoothed`，剖面逐字节等同于旧版。**
-2. 该 `targetY` 被 B 组以下位置当判据读：
-   - `PathSpanExtractor.refineTunnelSpans`：`centerStationOverburden` / `maximumFootprintOverburden`（如旧 `:546-556`，`accurate.surfaceHeight(sample) - targetY.get(index)`）；
-   - `FillBridgeExtender.refineFinalFillBridgeSpans`：新 `:207-212` `unsafeFill[index] = targetY.get(index) - lowestFootprintSurface[index] >= dryBridgeDepth;`、新 `:264-267` 的 `bankHeightDelta = Math.abs(targetY.get(bridgeStart) - targetY.get(bridgeEnd))`；
-   - `SpanConflictResolver.retainVerticallyRelevantCrossings`（首轮用 `provisionalTargetY`）。
-   于是**最终落盘的 TUNNEL / BRIDGE / 干洼地填方桥的 span 集合、桥面绝对 Y 会随桩号不同而不同**。
-3. **不受影响的部分**（B 组自己的判定）：水掩码只依赖水位/河床/湖泊/Streams，`findStableBankRange` 只依赖 `waterSurfaceY + 1` 和地形列，所以「哪一段水面变成 BRIDGE/ROAD_CROSSING、XZ 范围、稳定岸线扩张量」在同一地形/水位输入下与旧版相同；±5 正弦弯只依赖 XZ 与哈希，也不受影响。
+> **判定**：这是**改变**，但**不是重构丢失**——旧版从来没有这条路，新版是「多了一种可选求解器 + 一个可配置默认值」。要回答「重构是否等价」，必须把默认值钉死：**默认 LEGACY 时与旧版等价；默认 DP 时不等价。**
 
-**玩家能观察到的现象（仅显式开启 DP 时）**：同一 seed、同一配置 + `-Droadweaver.profileSolver=dp` 下，会出现「同一条河上桥仍是桥，但桥面高度/桥头引道长度与旧版不同」「本该成隧道的山段因为 DP 把路面压低/抬高而多成或少成隧道」「干洼地填方桥的起止点变化」。这与 C 组结论（DP 路径上「桥面=水位+净空」的平甲板、浅滩抬升、相邻桥连续、峡谷稳岸、跨海隧道剖面等不再生效）是同一根因在不同组的投影。
+### ★B-2 三处「新增但不改变既有行为」
 
-**这段历史在核查期间被推翻过一次**：17:09:20 工作树把默认值从 DP 改回 LEGACY（当前 `ProfileSolverMode.java:86-92`），并把理由写进 `:42-77`——「DP 拿不到水位，桥面从平甲板变斜弦」「prefer-cut 契约被翻转」「约 10 项仅 LEGACY 生效的旧补丁」，与 C 组结论完全一致。因此**当前工作树默认路径逐字节等同于旧版**；只有显式 `-Droadweaver.profileSolver=dp` 才复现上面这些差异。**这不是本次重构的漏改，也不该被算作默认行为改变。**
-
----
-
-## 非逻辑但值得记录（不是逻辑改变，但会影响可维护性/误导后来人）
-
-1. **`RoadCrossingOps.getRandomWidth` 是返回 0 的空壳，且无调用者**（新 `RoadCrossingOps.java:89-91`）。旧版 `Road.getRandomWidth`（旧 `Road.java:633-635`）同样 `return 0`，所以**不是回归**；但类头注释写「宽度为什么带随机量 / 用站点坐标做确定性抖色」（新 `:80-83`）与实际实现相反，且 `Road.generateRoad` 实际调的是 `Road` 里那个同名私有方法（新 `Road.java:119`）。属**文档/死代码陷阱**。
-2. **`CulvertPlanner` 新增了一个未使用的 import**（新 `CulvertPlanner.java:15` `import …postprocess.JunctionTrimOps;`，全文件无引用）。Java 允许，无行为影响。
-3. **`ProfileSolverMode` 的文档与实现一度相反，现已修正；但 `TargetYComputation:453` 的注释仍是旧说法**：`// ★ 默认已是 DP；{@code -Droadweaver.profileSolver=legacy} 可显式回退。` 这行在 17:09 把默认改回 LEGACY 之后**没有同步**（该文件 mtime 未变），现在与实现（默认 LEGACY）相反。属**注释/文档不一致**，不影响行为，但会误导后来人——建议后续改成「默认 LEGACY；`-Droadweaver.profileSolver=dp` 显式开启」。
-4. **大量 `private` → 包可见/`public`**：`PathSpanExtractor`（如 `segmentWaterSample`/`bridgeWaterSample`/`appendWaterCrossingSpan`）、`RoadSnapService` 的常量与工具方法、`AccurateHeightSampler` 的缓存与网络列方法。这是拆类必需的放宽，不改行为，但**扩大了同包耦合面**；今后任何同包类都能直接调这些内部判定。
-5. **`SamplerStatics` ↔ `AccurateHeightSampler` 双向静态导入**（新 `SamplerStatics.java:33` 与 `AccurateHeightSampler.java:32`）。Java 静态导入不触发类初始化循环，我核过两侧 `<clinit>` 互不引用对方非编译期常量，**当前无初始化顺序问题**；但这是编译期才能最终确认的形态。
-
----
-
-## 可观测性退步
-
-**没有发现 B 组原有日志被删或降级**（方法体逐字节相同，日志字符串必然保留）。逐条核对：
-
-| 日志 | 旧位置 | 新位置 | 状态 |
-|---|---|---|---|
-| `[ROAD-BRIDGE-MASK] waterRange=… stations=… footprintCols=…` | `PathSpanExtractor.java:1512-1519` | `:676-683` | 保留（同样每段水一行） |
-| `crossing plan type=… widthBlocks=… waterRange=… stableRange=…` | `:1643-1645` | `:807-809` | 保留 |
-| `route stage=span_extraction connection=… spans=…` | `Road.java:168-169` | `Road.java:183-184` | 保留 |
-| `kept secondary reuse as-is: extended reuse failed validation reason=…` | `RoadSnapService.java:467-472` | `JunctionConnector.java:206-211` | 保留（文案一字未改，含 `runs/first` 细节） |
-| `profile height step` / `water-span boundary height jump` | `Road.java:1090-1133`（C 组 #11 已核） | `TargetYComputation.java:467-510` | 保留 |
-
-**新增（不是退步，是噪音/信息量变化）**：
-
-- `logSpecIntegrity(rd, rawStart, rawEnd)` 插在 `Road.generateRoad` 返回前（新 `Road.java:641`，定义 `:795-811`）：每路一条 `road spec OK … stations/sections/uncovered`，违例时 `road spec VIOLATION …`（前 3 次 + 每 50 次打印）。只读自检，异常被吞（`:806-810`），**不改变返回值**。
-- `profile solver=dp stations=… perTwo=…` 每路一条 INFO（`TargetYComputation.java:611-614`），不可行/异常时各一条 WARN（`:604-605`、`:618`）——**只在显式 `-Droadweaver.profileSolver=dp` 时才会打印**（默认 LEGACY 在 `:573-575` 直接返回，不产生任何此类日志）。默认路径无新增日志。
-
-**文档层面退步**：`RoadCrossingOps` 类头声称「判据与阈值一字未改」但其 `getRandomWidth` 只是空壳（旧版也是空壳，表述易误导）。`ProfileSolverMode` 的文档与实现一度相反，已在核查期间修正（见下节）。
-
----
-
-## 无法判定的地方（如实列，不猜）
-
-1. **「相同输入 ⇒ 输出逐位相同」无法在本轮证明**：本轮只做源码静态比对（未编译、未运行、未开游戏）。我证明的是「方法体在去注释/空白后一致（237/249）、仅机械改写（10/249）、记录迁移（2/249）」；运行时因素（并发完成顺序、Streams 会话成功/失败分支的触发时机、缓存命中与否）不在本次可证范围内。缓存类差异按代码注释「只决定复用、不决定采样值」，但那是注释而非我的实测。
-2. **DP 求解器在真实地形上的差异幅度**：我没有复跑 AB。C 组报告给出 57 次观测（土方 325,346 → 8,996）与「DP 不可行会回落 legacy」的代码路径（`TargetYComputation.java:603-610`）；**注意当前默认已回到 LEGACY，这些差异只在显式 `-Droadweaver.profileSolver=dp` 时才会出现**；哪些具体路线会变、变多少，需真机日志（`profile solver=dp` / `infeasible`）才能定量。
-3. **`PlanningSnapshot.boxesByChunk` 与 `boxes` 的一致性依赖构造点**：我复核了 `PlanningSnapshot.forRoute`（新 `:118-129` 按 `minX/maxX±roadRadius` 逐块入桶）与 `withAdditionalRoadRadius`（`:692-708`）两处；A 组报告称仓内 5 处 `new PlanningSnapshot(...)` 均满足。但 `PlanningSnapshot` 是 record、规范构造器 public，**若将来有人手工拼出不一致快照，`isVillageEndpoint` 会静默漏判**（不报错、不告警）。属可维护性风险，不是现存缺陷，我无法用静态分析穷尽未来调用点。
-
----
-
-## 核查期间工作树变更（必须交代的时序）
-
-本组核查期间（约 17:00 开始，17:09 结束），`roadweaver-next` 工作树发生了**一处**与本组相关的变化：
-
-| 文件 | mtime | 变化 |
+| 新增物 | 位置 | 为什么不改变行为 |
 |---|---|---|
-| `pathlogic/profile/ProfileSolverMode.java` | **2026-11-13 17:09:20** | 默认剖面求解器 **DP → LEGACY**（`parse` 在未设置/非法值时返回 `LEGACY`，仅 `-Droadweaver.profileSolver=dp` 才用 DP）；同时在 javadoc 里记录了切回理由 |
+| `logSpecIntegrity` | `Road.java:641`（调用）、`:795-810`（实现） | 只在 `Road.generateRoad` 成功收尾处调用一次；`try { RoadSpec.from(rd) ... } catch (Throwable t) { }` 全包，只 `LOGGER.info/warn`，不写回任何数据 |
+| `BuildFrame` 桥范围缓存 | `pathlogic/construction/BuildFrame.java` | 缓存值 = `BridgeRangeCalculator.compute(middlePositions, spans, cfg)`（纯函数）；键 = `RoadShardStorage.computeFingerprint(data)` + `bridgeEnabled/bridgeUseBuoysInstead/bridgeMaxLengthBlocks/bridgeMergeGap` 压成的标量（`BuildFrame.java:83-90`），而 `BridgeRangeCalculator.compute` 恰好只读这 4 个配置字段（`BridgeRangeCalculator.java:64/68/69/90`）；取用走 `copyForUser()` 深拷贝 |
+| `StructureBoxIndex` | `pathlogic/structures/StructureBoxIndex.java` | 只把「全表扫描」换成「按区块桶查候选超集」，判据本身（含距离平方比较）留在调用方未改（§52） |
 
-证据与说明：
+### 唯一一类「机械改写」的完整清单（10 处，均已逐条确认无表达式变化）
 
-1. 该文件的新旧两态我都读到过：**态 A**（默认 DP）的 `parse` 实现与 **态 B**（默认 LEGACY，当前）的 `parse` 实现都原样贴在 ★B-1；`TargetYComputation.java` 的 mtime 未变，`applyProfileSolver` 的分派逻辑两态一致。
-2. 我按硬约束**没有执行任何 git 命令**，因此**无法判断该改动是否已提交到 `7bc6023`**。如果审计基线是「git 提交内容」而不是「工作树」，请以提交为准复核这一处；如果基线是「当前工作树」，则判定为：**默认路径与旧版等价，DP 为显式可选项（条件性改变）**。
-3. 本组其余全部结论（237 处逐字节等价 / 10 处机械改写 / 2 处记录迁移）不受这处改动影响——它们都不在 `ProfileSolverMode` 的判定链上。
+| 文件 | 方法 | 差异内容 |
+|---|---|---|
+| `PathMetricsOps` | `calculateAStarRoadPathDetailed`(8 参) | `StructureAvoidanceService.ensurePlanningSnapshotForPathAsync` → 静态导入 `SnapshotOrchestrator.*` 的同名方法（该方法体本身逐字相同） |
+| `PathFinalizeOps` | `finalizePath`(7 参) | `StructureAvoidanceService.stopAtEndpointBuilding/stopAtVillageBuilding/intersectsPreparedRoute/...` → 静态导入；可见性 `private`→`public` |
+| `PathFinalizeOps` | `repairStructureIntersectionsWithCorridorRefresh` | `AccurateGradeRepairPlanner.ExactStructureRepairOutcome` → `StructureRepair.ExactStructureRepairOutcome`；`repairStructureIntersectionsAtExactClearanceDetailed` 换宿主类（方法体逐字相同） |
+| `PathFinalizeOps` | `repairLakeIntersectionsWithCorridorRefresh` | `AccurateGradeRepairPlanner.repairLakeIntersections` → `LakeRiverRepair.repairLakeIntersections`（方法体逐字相同） |
+| `PathFinalizeOps` | `repairRiverIntersectionsWithCorridorRefresh` | 同上 |
+| `PathFinalizeOps` | `repairRiverRouteSegments` | 同上 |
+| `PathFinalizeOps` | `refreshPlanningSnapshot` | 同第 1 条 |
+| `PathMetricsOps` | `buildSegments` | 4 处 `StructureAvoidanceService.*` → 静态导入 |
+| `RoadSnapService` | `snapRoadList` | 异常类 `StructureAvoidanceService.PlanningSnapshotUnavailableException`（嵌套）→ 顶层同名类，构造器同为 `String` |
+| `EndpointConnectOps` | `markSnapTargets` | record 私有字段访问 `nearest.index` → `nearest.index()`（Java 21 nestmate/访问器差异），表达式不变 |
 
 ---
 
-## 附录 A：10 处「机械改写」全表（方法体其余部分逐字节相同）
+## 真删除清单（0 项）
 
-| # | 方法 | 旧位置 | 新位置 | 差异内容 |
-|---|---|---|---|---|
-| 1 | `calculateAStarRoadPathDetailed/8` | `RoadPathCalculator.java:955` | `PathMetricsOps.java:433` | 1 处 `StructureAvoidanceService.ensurePlanningSnapshotForPathAsync` → 静态导入裸名 |
-| 2 | `finalizePath/7` | `:1050` | `PathFinalizeOps.java:110` | 6 处 `StructureAvoidanceService.*` → 静态导入裸名 |
-| 3 | `repairStructureIntersectionsWithCorridorRefresh/5` | `:1187` | `PathFinalizeOps.java:247` | `AccurateGradeRepairPlanner.*` → `StructureRepair.*`（+2 处静态导入） |
-| 4 | `repairLakeIntersectionsWithCorridorRefresh/6` | `:1314` | `PathFinalizeOps.java:374` | `AccurateGradeRepairPlanner.repairLakeIntersections` → `LakeRiverRepair.repairLakeIntersections` |
-| 5 | `repairRiverIntersectionsWithCorridorRefresh/6` | `:1363` | `PathFinalizeOps.java:423` | 同上（river） |
-| 6 | `repairRiverRouteSegments/6` | `:1400` | `PathFinalizeOps.java:460` | 同上（river） |
-| 7 | `refreshPlanningSnapshot/3` | `:1430` | `PathFinalizeOps.java:490` | 1 处静态导入 |
-| 8 | `buildSegments/7` | `:1597` | `PathMetricsOps.java:217` | 6 处静态导入（`intersectsPreparedRoute`/`protectedGapSpans` 等） |
-| 9 | `snapRoadList/2` | `RoadSnapService.java:182` | `RoadSnapService.java:194` | `catch (StructureAvoidanceService.PlanningSnapshotUnavailableException)` → `catch (PlanningSnapshotUnavailableException)` |
-| 10 | `markSnapTargets/6` | `:3099` | `EndpointConnectOps.java:494` | `nearest.index`/`nearest.dist2` → `nearest.index()`/`nearest.dist2()`（record 跨顶层类后必须用访问器） |
+**结论：B 组没有任何一个方法、常量或判定被真正删除。** 反证四条：
 
-## 附录 B：迁移落点（旧方法 → 新类，全部逐字节等价，抽样列位置）
+1. **方法体逐字命中**：旧 `PathSpanExtractor` 60/60、`RoadPathCalculator` 55/55（47 逐字 + 8 机械改写）、`RoadSnapService` 142/142（139 逐字 + 3 机械改写/记录搬家）在**新仓全库**都能找到对应方法体，无一条「找不到」。
+2. **包级方法数不减**：`pathfinding/` 94→96、`pathlogic/pathcalc/` 66→66、`postprocess/` **195→195**。`postprocess` 是精确相等——旧 4 个文件 195 个方法，新 13 个文件仍是 195 个方法，一个没多一个没少。
+3. **包级行数不减**：`pathfinding/` 2476→2738、`pathcalc/` 1961→2136、`postprocess/` 5111→5621。三处都**变长**。
+4. **反向扫描无孤儿**：对新 `postprocess/` 全部 13 个文件、`UnderseaTunnelPlanner`/`FillBridgeExtender`/`SpanConflictResolver`/`TunnelFootprintSampler` 做反向审计（每个新方法体在旧仓能否找到），结果：**除上表 3 处机械改写外，其余 100% 在旧仓有逐字相同的方法体**；再对这批新类做「方法名全仓出现次数」扫描，**没有任何一个只被声明不被调用的死方法**。
 
-> 约定：本表括号里的旧行号、以及「新位置」的行号，都是**方法体左花括号所在行**（与 `grep -n` 能对上）；完整区间见正文「逐项对照」表。
+顺带说明两个「看起来像删除」其实不是的东西：
 
-| 旧方法（旧行号） | 新位置 |
-|---|---|
-| `extractSpans/6`（116） | `PathSpanExtractor.java:121` |
-| `collectBridgeSpans/11`（1448） | `PathSpanExtractor.java:612` |
-| `convertLongOceanBridgesToUnderseaTunnels/6`（578） | `UnderseaTunnelPlanner.java:59` |
-| `refineFinalFillBridgeSpans/5`（798） | `FillBridgeExtender.java:58` |
-| `resolvePhysicalSpanOverlaps/2`（1040） | `SpanConflictResolver.java:60` |
-| `appendTunnelWithSurfaceMouths/11`（1313） | `TunnelFootprintSampler.java:61` |
-| `connectSecondaryToPrimary/2`（332） | `JunctionConnector.java:71` |
-| `tryConnect/4`（982） | `JunctionTrimOps.java:66` |
-| `tryAbsorbEndpointCorridor/4`（1352） | `EndpointConnectOps.java:71` |
-| `tryReuseBetweenTwoApproaches/4`（1537） | `NetworkReuseMerger.java:50` |
-| `findSharedEndpointApproach/5`（2478） | `EndpointApproachConnector.java:68` |
-| `buildGrid/2`（3229） | `RoadSnapService.java:606`（`SegmentGrid` 在独立文件） |
-| `NearestResult`/`ConnectionOption`（3574/3580） | `SnapInternals.java:51`/`:54` |
+- `CANYON_BANK_SEARCH_SEGMENTS=8`、`CANYON_MIN_DEPTH_BLOCKS=10`、`CANYON_MIN_WIDTH_BLOCKS=5`（旧 `PathSpanExtractor.java:57-59` ↔ 新 `:62-64`）**两版都声明了但都没有任何引用**（全仓 grep 只有声明行）。它是旧版遗留的死常量，新版按原样保留，不是本次重构删的；旧注释也写明「A canyon is not a river. Only the actual water mask above may create BRIDGE or ROAD_CROSSING spans.」⇒ 干峡谷不造桥是**两版共同**的既定设计。
+- `UNDERSEA_TUNNEL_SELECTION_PROBABILITY=0.5D` 同样两版都只在声明处出现，实际取值走 `ConfigService.get().terrainProfile().oceanUnderseaChance()`（默认 `0.50D`，旧 `TerrainProfileConfig.java:17` ↔ 新 `:18`）——两版一致。
 
-## 附录 C：本组使用的核对命令（可复现、只读）
+---
 
-```text
-# 1) 方法体抽取 + 归一化比对（去注释/空白后按「方法名+参个数」在旧仓与新仓全树匹配）
-#    旧三文件 249 个类级成员 → 237 逐字节等价 / 10 机械改写 / 2 记录迁移
-# 2) 新仓反向扫描「新方法体」：pathfinding/ 仅 A* 与工厂类；pathlogic/bridge/ 0 个新方法体
-# 3) 整文件字节比对：
-cmp -s .../pathlogic/bridge/BridgeDeckProfile.java ...   # 仅头注释 1 行
-cmp -s .../pathlogic/bridge/BridgeSegment.java ...       # 仅头注释 1 行
-cmp -s .../util/Line.java ...                            # 仅头注释 1 行
-cmp -s .../pathfinding/TunnelEnvelopeCriterion.java ...  # 完全相同
-cmp -s .../pathlogic/structures/PlanningSnapshotUnavailableException.java ...  # 无旧文件（旧为嵌套类）
-```
+## 我不确定的地方
+
+1. **DP 默认值在核查期间被反复改，我无法给出「最终默认是什么」的结论。** 时间线（全部来自 `git log` / `git show`）：`7bc6023`（16:52）默认 **DP** → `46ee02e`（17:11）默认改回 **LEGACY** → 工作区 17:13 又未提交地把 `ProfileSolverMode.parse` 改回 **DP**，同时 `TargetYComputation` 加了 `deckFloor` 水位下界（12 参 `applyProfileSolver`）→ `e82bea0`（17:17）提交「桥面水位下界改为 DP 的求解约束」。也就是说 ★B-1 的第 2 条（DP 会把桥面压进水里）在 `e82bea0` 之后**可能**已被 `deckFloor` 修掉，但那条修改是我审计结束之后落的，**我没有逐行核过它**，因此不能声称「已修复」或「仍然会插水」。
+2. **`BuildFrame` 缓存的键完备性（条件风险，非已证缺陷）。** 缓存键只压缩了 4 个配置字段（`bridgeEnabled` / `bridgeUseBuoysInstead` / `bridgeMaxLengthBlocks` / `bridgeMergeGap`），而 `BridgeRangeCalculator.compute` 当前确实只读这 4 个；但这是**靠注释纪律维持的隐含契约**——将来 `BridgeRangeCalculator` 多读一个配置字段而忘了同步 `BuildFrame.configVersion`，就会出现「配置改了但桥掩码还是旧的」。另外我没有核实 `RoadShardStorage.computeFingerprint(data)` 是否把 `spans` 全部纳入（若只哈希 segments，改 spans 后可能命中旧缓存）。
+3. **`isVillageEndpoint` 的索引化等价性依赖 `boxesByChunk` 覆盖完整。** 我核了 `PlanningSnapshot` 的构造（`PlanningSnapshot.java:118-129`：每个盒按 `minX/maxX±roadRadius`、`minZ/maxZ±roadRadius` 逐区块入桶）与 `withAdditionalRoadRadius` 的重建，逻辑上「距端点 ≤16 格的盒必落在查询桶内」成立；但 `merge(...)` 分支里新增盒子的入桶逻辑我只扫了一眼，没有逐行验；如果某条 merge 路径漏入桶，`isVillageEndpoint` 会从 true 变 false（端点高度锁丢失）。建议由 A 组（结构避让）交叉确认。
+4. **`crossingWidthBlocks` 的口径问题两版都在。** 它量的是「沿路弧长 + 首尾半步」，不是「河面直线宽度」。对斜穿河道的情况，`<= 12` 判浅滩会比真实河宽更早升级成桥。这是**旧版就有的口径**（我逐字核对过两版相同），不是本次重构引入；我只是把它记下来，避免下一次审计又把它当成本次重构的新问题。
+5. **`CANYON_*` 三个常量的原意我判断不出。** 两版都没有引用、也没有测试引用，注释只说「干峡谷不是河」。它可能对应某个早已删除的干峡谷架桥算法，但我无法从代码里还原它当年怎么用。
+6. **未做的事**：没有编译、没有跑测试、没有跑游戏。所有结论都来自源码静态比对；「方法体逐字相同」不等于「运行时行为一定相同」——调用点、调用顺序、线程、配置读入时机我都核了（§32、§6、§44），但**并发路径（吸附在异步区块线程里跑）与缓存失效时机没有运行期证据**。
+7. **行号可能漂移**：新仓在我核查期间被改了 3 次（`46ee02e`/`e82bea0`/工作区）。表中新仓行号是 17:15 前后的工作树；`TargetYComputation` 与 `ProfileSolverMode` 两个文件的行号**已经不能保证与当前工作树一致**（其余文件未变）。
