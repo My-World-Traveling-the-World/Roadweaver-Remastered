@@ -23,6 +23,8 @@
 #     用 ConfigKeyTable.all() / byCategory() 打一行元数据自证日志，不再是孤岛。）
 #   （2026-11-13：AbRunner 也接进生产了 —— AbObservingPathfinder 在 AB 模式下
 #     用它的四项中立度量出报告，不再是孤岛。）
+#   （2026-11-13：BandRouteSolver 同样接进生产 —— BandPathfinder 现在委托它
+#     求解单条路线，消除「AB 观测用的算法 ≠ 生产用的算法」的漂移隐患。）
 #   [D] 对外契约     api / api-fabric 模块里的公共类型。零引用是正常的 ——
 #                    它们的存在意义就是给外部 mod 调用，不是给我们自己用。
 
@@ -58,7 +60,6 @@ WorldDataProviderImpl                  # fabric/src/main/java/net/shiroha233/roa
 
 # ── [C] 测试孤岛（接线，或连测试一起删）────────────────────
 AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
-BandRouteSolver                        # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/BandRouteSolver.java   测试引用 6 次
 QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
 RoadPipeline                           # common/src/main/java/net/shiroha233/roadweaver/pipeline/RoadPipeline.java   测试引用 11 次
 

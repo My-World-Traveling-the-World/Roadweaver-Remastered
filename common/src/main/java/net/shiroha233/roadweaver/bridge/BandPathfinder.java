@@ -8,10 +8,8 @@ import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
-import net.shiroha233.roadweaver.band.BandResult;
 import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.metric.ArrivalTimeField;
 import net.shiroha233.roadweaver.metric.FastMarchingSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.ObstacleField;
@@ -22,6 +20,10 @@ import net.shiroha233.roadweaver.pathfinding.Pathfinder;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
+
+import net.shiroha233.roadweaver.pipeline.ab.BandRouteSolver;
+import net.shiroha233.roadweaver.pipeline.ab.RouteSolver;
+import net.shiroha233.roadweaver.topology.RoadNode;
 
 /**
  * 新架构的寻路器实现 —— 旧链 {@link Pathfinder} 策略接口的第 5 个实现。
@@ -122,25 +124,27 @@ public final class BandPathfinder implements Pathfinder {
                 FinslerMetric.DEFAULT_GRADE_WEIGHT,
                 FinslerMetric.DEFAULT_OBSTACLE_WEIGHT);
 
-        ArrivalTimeField field;
-        try {
-            field = new FastMarchingSolver(metric).solve(start.getX(), start.getZ());
-        } catch (IllegalArgumentException unreachable) {
+        // 委托给 BandRouteSolver —— 它是「单条路线」的唯一实现。
+        //
+        // 2026-11-13：这里原本自己写了一遍「场求解 → 回溯 → 弹性带平滑」，
+        // 与 BandRouteSolver.solve 是两份独立实现。危险在于它们服务于不同目的：
+        //   · 本类（生产路径）决定真机上的路画成什么样；
+        //   · BandRouteSolver（AB 对比）决定「新链比旧链好还是差」的结论。
+        // 两份实现一旦漂移，AB 就会对着一个真实生产里并不存在的算法做评价 ——
+        // 改了一边忘了另一边，报告仍然『绿』，但结论已经与真机无关。
+        // 用同一个类，这个隐患从根上没有了。
+        BandRouteSolver routeSolver = new BandRouteSolver(metric, ElasticBandSolver.defaults());
+        RouteSolver.RouteSolution solution = routeSolver.solve(
+                new RoadNode("start", start.getX(), start.getZ()),
+                new RoadNode("end", end.getX(), end.getZ()));
+        if (!solution.reachable()) {
             return PathResult.failure();
         }
-        if (!field.reachable(end.getX(), end.getZ())) {
-            return PathResult.failure();
-        }
-
-        List<BandResult.Point> raw = field.pathTo(end.getX(), end.getZ()).stream()
-                .map(p -> new BandResult.Point(p[0], p[1]))
-                .toList();
-        BandResult smoothed = ElasticBandSolver.defaults().smooth(raw);
 
         // ④ 端点必须精确落回起终点（场求解会按步长取整）
-        List<BlockPos> path = new ArrayList<>(smoothed.points().size() + 2);
-        for (BandResult.Point point : smoothed.points()) {
-            path.add(new BlockPos(point.x(), terrain.height(point.x(), point.z()), point.z()));
+        List<BlockPos> path = new ArrayList<>(solution.points().size() + 2);
+        for (int[] point : solution.points()) {
+            path.add(new BlockPos(point[0], terrain.height(point[0], point[1]), point[1]));
         }
         if (path.isEmpty()) return PathResult.failure();
 
