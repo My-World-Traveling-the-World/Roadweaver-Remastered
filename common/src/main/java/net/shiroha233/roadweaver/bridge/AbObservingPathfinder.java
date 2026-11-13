@@ -12,6 +12,13 @@ import net.shiroha233.roadweaver.pathfinding.Pathfinder;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import net.shiroha233.roadweaver.pipeline.ab.AbRunner;
+import net.shiroha233.roadweaver.pipeline.ab.RouteMetrics;
+import net.shiroha233.roadweaver.pipeline.ab.RouteSolver;
+
 /**
  * AB 双跑包装器：**旧链生效，新链只观察**。
  *
@@ -64,10 +71,16 @@ public final class AbObservingPathfinder implements Pathfinder {
             PathResult observed = band.findPath(start, end, width, level, maxSteps,
                     cache, terrain, config);
             if (log) {
-                LOGGER.info("[ROAD-AB] #{} classic={}({}) band={}({})  (band 结果不生效)",
-                        n,
-                        size(authoritative), ok(authoritative),
-                        size(observed), ok(observed));
+                // 2026-11-13：这里原来只打「点数 + 是否成功」，信息量太低 ——
+                // 点数是 500 还是 480 根本说明不了新链画得好不好。改用 AbRunner
+                // 的四项中立度量（长度 / 重复 XZ / 曲率能量 / 最大转角）+ verdict。
+                // 这同时让 AbRunner 从「只有测试在用」变成生产接线。
+                AbRunner.AbReport report = AbRunner.compare(
+                        "(" + start.getX() + "," + start.getZ() + ")->("
+                                + end.getX() + "," + end.getZ() + ")",
+                        toSolution(authoritative), toSolution(observed));
+                LOGGER.info("[ROAD-AB] #{} verdict={}\n{}",
+                        n, report.verdict(), String.join("\n", report.diffs()));
             }
         } catch (Throwable t) {
             if (log) {
@@ -76,11 +89,25 @@ public final class AbObservingPathfinder implements Pathfinder {
         }
         return authoritative;
     }
-    private static int size(PathResult r) {
-        return r == null || r.rawPath() == null ? -1 : r.rawPath().size();
-    }
-
-    private static boolean ok(PathResult r) {
-        return r != null && r.success() && r.rawPath() != null && !r.rawPath().isEmpty();
+    /**
+     * 把旧链的 {@link PathResult} 翻译成中立度量要的形状。
+     *
+     * <p>只取 x/z —— {@link RouteMetrics} 是二维度量，高度不参与比较：
+     * 纵断面由另一套机制负责，混进来会让「长度」这项失去可比性。</p>
+     */
+    private static RouteSolver.RouteSolution toSolution(PathResult r) {
+        if (r == null || !r.success() || r.rawPath() == null || r.rawPath().isEmpty()) {
+            return RouteSolver.RouteSolution.unreachable();
+        }
+        List<int[]> pts = new ArrayList<>(r.rawPath().size());
+        for (BlockPos p : r.rawPath()) {
+            if (p != null) {
+                pts.add(new int[]{p.getX(), p.getZ()});
+            }
+        }
+        if (pts.isEmpty()) {
+            return RouteSolver.RouteSolution.unreachable();
+        }
+        return new RouteSolver.RouteSolution(pts, RouteMetrics.fromPairs(pts), true);
     }
 }

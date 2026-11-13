@@ -70,6 +70,29 @@ public final class AbRunner {
                 bandResult.reachable() ? bandResult.metrics() : null);
     }
 
+    /**
+     * 对比<b>已经算好</b>的两份结果。
+     *
+     * <h2>为什么需要这个重载（2026-11-13 接线时加的）</h2>
+     * <p>上面那个重载会自己调 {@code solve} —— 但生产里的 AB 观测
+     * （{@code AbObservingPathfinder}）<b>已经把两条路都算完了</b>，
+     * 再走一遍 {@code solve} 等于把寻路跑第二次，而寻路是秒级的。</p>
+     *
+     * <p>所以这里收两份现成结果，只做度量与判定。这也是 {@link AbRunner}
+     * 第一次进入生产路径 —— 在此之前它只有测试在用。</p>
+     *
+     * @param route   路线标签（日志用）
+     * @param classic 旧链结果，可为 {@code null}
+     * @param band    新链结果，可为 {@code null}
+     */
+    public static AbReport compare(String route,
+                                   RouteSolver.RouteSolution classic,
+                                   RouteSolver.RouteSolution band) {
+        return new AbReport(route,
+                classic != null && classic.reachable() ? classic.metrics() : null,
+                band != null && band.reachable() ? band.metrics() : null);
+    }
+
     private static String label(RoadNode from, RoadNode to) {
         return from.describe() + " -> " + to.describe();
     }
