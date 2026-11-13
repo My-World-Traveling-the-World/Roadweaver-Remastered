@@ -1746,3 +1746,54 @@ STATUS 是"体检报告"，HANDOVER 是"上手说明"。前者读完你还得自
 
 不写这句，下一个人（或下一轮的我）看到 684 全绿 + 一堆 ✅ 会以为收尾了。
 **未完成就要写未完成，并写清原因** —— 这比让清单看起来漂亮重要。
+
+---
+
+# ★ 重大事实：重组版直到 2026-11-13 08:36 才第一次上客户端（2026-11-13）
+
+## 证据（SHA-256 精确匹配）
+
+| jar | SHA-256 |
+|---|---|
+| 用户此前一直在跑的 `0.9.098` | `60B9A6C70ACBC154...` |
+| **旧仓 `roadweaver/fabric/build/final/0.9.098.jar`** | **`60B9A6C70ACBC154...`** ← 完全一致 |
+| 新仓 `roadweaver-next/fabric/build/final/0.9.098.jar` | `203B89561A5CA7AF...` ← 不同 |
+
+⇒ **此前客户端跑的是旧仓构建。`roadweaver-next` 从未部署过。**
+
+新仓的 `0.9.098` 产物构建于 11-12 17:56（首个提交后 2 分钟），但从未被复制到 mods。
+
+## 为什么这件事重要
+
+1. **本次 0.9.099 部署是"重构版第一次在真机上运行"** —— 684 个单测全绿
+   不等于真机能跑；配置界面拆分、`BuildFrame` 缓存这些"活的改动"都是第一次实战；
+2. 如果出问题，**大概率是真实回归，不是环境问题** —— 这决定了排查方向；
+3. 也解释了为什么之前所有"旧版行为"的观察都只反映旧仓代码。
+
+## 二进制级"功能不丢失"核查
+
+对比旧仓 0.9.098（1303 条目）与新仓 0.9.099（1478 条目）：
+
+| 项 | 数量 | 结论 |
+|---|---|---|
+| 旧有新无 | 37 | 其中 2 个是版本号派生的 architectury inject 目录名、1 个是 `Road$1` 匿名类（已改 lambda），**其余 32 个是嵌套类** |
+| 新仓新增 | 212 | `band` / `bridge` / `metric` / `topology` / `pipeline` / `spec` / `pathlogic/profile` + `client/fabric/*Section`（配置界面拆分）|
+
+**逐个核查那 32 个"消失"的嵌套类**：全部以顶层类或搬迁后的嵌套类形式存在，例如
+
+```
+StructureAvoidanceService$PieceOccupancy   -> structures/PieceOccupancy.class
+StructureAvoidanceService$PlanningSnapshot -> structures/PlanningSnapshot$VillageBuildingCollision.class
+RoadTunnelBuilder$Decision                 -> tunnel/Decision.class
+RoadSnapService$SegmentGrid                -> postprocess/SegmentGrid$IndexedPos.class
+AccurateGradeRepairPlanner$ExactStructureRepairOutcome -> terrain/StructureRepair$ExactStructureRepairOutcome.class
+```
+
+⇒ **真丢失类型：0 个。**
+
+## 构建产物路径的坑（已写进 HANDOVER）
+
+`fabric/build/libs/` 是 `remapJar` 的裸产物（**缺 API**），
+`fabric/build/final/` 才是 `embedApiJar` 的成品（含 `META-INF/jars/roadweaver-api.jar`）。
+两者**文件名完全一致**。第一次部署时取错了目录，导致启动报
+「需要 roadweaver_api 的 1 及以上版本，但没有安装它」，6 个下游模组全部被拒。
