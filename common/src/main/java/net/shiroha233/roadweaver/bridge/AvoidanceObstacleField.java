@@ -93,29 +93,60 @@ public final class AvoidanceObstacleField {
     public static ObstacleField sample(TerrainField terrain, int minX, int minZ,
                                        int width, int depth, int clearance,
                                        double falloff, BlockingTest test) {
+        return sample(terrain, minX, minZ, width, depth, stepOf(terrain), clearance, falloff, test);
+    }
+
+    /**
+     * 带采样步长地构造障碍场。
+     *
+     * <h3>2026-11-13：补上第二个 step 缺口</h3>
+     * <p>地表地形场（{@link TerrainField}）现在支持采样步长了，但本类此前恒按
+     * <b>1:1 逐格</b>采样（{@code int x = minX + ix;}）。两者不匹配的后果很直接：
+     * 网络级规划的地形场是 step=8 的，而这里的掩码是 1:1 的 ⇒ 区域尺寸差 64 倍，
+     * 根本配不到一起。这正是本类一直零引用的结构性原因（不是它没用，是接不上）。</p>
+     *
+     * <p>现在 {@code width}/{@code depth} 是<b>方块覆盖范围</b>，内部按 step 折算成
+     * 列数/行数：只在采样点调一次判据（省掉 63/64 的判据调用 —— 而
+     * {@code blocksPlanningObstacle} 内部要过 ThreadLocal 快照、包围盒相交、
+     * 村庄群聚合盒，正是最贵的那部分），查询时再就近吸附。</p>
+     *
+     * <p>{@code step = 1} 时与旧行为逐位一致。</p>
+     */
+    public static ObstacleField sample(TerrainField terrain, int minX, int minZ,
+                                       int blockWidth, int blockDepth, int step,
+                                       int clearance, double falloff, BlockingTest test) {
         if (terrain == null) throw new IllegalArgumentException("terrain 不能为 null");
         if (test == null) throw new IllegalArgumentException("test 不能为 null");
-        if (width <= 0 || depth <= 0) {
-            throw new IllegalArgumentException("区域尺寸必须为正: " + width + "x" + depth);
+        if (blockWidth <= 0 || blockDepth <= 0) {
+            throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
         }
+        int safeStep = Math.max(1, step);
+        int columns = (blockWidth - 1) / safeStep + 1;
+        int rows = (blockDepth - 1) / safeStep + 1;
 
-        boolean[] blocked = new boolean[width * depth];
+        boolean[] blocked = new boolean[columns * rows];
         int blockedCount = 0;
-        for (int iz = 0; iz < depth; iz++) {
-            for (int ix = 0; ix < width; ix++) {
-                int x = minX + ix;
-                int z = minZ + iz;
+        for (int iz = 0; iz < rows; iz++) {
+            for (int ix = 0; ix < columns; ix++) {
+                int x = minX + ix * safeStep;
+                int z = minZ + iz * safeStep;
                 int y = terrain.height(x, z);
                 if (test.blocks(x, y, z)) {
-                    blocked[ix + iz * width] = true;
+                    blocked[ix + iz * columns] = true;
                     blockedCount++;
                 }
             }
         }
 
         ObstaclePotential soft = ObstaclePotential.fromMask(
-                minX, minZ, width, depth, blocked, falloff);
-        return new MaskedPotential(soft, blocked, minX, minZ, width, depth, blockedCount);
+                minX, minZ, columns, rows, blocked, falloff);
+        return new MaskedPotential(soft, blocked, minX, minZ, columns, rows,
+                safeStep, blockedCount);
+    }
+
+    /** 与地形场保持同一步长（它自己知道该用多少格采一次）。 */
+    private static int stepOf(TerrainField terrain) {
+        return terrain == null ? 1 : terrain.step();
     }
 
     /**
@@ -128,7 +159,17 @@ public final class AvoidanceObstacleField {
                                                      int minX, int minZ,
                                                      int width, int depth,
                                                      int clearance, double falloff) {
-        return sample(terrain, minX, minZ, width, depth, clearance, falloff,
+        return fromAvoidanceService(terrain, minX, minZ, width, depth,
+                stepOf(terrain), clearance, falloff);
+    }
+
+    /** 带步长版本：步长默认跟随地形场（它自己知道采样密度）。 */
+    public static ObstacleField fromAvoidanceService(TerrainField terrain,
+                                                     int minX, int minZ,
+                                                     int blockWidth, int blockDepth,
+                                                     int step, int clearance, double falloff) {
+        return sample(terrain, minX, minZ, blockWidth, blockDepth, step,
+                clearance, falloff,
                 (x, y, z) -> blocksPlanningObstacle(
                         new BlockPos(x, y, z), clearance));
     }
@@ -163,28 +204,51 @@ public final class AvoidanceObstacleField {
      */
     private record MaskedPotential(ObstaclePotential soft,
                                    boolean[] blocked,
-                                   int minX, int minZ, int width, int depth,
-                                   int blockedCount) implements ObstacleField {
+                                   int minX, int minZ, int columns, int rows,
+                                   int step, int blockedCount) implements ObstacleField {
 
         @Override
         public double potential(int x, int z) {
-            return soft.potential(x, z);
+            // 区域外的势恒为 1.0 —— 这是 ObstaclePotential 自己的界外约定
+            // （归一化的最大势），不是随手取的常数。
+            // 2026-11-13 加步长时差点改坏这条：snapX/snapZ 会把界外坐标 clamp 回边缘，
+            // 于是 potential(-1,0) 从 1.0 变成"区域内某点的势"（通常是 0），
+            // 原有测试「区域外势为 1」立刻把它抓出来了。
+            if (x < minX || x > minX + (columns - 1) * step
+                    || z < minZ || z > minZ + (rows - 1) * step) {
+                return 1.0;
+            }
+            // 软势按采样点坐标查 —— ObstaclePotential 只认 1:1 网格
+            return soft.potential(minX + snapX(x) * step, minZ + snapZ(z) * step);
         }
 
         @Override
         public boolean impassable(int x, int z) {
-            if (x < minX || x >= minX + width || z < minZ || z >= minZ + depth) {
+            if (x < minX || x > minX + (columns - 1) * step
+                    || z < minZ || z > minZ + (rows - 1) * step) {
                 return true;            // 区域外一律当不可通行，防止求解器走出去
             }
-            return blocked[(x - minX) + (z - minZ) * width];
+            return blocked[snapX(x) + snapZ(z) * columns];
+        }
+
+        /** 方块坐标 → 列下标（就近吸附，与 TerrainField 同一口径）。 */
+        private int snapX(int x) {
+            int ix = Math.round((x - minX) / (float) step);
+            return Math.max(0, Math.min(columns - 1, ix));
+        }
+
+        /** 方块坐标 → 行下标（就近吸附）。 */
+        private int snapZ(int z) {
+            int iz = Math.round((z - minZ) / (float) step);
+            return Math.max(0, Math.min(rows - 1, iz));
         }
 
         /** 便于日志。 */
         String describe() {
-            return "avoidance: region=" + width + "x" + depth
+            return "avoidance: region=" + columns + "x" + rows + "@" + step
                     + " blocked=" + blockedCount
                     + " (" + String.format(java.util.Locale.ROOT, "%.1f",
-                    100.0 * blockedCount / (width * depth)) + "%)"
+                    100.0 * blockedCount / (columns * rows)) + "%)"
                     + " falloff=" + soft.falloff();
         }
     }
