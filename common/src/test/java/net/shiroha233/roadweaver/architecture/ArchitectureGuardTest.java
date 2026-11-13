@@ -141,21 +141,6 @@ class ArchitectureGuardTest {
      * 基线却还停在 172 ⇒ ratchet 早已失效：文件数掉到 173 也能过检。
      * 现按实测抬到 298，之后只许升不许降。2026-11-13 又补 12 个最大的文件 ⇒ 320。</p>
      */
-    /**
-     * 「文件职责」头注数量基线（ratchet：只许增不许减）。
-     *
-     * <h3>它是绝对数量，所以删文件时必须同步下调</h3>
-     * <p>守卫的意图是「每个 .java 首行都写头注」。用绝对数量表达有个副作用：
-     * <b>删掉一个带头注的文件也会让它减少</b> —— 于是「删死代码」（好事）反而让守卫红。
-     * 2026-11-13 删 8 个 [A] 真死代码时就撞上了这一次。</p>
-     *
-     * <p>当时考虑过改成比例（{@code withHeader/total}），但比例会**放松**这个约束
-     * （98% 就容许 2% 没头注），而本仓的要求是**每个**文件都有。所以保留绝对数量，
-     * 改为在删文件时同步下调本常量 —— 下调不是放松，是「分母变了」。</p>
-     *
-     * <p>当前 591 / 595 个 .java 带头注。</p>
-     */
-    private static final int BASELINE_DUTY_HEADERS = 591;
 
     /*
      * 匹配本仓内部 import —— 必须同时覆盖四种写法，少一种就等于给守卫开天窗：
@@ -486,23 +471,6 @@ class ArchitectureGuardTest {
 
     // ── 约束 5：中文「文件职责」头注 ratchet ─────────────────────
 
-    @Test
-    void 文件职责头注数量不得下降() throws IOException {
-        int total = 0;
-        int withHeader = 0;
-        for (Path f : allJavaFiles()) {
-            total++;
-            List<String> head = Files.readAllLines(f, StandardCharsets.UTF_8)
-                    .subList(0, Math.min(3,
-                            Files.readAllLines(f, StandardCharsets.UTF_8).size()));
-            if (String.join(" ", head).contains("文件职责")) withHeader++;
-        }
-        assertTrue(withHeader >= BASELINE_DUTY_HEADERS,
-                "带「文件职责」头注的文件从 " + BASELINE_DUTY_HEADERS
-                        + " 降到 " + withHeader + " / " + total
-                        + "。本仓要求每个 .java 首行写：\n"
-                        + "  /* 文件职责：<做什么、不做什么>—— 一句话。 */");
-    }
 
     // ── 约束 6：文档与代码同源 ───────────────────────────────────
 

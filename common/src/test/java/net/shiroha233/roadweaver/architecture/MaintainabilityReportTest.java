@@ -52,16 +52,6 @@ public final class MaintainabilityReportTest {
     /** 接近千行硬约束的预警档。 */
     private static final int VERY_LONG_FILE = 800;
     /** 职责头 ratchet 底线（2026-11-13 实测 320）。 */
-    /**
-     * 「文件职责」头注数量下限（ratchet）。
-     *
-     * <h3>它是绝对数量，删文件时要同步下调</h3>
-     * <p>2026-11-13 删 8 个 [A] 真死代码 + 1 个连带项（ModWorldGenerator）后，
-     * 总文件数从 603 降到 595、带头注的从 595 降到 591 —— 分母变了，下限跟着降。
-     * **这不是放松**：另有 {@code duty == total} 那条断言保证 100% 覆盖，
-     * 只要有文件缺头注就红。</p>
-     */
-    private static final int DUTY_HEADER_FLOOR = 591;
 
     // ── 方法级注释的 ratchet 底线（2026-11-13 实测）──────────────
     // 这三层是 depth-D 的剩余部分，规模远大于文件头（合计 4,887 个元素），
@@ -171,7 +161,7 @@ public final class MaintainabilityReportTest {
         sb.append("| 有效代码行 > ").append(VERY_LONG_FILE).append(" 的文件 | ").append(veryLong)
                 .append(" | ≤ 3 |\n");
         sb.append("| 有「文件职责」头 | ").append(duty)
-                .append(" | ≥ ").append(DUTY_HEADER_FLOOR).append(" |\n");
+                .append(" | = ").append(total).append("（100% 覆盖，硬要求） |\n");
         sb.append("| 长参数表方法 | ").append(longParams).append(" | 只报告 |\n\n");
 
         sb.append("## 分支密度 Top 10（if/for/case/&& 每百有效行）\n\n");
@@ -196,10 +186,13 @@ public final class MaintainabilityReportTest {
                 + " 有效代码行 / 职责头 " + duty + " / >" + VERY_LONG_FILE + " 行 " + veryLong
                 + " / 长参数表 " + longParams + " → " + reportFile);
 
-        assertTrue(duty >= DUTY_HEADER_FLOOR,
-                "有「文件职责」头的文件从 " + DUTY_HEADER_FLOOR + " 掉到 " + duty + " —— 注释不许倒退");
-        // 2026-11-13：注释债已清零，ratchet 升级为硬要求 —— 新文件必须带「文件职责」头，
-        // 不再有「先欠着」的余地。这条比上面的 ratchet 更严，二者同时生效。
+        // 2026-11-13：注释债已清零，ratchet 升级为硬要求 —— 新文件必须带「文件职责」头。
+        //
+        // 同一天还删掉了原来那条 `duty >= DUTY_HEADER_FLOOR`（绝对数量下限）。
+        // 理由：它**完全被下面这条覆盖** —— 若 duty == total 成立，则
+        // duty == total >= 任何历史下限，那条断言永不可能单独触发。
+        // 而它的副作用是真实的：**删死代码（好事）会让绝对数量下降，于是守卫红**。
+        // 100% 覆盖既更严，又不会误伤删除。
         assertTrue(duty == total,
                 "有 " + (total - duty) + " 个文件缺「文件职责」头注（现在要求 100% 覆盖）："
                         + "新增 .java 文件请在第一行写 /* 文件职责：<做什么、不做什么> */");

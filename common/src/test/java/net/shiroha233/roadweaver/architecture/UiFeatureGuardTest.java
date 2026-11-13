@@ -62,9 +62,23 @@ public final class UiFeatureGuardTest {
             "key.roadweaver.route.speed_boost",
             "key.roadweaver.route.edit_modifier");
 
-    /** 四个 UI 区的文件数下限（ratchet：只许涨）。 */
+    /**
+     * 四个 UI 区的文件数下限（ratchet：只许涨）。
+     *
+     * <h3>★ 2026-11-13：统计时<b>跳过死代码基线里的文件</b></h3>
+     * <p>原来这里是纯绝对数量下限。副作用很直接：删一个已在
+     * {@code [A] 真死代码} 里的 UI 文件（那是<b>好事</b>），文件数就从 56 掉到 55，
+     * 守卫立刻红 —— 于是「删死代码」反过来要改守卫的常量。删 9 个死代码那天就撞了一次。</p>
+     *
+     * <p>现在统计时先读 {@code dead-code-baseline.txt}，把<b>已在基线里登记过的类</b>
+     * 排除掉。效果是：<b>删掉一个 [A] 文件时计入数不变</b>（它早就被排除了），所以下限
+     * 不必跟着删改；而<b>删掉一个不在基线里的 UI 文件</b>仍然会让计入数下降、守卫仍然会红
+     * —— 那才是它该拦的事。</p>
+     *
+     * <p>下限值因此是「<b>排除死代码之后</b>的有效文件数」。</p>
+     */
     private static final String[][] UI_AREAS = {
-            {"client/map", "地图界面", "55"},   // 2026-11-13: 删掉死代码 SingleplayerOverlayTileManager (56->55)
+            {"client/map", "地图界面", "53"},
             {"route/editor", "手绘路线编辑器", "12"},
             {"client/config", "配置界面", "12"},
             {"client/loading", "预热/加载界面", "3"},
@@ -222,6 +236,17 @@ public final class UiFeatureGuardTest {
         Assumptions.assumeTrue(srcRoot != null, "跳过");
         List<String> problems = new ArrayList<>();
         StringBuilder report = new StringBuilder();
+        // 读死代码基线：这些类即使还在，也不该算进 UI 区文件数（删它们是好事）
+        java.util.Set<String> knownDeadTypes = new java.util.HashSet<>();
+        Path deadBaseline = srcRoot.getParent().getParent().getParent()
+                .resolve("common/src/test/resources/architecture/dead-code-baseline.txt");
+        if (Files.isRegularFile(deadBaseline)) {
+            for (String line : Files.readAllLines(deadBaseline, java.nio.charset.StandardCharsets.UTF_8)) {
+                String s = line.trim();
+                if (s.isEmpty() || s.startsWith("#")) continue;
+                knownDeadTypes.add(s.split("[\\s#]+")[0]);
+            }
+        }
         for (String[] area : UI_AREAS) {
             Path dir = srcRoot.resolve(area[0]);
             if (!Files.isDirectory(dir)) {
@@ -230,13 +255,18 @@ public final class UiFeatureGuardTest {
             }
             int count;
             try (Stream<Path> s = Files.walk(dir)) {
-                count = (int) s.filter(x -> x.toString().endsWith(".java")).count();
+                count = (int) s.filter(x -> x.toString().endsWith(".java"))
+                        .filter(x -> {
+                            String f = x.getFileName().toString();
+                            return !knownDeadTypes.contains(f.substring(0, f.length() - 5));
+                        })
+                        .count();
             }
             int floor = Integer.parseInt(area[2]);
             report.append("  ").append(area[1]).append("（").append(area[0]).append("）")
-                    .append(count).append(" 个文件 / 下限 ").append(floor).append('\n');
+                    .append(count).append(" 个有效文件 / 下限 ").append(floor).append('\n');
             if (count < floor) {
-                problems.add(area[1] + " 从 " + floor + " 个文件缩到 " + count + " —— 有功能被删了");
+                problems.add(area[1] + " 从 " + floor + " 个文件缩到 " + count + " —— 有功能被删了（注意：已在死代码基线里的文件不计入）");
             }
         }
         System.out.print("UiFeatureGuardTest 四个 UI 区：\n" + report);

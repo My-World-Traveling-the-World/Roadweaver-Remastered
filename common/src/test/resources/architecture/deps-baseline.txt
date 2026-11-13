@@ -63,13 +63,10 @@ map -> client                            1
 map -> config                            8
 map -> core                              16
 map -> network                           1
-map -> pathfinding                       18
 map -> pathlogic                         1
 map -> persistence                       9
 map -> planning                          3
 map -> runtime                           3
-map -> search                            1
-map -> util                              1
 map -> worldgen                          2
 network -> client                        9
 network -> core                          3

@@ -38,16 +38,7 @@
 #                    它们的存在意义就是给外部 mod 调用，不是给我们自己用。
 
 # ── [A] 真死代码（可以删）────────────────────────────────
-AccurateTerrainTileBackfillService     # common/src/main/java/net/shiroha233/roadweaver/map/tile/backfill/AccurateTerrainTileBackfillService.java
-InitialRoadConstructionService         # common/src/main/java/net/shiroha233/roadweaver/generation/InitialRoadConstructionService.java
-MapSamplingNoticeOverlayRenderer       # common/src/main/java/net/shiroha233/roadweaver/client/map/render/MapSamplingNoticeOverlayRenderer.java
-MapSnapshotAccumulator                 # common/src/main/java/net/shiroha233/roadweaver/client/map/data/MapSnapshotAccumulator.java
-MapTerrainSamplingService              # common/src/main/java/net/shiroha233/roadweaver/map/tile/sampling/MapTerrainSamplingService.java
 OpenCLAccurateHeightBackend            # common/src/main/java/net/shiroha233/roadweaver/pathfinding/sampling/opencl/OpenCLAccurateHeightBackend.java
-OverlayTileQueryService                # common/src/main/java/net/shiroha233/roadweaver/map/tile/query/OverlayTileQueryService.java
-OverlayTileRenderer                    # common/src/main/java/net/shiroha233/roadweaver/map/tile/render/OverlayTileRenderer.java
-Records                                # common/src/main/java/net/shiroha233/roadweaver/util/Records.java
-TerrainTileRenderer                    # common/src/main/java/net/shiroha233/roadweaver/map/tile/render/TerrainTileRenderer.java
 
 # ── [B] 平台实现（禁止删；守卫自动校验它真的是平台实现）──────────
 ClientNetBridgeImpl                    # fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ClientNetBridgeImpl.java
