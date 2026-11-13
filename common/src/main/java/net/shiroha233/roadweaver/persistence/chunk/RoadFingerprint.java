@@ -13,18 +13,26 @@ public final class RoadFingerprint {
 
     private RoadFingerprint() {}
 
+    /**
+     * 计算道路指纹。
+     *
+     * <h2>★ 端点只是「身份」，不是「内容」（2026-11-13 修正）</h2>
+     * <p>旧实现里，只要 {@link RoadData#hasOwnerPair()} 为真就<b>直接返回</b>
+     * 「两个端点坐标的哈希」，几何一概不看。后果：</p>
+     * <ul>
+     *   <li>同一对端点之间重新规划（桥改隧道、中心线改道、剖面重算）⇒ 指纹<b>不变</b>；</li>
+     *   <li>{@code BuildFrame} 按指纹缓存桥掩码 ⇒ 拿<b>旧的</b>桥区间去铺<b>新的</b>路。</li>
+     * </ul>
+     * <p>所以现在：<b>几何永远参与哈希</b>，端点对只是在这一层之上再叠一条身份信息。</p>
+     */
     public static long compute(RoadData road) {
         if (road == null || road.roadSegmentList() == null || road.roadSegmentList().isEmpty()) return 0L;
-        if (road.hasOwnerPair()) {
-            long firstOwner = Math.min(road.ownerA2dKey(), road.ownerB2dKey());
-            long secondOwner = Math.max(road.ownerA2dKey(), road.ownerB2dKey());
-            return nonZero(mix(mix(mix(FNV_OFFSET, 0x524F41444F574E52L), firstOwner), secondOwner));
-        }
 
         BlockPos first = firstPosition(road.roadSegmentList());
         BlockPos last = lastPosition(road.roadSegmentList());
         if (first == null || last == null) return 0L;
         boolean forward = compare(first, last) <= 0;
+
         long hash = mix(mix(FNV_OFFSET, road.width()), road.roadType());
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
         for (int offset = 0; offset < segments.size(); offset++) {
@@ -33,6 +41,13 @@ public final class RoadFingerprint {
             if (segment != null && segment.middlePos() != null) {
                 hash = mix(hash, segment.middlePos().asLong());
             }
+        }
+
+        if (road.hasOwnerPair()) {
+            long firstOwner = Math.min(road.ownerA2dKey(), road.ownerB2dKey());
+            long secondOwner = Math.max(road.ownerA2dKey(), road.ownerB2dKey());
+            hash = mix(mix(hash, 0x524F41444F574E52L), firstOwner);
+            hash = mix(hash, secondOwner);
         }
         return nonZero(hash);
     }

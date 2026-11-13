@@ -450,10 +450,18 @@ public final class TargetYComputation {
         }
 
         // ── 剖面求解器模式分派（S7 第 1 级）──────────────────────────────
-        // 默认 LEGACY：直接返回原剖面，不建任何对象、不做任何计算 —— 保证
-        // 「没设属性」与「设了 legacy」逐字节等价，CI 才敢用默认路径当基线。
-        smoothed = applyProfileSolver(smoothed, terrainY, tunnelMask, pinnedMask,
-                startBoundary, endBoundary, cfg, connection);
+        // ★ 默认已是 DP；{@code -Droadweaver.profileSolver=legacy} 可显式回退。
+        //
+        // ★★ 必须在覆盖前留一份旧剖面快照：下面的 AB 观测器拿它当「legacy」臂。
+        // 若不快照，观测器拿到的其实是 DP 自己的输出 —— 两条臂都是 DP，
+        // 观测数据彻底失去意义（2026-11-13 独立审计发现，此前全部 AB 结论作废）。
+        int[] legacySnapshot = smoothed.clone();
+        // 施工端的真实挖填上限。DP 与旧流水线必须用同一套窗口，否则 DP 会挖出
+        // 施工端直接拒收的深度（审计实测：24/12 实验窗口下约 0.3% 的站被判死）。
+        RoadGradePlanner.SurfaceGradeLimits gradeLimits =
+                RoadGradePlanner.SurfaceGradeLimits.capture();
+        smoothed = applyProfileSolver(smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
+                startBoundary, endBoundary, cfg, gradeLimits, connection);
         List<Integer> out = new ArrayList<>(n);
         for (int v : smoothed) out.add(v);
         // Task 16 diagnostic: flag remaining >1 station height steps and
@@ -505,22 +513,23 @@ public final class TargetYComputation {
         // 用于回答「新解到底更好还是更差」——在此之前不允许切默认。
         // 开关：-Droadweaver.profileAb=on（默认关闭，关闭时一次布尔判断就返回）。
         //
-        // 窗口参数是**实验参数**，不是生产值：故意放宽（挖 24 / 填 12）是为了让 DP
-        // 在陡地形上也可行，把对比聚焦在「坡度平顺 vs 土方量」，而不是让不可行掩盖一切。
+        // ★ 观测的第一臂必须是**旧流水线的真实输出**（legacySnapshot），不能是 smoothed ——
+        // 后者此时已经是 DP 的结果，两条臂都成 DP 就测不出任何东西（审计发现）。
+        // 窗口也必须与生产一致：旧代码用的是实验窗口 24/12，会让 DP 挖出施工端拒收的深度。
         //
         // ★ 坡度口径（2026-11-13 修正）：配置 maxSlopeStepPerTwoSegments 的语义是
         // 「每**两**站最多升降 N 格」，必须原样传给二阶约束。曾经用 ceil(N/2) 折算成
         // 「每站」是错的 —— 那允许「连续每站 +1」，三站升 3 格，比配置允许的多一倍，
         // 于是 DP 拿「更陡」去换「更少土方」，AB 对比因此不公平。
-        ProfileAbObserver.observe(smoothed, terrainY, isCrossing,
-                PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL,
+        ProfileAbObserver.observe(legacySnapshot, terrainY, isCrossing,
+                gradeLimits.plainCut(), gradeLimits.plainFill(),
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
                 cfg.maxSlopeStepPerTwoSegments(),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
         // S4：在同样的物理约束下让联合 DP 自己重新决定桥/隧道/地面。
         // groundBanned 喂的是「这里不能铺地面」这条物理事实（水面 / 已有公路 / 保护区），
         // **不喂**旧版判出来的桥/隧道选择 —— 否则 DP 只是在复现旧决策。
-        ProfileAbObserver.observeModes(smoothed, terrainY, isCrossing, tunnelMask,
+        ProfileAbObserver.observeModes(legacySnapshot, terrainY, isCrossing, tunnelMask,
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
                 cfg.maxSlopeStepPerTwoSegments(),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
@@ -546,12 +555,26 @@ public final class TargetYComputation {
      *       少传任何一条都会让入口高度偏离实测地表 —— 那正是玩家一眼能看出来的错误。</li>
      * </ol>
      *
-     * <p>窗口参数与 AB 观察器用的是同一组实验值，便于两边日志直接对比。</p>
+     * <p>窗口与坡度口径<b>必须与生产一致</b>：窗口用 {@link RoadGradePlanner.SurfaceGradeLimits}
+     * 的实时上限（施工端同一套），坡度用配置原值传给二阶约束。
+     * 曾经用「AB 实验窗口 24/12 + ceil(N/2) 每站步长」，两者都让 DP 比生产允许的更激进 ——
+     * 2026-11-13 独立审计发现并修正。</p>
+     *
+     * @param isCrossing 每站是否跨水/桥。这是 {@link ProfileDpSource} 的「桥段钉成直线」输入，
+     *                   <b>不是</b> tunnelMask —— 曾经传错，导致桥面甲板高度被整条覆盖掉
+     * @param gradeLimits 本趟规划的施工上限快照（挖/填/覆土同源）
      */
-    private static int[] applyProfileSolver(int[] smoothed, int[] terrainY, boolean[] tunnelMask,
-                                            boolean[] pinnedMask, int startBoundary, int endBoundary,
-                                            RoadGenerationConfig cfg, StructureConnection connection) {
+    private static int[] applyProfileSolver(int[] smoothed, int[] terrainY, boolean[] isCrossing,
+                                            boolean[] tunnelMask, boolean[] pinnedMask,
+                                            int startBoundary, int endBoundary,
+                                            RoadGenerationConfig cfg,
+                                            RoadGradePlanner.SurfaceGradeLimits gradeLimits,
+                                            StructureConnection connection) {
         if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
+            return smoothed;
+        }
+        // 用户关掉坡度限制时，旧流水线也不夹坡。DP 若仍强制 |Δ|≤N 就是两套语义打架。
+        if (!cfg.slopeLimitEnabled()) {
             return smoothed;
         }
         int n = smoothed.length;
@@ -562,15 +585,21 @@ public final class TargetYComputation {
                 if (pinnedMask.length > 0 && pinnedMask[0]) pin[0] = startBoundary;
                 if (pinnedMask.length > n - 1 && pinnedMask[n - 1]) pin[n - 1] = endBoundary;
             }
-            int minCover = Math.max(1, RoadGradePlanner.SurfaceGradeLimits.capture().tunnelCoreOverburden());
+            int minCover = Math.max(1, gradeLimits.tunnelCoreOverburden());
+            // mustBeCovered 用隧道掩码（覆土是隧道的要求）；crossing 用桥掩码（桥面钉直线）。
+            // 这两个是不同的事实，曾经被同一个 tunnelMask 顶替 —— 后果是隧道被当成桥钉直、
+            // 而真正的桥面甲板高度被 DP 整条覆盖掉。
             var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover);
-            // 一阶上限（每站）与二阶上限（每两站）都给足，交给求解器同时生效。
-            // ★ 二阶那个用配置原值，不再除以 2 —— 见 AB 观测处的注释。
             int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
-            int maxStep = perTwo;
+            // 一阶上限 = 把「每两站 N 格」折算成每站（向上取整）。它只是兜底，
+            // 真正绑定的是二阶约束 |d_i + d_{i−1}| ≤ perTwo。
+            int maxStep = Math.max(1, (perTwo + 1) / 2);
+            // 窗口取施工端的实时上限 —— 与旧流水线同一套，DP 才不会挖出施工端拒收的深度。
+            int maxCut = Math.max(0, gradeLimits.plainCut());
+            int maxFill = Math.max(0, gradeLimits.plainFill());
 
-            var solved = ProfileDpSource.solve(terrainY, isCrossingMaskOf(tunnelMask, n),
-                    PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL, maxStep, perTwo, constraints);
+            var solved = ProfileDpSource.solve(terrainY, isCrossing,
+                    maxCut, maxFill, maxStep, perTwo, constraints);
             if (solved.isEmpty()) {
                 LOGGER.warn("RoadWeaver profile solver=dp infeasible, falling back to legacy"
                                 + " stations={} connection={}->{}",
@@ -579,8 +608,8 @@ public final class TargetYComputation {
                         connection == null ? "?" : connection.to());
                 return smoothed;
             }
-            LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} minCover={} connection={}->{}",
-                    n, perTwo, minCover,
+            LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
+                    n, perTwo, maxStep, maxCut, maxFill, minCover,
                     connection == null ? "?" : connection.from(),
                     connection == null ? "?" : connection.to());
             return solved.get();
@@ -591,12 +620,4 @@ public final class TargetYComputation {
         }
     }
 
-    /** DP 的 crossing 参数：隧道段视作需要特殊处理（保持覆土/直线），其余交给约束。 */
-    private static boolean[] isCrossingMaskOf(boolean[] tunnelMask, int n) {
-        boolean[] mask = new boolean[n];
-        if (tunnelMask != null) {
-            System.arraycopy(tunnelMask, 0, mask, 0, Math.min(n, tunnelMask.length));
-        }
-        return mask;
-    }
 }

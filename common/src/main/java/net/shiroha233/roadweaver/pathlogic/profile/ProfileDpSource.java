@@ -162,6 +162,14 @@ public final class ProfileDpSource {
             int b = terrainY[end];
             int len = end - start;
             for (int k = start; k <= end; k++) {
+                // ★ 契约 ①②（结构边界锁定 / 未知端点共享高度）优先于「桥段钉成直线」。
+                //
+                // 这一段曾经无条件写 pin/lo/hi，把前面刚写好的 pin 顶掉 ——
+                // 2026-11-13 独立审计实测：`terrain=70, tunnel=0..2, pin[0]=62` 时
+                // 输出是 `[70,70,70,70,70]`，锁定点被悄悄丢弃；pin 值若再高一点还会
+                // 触发构造期的「钉住 vs 覆土」矛盾异常，被上层 catch 吞掉后整条路静默回落。
+                // 这正是旧版 0.8.369 记录过的「锁定 407、实际 389」那类接缝错位。
+                if (constraints.pinned(k)) continue;
                 int chord = len == 0 ? a : a + Math.round((b - a) * (k - start) / (float) len);
                 pin[k] = chord;
                 lo[k] = chord;

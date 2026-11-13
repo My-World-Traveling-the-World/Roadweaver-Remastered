@@ -56,8 +56,37 @@ public final class BuildFrame {
     /** 缓存上限：超过就整表清空。 */
     private static final int MAX_ENTRIES = 512;
 
-    /** 缓存键：内容指纹 + 配置对象。两者任一变化都必须重算。 */
-    private record Key(long fingerprint, ModConfig cfg) {
+    /**
+     * 缓存键：内容指纹 + 影响本类计算的<b>配置版本标量</b>。
+     *
+     * <h2>★ 为什么不能直接放 {@code ModConfig} 对象（2026-11-13 修正）</h2>
+     * <p>{@code ModConfig} 是普通 class，<b>没有覆写 {@code equals/hashCode}</b>。
+     * record 生成的 {@code equals} 会对这个字段走<b>引用比较</b>，于是：</p>
+     * <ul>
+     *   <li>配置对象被复制（热重载 / 拷贝构造）⇒ 同一份配置变成不同键 ⇒ <b>缓存永远命中不了</b>；</li>
+     *   <li>配置被就地修改 ⇒ 旧条目仍按<b>旧配置</b>命中 ⇒ <b>拿到过期结果</b>。</li>
+     * </ul>
+     * <p>所以只取真正参与计算的那几个字段压成一个标量。false miss 只是慢，
+     * false hit 才是错 —— 这个设计保证只会出现前者。</p>
+     */
+    private record Key(long fingerprint, long configVersion) {
+    }
+
+    /**
+     * 把影响 {@link BridgeRangeCalculator#compute} 结果的配置字段压成一个标量。
+     *
+     * <p>字段清单来自 {@code BridgeRangeCalculator} 的实际读取点：
+     * {@code bridgeEnabled} / {@code bridgeUseBuoysInstead} /
+     * {@code bridgeMaxLengthBlocks} / {@code bridgeMergeGap}。
+     * <b>那边新增字段时这里必须同步</b>，否则会出现「配置改了但缓存还命中」。</p>
+     */
+    private static long configVersion(ModConfig cfg) {
+        if (cfg == null) return 0L;
+        long v = cfg.bridgeEnabled() ? 1L : 0L;
+        v = v * 31L + (cfg.bridgeUseBuoysInstead() ? 1L : 0L);
+        v = v * 31L + Math.max(0, cfg.bridgeMaxLengthBlocks());
+        v = v * 31L + Math.max(0, cfg.bridgeMergeGap());
+        return v;
     }
 
     /**
@@ -112,7 +141,7 @@ public final class BuildFrame {
     public static Frames of(long fingerprint, List<RoadSegmentPlacement> segments,
                             List<RoadSpan> spans, ModConfig cfg) {
         if (CACHE.size() > MAX_ENTRIES) CACHE.clear();
-        Key key = new Key(fingerprint, cfg);
+        Key key = new Key(fingerprint, configVersion(cfg));
         return CACHE.computeIfAbsent(key, k -> compute(segments, spans, cfg));
     }
 
