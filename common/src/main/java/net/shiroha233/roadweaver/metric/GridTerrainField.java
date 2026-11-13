@@ -24,6 +24,7 @@ public final class GridTerrainField implements TerrainField {
     private final int minZ;
     private final int width;
     private final int depth;
+    private final int step;
     private final int[] heights;
 
     /**
@@ -34,6 +35,35 @@ public final class GridTerrainField implements TerrainField {
      * @param heights 高度数组，下标 = {@code (x-minX) + (z-minZ)*width}
      */
     public GridTerrainField(int minX, int minZ, int width, int depth, int[] heights) {
+        this(minX, minZ, width, depth, 1, heights);
+    }
+
+    /**
+     * 带采样步长的构造。
+     *
+     * <h3>2026-11-13：补上一个一直缺的约定</h3>
+     * <p>{@link TerrainField#step()} 的注释写得很清楚 —— 「真实路线的包围盒动辄
+     * 1500×1500，逐格采样是 225 万列，<b>既采不完也存不下</b>」。
+     * 但本类作为该接口<b>唯一的具体实现</b>，此前却完全没有实现 step：
+     * 数组恒按 {@code width × depth} 逐格布局、{@code maxX()} 恒等于
+     * {@code minX + width - 1}。于是任何想按步长采样的调用方
+     * （典型是 {@code SampledTerrainField.fromAccurateSampler}）
+     * 只能硬编码 {@code step = 1} ⇒ 网络级规划用不了它 ⇒ 相关组件全部零引用。</p>
+     *
+     * <p>现在 {@code width}/{@code depth} 表示<b>采样点数</b>（列/行），
+     * 覆盖的方块范围是 {@code (width-1)*step + 1}。两种取值的对应关系：</p>
+     * <ul>
+     *   <li>{@code step() == 1} ⇒ 与原实现<b>逐位一致</b>（旧构造器就是这么委托的）；</li>
+     *   <li>{@code step() > 1} ⇒ {@link #height} 把方块坐标<b>就近吸附</b>到采样点，
+     *       {@link #gradient} 除以 step 归一（不除会让坡度放大 step 倍 ——
+     *       step=8 时坡罚炸 64 倍，表现为「平原上也开始绕坡」）。</li>
+     * </ul>
+     *
+     * @param width  采样列数（不是方块宽）
+     * @param depth  采样行数（不是方块深）
+     * @param step   采样步长（格，≥1）
+     */
+    public GridTerrainField(int minX, int minZ, int width, int depth, int step, int[] heights) {
         if (width <= 0 || depth <= 0) {
             throw new IllegalArgumentException("区域尺寸必须为正: " + width + "x" + depth);
         }
@@ -46,6 +76,7 @@ public final class GridTerrainField implements TerrainField {
         this.minZ = minZ;
         this.width = width;
         this.depth = depth;
+        this.step = Math.max(1, step);
         this.heights = heights;
     }
 
@@ -65,21 +96,67 @@ public final class GridTerrainField implements TerrainField {
     public int height(int x, int z) {
         if (!contains(x, z)) {
             throw new IllegalArgumentException(
-                    "点 (" + x + "," + z + ") 不在区域内 [" + minX + ".." + (minX + width - 1)
-                            + "] x [" + minZ + ".." + (minZ + depth - 1) + "]");
+                    "点 (" + x + "," + z + ") 不在区域内 [" + minX + ".." + maxX()
+                            + "] x [" + minZ + ".." + maxZ() + "]");
         }
-        return heights[(x - minX) + (z - minZ) * width];
+        return heights[snapX(x) + snapZ(z) * width];
     }
+
+    /**
+     * 梯度按<b>每格</b>归一 —— 采样点之间的水平距离是 {@code step} 格。
+     *
+     * <p>与 {@link TerrainField#gradient} 的默认实现相比，这里不能直接用
+     * {@code height(x±1, z)}：step > 1 时 {@code x±1} 会吸附到同一个采样点，
+     * 差分成 0（坡度永远为零，坡罚静默失效）。所以必须按<b>采样点索引</b>取邻居，
+     * 再把距离除以 step。</p>
+     */
+    @Override
+    public double[] gradient(int x, int z) {
+        if (!contains(x, z)) {
+            throw new IllegalArgumentException(
+                    "点 (" + x + "," + z + ") 不在区域内 [" + minX + ".." + maxX()
+                            + "] x [" + minZ + ".." + maxZ() + "]");
+        }
+        int ix = snapX(x);
+        int iz = snapZ(z);
+        int ixm = Math.max(0, ix - 1);
+        int ixp = Math.min(width - 1, ix + 1);
+        int izm = Math.max(0, iz - 1);
+        int izp = Math.min(depth - 1, iz + 1);
+
+        double gx = (ixp == ixm) ? 0.0
+                : (heights[ixp + iz * width] - heights[ixm + iz * width])
+                / ((double) (ixp - ixm) * step);
+        double gz = (izp == izm) ? 0.0
+                : (heights[ix + izp * width] - heights[ix + izm * width])
+                / ((double) (izp - izm) * step);
+        return new double[]{gx, gz};
+    }
+
+    /** 方块坐标 → 列下标（就近吸附，与 {@code StridedTerrainField} 同一口径）。 */
+    private int snapX(int x) {
+        int ix = Math.round((x - minX) / (float) step);
+        return Math.max(0, Math.min(width - 1, ix));
+    }
+
+    /** 方块坐标 → 行下标（就近吸附）。 */
+    private int snapZ(int z) {
+        int iz = Math.round((z - minZ) / (float) step);
+        return Math.max(0, Math.min(depth - 1, iz));
+    }
+
+    @Override
+    public int step() { return step; }
 
     @Override
     public int minX() { return minX; }
 
     @Override
-    public int maxX() { return minX + width - 1; }
+    public int maxX() { return minX + (width - 1) * step; }
 
     @Override
     public int minZ() { return minZ; }
 
     @Override
-    public int maxZ() { return minZ + depth - 1; }
+    public int maxZ() { return minZ + (depth - 1) * step; }
 }

@@ -61,15 +61,39 @@ public final class SampledTerrainField {
      */
     public static TerrainField of(int minX, int minZ, int width, int depth,
                                   GridSampler sampler) {
+        return of(minX, minZ, width, depth, 1, sampler);
+    }
+
+    /**
+     * 带采样步长地构造地形场。
+     *
+     * <h3>为什么要这个重载（2026-11-13）</h3>
+     * <p>{@link TerrainField#step()} 的注释写着：真实路线的包围盒动辄 1500×1500，
+     * 逐格采样是 225 万列，<b>既采不完也存不下</b>。而本类此前硬编码 step=1，
+     * 于是它只能用于小区域 —— 网络级规划（{@code RoadPipeline}）因此用不了它，
+     * 相关的一整条链路都停在「写好了但接不上」的状态。</p>
+     *
+     * <p>现在 {@code blockWidth}/{@code blockDepth} 是<b>方块覆盖范围</b>
+     * （调用方视角），内部按 step 折算成列数/行数去采样。
+     * {@code step = 1} 时与旧行为逐位一致。</p>
+     */
+    public static TerrainField of(int minX, int minZ, int blockWidth, int blockDepth,
+                                  int step, GridSampler sampler) {
         if (sampler == null) throw new IllegalArgumentException("sampler 不能为 null");
-        int[] heights = sampler.sampleHeights(minX, minZ, width, depth);
+        if (blockWidth <= 0 || blockDepth <= 0) {
+            throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
+        }
+        int safeStep = Math.max(1, step);
+        int columns = (blockWidth - 1) / safeStep + 1;
+        int rows = (blockDepth - 1) / safeStep + 1;
+        int[] heights = sampler.sampleHeights(minX, minZ, columns, rows);
         // 长度由 GridTerrainField 的构造器校验；这里先给出更有指向性的错误
-        if (heights == null || heights.length != width * depth) {
+        if (heights == null || heights.length != columns * rows) {
             throw new IllegalArgumentException(
-                    "采样器返回的长度必须是 " + (width * depth) + "，实际 "
+                    "采样器返回的长度必须是 " + (columns * rows) + "，实际 "
                             + (heights == null ? "null" : heights.length));
         }
-        return new GridTerrainField(minX, minZ, width, depth, heights);
+        return new GridTerrainField(minX, minZ, columns, rows, safeStep, heights);
     }
 
     /**
@@ -87,17 +111,40 @@ public final class SampledTerrainField {
     public static TerrainField fromAccurateSampler(AccurateHeightSampler sampler,
                                                    int minX, int minZ,
                                                    int width, int depth) {
+        return fromAccurateSampler(sampler, minX, minZ, width, depth, 1);
+    }
+
+    /**
+     * 带采样步长地用精确采样器构造地形场 —— <b>网络级规划的唯一可用入口</b>。
+     *
+     * <h3>精度与规模的取舍</h3>
+     * <p>规划要到「哪两个结构连一条路」的粒度，1500×1500 的区域在 step=8 时是
+     * 187×187 ≈ 3.5 万列 —— 比逐格的 225 万列小 64 倍，而拓扑决策根本不需要方格精度。
+     * 真正要方格精度的是单条路线的几何，那由 {@code BandRouteSolver} 在
+     * 自己的包围盒里做（它的搜索步长本来就等于 A* 的 {@code effectiveAStarStep}）。</p>
+     *
+     * <p>{@link AccurateHeightGridRequest} 的 {@code width}/{@code height} 是
+     * <b>采样点数</b>（不是方块宽），{@code blockX(i) = minX + (i % width) * step}，
+     * 所以这里按 step 折算列数再请求。</p>
+     */
+    public static TerrainField fromAccurateSampler(AccurateHeightSampler sampler,
+                                                   int minX, int minZ,
+                                                   int blockWidth, int blockDepth,
+                                                   int step) {
         if (sampler == null) throw new IllegalArgumentException("sampler 不能为 null");
-        if (width <= 0 || depth <= 0) {
-            throw new IllegalArgumentException("区域尺寸必须为正: " + width + "x" + depth);
+        if (blockWidth <= 0 || blockDepth <= 0) {
+            throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
         }
+        int safeStep = Math.max(1, step);
+        int columns = (blockWidth - 1) / safeStep + 1;
+        int rows = (blockDepth - 1) / safeStep + 1;
 
         AccurateHeightGridRequest request =
-                new AccurateHeightGridRequest(minX, minZ, width, depth, 1);
+                new AccurateHeightGridRequest(minX, minZ, columns, rows, safeStep);
         AccurateHeightGrid grid = sampler.sampleGrid(request);
 
         // motionBlocking 是「行走面」：含障碍物、不含树叶。
         // worldSurface 会把树冠算进去，道路会莫名抬高；oceanFloor 只在过水判定用。
-        return new GridTerrainField(minX, minZ, width, depth, grid.motionBlocking());
+        return new GridTerrainField(minX, minZ, columns, rows, safeStep, grid.motionBlocking());
     }
 }
