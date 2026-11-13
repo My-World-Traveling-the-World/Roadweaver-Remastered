@@ -102,8 +102,12 @@ public final class BandPathfinder implements Pathfinder {
                 minX, minZ, columns, rows, step, heights);
 
         // ② 采避让（判据一字不改；调用方已在 PlanningScope 内）
+        //
+        // ★ 2026-11-13 修复：生产链全部走 findRawPath ⇒ 接口 width 恒为 1，
+        // 若直接信任它则 clearance=0，硬避让半径归零（路直接穿过村庄建筑）。
+        // 这里改用 planningRoadRadius() —— 与四个旧寻路器完全同一口径。
         boolean[] blocked = new boolean[columns * rows];
-        int clearance = Math.max(0, width / 2);
+        int clearance = planningRoadRadius();
         for (int iz = 0; iz < rows; iz++) {
             for (int ix = 0; ix < columns; ix++) {
                 int index = ix + iz * columns;

@@ -208,4 +208,44 @@ class FinslerMetricTest {
             }
         }
     }
+
+    // ── 性质 7：求解器真的用了各向异性代价（2026-11-13 接入）────
+
+    /**
+     * 斜坡上：沿等高线走的到达时间必须低于直冲坡顶。
+     *
+     * <p>地形 {@code height(x,z)=x}（梯度恒为 (1,0)，坡罚权重 1）。
+     * 沿 +x 方向每格代价 = 1 + 1·1² = 2；沿 +z 方向每格代价 = 1。
+     * 从 (5,10) 到 (15,10)：直冲 10 格上坡 ≈ 20；先沿 z 绕行则 x 分量代价仍要付，
+     * 但等值线方向的移动是纯 1。这个测试钉的是<b>两个轴的单价不同且与梯度方向对齐</b>，
+     * 即 FinslerMetric.cost(x,z,dirX,dirZ) 真的进了求解器（此前全仓零调用）。</p>
+     */
+    @Test
+    void 求解器必须真的用各向异性代价_沿坡比横坡贵() {
+        FastMarchingSolver solver = new FastMarchingSolver(
+                new FinslerMetric(ramp(0, 40), ObstacleField.NONE, 1.0, 0.0));
+        ArrivalTimeField field = solver.solve(20, 20);
+
+        // 沿 +x 走 1 格（上坡）：每格 2
+        assertEquals(2.0, field.at(21, 20), 1e-9,
+                "沿坡走 1 格应花 2（1 基础 + 1 坡罚）；若是 1 说明求解器还在用各向同性代价");
+        // 沿 +z 走 1 格（等高线）：每格 1
+        assertEquals(1.0, field.at(20, 21), 1e-9,
+                "沿等高线走 1 格应花 1（无坡罚）");
+        // 对称性：上坡下坡同价（公式是 (∇h·θ̂)²，方向反号不影响平方）
+        assertEquals(2.0, field.at(19, 20), 1e-9, "反向下坡同价（平方项对称）");
+    }
+
+    /**
+     * 负控：平地上各向异性必须严格退化为各向同性（旧行为不能变）。
+     */
+    @Test
+    void 平地上各向异性严格退化为各向同性() {
+        ArrivalTimeField field = new FastMarchingSolver(
+                FinslerMetric.of(flat(0, 40), ObstacleField.NONE)).solve(20, 20);
+
+        assertEquals(1.0, field.at(21, 20), 1e-9, "平地 x 向每格 1");
+        assertEquals(1.0, field.at(20, 21), 1e-9, "平地 z 向每格 1");
+        assertEquals(10.0, field.at(30, 20), 1e-9, "平地正交 10 格 = 10");
+    }
 }

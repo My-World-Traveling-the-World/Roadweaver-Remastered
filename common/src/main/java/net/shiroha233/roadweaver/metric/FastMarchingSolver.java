@@ -99,7 +99,11 @@ public final class FastMarchingSolver {
                 // 硬不可通行的格子**不进队列**，而不是给一个很大的代价 ——
                 // 只有这样「不可达」才是真的不可达，拓扑层才能判断
                 // 「这个端点根本连不上」而不是看到一个天文数字假装连通。
-                if (!metric.isPassable(minX + nix, minZ + niz)) continue;
+                //
+                // ★ 2026-11-13 修复：这里曾写成 `isPassable(minX + nix, minZ + niz)`，
+                // 漏乘了 step —— 网格下标被当成方块坐标，step=8 时硬障碍检查
+                // 落在离目标 8 倍近的错误位置，等价于硬约束大面积失明。
+                if (!metric.isPassable(minX + nix * step, minZ + niz * step)) continue;
 
                 // **慢度必须取「正在求解的那一格」的，不能取「已冻结的那一格」的。**
                 //
@@ -115,11 +119,19 @@ public final class FastMarchingSolver {
                 //    便宜格的代价，墙的代价根本没被收。实测表现为「一道 9 倍代价的
                 //    墙完全透明，T(30,20) 恰好等于直线 10」。
                 //    正确写法是求 (nix,niz) 自己那一格的慢度。
-                // 慢度是「每单位长度的代价」，而网格间距是 step 格 ⇒ 乘 step。
-                // 否则步长变大时到达时间会被系统性低估（step 倍）。
-                double slowness = Math.max(1e-9, step
-                        * metric.isotropicCost(minX + nix * step, minZ + niz * step));
-                double candidate = solveEikonal(t, w, d, nix, niz, slowness);
+                //
+                // ★ 2026-11-13：各向异性化 —— 慢度从「每格一个标量」换成
+                // 「每格每轴一个」：x 轴用 cost(·, 1, 0)、z 轴用 cost(·, 0, 1)。
+                // 这正是 Finsler 度量 c(x,θ̂) 的轴对齐特例（沿 x 走只付 gx² 的坡罚，
+                // 沿 z 走只付 gz²）—— 沿等高线走（∇h·θ̂≈0）天然比直冲坡顶便宜。
+                // 数值上用对角各向异性 fast marching（每轴一个慢度的 Godunov 格式），
+                // 是各向异性 Eikonal 里已验证稳定的离散，不需要 Ordered Upwind。
+                // 平地（∇h=0、无障碍）严格退化为原各向同性解。
+                int bx = minX + nix * step;
+                int bz = minZ + niz * step;
+                double hx = Math.max(1e-9, step * metric.cost(bx, bz, 1.0, 0.0));
+                double hz = Math.max(1e-9, step * metric.cost(bx, bz, 0.0, 1.0));
+                double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz);
                 if (candidate < t[nIndex]) {
                     t[nIndex] = candidate;
                     queue.add(new Entry(candidate, nIndex));
@@ -134,12 +146,15 @@ public final class FastMarchingSolver {
     private static final int[] DZ = {0, 0, 1, -1};
 
     /**
-     * Godunov upwind 一阶格式（网格步长 h = 1）。
+     * 各向异性 Godunov 迎风（网格步长各轴分别为 hx/hz）。
      *
-     * @param slowness 局部慢度 {@code s = 1/c}
+     * <p>解 {@code max(T−a,0)²/hx² + max(T−b,0)²/hz² = 1}，
+     * 其中 {@code a} 是 x 方向最近邻、{@code b} 是 z 方向最近邻的到达时间，
+     * {@code hx/hz} 是「沿该轴走一格的代价」。
+     * 平地且 hx=hz 时严格退化为各向同性解。</p>
      */
-    private static double solveEikonal(double[] t, int w, int d,
-                                       int ix, int iz, double slowness) {
+    private static double solveEikonalAnisotropic(double[] t, int w, int d,
+                                                  int ix, int iz, double hx, double hz) {
         double a = Math.min(
                 ix > 0 ? t[ix - 1 + iz * w] : UNREACHABLE,
                 ix < w - 1 ? t[ix + 1 + iz * w] : UNREACHABLE);
@@ -148,15 +163,23 @@ public final class FastMarchingSolver {
                 iz < d - 1 ? t[ix + (iz + 1) * w] : UNREACHABLE);
 
         if (a == UNREACHABLE && b == UNREACHABLE) return UNREACHABLE;
-        if (a == UNREACHABLE) return b + slowness;
-        if (b == UNREACHABLE) return a + slowness;
+        if (a == UNREACHABLE) return b + hz;
+        if (b == UNREACHABLE) return a + hx;
 
-        if (Math.abs(a - b) >= slowness) {
-            return Math.min(a, b) + slowness;
+        // 双轴联合解（T−a）²/hx² + (T−b)²/hz² = 1 的较大根
+        double ix2 = 1.0 / (hx * hx);
+        double iz2 = 1.0 / (hz * hz);
+        double A = ix2 + iz2;
+        double B = -2.0 * (a * ix2 + b * iz2);
+        double C = a * a * ix2 + b * b * iz2 - 1.0;
+        double disc = B * B - 4.0 * A * C;
+        if (disc >= 0) {
+            double root = (-B + Math.sqrt(disc)) / (2.0 * A);
+            // 迎风电验：根必须不小于两个邻居（否则信息不是从邻居流过来的）
+            if (root >= a && root >= b) return root;
         }
-        double discriminant = 2.0 * slowness * slowness - (a - b) * (a - b);
-        if (discriminant <= 0) return Math.min(a, b) + slowness;
-        return (a + b + Math.sqrt(discriminant)) / 2.0;
+        // 退化：单轴推进
+        return Math.min(a + hx, b + hz);
     }
 
     /** 优先队列条目，按到达时间升序。 */
