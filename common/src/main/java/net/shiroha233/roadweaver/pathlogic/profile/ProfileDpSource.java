@@ -50,17 +50,40 @@ public final class ProfileDpSource {
      * @param mustBeCovered  每站是否必须保持覆土（隧道段）；{@code null} 表示没有
      * @param minCover       覆土最小厚度（格）
      */
-    public record Constraints(int[] pin, boolean[] mustBeCovered, int minCover) {
+    /**
+     * 求解约束。
+     *
+     * @param pin            每站强制高度（{@code -1} = 不钉）
+     * @param mustBeCovered  每站是否必须有覆土（隧道）
+     * @param minCover       覆土下限
+     * @param deckFloor      每站<b>桥面高度下界</b>（{@code Integer.MIN_VALUE} = 无下界）。
+     *                       <p>这是「重构」而不是「补丁」的关键：旧版是
+     *                       {@code computeTargetY} 算完之后再用 {@code applyFixedRange}
+     *                       把桥面抬到水位以上；新版把这个下界<b>作为 DP 的搜索约束</b>
+     *                       喂进去，DP 在满足坡度的前提下自己找最优。</p>
+     *                       <p>下界由 {@code RoadConstructionSafety.bridgeDeckSurfaceY}
+     *                       算出（逐站查最高水位，并向两侧 {@code WATERCOURSE_HALF_WIDTH}
+     *                       取样取最高，再加 {@code bridgeDeckClearance}）。</p>
+     */
+    public record Constraints(int[] pin, boolean[] mustBeCovered, int minCover, int[] deckFloor) {
 
         /** 无约束。 */
         public static Constraints none() {
-            return new Constraints(null, null, 0);
+            return new Constraints(null, null, 0, null);
+        }
+
+        /** 兼容旧调用（无桥面下界）。 */
+        public Constraints(int[] pin, boolean[] mustBeCovered, int minCover) {
+            this(pin, mustBeCovered, minCover, null);
         }
 
         public Constraints {
             if (minCover < 0) throw new IllegalArgumentException("minCover 不能为负");
             if (pin != null && mustBeCovered != null && pin.length != mustBeCovered.length) {
                 throw new IllegalArgumentException("pin 与 mustBeCovered 长度必须一致");
+            }
+            if (deckFloor != null && pin != null && deckFloor.length != pin.length) {
+                throw new IllegalArgumentException("deckFloor 与 pin 长度必须一致");
             }
         }
 
@@ -171,6 +194,19 @@ public final class ProfileDpSource {
                 // 这正是旧版 0.8.369 记录过的「锁定 407、实际 389」那类接缝错位。
                 if (constraints.pinned(k)) continue;
                 int chord = len == 0 ? a : a + Math.round((b - a) * (k - start) / (float) len);
+                // ★ 桥面高度下界：crossing 段不得低于「最高水位 + 净空」。
+                //
+                // 这一行是「重构」与「补丁」的分界线。旧版的做法是：先按地形算出剖面，
+                // 再在后处理里用 applyFixedRange 把桥面整段抬到水位以上 —— 那是补丁，
+                // 因为它是在**已经违反物理约束之后**去修正，修正之后的坡度约束全部失效。
+                // 这里把它变成**求解前就已知的下界**：DP 在满足坡度上限的前提下，
+                // 自己决定从哪里开始爬、爬多快。桥面依然平（同一水位段下界相同），
+                // 但过渡段由 DP 统一安排，不再需要事后再贴一遍坡。
+                int[] floor = constraints.deckFloor();
+                if (floor != null && k < floor.length && floor[k] != Integer.MIN_VALUE
+                        && floor[k] > chord) {
+                    chord = floor[k];
+                }
                 pin[k] = chord;
                 lo[k] = chord;
                 hi[k] = chord;

@@ -30,7 +30,7 @@ public enum ProfileSolverMode {
     /** 旧 15 道 pass 流水线（保留作为显式回退路径）。 */
     LEGACY,
 
-    /** 全局 DP 求解（<b>非默认，需 -Droadweaver.profileSolver=dp 显式开启</b>）。 */
+    /** 全局 DP 求解（<b>2026-11-13 起为默认</b>：桥面水位下界已作为求解约束喂入）。 */
     DP;
 
     /** 系统属性名。 */
@@ -76,18 +76,18 @@ public enum ProfileSolverMode {
      * <p><b>不可行回落的语义保持不变</b>：DP 判不可行会回落到旧流水线并记 WARN，
      * 绝不让一条路算不出剖面。</p>
      *
-     * @return 合法值返回对应模式；未设或非法返回 {@link #LEGACY}
+     * @return 合法值返回对应模式；未设或非法返回 {@link #DP}
      */
     public static ProfileSolverMode fromProperty() {
         return parse(System.getProperty(PROPERTY));
     }
 
-    /** 解析字符串（大小写不敏感）；未设或非法返回 {@link #LEGACY}（默认）。 */
+    /** 解析字符串（大小写不敏感）；未设或非法返回 {@link #DP}（默认）。 */
     public static ProfileSolverMode parse(String raw) {
-        if (raw == null || raw.isBlank()) return LEGACY;
+        if (raw == null || raw.isBlank()) return DP;
         String v = raw.trim().toLowerCase(java.util.Locale.ROOT);
         if ("dp".equals(v)) return DP;
         if ("legacy".equals(v) || "classic".equals(v)) return LEGACY;
-        return LEGACY;
+        return DP;
     }
 }

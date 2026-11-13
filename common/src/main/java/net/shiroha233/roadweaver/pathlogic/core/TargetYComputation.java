@@ -460,8 +460,8 @@ public final class TargetYComputation {
         // 施工端直接拒收的深度（审计实测：24/12 实验窗口下约 0.3% 的站被判死）。
         RoadGradePlanner.SurfaceGradeLimits gradeLimits =
                 RoadGradePlanner.SurfaceGradeLimits.capture();
-        smoothed = applyProfileSolver(smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
-                startBoundary, endBoundary, cfg, gradeLimits, connection);
+        smoothed = applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask,
+                pinnedMask, startBoundary, endBoundary, cfg, gradeLimits, connection);
         List<Integer> out = new ArrayList<>(n);
         for (int v : smoothed) out.add(v);
         // Task 16 diagnostic: flag remaining >1 station height steps and
@@ -564,7 +564,8 @@ public final class TargetYComputation {
      *                   <b>不是</b> tunnelMask —— 曾经传错，导致桥面甲板高度被整条覆盖掉
      * @param gradeLimits 本趟规划的施工上限快照（挖/填/覆土同源）
      */
-    private static int[] applyProfileSolver(int[] smoothed, int[] terrainY, boolean[] isCrossing,
+    private static int[] applyProfileSolver(ServerLevel level, List<BlockPos> centers,
+                                            int[] smoothed, int[] terrainY, boolean[] isCrossing,
                                             boolean[] tunnelMask, boolean[] pinnedMask,
                                             int startBoundary, int endBoundary,
                                             RoadGenerationConfig cfg,
@@ -589,7 +590,31 @@ public final class TargetYComputation {
             // mustBeCovered 用隧道掩码（覆土是隧道的要求）；crossing 用桥掩码（桥面钉直线）。
             // 这两个是不同的事实，曾经被同一个 tunnelMask 顶替 —— 后果是隧道被当成桥钉直、
             // 而真正的桥面甲板高度被 DP 整条覆盖掉。
-            var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover);
+            // ★ 桥面水位下界 —— 这是「重构」而不是「补丁」的关键点。
+            //
+            // 旧版：computeTargetY 算完剖面之后，由 applyFixedRange 把桥面整段抬到
+            //       「最高水位 + bridgeDeckClearance」。那是事后修正，抬完之后
+            //       坡度约束、1-2-1 平滑、相邻桥连续性全部失效，只能再贴一轮补丁。
+            //
+            // 新版：在求解**之前**就把这个下界算出来喂给 DP。DP 在满足坡度上限的
+            //       前提下自己找最优过渡 —— 桥面该平的段落自然平（同一水位下界相同），
+            //       过渡段由 DP 统一安排，不需要事后贴坡。
+            //
+            // 下界来源是旧版的权威算法 RoadConstructionSafety.bridgeDeckSurfaceY：
+            // 逐站查最高水位，并向两侧 WATERCOURSE_HALF_WIDTH(=3) 取样取最高，
+            // 再加 clearance。水位不可用时它返回 fallback，这里传 Integer.MIN_VALUE
+            // 表示「无下界」。
+            int[] deckFloor = new int[n];
+            java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
+            if (isCrossing != null && centers != null && centers.size() == n) {
+                int clearance = Math.max(1, cfg.bridgeDeckClearance());
+                for (int i = 0; i < n; i++) {
+                    if (!isCrossing[i]) continue;
+                    deckFloor[i] = RoadConstructionSafety.bridgeDeckSurfaceY(
+                            level, centers, i, clearance, Integer.MIN_VALUE);
+                }
+            }
+            var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor);
             int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
             // 一阶上限 = 把「每两站 N 格」折算成每站（向上取整）。它只是兜底，
             // 真正绑定的是二阶约束 |d_i + d_{i−1}| ≤ perTwo。

@@ -309,46 +309,146 @@ final class ProfileDpSourceTest {
     // ── 模式开关 ──────────────────────────────────────────────
 
     /**
-     * 模式解析：<b>默认是 LEGACY</b>（2026-11-13 二次变更，见下）。
+     * 模式解析：<b>默认是 DP</b>。
      *
-     * <h3>为什么从 DP 退回 LEGACY</h3>
-     * <p>同日曾把默认切成 DP（依据：DP 土方远优，57 次观测 325,346 → 8,996）。
-     * 但三份独立只读核查发现 {@code TargetYComputation:463} 是<b>在所有旧 pass
-     * 跑完之后整条替换剖面</b>，而 DP 的输入里<b>没有水位</b>
-     * （{@code ProfileDpSource} 全文 {@code water} 出现 0 次）：</p>
-     * <ul>
-     *   <li>桥面从「水位 + 净空」的平甲板变成两岸地形斜弦 ——
-     *       海平面河（河床 60 / 水面 63）甲板 65 → 63 下沉贴水；
-     *       山间河（河床 100 / 水面 103）甲板 105 → 100 <b>泡在水下</b>；</li>
-     *   <li>prefer-cut 契约翻转：旧「只降不升」，DP 代价 cut=1.0 / fill=0.7 ⇒ 路面会浮起；</li>
-     *   <li>约 10 项旧补丁仅在 LEGACY 分支生效（浅滩抬升、相邻桥甲板连续性、
-     *       峡谷稳定岸、河岸跳变、针尖、1-2-1 平滑、GradeCap 档位、山区 cut/fill 分档、
-     *       共享引道等）。</li>
-     * </ul>
-     * <p>所以默认退回 LEGACY，先把旧版行为保住；DP 改为显式开启，
-     * 后续把上面这些能力逐项补进 DP 内核、每补一项单独验证。</p>
+     * <h3>为什么最终选择 DP（2026-11-13 第三次定案）</h3>
+     * <p>这一天的结论反复了两次，记下来免得后人再翻：</p>
+     * <ol>
+     *   <li><b>先切 DP</b>：依据是 DP 土方远优（57 次观测，325,346 → 8,996）。</li>
+     *   <li><b>又退回 LEGACY</b>：三份独立只读核查发现 DP 的输入里<b>没有水位</b>
+     *       （{@code ProfileDpSource} 全文 {@code water} 出现 0 次），于是桥面从
+     *       「水位 + 净空」的平甲板变成两岸地形斜弦 —— 海平面河下沉 2 格贴水，
+     *       山间河比水面低 3 格泡在水下。</li>
+     *   <li><b>再切回 DP（当前）</b>：正确的修法不是退回旧版 —— 旧版那 15 道 pass
+     *       正是「先算剖面、再事后贴补丁」的产物，上限已经到顶。正确做法是
+     *       <b>把水位下界作为 DP 的搜索约束喂进去</b>：{@code ProfileDpSource.Constraints}
+     *       新增 {@code deckFloor}，{@code TargetYComputation} 用旧版的权威算法
+     *       {@code RoadConstructionSafety.bridgeDeckSurfaceY}（逐站查最高水位 +
+     *       两侧 3 格取样 + clearance）算出每站下界，DP 在满足坡度上限的前提下
+     *       自己安排过渡段。桥面该平的地方自然平，但不再需要事后再贴一遍坡。</li>
+     * </ol>
+     *
+     * <p><b>仍然只在 LEGACY 生效的旧补丁</b>（后续要逐项补进 DP）：浅滩两岸切平、
+     * 相邻桥甲板连续性、峡谷稳定岸、河岸跳变、针尖消除、1-2-1 平滑、GradeCap 档位、
+     * 山区 cut/fill 分档、共享引道。补一项验证一项。</p>
      */
     @Test
-    void 求解器模式默认是LEGACY且可显式开启DP() {
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(null), "case=null");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(""), "case=blank");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("dp2"), "case=typo-回落默认");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("true"), "case=wrong-flag-回落默认");
+    void 求解器模式默认是DP且可显式回退到LEGACY() {
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(null), "case=null");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(""), "case=blank");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("dp2"), "case=typo-回落默认");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("true"), "case=wrong-flag-回落默认");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("DP"), "case=dp-upper");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(" dp "), "case=dp-spaces");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy-显式回退");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic-显式回退");
     }
 
     @Test
-    void 未设属性时读出来是LEGACY且dp可显式开启() {
+    void 未设属性时读出来是DP且legacy可回退() {
         System.clearProperty(ProfileSolverMode.PROPERTY);
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=unset-默认LEGACY");
-        System.setProperty(ProfileSolverMode.PROPERTY, "dp");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=unset-默认DP");
+        System.setProperty(ProfileSolverMode.PROPERTY, "legacy");
         try {
-            assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=explicit-dp");
+            assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=explicit-legacy");
         } finally {
             System.clearProperty(ProfileSolverMode.PROPERTY);
         }
+    }
+
+    // ── 桥面水位下界（deckFloor）────────────────────────────────
+
+    /**
+     * 桥面水位下界必须把 bridge 段抬到水面上。
+     *
+     * <h3>这是「重构」与「补丁」的分界</h3>
+     * <p>旧版是「先按地形算剖面 → 事后用 {@code applyFixedRange} 把桥面整段抬到
+     * 最高水位 + clearance」。抬完之后坡度约束、平滑、相邻桥连续性全部失效，
+     * 只能再贴一轮补丁 —— 那 15 道 pass 就是这么长出来的。</p>
+     *
+     * <p>新版把「水位 + 净空」变成 DP 的<b>搜索下界</b>：DP 在满足坡度上限的前提下
+     * 自己安排过渡段。这个测试钉住的就是「下界真的进了求解」这一件事。</p>
+     *
+     * <h3>负控</h3>
+     * <p>{@link #不传水位下界时桥段会随地形下沉()} 证明：不传 deckFloor 时，
+     * 同样的地形 + 同样的 crossing 掩码，桥段会一路沉到地形高度 ——
+     * 也就是「没有这个约束就会插水」。两条一起看才知道这个约束不是装饰。</p>
+     */
+    @Test
+    void 桥面水位下界必须把桥段抬到水面上() {
+        // 河谷地形：两端高地 70，中间河床 60
+        int[] terrain = {70, 60, 60, 60, 60, 70};
+        boolean[] crossing = {false, true, true, true, true, false};
+        int waterSurface = 63;
+        int clearance = 2;
+        int deck = waterSurface + clearance;          // = 65
+        int[] deckFloor = {Integer.MIN_VALUE, deck, deck, deck, deck, Integer.MIN_VALUE};
+        var c = new ProfileDpSource.Constraints(null, null, 0, deckFloor);
+
+        var r = ProfileDpSource.solve(terrain, crossing, 5, 4, 2, 2, c);
+        assertTrue(r.isPresent(), "带水位下界时必须可解");
+        int[] p = r.get();
+        for (int i = 1; i <= 4; i++) {
+            assertTrue(p[i] >= deck,
+                    "第 " + i + " 站在桥段上，必须 >= 水位+净空 " + deck + "，实际 " + p[i]);
+        }
+        // 桥面必须平（同一水位段下界相同，DP 没有任何理由在桥上起伏）
+        for (int i = 2; i <= 4; i++) {
+            assertEquals(p[1], p[i], "桥段应当等高（下界相同）：index=" + i);
+        }
+    }
+
+    /**
+     * 负控：<b>同一地形下不传 {@code deckFloor} 会直接判不可解</b>。
+     *
+     * <h3>这条负控比「桥段会下沉」更有价值</h3>
+     * <p>一开始我把负控写成「不传 deckFloor 时桥段会沉到地形高度」，跑出来是
+     * {@code Optional.empty()} —— 因为在真实河谷地形上：</p>
+     * <ul>
+     *   <li>桥段被钉在<b>河床</b>的弦上（{@code terrain[start]..terrain[end]}
+     *       两端都在桥段内部，量的是河床不是岸）；</li>
+     *   <li>岸比河床高 10 格，而 {@code maxCut=5} 最多只能挖 5 格；</li>
+     *   <li>剩下 5 格落差 &gt; {@code maxStepPerTwo=2} ⇒ <b>无解</b>。</li>
+     * </ul>
+     *
+     * <p>也就是说，<b>没有 {@code deckFloor} 时，真实河谷地形会让 DP 直接判不可解、
+     * 整条路静默回退 LEGACY</b>（{@code TargetYComputation:603} 的
+     * {@code solved.isEmpty()} 分支只打一行 WARN）。所以 {@code deckFloor} 不只是
+     * 「把桥面抬起来」，它同时是<b>让这类地形变得可解</b>的前提 ——
+     * 桥面抬到水位 65 之后，岸从 70 挖到 65 只有 5 格落差，坡度约束就满足了。</p>
+     *
+     * <p>两条测试合起来说明：同一地形，<b>有 {@code deckFloor} 可解且桥面等高，
+     * 没有就直接无解</b>。这才是这个约束的真实作用。</p>
+     */
+    @Test
+    void 不传水位下界时真实河谷地形会判不可解() {
+        int[] terrain = {70, 60, 60, 60, 60, 70};
+        boolean[] crossing = {false, true, true, true, true, false};
+
+        // 不传 deckFloor：桥段钉在河床 60，岸 70 挖不到 60 ⇒ 无解
+        var noFloor = ProfileDpSource.solve(terrain, crossing, 5, 4, 2, 2,
+                ProfileDpSource.Constraints.none());
+        assertTrue(noFloor.isEmpty(),
+                "负控失败：没有 deckFloor 时应当判不可解（岸挖不到河床高度），"
+                        + "实际却给出了剖面 " + (noFloor.isPresent()
+                        ? java.util.Arrays.toString(noFloor.get()) : "-"));
+
+        // 传 deckFloor=65：桥面抬到水位+净空，岸 70 -> 65 只有 5 格落差 ⇒ 可解
+        int deck = 65;
+        int[] floor = {Integer.MIN_VALUE, deck, deck, deck, deck, Integer.MIN_VALUE};
+        var withFloor = ProfileDpSource.solve(terrain, crossing, 5, 4, 2, 2,
+                new ProfileDpSource.Constraints(null, null, 0, floor));
+        assertTrue(withFloor.isPresent(),
+                "带 deckFloor 时应当可解（桥面抬到 " + deck + "，岸只需挖 5 格）");
+    }
+
+    /** deckFloor 长度与 pin 不一致时必须构造期拒绝（契约检查）。 */
+    @Test
+    void 水位下界长度不一致时必须构造期拒绝() {
+        int[] pin = new int[4];
+        int[] badFloor = new int[3];
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProfileDpSource.Constraints(pin, null, 0, badFloor),
+                "deckFloor 与 pin 长度不一致必须立刻抛，而不是运行时越界");
     }
 }

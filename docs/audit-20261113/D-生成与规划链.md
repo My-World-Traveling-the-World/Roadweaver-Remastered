@@ -190,13 +190,13 @@ public static List<Integer> initialBatchSteps(int configuredStep) {
 
 ---
 
-## ★ 逻辑改变清单
+## ★ 差异清单（默认路径 0 条行为改变）
 
-**默认配置下（`planningAlgorithm=RNG`）：0 条。** 同样的世界种子 + 同样的配置，新旧两版走的是同一串调用、同样的判据、同样的顺序、同样的并发策略。
+**默认配置下（`planningAlgorithm=RNG`）：逻辑改变 0 条。** 同样的世界种子 + 同样的配置，新旧两版走的是同一串调用、同样的判据、同样的顺序、同样的并发策略。
 
-下面是**全部**被确认为「新旧不一样」的东西，逐条给出为何不影响默认路径：
+下面是**全部**被确认为「新旧代码不一样」的东西，逐条给出为何不影响默认路径：
 
-### 改变 1 —— `planPrimaryEdges` / `NetworkPlannerFactory` 多一个 `ServerLevel` 形参
+### 差异 1（新增能力，默认关闭）—— `planPrimaryEdges` / `NetworkPlannerFactory` 多一个 `ServerLevel` 形参
 
 旧（`RoadPlanningService.java:525-527`）：
 ```java
@@ -220,7 +220,7 @@ case PIPELINE -> new PipelinePlanner(level);
 
 **可观察差异：默认路径 0。** 其余 6 种规划器全部忽略 `level`（构造函数无参，见 #21 六个文件逐字相同），`KNNPlanner` 分支的额外参数、`maxEdge` 上限、`planner.plan(points, maxEdge)` 调用顺序都没变。**只有把 `planningAlgorithm` 改成 `PIPELINE` 时才会不同**，而那个值旧版不存在。
 
-### 改变 2 —— 新增 `PlanningAlgorithm.PIPELINE`（枚举第 7 项）
+### 差异 2（新增能力，默认关闭）—— 新增 `PlanningAlgorithm.PIPELINE`（枚举第 7 项）
 
 旧（`config/sub/PlanningConfig.java:15`）：
 ```java
@@ -235,7 +235,7 @@ public enum PlanningAlgorithm { KNN, DELAUNAY, RNG, MST, SNAP_BRANCH, ALPHA_MODE
 **但有一处文档不同步（不是行为改变，是可见性瑕疵）**：`PlanningKeys.java:71` 的选项说明仍写着
 `"可选：KNN / DELAUNAY / RNG / MST / SNAP_BRANCH / ALPHA_MODEL"` —— 没提 `PIPELINE`。若配置界面按 `values()` 渲染下拉框，用户会看到一个**没有说明文字**的选项。
 
-### 改变 3 —— `isVillageEndpoint` 从「全表扫描」改为「区块桶索引查询」（**已证等价，不是行为改变**）
+### 差异 3（算法性替换，**已证等价**）—— `isVillageEndpoint` 从「全表扫描」改为「区块桶索引查询」
 
 旧（`StructureAvoidanceService.java:3251-3265`）遍历 `snapshot.boxes()` 全部框；新（`EndpointOwnerResolver.java:148-177`）改为
 `StructureBoxIndex.fromChunkBuckets(snapshot.boxesByChunk()).query(x±reach, z±reach)`。
