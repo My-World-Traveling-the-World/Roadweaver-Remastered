@@ -28,7 +28,7 @@ import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.planning.impl.KNNPlanner;
+import net.shiroha233.roadweaver.planning.ComponentConnector;
 import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 import net.shiroha233.roadweaver.planning.path.SharedEndpointPathReuse;
@@ -255,7 +255,7 @@ public final class AsyncPlanningOps {
                 ArrayList<StructureConnection> base = new ArrayList<>(existingInRect);
                 base.addAll(filteredPrimary);
                 ArrayList<BlockPos> componentPoints = collectComponentPoints(points, existingInRect, filteredPrimary);
-                List<StructureConnection> bridges = KNNPlanner.connectComponents(
+                List<StructureConnection> bridges = ComponentConnector.connectComponents(
                         componentPoints, base,
                         cfg0.planning().bridgeJoinLenBlocks(),
                         cfg0.planning().componentMinAngleDeg(),

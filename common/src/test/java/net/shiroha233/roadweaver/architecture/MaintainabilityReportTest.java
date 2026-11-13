@@ -60,9 +60,9 @@ public final class MaintainabilityReportTest {
     /** 有注释的 public 方法数（实测 906 / 3,338）。 */
     private static final int PUBLIC_METHOD_DOC_FLOOR = 906;
     /** 有注释的 private 方法数（实测 271 / 1,549）。 */
-    // 2026-11-13：271 -> 268。旧 A* 系寻路器（4 个类）删除时带走了 3 个
-    // 有注释的 private 方法；这是 ratchet 地板随删除的正常下调。
-    private static final int PRIVATE_METHOD_DOC_FLOOR = 268;
+    // 2026-11-13：271 -> 268（删旧 A* 寻路器）-> 266（删旧规划器）。
+    // 删除旧实现带走了有注释的 private 方法，这是 ratchet 地板随删除的正常下调。
+    private static final int PRIVATE_METHOD_DOC_FLOOR = 266;
     /** 长参数表判定：括号内超过 120 个字符。 */
     private static final Pattern LONG_PARAMS = Pattern.compile("\\w+\\s*\\([^)]{120,}\\)");
     private static final Pattern METHOD = Pattern.compile(

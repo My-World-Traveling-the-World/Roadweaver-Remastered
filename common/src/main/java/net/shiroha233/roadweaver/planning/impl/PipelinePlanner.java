@@ -99,7 +99,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         if (level == null) {
             // 没有世界就建不了地形场。退回直线距离的 MST —— 宁可退化也不抛异常：
             // 规划器挂掉会让整局一条路都不生成，那比「用旧算法」严重得多。
-            return MSTPlanner.planMST(points, maxEdgeLenBlocks);
+            return fallbackMST(points, maxEdgeLenBlocks);
         }
 
         // ① 去重并记录每点的代表坐标（节点只有 x/z，y 要从原 BlockPos 取回）
@@ -146,7 +146,7 @@ public final class PipelinePlanner implements NetworkPlanner {
                     AccurateHeightSampler.create(level), minX, minZ, width, depth, step);
         } catch (RuntimeException samplingFailure) {
             // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败
-            return MSTPlanner.planMST(points, maxEdgeLenBlocks);
+            return fallbackMST(points, maxEdgeLenBlocks);
         }
         FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
 
@@ -156,7 +156,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         try {
             plan = new RoadPipeline(metric, ElasticBandSolver.defaults()).run(nodes);
         } catch (RuntimeException pipelineFailure) {
-            return MSTPlanner.planMST(points, maxEdgeLenBlocks);
+            return fallbackMST(points, maxEdgeLenBlocks);
         }
 
         // ⑤ 质量门 —— 只测不拦
@@ -201,5 +201,79 @@ public final class PipelinePlanner implements NetworkPlanner {
 
     private static long xzKey(int x, int z) {
         return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
+    }
+
+    /**
+     * 直线距离的 MST 回退（从 MSTPlanner.planMST 内联，2026-11-13）。
+     *
+     * <p>旧 MSTPlanner 已随「全用最新算法」退役，但本方法仍被三重回退调用：
+     * 没有世界 / 采样失败 / 管线失败时，宁可退化也不抛异常。</p>
+     */
+    private static List<StructureConnection> fallbackMST(List<BlockPos> points, int maxEdgeLenBlocks) {
+        if (points == null || points.size() < 2) return List.of();
+
+        ArrayList<BlockPos> unique = new ArrayList<>();
+        HashSet<Long> seen = new HashSet<>();
+        for (BlockPos p : points) {
+            BlockPos q = new BlockPos(p.getX(), 0, p.getZ());
+            long key = xzKey(q.getX(), q.getZ());
+            if (seen.add(key)) unique.add(q);
+        }
+        int n = unique.size();
+        if (n < 2) return List.of();
+
+        long maxD2 = maxEdgeLenBlocks > 0 ? (long) maxEdgeLenBlocks * (long) maxEdgeLenBlocks : Long.MAX_VALUE;
+
+        record Edge(int a, int b, long d2) {}
+
+        ArrayList<Edge> edges = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            BlockPos pi = unique.get(i);
+            long ix = pi.getX();
+            long iz = pi.getZ();
+            for (int j = i + 1; j < n; j++) {
+                BlockPos pj = unique.get(j);
+                long dx = ix - pj.getX();
+                long dz = iz - pj.getZ();
+                long d2 = dx * dx + dz * dz;
+                if (d2 > maxD2) continue;
+                edges.add(new Edge(i, j, d2));
+            }
+        }
+        if (edges.isEmpty()) return List.of();
+
+        edges.sort((e1, e2) -> Long.compare(e1.d2(), e2.d2()));
+
+        int[] parent = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+
+        ArrayList<StructureConnection> result = new ArrayList<>();
+        HashSet<Long> edgeKeys = new HashSet<>();
+
+        for (Edge e : edges) {
+            int ra = find(parent, e.a());
+            int rb = find(parent, e.b());
+            if (ra == rb) continue;
+            parent[rb] = ra;
+
+            int ia = Math.min(e.a(), e.b());
+            int ib = Math.max(e.a(), e.b());
+            long key = (((long) ia) << 32) ^ (long) ib;
+            if (!edgeKeys.add(key)) continue;
+
+            BlockPos pa = unique.get(e.a());
+            BlockPos pb = unique.get(e.b());
+            result.add(new StructureConnection(pa, pb));
+        }
+
+        return result;
+    }
+
+    private static int find(int[] parent, int x) {
+        while (parent[x] != x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        return x;
     }
 }

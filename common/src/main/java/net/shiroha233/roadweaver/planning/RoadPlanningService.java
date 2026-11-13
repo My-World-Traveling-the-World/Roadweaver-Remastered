@@ -28,7 +28,7 @@ import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.planning.impl.KNNPlanner;
+import net.shiroha233.roadweaver.planning.ComponentConnector;
 import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 import net.shiroha233.roadweaver.planning.path.SharedEndpointPathReuse;
@@ -465,7 +465,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         base.addAll(filteredPrimary);
         ArrayList<BlockPos> componentPoints = collectComponentPoints(points, existingInRect, filteredPrimary);
 
-        List<StructureConnection> bridges = KNNPlanner.connectComponents(
+        List<StructureConnection> bridges = ComponentConnector.connectComponents(
                 componentPoints, base,
                 cfg0.planning().bridgeJoinLenBlocks(),
                 cfg0.planning().componentMinAngleDeg(),
@@ -544,13 +544,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         NetworkPlanner planner = NetworkPlannerFactory.create(
                 cfg0.planning().planningAlgorithm(), level);
         int maxEdge = cfg0.planning().planMaxEdgeLenBlocks();
-        if (planner instanceof KNNPlanner knn) {
-            return knn.plan(points, maxEdge,
-                    cfg0.planning().knnK(),
-                    cfg0.planning().knnAlpha(),
-                    cfg0.planning().knnMinAngleDeg(),
-                    cfg0.planning().knnDegreeCap());
-        }
+        // 2026-11-13：旧 KNNPlanner 已删除（用户拍板「全用最新」）。
+        // 工厂只产出 PipelinePlanner，这里不再需要 instanceof 分支。
         return planner.plan(points, maxEdge);
     }
 

@@ -64,21 +64,18 @@ public final class PlanningSection {
                 .setSaveConsumer(cfg::setDynamicPlanStrideChunks)
                 .build());
 
+        // 2026-11-13：旧规划算法全部退役（用户拍板「全用最新的，旧的全部删除」）。
+        // 算法选择器改为固定说明 —— 只剩 PIPELINE（测地距离 MST）一种。
         category.addEntry(eb
-                .startEnumSelector(Component.translatable("config.roadweaver.planning_algorithm"),
-                        PlanningConfig.PlanningAlgorithm.class, cfg.planningAlgorithm())
-                .setDefaultValue(def.planningAlgorithm())
-                .setTooltip(Component.translatable("config.roadweaver.planning_algorithm.tooltip"))
-                .setEnumNameProvider(v -> Component.translatable("config.roadweaver.planning_algorithm.option." + v.name().toLowerCase(Locale.ROOT)))
-                .setSaveConsumer(cfg::setPlanningAlgorithm)
+                .startTextDescription(Component.translatable(
+                        "config.roadweaver.planning_algorithm.fixed_pipeline"))
+                .setColor(0xFF88FF88)
                 .build());
 
-        // 0.8.420：KNN 路网拓扑（改任一值会改规划指纹、令已有路线重算）
-        // 0.8.421：界面诚实化 —— k / alpha / minAngleDeg / degreeCap 这四项**只在**
-        // 「路网规划算法」= KNN 时才被 RoadPlanningService 读取（见 planPrimaryEdges 的
-        // `planner instanceof KNNPlanner` 分支）；其余四种算法下它们完全不生效。
-        // 因此在标题上直接标注「当前不生效」，并加一行提示，避免玩家白调。
-        boolean knnActive = cfg.planningAlgorithm() == PlanningConfig.PlanningAlgorithm.KNN;
+        // 0.8.420：KNN 路网拓扑参数已随旧规划器一并删除，不再出现在界面上。
+        // （k / alpha / minAngleDeg / degreeCap 这四个字段仍在 PlanningConfig 里，
+        //  但只被 ComponentConnector.connectComponents 读取，与「KNN 拓扑」无关。）
+        boolean knnActive = false;
         if (!knnActive) {
             category.addEntry(eb
                     .startTextDescription(Component.translatable(
