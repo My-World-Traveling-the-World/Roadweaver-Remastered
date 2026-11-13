@@ -1797,3 +1797,47 @@ AccurateGradeRepairPlanner$ExactStructureRepairOutcome -> terrain/StructureRepai
 `fabric/build/final/` 才是 `embedApiJar` 的成品（含 `META-INF/jars/roadweaver-api.jar`）。
 两者**文件名完全一致**。第一次部署时取错了目录，导致启动报
 「需要 roadweaver_api 的 1 及以上版本，但没有安装它」，6 个下游模组全部被拒。
+
+---
+
+# S6 配置界面拆分：真机验证 + 逐项对账（2026-11-13）
+
+## 为什么要做这轮对账
+
+配置界面拆分（1791 行 -> 52 行入口 + 12 个分区）是本会话唯一**改动了真机可见行为**的重构。
+`UiFeatureGuardTest` 只做静态校验（分区数 / 总行数 / 每区下限 / 入口委托），
+**证明不了"没有漏掉配置项"**。所以部署到客户端后做了真机 + 计数双重验证。
+
+## 真机验证（用户操作，2026-11-13 08:5x）
+
+12 个页签全部渲染正常，抽查 3 个页签截图确认：
+
+| 页签 | 观察 |
+|---|---|
+| 路网规划 | 值正确（初始半径 128 / 动态 256 / 步进 32 / 规划算法 ALPHA_MODEL），KNN 灰化提示按原逻辑显示 |
+| 寻路算法与成本 | 值正确（势场法 / 步长 8 / 最大步数 200000 / 正交 1.0 / 对角 1.414 / 高度权重 80 / 群系 2 / 稳定性 30 / 水深 160）|
+| 桥梁 | 值正确（启用=是 绿色 / 净空 2 / 跨度上限 0 / 浮标两项=否 红色 / 间隔 32 / 桥墩 6-1-6）|
+
+布尔开关的绿「是」/ 红「否」配色、"重置"按钮都正常。
+
+## 逐项对账：拆分前 vs 拆分后
+
+| 口径 | 旧仓单文件 | 新仓入口 + 12 分区 | 结论 |
+|---|---|---|---|
+| `addEntry(` 配置条目 | **195** | **195** | 一致 |
+| `getOrCreateCategory(` 页签 | **12** | **12** | 一致 |
+| `setSaveConsumer(` 保存回调 | **192** | **192** | 一致 |
+| `config.roadweaver.*` 唯一键 | **196** | **196** | **0 丢失 / 0 新增** |
+
+> 注：对账必须把**入口文件 `ConfigScreenFactoryImpl` 一起算进来** ——
+> 只统计 12 个 `*Section.java` 会漏掉 `config.roadweaver.title`（它在入口的 `.setTitle(...)` 里），
+> 从而误判成"丢了 1 个键"。第一次统计就踩了这个假警报。
+
+## 顺带确认的两件事
+
+1. **规划算法 = `ALPHA_MODEL` 是用户自己配置的值**，不是默认值 ——
+   代码默认是 `PlanningAlgorithm.RNG`（`PlanningConfig:31`），
+   用户的 `config/roadweaver/roadweaver.json` 里存的是 `ALPHA_MODEL`。
+2. **KNN 灰化 + 橙色警告是原有行为**，不是本次重构新增 ——
+   旧仓 `ConfigScreenFactoryImpl:219/:275` 就有同一段逻辑（"避免玩家白调参数"），
+   拆分时逐字搬进了 `PlanningSection`。
