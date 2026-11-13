@@ -13,8 +13,12 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
  * 玩家只会觉得「这个选项好像没用」。本表里两个键已实证就是这个状态：</p>
  * <ul>
  *   <li>{@code placeWaypoints} —— 全仓 0 处外部引用。</li>
- *   <li>{@code landTunnelEnabled} —— 假开关：{@code PathSpanExtractor} 读出来了，
- *       但赋值是 {@code buried = oldBuried}，{@code newBuried} 只进日志。</li>
+ *   <li>{@code landTunnelEnabled} —— <b>已接线</b>，标 {@link ConfigStatus#ACTIVE}。
+ *       <b>2026-11-13 更正</b>：旧注释说它是「假开关（{@code buried = oldBuried}，
+ *       {@code newBuried} 只进日志）」，那是 0.9.005-B 时期的状态。
+ *       现在 {@code PathSpanExtractor} 里是
+ *       {@code boolean buried = landTunnelSwitch && newBuried;} ——
+ *       <b>真的参与判定</b>，并且还传进后续调用。关掉它就不会挖陆上隧道。</li>
  * </ul>
  *
  * <h2>单位口径要说清</h2>
@@ -157,10 +161,10 @@ public final class RoadAppearanceKeys {
                     "与 0.9.033 的单列保护逻辑相关：路面格受保护时会走「只铺路面不动路基」的窄路径"),
 
             ConfigKey.bool("landTunnelEnabled", true,
-                    ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.UNWIRED,
+                    ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "陆上隧道", "Land tunnel",
-                    "在陆地上的高地也挖隧道穿过",
-                    "★ 已实证是假开关：PathSpanExtractor 里读出来了，但 buried = oldBuried，newBuried 只进日志 ⇒ 判出来也不会真的挖。而且判据在数学上排除目标地形（planned 取 ±8 站中值，宽<17 的突起被自己抹平、宽≥17 的高地自身即基准）"),
+                    "在陆地上的高地也挖隧道穿过（关掉则只在过水处用隧道）",
+                    ""),
 
             ConfigKey.bool("bumpCutEnabled", true,
                     ConfigCategory.BUILD, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

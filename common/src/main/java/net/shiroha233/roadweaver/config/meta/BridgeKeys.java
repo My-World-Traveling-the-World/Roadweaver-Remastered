@@ -14,8 +14,12 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
  *   <li>{@code enabled} / {@code deckClearance} / … —— 正常已接线</li>
  *   <li>{@code keepLamps} / {@code minLength} —— <b>死键</b>（代码里不再读取，
  *       改了完全无效），标 {@link ConfigStatus#DEPRECATED}</li>
- *   <li>{@code minWaterDepth} —— <b>有字段但未接线</b>（真实水深在 7 处硬编码为 1，
- *       改配置无效，属已知待办 O-11），标 {@link ConfigStatus#UNWIRED}</li>
+ *   <li>{@code minWaterDepth} —— <b>已接线</b>，标 {@link ConfigStatus#ACTIVE}。
+ *       <b>2026-11-13 更正</b>：旧注释说「真实水深在 7 处硬编码为 1」，
+ *       那条来自 O-11 的早期分析，后来已经改掉了 —— 现在
+ *       {@code CrossingNegotiation.bridgeMinWaterDepth()}、{@code RawPathSearch}（2 处）、
+ *       {@code PathPostProcessor} 都<b>真的读本配置</b>。唯一的例外是
+ *       {@code terrainProfileMode=BRIDGE_FIRST} 时固定取 1（那条分支是有意的）。</li>
  * </ul>
  *
  * <p>这三种状态以前在 UI 上长得<b>一模一样</b>，玩家没法知道自己调的是不是真的。
@@ -108,10 +112,10 @@ public final class BridgeKeys {
 
             ConfigKey.integer("minWaterDepth", RoadConstants.DEFAULT_BRIDGE_MIN_WATER_DEPTH,
                     RoadConstants.BRIDGE_MIN_WATER_DEPTH_MIN, RoadConstants.BRIDGE_MIN_WATER_DEPTH_MAX,
-                    ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.UNWIRED,
-                    "最小水深（未接线）", "Min water depth (unwired)",
-                    "【未接线】真实判据在 7 处硬编码为 1，改这里目前不生效",
-                    "格", "待办 O-11：把 7 处硬编码 1 改为读取本配置"),
+                    ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
+                    "最小水深", "Min water depth",
+                    "水浅于这个值就不架桥（改成浅滩/涵洞）。桥优先地形档下固定按 1 处理",
+                    "格", ""),
 
             ConfigKey.integer("minLength", RoadConstants.DEFAULT_BRIDGE_MIN_LENGTH,
                     RoadConstants.BRIDGE_MIN_LENGTH_MIN, RoadConstants.BRIDGE_MIN_LENGTH_MAX,
