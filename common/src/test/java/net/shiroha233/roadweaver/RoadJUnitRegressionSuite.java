@@ -48,6 +48,10 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.LegacyLedgerTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.path.SharedEndpointPathReuseTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.architecture.RegressionRegistrationTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.DeadCodeGuardTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.MaintainabilityReportTest"),
