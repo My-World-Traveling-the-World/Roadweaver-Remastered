@@ -159,9 +159,19 @@ roadweaver       冻结（2c6547a / tag roadweaver-frozen-0.9.098）→ 只修 b
 ## 台账（改这里必须同时改代码，否则测试失败）
 
 <!-- LEDGER:BEGIN -->
-LEDGER|1|纵断面与坡度|pathlogic/grade|profile|TODO|3543
-LEDGER|2|桥隧判定|pathlogic/tunnel|span|TODO|2918
-LEDGER|3|桥体与施工|pathlogic/bridge|construction|TODO|4085
+<!-- ★ 2026-11-13 修正：本表原先 7 批的 newPkg 全指向**不存在的顶层包**
+     （profile / span / construction / roadnet / geometry / avoidance / validate），
+     而真实的新实现落在 pathlogic/profile 与 pathlogic/construction。
+     后果是守卫的两条断言都成了空转：
+       · 「DONE ⇒ newPkg 必须存在」—— 全是 TODO，从不触发
+       · 「newPkg 已有文件 ⇒ 不许还是 TODO」—— newPkg 不存在，也从不触发
+     即：**做了一半的活，台账上完全看不出来**。现在按真实路径改正，
+     批 1/2/3 立刻被反向断��推进 IN_PROGRESS。
+     注：批 1 与批 2 的新实现同在 pathlogic/profile（剖面 DP 与桥隧联合模式 DP
+     是同一套求解器），将来删旧时按 docs/S5-METHOD-MAP.md 的方法粒度区分。 -->
+LEDGER|1|纵断面与坡度|pathlogic/grade|pathlogic/profile|IN_PROGRESS|3543
+LEDGER|2|桥隧判定|pathlogic/tunnel|pathlogic/profile|IN_PROGRESS|2918
+LEDGER|3|桥体与施工|pathlogic/bridge|pathlogic/construction|IN_PROGRESS|4085
 LEDGER|4|路口与合并|pathlogic/junction|roadnet|TODO|1877
 LEDGER|5|几何后处理|postprocess|geometry|TODO|5615
 LEDGER|6|结构避让|pathlogic/structures|avoidance|TODO|6291

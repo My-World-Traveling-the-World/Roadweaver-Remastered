@@ -114,6 +114,27 @@ final class LegacyLedgerTest {
     }
 
     @Test
+    void inProgressBatchMustPointAtRealPackage() throws IOException {
+        // ★ 2026-11-13 补：IN_PROGRESS 也必须指向真实存在的包。
+        //
+        // 补这条之前，台账可以写「重制中」而 newPkg 指向一个根本不存在的顶层包 ——
+        // 于是「DONE ⇒ 包必须存在」和「包有文件 ⇒ 不许还是 TODO」两条断言都空转，
+        // 做了一半的活（例如 pathlogic/profile 已有 9 个类）在台账上完全看不出来。
+        for (Row r : rows()) {
+            if (!"IN_PROGRESS".equals(r.status)) { continue; }
+            Path pkgDir = mainJava().resolve(r.newPkg.replace('/', java.io.File.separatorChar));
+            assertTrue(Files.isDirectory(pkgDir),
+                    "批 " + r.batch + "（" + r.domain + "）标为 IN_PROGRESS，"
+                            + "但 newPkg 指向的包不存在：" + r.newPkg
+                            + " —— 「重制中」必须能指到真实代码，否则台账无法用于删除");
+            try (Stream<Path> s = Files.walk(pkgDir)) {
+                long n = s.filter(p -> p.toString().endsWith(".java")).count();
+                assertTrue(n > 0, "批 " + r.batch + " 标为 IN_PROGRESS，但新实现包是空的：" + r.newPkg);
+            }
+        }
+    }
+
+    @Test
     void doneBatchMustHaveRealNewPackage() throws IOException {
         for (Row r : rows()) {
             if (!"DONE".equals(r.status)) { continue; }
