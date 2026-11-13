@@ -97,6 +97,24 @@ public final class ProfileDpSource {
     public static Prepared prepare(int[] terrainY, boolean[] crossing,
                                    int maxCut, int maxFill, int maxStep,
                                    Constraints constraints) {
+        return prepare(terrainY, crossing, maxCut, maxFill, maxStep, -1, constraints);
+    }
+
+    /**
+     * 带硬契约 + <b>二阶坡度约束</b>的翻译。
+     *
+     * @param maxStepPerTwo 「任意<b>相隔两站</b>的高度差上限」，即配置
+     *                      {@code maxSlopeStepPerTwoSegments} 的真实语义；
+     *                      {@code < 0} 表示退回只看 {@code maxStep} 的一阶模型。
+     *
+     * <h2>★ 为什么必须单独给这个值</h2>
+     * <p>一阶的 {@code maxStep} 上限是「每站」，而生产配置说的是「每两站」。
+     * 用半值（{@code ceil(perTwo/2)}）去近似是错的 —— 它允许「连续每站 +1」，
+     * 三站就升 3 格，正好比配置允许的多一倍。2026-11-13 的 AB 实测就栽在这里。</p>
+     */
+    public static Prepared prepare(int[] terrainY, boolean[] crossing,
+                                   int maxCut, int maxFill, int maxStep,
+                                   int maxStepPerTwo, Constraints constraints) {
         int n = terrainY.length;
         if (n == 0) throw new IllegalArgumentException("至少一站");
         if (constraints == null) constraints = Constraints.none();
@@ -151,7 +169,8 @@ public final class ProfileDpSource {
             }
         }
         double[][] cost = CostModel.fromTerrain(terrainY, lo, hi, CostModel.Settings.defaults());
-        return new Prepared(new ProfileDpSolver.Problem(lo, hi, cost, maxStep, pin), terrainY, crossing);
+        return new Prepared(new ProfileDpSolver.Problem(lo, hi, cost, maxStep, pin, maxStepPerTwo),
+                terrainY, crossing);
     }
 
     /**
@@ -181,7 +200,19 @@ public final class ProfileDpSource {
     public static Optional<int[]> solve(int[] terrainY, boolean[] crossing,
                                         int maxCut, int maxFill, int maxStep,
                                         Constraints constraints) {
-        Prepared p = prepare(terrainY, crossing, maxCut, maxFill, maxStep, constraints);
+        return solve(terrainY, crossing, maxCut, maxFill, maxStep, -1, constraints);
+    }
+
+    /**
+     * 带二阶坡度约束的求解 —— <b>生产路径应当用这个</b>。
+     *
+     * @param maxStepPerTwo 「任意相隔两站的高度差上限」= 配置
+     *                      {@code maxSlopeStepPerTwoSegments} 的原始值（不要再除以 2）
+     */
+    public static Optional<int[]> solve(int[] terrainY, boolean[] crossing,
+                                        int maxCut, int maxFill, int maxStep,
+                                        int maxStepPerTwo, Constraints constraints) {
+        Prepared p = prepare(terrainY, crossing, maxCut, maxFill, maxStep, maxStepPerTwo, constraints);
         return ProfileDpSolver.solve(p.problem()).map(ProfileDpSolver.Solution::profile);
     }
 }

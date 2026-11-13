@@ -74,10 +74,25 @@ public final class ProfileAbObserver {
      */
     public static void observe(int[] legacyProfile, int[] terrainY, boolean[] crossing,
                                int maxCut, int maxFill, int maxStep, String tag) {
+        observe(legacyProfile, terrainY, crossing, maxCut, maxFill, maxStep, -1, tag);
+    }
+
+    /**
+     * 观察一条路（带二阶坡度约束）。
+     *
+     * @param maxStepPerTwo 「任意相隔两站的高度差上限」= 配置
+     *                      {@code maxSlopeStepPerTwoSegments} 的原始值；
+     *                      {@code < 0} 表示用一阶模型。
+     *                      <p><b>★ 必须传原值</b>：折半近似会让 DP 拿到两倍坡度，
+     *                      于是它靠「更陡」换「更少土方」，对比失去意义。</p>
+     */
+    public static void observe(int[] legacyProfile, int[] terrainY, boolean[] crossing,
+                               int maxCut, int maxFill, int maxStep, int maxStepPerTwo, String tag) {
         if (!enabled()) return;
         if (legacyProfile == null || terrainY == null || legacyProfile.length != terrainY.length) return;
         try {
-            Optional<int[]> dp = ProfileDpSource.solve(terrainY, crossing, maxCut, maxFill, maxStep);
+            Optional<int[]> dp = ProfileDpSource.solve(terrainY, crossing, maxCut, maxFill,
+                    maxStep, maxStepPerTwo, ProfileDpSource.Constraints.none());
             int call = CALLS.incrementAndGet();
             if (dp.isEmpty()) {
                 int bad = INFEASIBLE.incrementAndGet();
@@ -151,6 +166,12 @@ public final class ProfileAbObserver {
      */
     public static void observeModes(int[] legacyProfile, int[] terrainY, boolean[] groundBanned,
                                     boolean[] legacyTunnel, int maxStep, String tag) {
+        observeModes(legacyProfile, terrainY, groundBanned, legacyTunnel, maxStep, -1, tag);
+    }
+
+    /** 观察桥隧模式（带二阶坡度约束，口径同 {@link #observe}）。 */
+    public static void observeModes(int[] legacyProfile, int[] terrainY, boolean[] groundBanned,
+                                    boolean[] legacyTunnel, int maxStep, int maxStepPerTwo, String tag) {
         if (!enabled()) return;
         if (terrainY == null || legacyProfile == null || legacyProfile.length != terrainY.length) return;
         try {

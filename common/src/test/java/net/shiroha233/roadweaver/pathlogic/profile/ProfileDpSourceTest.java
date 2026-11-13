@@ -308,25 +308,32 @@ final class ProfileDpSourceTest {
 
     // ── 模式开关 ──────────────────────────────────────────────
 
+    /**
+     * 模式解析：<b>默认已是 DP</b>（2026-11-13 切换）。
+     *
+     * <p>旧行为是「未设 ⇒ LEGACY」，那是为了先收集数据再决定。
+     * 数据到手、二阶坡度约束修好之后，用户拍板直接转向重构版，
+     * 于是默认翻成 DP；{@code legacy} / {@code classic} 仍可显式回退。</p>
+     */
     @Test
-    void 求解器模式默认是LEGACY且非法值也回落LEGACY() {
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(null), "case=null");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(""), "case=blank");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("dp2"), "case=typo");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("true"), "case=wrong-flag");
+    void 求解器模式默认是DP且可显式回退到LEGACY() {
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(null), "case=null");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(""), "case=blank");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("dp2"), "case=typo-回落默认");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("true"), "case=wrong-flag-回落默认");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("DP"), "case=dp-upper");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(" dp "), "case=dp-spaces");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy-显式回退");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic-显式回退");
     }
 
     @Test
-    void 未设属性时读出来是LEGACY() {
+    void 未设属性时读出来是DP且legacy可回退() {
         System.clearProperty(ProfileSolverMode.PROPERTY);
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=unset");
-        System.setProperty(ProfileSolverMode.PROPERTY, "dp");
+        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=unset-默认DP");
+        System.setProperty(ProfileSolverMode.PROPERTY, "legacy");
         try {
-            assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=set-dp");
+            assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=explicit-legacy");
         } finally {
             System.clearProperty(ProfileSolverMode.PROPERTY);
         }

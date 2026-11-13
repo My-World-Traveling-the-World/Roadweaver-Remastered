@@ -179,4 +179,83 @@ final class ProfileDpSolverTest {
             bruteForce(p, i + 1, cur, best, bestProfile);
         }
     }
+
+    // ── 二阶约束：「每两站最多升降 N 格」（2026-11-13 修正）──────────────
+
+    /**
+     * 负控：一阶允许、二阶必须拒绝。
+     *
+     * <p>三站高度被钉成 0 / 1 / 2：一阶 {@code maxStep=1} 认为完全合法
+     * （每站 +1），但「每两站 ≤1 格」下 {@code |y2 − y0| = 2 > 1} ⇒ <b>必须不可行</b>。</p>
+     *
+     * <p>这条测试是整次修正的核心钉子：没有它，二阶约束可以被写成空操作而没人发现。</p>
+     */
+    @Test
+    void 每两站一格时连续两站加一必须不可行() {
+        int n = 3;
+        int[] lo = {0, 1, 2};
+        int[] hi = {0, 1, 2};
+        int[] pin = {0, 1, 2};          // 全部钉死 ⇒ 只有唯一候选，纯约束判定
+
+        // 一阶：可行
+        assertTrue(ProfileDpSolver.solve(new ProfileDpSolver.Problem(
+                        lo, hi, null, 1, pin)).isPresent(),
+                "case=first-order-allows");
+
+        // 二阶：不可行
+        assertFalse(ProfileDpSolver.solve(new ProfileDpSolver.Problem(
+                        lo, hi, null, 1, pin, 1)).isPresent(),
+                "case=two-station-rejects 连续 +1,+1 必须被判不可行");
+    }
+
+    @Test
+    void 每两站一格时升降相消是允许的() {
+        // 0 -> 1 -> 0：|y2 − y0| = 0 ≤ 1，合法
+        int[] lo = {0, 1, 0};
+        int[] hi = {0, 1, 0};
+        int[] pin = {0, 1, 0};
+        assertTrue(ProfileDpSolver.solve(new ProfileDpSolver.Problem(
+                        lo, hi, null, 1, pin, 1)).isPresent(),
+                "case=up-then-down-allowed");
+    }
+
+    @Test
+    void 二阶解里任意相隔两站的落差都不超过上限() {
+        // 一段起伏地形，窗口放得很宽，只靠二阶约束限制
+        int n = 60;
+        int[] lo = new int[n];
+        int[] hi = new int[n];
+        java.util.Arrays.fill(lo, 0);
+        java.util.Arrays.fill(hi, 40);
+        for (int i = 0; i < n; i++) lo[i] = 10 + (int) (6 * Math.sin(i * 0.35));
+        for (int i = 0; i < n; i++) hi[i] = lo[i] + 20;
+
+        Optional<ProfileDpSolver.Solution> sol = ProfileDpSolver.solve(
+                new ProfileDpSolver.Problem(lo, hi, null, 4, null, 1));
+        assertTrue(sol.isPresent(), "case=feasible");
+        int[] p = sol.get().profile();
+        for (int i = 2; i < n; i++) {
+            assertTrue(Math.abs(p[i] - p[i - 2]) <= 1,
+                    "case=two-station-limit 第 " + i + " 站 |Δ2|=" + Math.abs(p[i] - p[i - 2]));
+        }
+        // 同时一阶上限也得满足
+        for (int i = 1; i < n; i++) {
+            assertTrue(Math.abs(p[i] - p[i - 1]) <= 4,
+                    "case=first-order-limit 第 " + i + " 站步长 " + Math.abs(p[i] - p[i - 1]));
+        }
+    }
+
+    @Test
+    void 二阶上限为零等价于要求全平() {
+        int n = 5;
+        int[] lo = {0, 0, 0, 0, 0};
+        int[] hi = {3, 3, 3, 3, 3};
+        Optional<ProfileDpSolver.Solution> sol = ProfileDpSolver.solve(
+                new ProfileDpSolver.Problem(lo, hi, null, 3, null, 0));
+        assertTrue(sol.isPresent(), "case=feasible");
+        int[] p = sol.get().profile();
+        for (int i = 1; i < n; i++) {
+            assertEquals(p[0], p[i], "case=flat-only 第 " + i + " 站必须与第 0 站同高");
+        }
+    }
 }

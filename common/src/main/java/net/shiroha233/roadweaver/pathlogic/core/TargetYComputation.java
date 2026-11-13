@@ -507,16 +507,22 @@ public final class TargetYComputation {
         //
         // 窗口参数是**实验参数**，不是生产值：故意放宽（挖 24 / 填 12）是为了让 DP
         // 在陡地形上也可行，把对比聚焦在「坡度平顺 vs 土方量」，而不是让不可行掩盖一切。
-        // maxStep 取「每两站 M 格」折算成的每站步长（向上取整），与旧版约束口径一致。
+        //
+        // ★ 坡度口径（2026-11-13 修正）：配置 maxSlopeStepPerTwoSegments 的语义是
+        // 「每**两**站最多升降 N 格」，必须原样传给二阶约束。曾经用 ceil(N/2) 折算成
+        // 「每站」是错的 —— 那允许「连续每站 +1」，三站升 3 格，比配置允许的多一倍，
+        // 于是 DP 拿「更陡」去换「更少土方」，AB 对比因此不公平。
         ProfileAbObserver.observe(smoothed, terrainY, isCrossing,
                 PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL,
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
+                cfg.maxSlopeStepPerTwoSegments(),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
         // S4：在同样的物理约束下让联合 DP 自己重新决定桥/隧道/地面。
         // groundBanned 喂的是「这里不能铺地面」这条物理事实（水面 / 已有公路 / 保护区），
         // **不喂**旧版判出来的桥/隧道选择 —— 否则 DP 只是在复现旧决策。
         ProfileAbObserver.observeModes(smoothed, terrainY, isCrossing, tunnelMask,
                 Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
+                cfg.maxSlopeStepPerTwoSegments(),
                 connection == null ? "?" : connection.from() + "->" + connection.to());
         // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。
         // 只在地形、不录旧剖面 —— 我们要比的是「同一地形，两种算法各自算出的解」。
@@ -558,10 +564,13 @@ public final class TargetYComputation {
             }
             int minCover = Math.max(1, RoadGradePlanner.SurfaceGradeLimits.capture().tunnelCoreOverburden());
             var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover);
-            int maxStep = Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2);
+            // 一阶上限（每站）与二阶上限（每两站）都给足，交给求解器同时生效。
+            // ★ 二阶那个用配置原值，不再除以 2 —— 见 AB 观测处的注释。
+            int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
+            int maxStep = perTwo;
 
             var solved = ProfileDpSource.solve(terrainY, isCrossingMaskOf(tunnelMask, n),
-                    PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL, maxStep, constraints);
+                    PROFILE_AB_MAX_CUT, PROFILE_AB_MAX_FILL, maxStep, perTwo, constraints);
             if (solved.isEmpty()) {
                 LOGGER.warn("RoadWeaver profile solver=dp infeasible, falling back to legacy"
                                 + " stations={} connection={}->{}",
@@ -570,8 +579,8 @@ public final class TargetYComputation {
                         connection == null ? "?" : connection.to());
                 return smoothed;
             }
-            LOGGER.info("RoadWeaver profile solver=dp stations={} maxStep={} minCover={} connection={}->{}",
-                    n, maxStep, minCover,
+            LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} minCover={} connection={}->{}",
+                    n, perTwo, minCover,
                     connection == null ? "?" : connection.from(),
                     connection == null ? "?" : connection.to());
             return solved.get();
