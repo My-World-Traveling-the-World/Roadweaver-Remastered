@@ -12,7 +12,35 @@ public final class PlanningConfig implements SubConfig {
     /**
      * 规划算法枚举。
      */
-    public enum PlanningAlgorithm { KNN, DELAUNAY, RNG, MST, SNAP_BRANCH, ALPHA_MODEL }
+    public enum PlanningAlgorithm {
+        /** 每个结构连最近的 k 个。 */
+        KNN,
+        /** Delaunay 三角剖分。 */
+        DELAUNAY,
+        /** 相对邻域图（长边自动剪掉）。 */
+        RNG,
+        /** 直线距离的最小生成树。 */
+        MST,
+        /** 生成树 + 就近支线吸附。 */
+        SNAP_BRANCH,
+        /** Alpha 模型（交通量加权的 alpha shape）。 */
+        ALPHA_MODEL,
+        /**
+         * 新三层内核的<b>测地距离</b>最小生成树（2026-11-13 新增，实验性）。
+         *
+         * <p>与 {@link #MST} 的区别只有一条，但很关键：MST 用<b>直线距离</b>建树，
+         * 本项用<b>测地距离</b> —— 也就是「绕开山和水实际要走多远」。两座结构直线
+         * 200 格、中间隔一道山脊时，直线距离看不出问题，测地距离会说实话。</p>
+         *
+         * <p>实现见 {@code PipelinePlanner}。它只接管<b>拓扑</b>，具体走线仍由
+         * 后续 A* 算（{@code RoadPipeline} 顺带算出的弹性带曲线暂不消费 ——
+         * 生成链没有接收预计算曲线的入口）。</p>
+         *
+         * <p><b>出厂默认仍是 RNG</b>，本项要手动选。第一次用建议配合日志观察
+         * 「测地距离的 MST 边」与「直线距离的 MST 边」差多少。</p>
+         */
+        PIPELINE
+    }
     /**
      * Terrain profile mode. Three distinct behaviors: AUTO is the balanced
      * baseline (legacy BALANCED saves load as AUTO), TUNNEL_FIRST keeps the

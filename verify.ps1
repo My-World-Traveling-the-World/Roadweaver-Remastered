@@ -28,7 +28,14 @@ if (-not (Test-Path $gradle)) {
     if (-not $found) { Write-Host "[verify] gradle.bat not found"; exit 2 }
     $gradle = $found.FullName
 }
-$opts = @('--no-daemon', '--console=plain', '--dependency-verification=off')
+# 2026-11-13: switched from --no-daemon to --daemon.
+# --no-daemon makes Gradle fork a ONE-SHOT daemon for the build, and that one-shot
+# handshake is exactly what kept failing on this machine: the daemon started, logged
+# "Advertising the daemon address", listened on 127.0.0.1, and then died without the
+# client ever connecting ("no longer found in the daemon registry").
+# A regular (reused) daemon connects fine - verified 14:40 on this machine.
+# Side benefit: successive verify runs reuse the warm daemon, so they are faster too.
+$opts = @('--daemon', '--console=plain', '--dependency-verification=off')
 
 # Known-flaky, NON-CODE failure: the Gradle daemon process starts and listens on
 # 127.0.0.1, but the client cannot connect and the daemon drops its own registry

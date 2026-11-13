@@ -290,6 +290,7 @@
   "config.roadweaver.planning_algorithm.option.rng": "相对邻域图 (RNG)",
   "config.roadweaver.planning_algorithm.option.snap_branch": "点线吸附三岔",
   "config.roadweaver.planning_algorithm.option.alpha_model": "Alpha Model 路网生长",
+  "config.roadweaver.planning_algorithm.option.pipeline": "测地距离 MST（实验性）",
   "config.roadweaver.planning_algorithm.tooltip": "选择路网规划的主连边算法：KNN = 局部稀疏、近似街区；Delaunay = 稠密路网；RNG = 稀疏网状；MST = 最小总边长树；点线吸附三岔 = 先建稀疏主干，再把邻近点吸附到线段形成三岔路口；Alpha Model = 按交通量让整张路网一起生长，新路共用已有路打折，主干+分支自然涌现。",
   "config.roadweaver.knn_k": "KNN 近邻数 K · 仅 KNN",
   "config.roadweaver.knn_k.tooltip": "每个结构尝试连接的最近邻个数（默认 2）。调大路网更密、冗余边更多。\n仅 KNN 算法生效；改它会改规划指纹，已有缓存路线会重算（建新世界前先定好）。",

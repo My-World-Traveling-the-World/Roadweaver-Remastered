@@ -290,6 +290,7 @@
   "config.roadweaver.planning_algorithm.option.rng": "Relative Neighborhood Graph (RNG)",
   "config.roadweaver.planning_algorithm.option.snap_branch": "Snap-Branch Junction",
   "config.roadweaver.planning_algorithm.option.alpha_model": "Alpha Model Network Growth",
+  "config.roadweaver.planning_algorithm.option.pipeline": "Geodesic MST (experimental)",
   "config.roadweaver.planning_algorithm.tooltip": "Choose the primary edge algorithm for road network planning: KNN = sparse local graph; Delaunay = more uniform but denser mesh; RNG = sparser skeleton; MST = tree with minimum total edge length; Snap-Branch = sparse trunk + point-to-line snapping branches (T-junction style); Alpha Model = whole network grows by traffic volume, new routes reuse existing corridors at a discount, trunk + branches emerge naturally.",
   "config.roadweaver.knn_k": "KNN Neighbors K · KNN only",
   "config.roadweaver.knn_k.tooltip": "How many nearest neighbors each structure tries to connect to (default 2). Larger = denser, more redundant network.\nOnly effective with the KNN algorithm; changing it alters the planning fingerprint and recomputes cached routes (set it before creating a world).",

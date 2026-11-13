@@ -241,7 +241,7 @@ public final class AsyncPlanningOps {
                     }
                 }
 
-                List<StructureConnection> primaryEdges = planPrimaryEdges(points, cfg0);
+                List<StructureConnection> primaryEdges = planPrimaryEdges(level, points, cfg0);
                 if (primaryEdges.isEmpty() && existingInRect.isEmpty()) return new PlannedRegionResult(List.of());
 
                 primaryEdges = primaryEdges.stream()

@@ -440,7 +440,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         }
 
         ModConfig cfg0 = ConfigService.get();
-        List<StructureConnection> primaryEdges = planPrimaryEdges(points, cfg0);
+        List<StructureConnection> primaryEdges = planPrimaryEdges(level, points, cfg0);
         if (primaryEdges.isEmpty()) return;
 
         WorldDataProvider provider = WorldDataProvider.getInstance();
@@ -530,7 +530,19 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
      * 改为读配置（{@code planMaxEdgeLenBlocks}），默认值不变。
      */
     static List<StructureConnection> planPrimaryEdges(List<BlockPos> points, ModConfig cfg0) {
-        NetworkPlanner planner = NetworkPlannerFactory.create(cfg0.planning().planningAlgorithm());
+        return planPrimaryEdges(null, points, cfg0);
+    }
+
+    /**
+     * 带世界的版本 —— {@code planningAlgorithm = PIPELINE} 需要它。
+     *
+     * <p>2026-11-13 加：测地距离规划器必须先采地形，而地形来自世界。
+     * 传 {@code null} 时该规划器会退回直线距离的 MST（见 {@code PipelinePlanner}）。</p>
+     */
+    static List<StructureConnection> planPrimaryEdges(ServerLevel level, List<BlockPos> points,
+                                                      ModConfig cfg0) {
+        NetworkPlanner planner = NetworkPlannerFactory.create(
+                cfg0.planning().planningAlgorithm(), level);
         int maxEdge = cfg0.planning().planMaxEdgeLenBlocks();
         if (planner instanceof KNNPlanner knn) {
             return knn.plan(points, maxEdge,
