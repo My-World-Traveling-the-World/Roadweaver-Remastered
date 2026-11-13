@@ -7,8 +7,6 @@ import net.shiroha233.roadweaver.client.tips.LoadingTipsRenderer;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateSamplingStats;
-import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingStats;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

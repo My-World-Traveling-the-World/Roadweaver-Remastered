@@ -2,7 +2,6 @@
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;
-import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;

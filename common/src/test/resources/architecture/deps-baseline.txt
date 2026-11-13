@@ -65,7 +65,6 @@ map -> pathfinding                       18
 map -> pathlogic                         1
 map -> persistence                       9
 map -> planning                          3
-map -> postprocess                       1
 map -> runtime                           3
 map -> search                            1
 map -> util                              1
@@ -120,7 +119,6 @@ planning -> network                      5
 planning -> pathfinding                  52
 planning -> pathlogic                    84
 planning -> persistence                  29
-planning -> postprocess                  8
 planning -> runtime                      18
 planning -> search                       5
 planning -> util                         5
@@ -135,7 +133,7 @@ route -> client                          2
 route -> core                            10
 route -> generation                      1
 route -> pathfinding                     2
-route -> pathlogic                       6
+route -> pathlogic                       5
 route -> persistence                     4
 route -> planning                        2
 runtime -> compat                        1
