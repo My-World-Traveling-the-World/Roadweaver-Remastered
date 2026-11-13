@@ -64,7 +64,7 @@ public final class UiFeatureGuardTest {
 
     /** 四个 UI 区的文件数下限（ratchet：只许涨）。 */
     private static final String[][] UI_AREAS = {
-            {"client/map", "地图界面", "56"},
+            {"client/map", "地图界面", "55"},   // 2026-11-13: 删掉死代码 SingleplayerOverlayTileManager (56->55)
             {"route/editor", "手绘路线编辑器", "12"},
             {"client/config", "配置界面", "12"},
             {"client/loading", "预热/加载界面", "3"},
