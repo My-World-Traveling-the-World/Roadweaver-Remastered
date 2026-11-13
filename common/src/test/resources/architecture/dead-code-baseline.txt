@@ -1,32 +1,68 @@
-# 死代码基线（ratchet：只许缩小，不许新增）
-# 判定：类型名在【全模块 java 正文（含测试源码）】或【全部资源文件】里的出现次数 == 自身文件内出现次数
-# 生成：2026-11-13（守卫 G5；含测试语料口径）
+# 死代码基线（ratchet：**四组都只许缩小，不许新增**）
+#
+# ★ 2026-11-13 口径大修（两个真问题）：
+#
+# 1) 统计引用时**剥离注释与 javadoc**。旧口径把 `{@link Foo}` 也算「有人用」，
+#    导致 10 个类型靠 javadoc 维持活着，其中 4 个连测试都不引用：
+#      InitialRoadConstructionService / Records /
+#      RiverReadinessBroadcast / TwoStagePathfindingManager
+#
+# 2) 旧基线把 3 个**公开 API 门面**判成「[A] 真死代码，可以删」：
+#      CruiseSignalsApi / PlanningReadinessApi / StructureReservationApi
+#    它们都在 api/incoming/，是**别的 mod 调我们的入口**（CruiseSignalsApi 的注释原文：
+#    「消费方（区块预生成侧）用这几个方法，不再反射」）。零引用是设计如此 ——
+#    真删了会让下游 mod 编译失败或运行崩溃。现在单独归入 [D] 对外契约，禁止删。
+#
+# 四组的区别：
+#   [A] 真死代码     生产与测试都零引用。删掉即可，删完把这行也删了。
+#   [B] 平台实现     Architectury @ExpectPlatform 的 Fabric 侧实现。删了直接崩。
+#                    守卫会**自动校验**：类名须是 XxxImpl 且主类 Xxx 里真声明了
+#                    @ExpectPlatform。不符合的判为「藏匿」，直接红。
+#   [C] 测试孤岛     生产零引用、只有测试在用。要么接进生产，要么连测试一起删。
+#   [D] 对外契约     api / api-fabric 模块里的公共类型。零引用是正常的 ——
+#                    它们的存在意义就是给外部 mod 调用，不是给我们自己用。
 
-# ── [A] 真死代码：可以删（删掉后把这一行也删了）──────────────
-AccurateTerrainTileBackfillService    # common/net\shiroha233\roadweaver\map\tile\backfill\AccurateTerrainTileBackfillService.java
-ArtificialDecorationSystem    # common/net\shiroha233\roadweaver\decoration\system\ArtificialDecorationSystem.java
-CruiseSignalsApi    # api/net\shiroha233\roadweaver\api\incoming\CruiseSignalsApi.java
-FenceWaypointDecoration    # common/net\shiroha233\roadweaver\decoration\types\FenceWaypointDecoration.java
-MapSamplingNoticeOverlayRenderer    # common/net\shiroha233\roadweaver\client\map\render\MapSamplingNoticeOverlayRenderer.java
-MapSnapshotAccumulator    # common/net\shiroha233\roadweaver\client\map\data\MapSnapshotAccumulator.java
-MapTerrainSamplingService    # common/net\shiroha233\roadweaver\map\tile\sampling\MapTerrainSamplingService.java
-NaturalDecorationSystem    # common/net\shiroha233\roadweaver\decoration\system\NaturalDecorationSystem.java
-OpenCLAccurateHeightBackend    # common/net\shiroha233\roadweaver\pathfinding\sampling\opencl\OpenCLAccurateHeightBackend.java
-OverlayTileQueryService    # common/net\shiroha233\roadweaver\map\tile\query\OverlayTileQueryService.java
-OverlayTileRenderer    # common/net\shiroha233\roadweaver\map\tile\render\OverlayTileRenderer.java
-PlanningReadinessApi    # api/net\shiroha233\roadweaver\api\incoming\PlanningReadinessApi.java
-PresetConfig    # common/net\shiroha233\roadweaver\config\PresetConfig.java
-RoadDirection    # common/net\shiroha233\roadweaver\pathlogic\core\RoadDirection.java
-SingleplayerOverlayTileManager    # common/net\shiroha233\roadweaver\client\map\tile\SingleplayerOverlayTileManager.java
-TerrainTileRenderer    # common/net\shiroha233\roadweaver\map\tile\render\TerrainTileRenderer.java
+# ── [A] 真死代码（可以删）────────────────────────────────
+AccurateTerrainTileBackfillService     # common/src/main/java/net/shiroha233/roadweaver/map/tile/backfill/AccurateTerrainTileBackfillService.java
+ArtificialDecorationSystem             # common/src/main/java/net/shiroha233/roadweaver/decoration/system/ArtificialDecorationSystem.java
+FenceWaypointDecoration                # common/src/main/java/net/shiroha233/roadweaver/decoration/types/FenceWaypointDecoration.java
+InitialRoadConstructionService         # common/src/main/java/net/shiroha233/roadweaver/generation/InitialRoadConstructionService.java
+MapSamplingNoticeOverlayRenderer       # common/src/main/java/net/shiroha233/roadweaver/client/map/render/MapSamplingNoticeOverlayRenderer.java
+MapSnapshotAccumulator                 # common/src/main/java/net/shiroha233/roadweaver/client/map/data/MapSnapshotAccumulator.java
+MapTerrainSamplingService              # common/src/main/java/net/shiroha233/roadweaver/map/tile/sampling/MapTerrainSamplingService.java
+NaturalDecorationSystem                # common/src/main/java/net/shiroha233/roadweaver/decoration/system/NaturalDecorationSystem.java
+OpenCLAccurateHeightBackend            # common/src/main/java/net/shiroha233/roadweaver/pathfinding/sampling/opencl/OpenCLAccurateHeightBackend.java
+OverlayTileQueryService                # common/src/main/java/net/shiroha233/roadweaver/map/tile/query/OverlayTileQueryService.java
+OverlayTileRenderer                    # common/src/main/java/net/shiroha233/roadweaver/map/tile/render/OverlayTileRenderer.java
+PresetConfig                           # common/src/main/java/net/shiroha233/roadweaver/config/PresetConfig.java
+Records                                # common/src/main/java/net/shiroha233/roadweaver/util/Records.java
+RoadDirection                          # common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/RoadDirection.java
+RoadWeaverDataGenerator                # fabric/src/main/java/net/shiroha233/roadweaver/RoadWeaverDataGenerator.java
+SingleplayerOverlayTileManager         # common/src/main/java/net/shiroha233/roadweaver/client/map/tile/SingleplayerOverlayTileManager.java
+TerrainTileRenderer                    # common/src/main/java/net/shiroha233/roadweaver/map/tile/render/TerrainTileRenderer.java
+TwoStagePathfindingManager             # common/src/main/java/net/shiroha233/roadweaver/pathfinding/TwoStagePathfindingManager.java
 
-# ── [B] 平台实现：Java 侧没有静态引用是正常的（Architectury @ExpectPlatform），禁止删 ──
-ClientNetBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ClientNetBridgeImpl.java
-MapAccessPlatformBridgeImpl    # fabric/net\shiroha233\roadweaver\map\permission\fabric\MapAccessPlatformBridgeImpl.java
-OpenMapKeyTextBridgeImpl    # fabric/net\shiroha233\roadweaver\client\loading\fabric\OpenMapKeyTextBridgeImpl.java
-RoadWeaverDataGenerator    # fabric/net\shiroha233\roadweaver\RoadWeaverDataGenerator.java
-RouteKeysBridgeImpl    # fabric/net\shiroha233\roadweaver\route\editor\fabric\RouteKeysBridgeImpl.java
-RouteWorldRendererBridgeImpl    # fabric/net\shiroha233\roadweaver\route\editor\fabric\RouteWorldRendererBridgeImpl.java
-ServerMapPatchBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ServerMapPatchBridgeImpl.java
-ServerMapPlanningActivityBridgeImpl    # fabric/net\shiroha233\roadweaver\network\fabric\ServerMapPlanningActivityBridgeImpl.java
-WorldDataProviderImpl    # fabric/net\shiroha233\roadweaver\persistence\fabric\WorldDataProviderImpl.java
+# ── [B] 平台实现（禁止删；守卫自动校验它真的是平台实现）──────────
+ClientNetBridgeImpl                    # fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ClientNetBridgeImpl.java
+MapAccessPlatformBridgeImpl            # fabric/src/main/java/net/shiroha233/roadweaver/map/permission/fabric/MapAccessPlatformBridgeImpl.java
+OpenMapKeyTextBridgeImpl               # fabric/src/main/java/net/shiroha233/roadweaver/client/loading/fabric/OpenMapKeyTextBridgeImpl.java
+RouteKeysBridgeImpl                    # fabric/src/main/java/net/shiroha233/roadweaver/route/editor/fabric/RouteKeysBridgeImpl.java
+RouteWorldRendererBridgeImpl           # fabric/src/main/java/net/shiroha233/roadweaver/route/editor/fabric/RouteWorldRendererBridgeImpl.java
+ServerMapPatchBridgeImpl               # fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ServerMapPatchBridgeImpl.java
+ServerMapPlanningActivityBridgeImpl    # fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ServerMapPlanningActivityBridgeImpl.java
+WorldDataProviderImpl                  # fabric/src/main/java/net/shiroha233/roadweaver/persistence/fabric/WorldDataProviderImpl.java
+
+# ── [C] 测试孤岛（接线，或连测试一起删）────────────────────
+AbRunner                               # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/AbRunner.java   测试引用 10 次
+AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
+BandRouteSolver                        # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/BandRouteSolver.java   测试引用 6 次
+BuildPlanCompiler                      # common/src/main/java/net/shiroha233/roadweaver/spec/BuildPlanCompiler.java   测试引用 12 次
+ConfigKeyTable                         # common/src/main/java/net/shiroha233/roadweaver/config/meta/ConfigKeyTable.java   测试引用 8 次
+QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
+RoadPipeline                           # common/src/main/java/net/shiroha233/roadweaver/pipeline/RoadPipeline.java   测试引用 11 次
+
+# ── [D] 对外契约（禁止删：删了会让下游 mod 崩）────────────────
+CruiseSignalsApi                       # api/src/main/java/net/shiroha233/roadweaver/api/incoming/CruiseSignalsApi.java   测试引用 0 次
+PlanningReadinessApi                   # api/src/main/java/net/shiroha233/roadweaver/api/incoming/PlanningReadinessApi.java   测试引用 0 次
+RiverReadinessBroadcast                # api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RiverReadinessBroadcast.java   测试引用 0 次
+StructureReservationApi                # api/src/main/java/net/shiroha233/roadweaver/api/incoming/StructureReservationApi.java   测试引用 2 次

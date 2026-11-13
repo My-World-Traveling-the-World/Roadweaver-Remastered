@@ -1,4 +1,4 @@
-/* 文件职责：死代码守卫 —— 全模块扫描零引用类型，只许减少不许新增。 */
+/* 文件职责：死代码守卫 —— 四类分组、剥离注释统计、分类漂移即红。 */
 package net.shiroha233.roadweaver.architecture;
 
 import java.io.IOException;
@@ -7,8 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -30,26 +33,71 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code StructureKeys} 被 common 里 11 处引用、{@code RoadBeardifierAccess}
  * 只在 fabric 的 mixin 里被引用。</p>
  *
- * <h2>判定口径（刻意保守）</h2>
- * <p>类型名出现在<b>全部模块（common / fabric / api / api-fabric）的 Java 正文</b>
- * 或<b>全部资源文件</b>（json / properties / toml / txt / cfg / yaml）里就算「活着」。
- * 宁可漏判，不可误杀 —— 资源里可能藏着注册表、mixin 配置、entrypoint、服务加载器声明。</p>
+ * <h2>★ 2026-11-13 口径大修（独立审计 + 我复现确认的两个真问题）</h2>
  *
- * <h2>★ 两类必须区分</h2>
+ * <h3>问题一：javadoc 被当成真实使用</h3>
+ * <p>旧口径在<b>原始文本</b>里统计类型名出现次数。于是
+ * {@code /** 见 {@link Foo} *}{@code /} 这样的注释也会让 {@code Foo} 算「有人用」。</p>
+ * <p>实测后果：<b>10 个类型靠 javadoc 维持活着</b>，其中 4 个连测试都不引用 ——
+ * {@code InitialRoadConstructionService}、{@code Records}、
+ * {@code RiverReadinessBroadcast}、{@code TwoStagePathfindingManager}。
+ * 它们是真死代码，但旧口径永远看不见。</p>
+ * <p>修法：{@link #stripComments(String)} 剥掉块注释与行注释后再统计。</p>
+ *
+ * <h3>问题二：把公开 API 门面判成「可以删」</h3>
+ * <p>旧基线把 {@code CruiseSignalsApi} / {@code PlanningReadinessApi} /
+ * {@code StructureReservationApi} 归进「[A] 真死代码，可以删」。但它们都在
+ * {@code api/incoming/}，是<b>别的 mod 调我们的入口</b> ——
+ * {@code CruiseSignalsApi} 的注释原文：「消费方（区块预生成侧）用这几个方法，<b>不再反射</b>」。</p>
+ * <p>零引用是<b>设计如此</b>：我们不调自己，别人调。真删了会让下游 mod
+ * 编译失败或运行崩溃。</p>
+ * <p>修法：新增 {@link Kind#D}「对外契约」，{@code api} / {@code api-fabric}
+ * 模块里的零引用类型一律归入，禁止删。</p>
+ *
+ * <h3>问题三：[A]/[B] 分组对断言零影响（藏匿后门）</h3>
+ * <p>旧实现把四组的成员都塞进同一个 {@code Set<String> baseline}，
+ * 断言只看「在不在并集里」。于是把一条真死代码从 {@code [A]} 挪到
+ * {@code [B]}（「平台实现，禁止删」）就<b>合法地藏起来了</b>。
+ * 历史上确实发生过一次（提交 50f6bbc）。</p>
+ * <p>修法：{@link Kind} 成为断言的一部分 —— <b>分类漂移直接红</b>；
+ * 并且 {@code [B]} 的每个成员都要通过 {@link #isPlatformImpl} 的自动校验
+ * （类名 XxxImpl + 主类 Xxx 里真的声明了 {@code @ExpectPlatform}）。</p>
+ *
+ * <h2>四类</h2>
  * <ul>
- *   <li><b>[A] 真死代码</b>：删掉不会有任何影响（删完请把基线里那行也删了）；</li>
- *   <li><b>[B] 平台实现</b>：Architectury 的 {@code @ExpectPlatform} 由平台在运行时分发，
- *       Java 侧本来就没有静态引用 —— <b>删了会直接崩</b>。基线里单独分组并标注禁止删。</li>
+ *   <li>{@link Kind#A} 真死代码 —— 生产与测试都零引用；</li>
+ *   <li>{@link Kind#B} 平台实现 —— {@code @ExpectPlatform} 的 Fabric 侧，删了崩；</li>
+ *   <li>{@link Kind#C} 测试孤岛 —— 生产零引用、只有测试用；</li>
+ *   <li>{@link Kind#D} 对外契约 —— {@code api} 模块，给外部 mod 用。</li>
  * </ul>
  *
- * <p>守卫只做一件事：<b>不许新增</b>零引用类型（ratchet）。已有债务照实记录，慢慢还。</p>
+ * <p>守卫只做一件事：<b>不许新增、不许换组</b>（ratchet）。已有债务照实记录，慢慢还。</p>
  */
 public final class DeadCodeGuardTest {
+
+    /** 四种归属 —— 是断言的一部分，不只是标签。 */
+    enum Kind {
+        /** 真死代码：生产与测试都零引用，删掉即可。 */
+        A,
+        /** 平台实现：{@code @ExpectPlatform} 的 Fabric 侧，删了直接崩。 */
+        B,
+        /** 测试孤岛：生产零引用、只有测试在用。 */
+        C,
+        /** 对外契约：{@code api} 模块里的公共类型，给外部 mod 调用。 */
+        D
+    }
 
     /** 顶层类型声明（列 0）—— 不含嵌套类，嵌套类生命周期跟随外层。 */
     private static final Pattern TOP_LEVEL_DECL = Pattern.compile(
             "^(?:public |final |abstract |sealed |non-sealed )*(?:class|interface|enum|record)\\s+(\\w+)",
             Pattern.MULTILINE);
+
+    /** 标识符（统计引用用）。 */
+    private static final Pattern WORD = Pattern.compile("\\b[A-Za-z_][A-Za-z0-9_]*\\b");
+
+    private static final Pattern BLOCK_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+
+    private static final Pattern LINE_COMMENT = Pattern.compile("//[^\\n]*");
 
     private static final String[] MODULES = {"common", "fabric", "api", "api-fabric"};
 
@@ -68,16 +116,25 @@ public final class DeadCodeGuardTest {
         }
     }
 
-    private static List<Path> mainJava() {
+    /**
+     * 剥掉注释。
+     *
+     * <p>这是本守卫最关键的一行逻辑 —— 不剥注释，{@code {@link Foo}} 就会让
+     * {@code Foo} 永远「有人用」（2026-11-13 实测 10 个类型被这样掩护）。</p>
+     */
+    static String stripComments(String source) {
+        String noBlock = BLOCK_COMMENT.matcher(source).replaceAll(" ");
+        return LINE_COMMENT.matcher(noBlock).replaceAll(" ");
+    }
+
+    private static List<Path> javaFiles(String module, String phase) {
         List<Path> out = new ArrayList<>();
-        for (String m : MODULES) {
-            Path d = repoRoot.resolve(m).resolve("src").resolve("main").resolve("java");
-            if (!Files.isDirectory(d)) continue;
-            try (Stream<Path> s = Files.walk(d)) {
-                s.filter(p -> p.toString().endsWith(".java")).forEach(out::add);
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
+        Path d = repoRoot.resolve(module).resolve("src").resolve(phase).resolve("java");
+        if (!Files.isDirectory(d)) return out;
+        try (Stream<Path> s = Files.walk(d)) {
+            s.filter(p -> p.toString().endsWith(".java")).forEach(out::add);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
         }
         return out;
     }
@@ -88,100 +145,219 @@ public final class DeadCodeGuardTest {
                 || name.endsWith(".yaml") || name.endsWith(".yml");
     }
 
-    private static String resourceCorpus() {
+    /** 资源文本：mixin 配置、entrypoint、服务加载器声明都可能让一个类「活着」。 */
+    private static String resourceCorpus() throws IOException {
         StringBuilder sb = new StringBuilder();
         for (String m : MODULES) {
             Path d = repoRoot.resolve(m).resolve("src").resolve("main").resolve("resources");
             if (!Files.isDirectory(d)) continue;
             try (Stream<Path> s = Files.walk(d)) {
                 for (Path p : s.filter(Files::isRegularFile).toList()) {
-                    if (!isTextResource(p.getFileName().toString())) continue;
-                    sb.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
+                    if (isTextResource(p.getFileName().toString())) {
+                        sb.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
+                    }
                 }
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
             }
         }
         return sb.toString();
     }
 
-    @Test
-    void 死代码只许减少不许新增() throws IOException {
-        Assumptions.assumeTrue(repoRoot != null, "找不到仓库根（settings.gradle），跳过");
+    private static String moduleOf(Path file) {
+        return repoRoot.relativize(file).getName(0).toString();
+    }
 
-        List<Path> files = mainJava();
-        StringBuilder corpus = new StringBuilder();
-        TreeMap<Path, String> texts = new TreeMap<>();
-        for (Path p : files) {
-            String t = Files.readString(p, StandardCharsets.UTF_8);
-            texts.put(p, t);
-            corpus.append(t).append('\n');
+    /** 统计一段文本里每个标识符出现次数。 */
+    private static Map<String, Integer> countWords(String text) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        Matcher m = WORD.matcher(text);
+        while (m.find()) out.merge(m.group(), 1, Integer::sum);
+        return out;
+    }
+
+    /**
+     * 这个类型是不是 {@code @ExpectPlatform} 的平台实现。
+     *
+     * <p>判据（两条都要满足）：</p>
+     * <ol>
+     *   <li>类名是 {@code XxxImpl}；</li>
+     *   <li>生产源码里存在类 {@code Xxx}，且它真的声明了 {@code @ExpectPlatform}。</li>
+     * </ol>
+     *
+     * <p>这条校验是 2026-11-13 加的：此前 {@code [B]} 只是一个文本分组，
+     * 「位于 fabric 模块」或「类名以 Impl 结尾」就能进去 ——
+     * 于是 {@code RoadWeaverDataGenerator}（实现了 {@code DataGeneratorEntrypoint}
+     * 但 {@code fabric.mod.json} 里<b>没有注册</b>，永不被加载）靠这个混进了
+     * 「禁止删」组。现在它会因为找不到 {@code RoadWeaver}？不 —— 因为它没有
+     * {@code DataGenerator} 主类，直接判为非平台实现，落回 {@code [A]}。</p>
+     */
+    private static boolean isPlatformImpl(String typeName, Set<String> expectPlatformClasses) {
+        if (!typeName.endsWith("Impl")) return false;
+        String primary = typeName.substring(0, typeName.length() - "Impl".length());
+        return expectPlatformClasses.contains(primary);
+    }
+
+    /** 扫出所有声明了 {@code @ExpectPlatform} 的类型名。 */
+    private static Set<String> expectPlatformClasses(Map<Path, String> prodTexts) {
+        Set<String> out = new LinkedHashSet<>();
+        for (String text : prodTexts.values()) {
+            if (!text.contains("@ExpectPlatform")) continue;
+            Matcher m = TOP_LEVEL_DECL.matcher(text);
+            while (m.find()) out.add(m.group(1));
         }
-        // 测试源码也算「活着」的引用：被测试用到的类不是死代码。
-        StringBuilder testCorpus = new StringBuilder();
+        return out;
+    }
+
+    /**
+     * 算出每个零引用类型的<b>实际</b>归属。
+     *
+     * <p>「零引用」= 生产代码（剥注释）+ 资源里，去掉它自己文件内的出现后，
+     * 别处出现次数为 0。测试引用单独统计，用来区分 {@link Kind#A} 与 {@link Kind#C}。</p>
+     */
+    private static Map<String, Kind> classify() throws IOException {
+        Map<Path, String> raw = new TreeMap<>();
+        Map<Path, String> code = new TreeMap<>();
         for (String m : MODULES) {
-            Path d = repoRoot.resolve(m).resolve("src").resolve("test").resolve("java");
-            if (!Files.isDirectory(d)) continue;
-            try (Stream<Path> s = Files.walk(d)) {
-                for (Path p : s.filter(x -> x.toString().endsWith(".java")).toList()) {
-                    testCorpus.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
-                }
+            for (Path p : javaFiles(m, "main")) {
+                String t = Files.readString(p, StandardCharsets.UTF_8);
+                raw.put(p, t);
+                code.put(p, stripComments(t));
             }
         }
-        String all = corpus.toString() + testCorpus + resourceCorpus();
+        String prodCorpus = String.join("\n", code.values()) + "\n" + resourceCorpus();
+        Map<String, Integer> prodCounts = countWords(prodCorpus);
 
-        Set<String> current = new LinkedHashSet<>();
-        for (var e : texts.entrySet()) {
+        StringBuilder testCode = new StringBuilder();
+        for (String m : MODULES) {
+            for (Path p : javaFiles(m, "test")) {
+                testCode.append(stripComments(Files.readString(p, StandardCharsets.UTF_8))).append('\n');
+            }
+        }
+        Map<String, Integer> testCounts = countWords(testCode.toString());
+
+        Set<String> platforms = expectPlatformClasses(raw);
+
+        Map<String, Kind> out = new LinkedHashMap<>();
+        for (Map.Entry<Path, String> e : raw.entrySet()) {
+            Path file = e.getKey();
+            String selfCode = code.get(file);
+            Map<String, Integer> selfCounts = countWords(selfCode);
             Matcher m = TOP_LEVEL_DECL.matcher(e.getValue());
             while (m.find()) {
                 String name = m.group(1);
-                Pattern ref = Pattern.compile("\\b" + Pattern.quote(name) + "\\b");
-                long total = ref.matcher(all).results().count();
-                long self = ref.matcher(e.getValue()).results().count();
-                if (total - self <= 0) current.add(name);
+                int elsewhere = prodCounts.getOrDefault(name, 0) - selfCounts.getOrDefault(name, 0);
+                if (elsewhere > 0) continue;                      // 生产代码真的在用
+
+                if (isPlatformImpl(name, platforms)) {
+                    out.put(name, Kind.B);
+                    continue;
+                }
+                String module = moduleOf(file);
+                if ("api".equals(module) || "api-fabric".equals(module)) {
+                    out.put(name, Kind.D);                        // 对外契约，零引用正常
+                    continue;
+                }
+                out.put(name, testCounts.getOrDefault(name, 0) > 0 ? Kind.C : Kind.A);
             }
         }
+        return out;
+    }
+
+    /** 解析基线：按 {@code [A]/[B]/[C]/[D]} 分节标记分组。 */
+    private static Map<String, Kind> parseBaseline(Path file) throws IOException {
+        Map<String, Kind> out = new LinkedHashMap<>();
+        Kind current = null;
+        for (String rawLine : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+            String line = rawLine;
+            int hash = line.indexOf('#');
+            if (hash >= 0) {
+                String comment = line.substring(hash);
+                if (comment.contains("[A]")) current = Kind.A;
+                else if (comment.contains("[B]")) current = Kind.B;
+                else if (comment.contains("[C]")) current = Kind.C;
+                else if (comment.contains("[D]")) current = Kind.D;
+                line = line.substring(0, hash);
+            }
+            line = line.trim();
+            if (line.isEmpty() || current == null) continue;
+            out.put(line, current);
+        }
+        return out;
+    }
+
+    @Test
+    void 死代码四组都只许减少不许新增且不许换组() throws IOException {
+        Assumptions.assumeTrue(repoRoot != null, "找不到仓库根（settings.gradle），跳过");
 
         Path baselineFile = repoRoot.resolve("common").resolve("src").resolve("test")
                 .resolve("resources").resolve("architecture").resolve("dead-code-baseline.txt");
         assertTrue(Files.isRegularFile(baselineFile), "缺死代码基线: " + baselineFile);
 
-        Set<String> baseline = new LinkedHashSet<>();
-        Set<String> platformImpls = new LinkedHashSet<>();
-        boolean inPlatformSection = false;
-        for (String raw : Files.readAllLines(baselineFile, StandardCharsets.UTF_8)) {
-            String line = raw;
-            int hash = line.indexOf('#');
-            if (hash >= 0) {
-                if (line.contains("[B]")) inPlatformSection = true;
-                if (line.contains("[A]")) inPlatformSection = false;
-                line = line.substring(0, hash);
-            }
-            line = line.trim();
-            if (line.isEmpty()) continue;
-            baseline.add(line);
-            if (inPlatformSection) platformImpls.add(line);
-        }
+        Map<String, Kind> baseline = parseBaseline(baselineFile);
+        Map<String, Kind> current = classify();
+        assertTrue(baseline.size() > 10,
+                "基线只解析出 " + baseline.size() + " 条 —— 分节标记 [A]/[B]/[C]/[D] 可能被删了");
 
+        List<String> problems = new ArrayList<>();
+
+        // ① 新增：实际零引用但基线里没有
         List<String> added = new ArrayList<>();
-        for (String name : current) {
-            if (!baseline.contains(name)) added.add(name);
+        for (Map.Entry<String, Kind> e : current.entrySet()) {
+            if (!baseline.containsKey(e.getKey())) added.add(e.getKey() + "（" + e.getValue() + " 类）");
         }
-        assertTrue(added.isEmpty(),
-                "新增了零引用类型（死代码 ratchet：只许减少不许新增）：\n  "
-                        + String.join("\n  ", added)
-                        + "\n如果是「切出来但暂时没人调」，请先在代码里接上调用；"
-                        + "确实无用的请直接删掉，不要往基线里加。");
+        if (!added.isEmpty()) {
+            problems.add("新增了零引用类型（ratchet：只许减少不许新增）：\n    "
+                    + String.join("\n    ", added));
+        }
 
+        // ② 换组：两组都有但归属不同 —— 这是「把死代码挪进禁止删的组」的后门
+        List<String> moved = new ArrayList<>();
+        for (Map.Entry<String, Kind> e : current.entrySet()) {
+            Kind declared = baseline.get(e.getKey());
+            if (declared != null && declared != e.getValue()) {
+                moved.add(e.getKey() + "  基线写的是 [" + declared + "]，实际是 [" + e.getValue() + "]");
+            }
+        }
+        if (!moved.isEmpty()) {
+            problems.add("零引用类型的归属和基线不一致（换组会把债务藏起来）：\n    "
+                    + String.join("\n    ", moved));
+        }
+
+        // ③ [B] 的每个成员都必须真的是平台实现
+        List<String> fakePlatforms = new ArrayList<>();
+        for (Map.Entry<String, Kind> e : baseline.entrySet()) {
+            if (e.getValue() != Kind.B) continue;
+            Kind actual = current.get(e.getKey());
+            if (actual == Kind.B) continue;                        // 已在 ② 里处理过
+            if (actual == null) continue;                          // 不再是零引用，跳过
+            fakePlatforms.add(e.getKey() + "（实际是 " + actual + " 类）");
+        }
+        if (!fakePlatforms.isEmpty()) {
+            problems.add("这些类型被放在 [B]「平台实现，禁止删」里，但它们不是 "
+                    + "@ExpectPlatform 的实现（类名不是 XxxImpl，或主类没声明 @ExpectPlatform）：\n    "
+                    + String.join("\n    ", fakePlatforms)
+                    + "\n    [B] 是「删了会崩」的保护区，不是藏死代码的地方。");
+        }
+
+        assertTrue(problems.isEmpty(),
+                "死代码守卫失败：\n\n" + String.join("\n\n", problems)
+                        + "\n\n基线文件：common/src/test/resources/architecture/dead-code-baseline.txt");
+
+        // ④ 基线里已经不再是零引用的：提示可以删掉（不影响通过）
         List<String> stale = new ArrayList<>();
-        for (String name : baseline) {
-            if (!current.contains(name)) stale.add(name);
+        for (String name : baseline.keySet()) {
+            if (!current.containsKey(name)) stale.add(name);
         }
         if (!stale.isEmpty()) {
             System.out.println("DeadCodeGuardTest: 基线里有 " + stale.size()
-                    + " 条已经不再是零引用（可以删掉基线行）：" + stale);
+                    + " 条已经不是零引用（可以删掉基线行）：" + stale);
         }
+
+        Map<Kind, Integer> counts = new EnumMap<>(Kind.class);
+        for (Kind k : current.values()) counts.merge(k, 1, Integer::sum);
         System.out.println("DeadCodeGuardTest: 当前零引用类型 " + current.size()
-                + " 个，其中平台实现 " + platformImpls.size() + " 个（禁止删）");
+                + " 个 —— [A]真死=" + counts.getOrDefault(Kind.A, 0)
+                + " [B]平台实现=" + counts.getOrDefault(Kind.B, 0)
+                + " [C]测试孤岛=" + counts.getOrDefault(Kind.C, 0)
+                + " [D]对外契约=" + counts.getOrDefault(Kind.D, 0));
     }
 }
