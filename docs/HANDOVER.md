@@ -92,6 +92,58 @@ cd D:\云游四海-Mod源码\roadweaver-next
 
 ---
 
+## 六点五、★ 构建与部署：两个会浪费你半小时的坑
+
+### 坑 1：`verify.ps1` 不产出可部署 jar
+
+它只跑 `:fabric:compileJava` 和 `:common:roadJUnitRegressionSuite`。
+**684 个测试全绿 ≠ 有一个能放进 mods 的 jar。**
+
+### 坑 2：可部署产物在 `fabric/build/final/`，不是 `build/libs/`
+
+```
+fabric/build/libs/    <- :fabric:remapJar 的裸产物（缺 API，装进去会报「不兼容的模组」）
+fabric/build/final/   <- :fabric:embedApiJar 的产物（把 API 当 JiJ 嵌进去）<== 部署这个
+```
+
+原因在 `fabric/build.gradle:145-165`：`embedApiJar` 是个**后处理 Zip** 任务，
+`destinationDirectory = layout.buildDirectory.dir('final')`，
+文件名与 `remapJar` 完全一致 —— **两个目录里会出现同名但内容不同的 jar**。
+
+### 正确的构建 + 部署命令
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Java\jdk-21'
+Set-Location D:\云游四海-Mod源码\roadweaver-next
+# 先改 build.gradle 的 version（避免与客户端同名 jar 冲突）
+.\(gradle 路径)\gradle.bat :fabric:embedApiJar --no-daemon --console=plain --dependency-verification=off
+# 产物：fabric/build/final/roadweaver-fabric-...<version>.jar
+```
+
+### 部署后必须验的四件事
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$z=[IO.Compression.ZipFile]::OpenRead($dst)
+$z.Entries | Where-Object { $_.FullName -match '\.jar$' }   # 必须有 5 个，含 roadweaver-api.jar
+$z.Dispose()
+# 1) 内嵌 jar = 5 个且含 META-INF/jars/roadweaver-api.jar
+# 2) 构建件 SHA == 部署件 SHA
+# 3) mods 里活动 roadweaver-fabric-*.jar 数量 == 1
+# 4) 旧件已改名 .bak
+```
+
+### 踩过的具体事故（2026-11-13）
+
+第一次部署时我从 `build/libs/` 取了 jar → 缺 `META-INF/jars/roadweaver-api.jar`
+→ 启动直接报 **「不兼容的模组 / 需要 roadweaver_api 的 1 及以上版本，但没有安装它」**，
+6 个下游模组（Chunky AutoGen / Huge Trees / LOD Cruise / Twilight / Streams / 本模组）全部被拒。
+
+**教训**：`build/libs` 和 `build/final` 同名不同内容，部署前**必须打开 jar 数内嵌 jar**，
+不能只看文件名和体积。
+
+---
+
 ## 七、下一阶段（S7）的入口
 
 | 级别 | 内容 | 现在能不能做 |
