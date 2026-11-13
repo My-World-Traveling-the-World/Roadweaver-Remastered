@@ -169,5 +169,4 @@ topology -> metric                       3
 util -> runtime                          1
 worldgen -> config                       1
 worldgen -> core                         10
-worldgen -> pathlogic                    1
 worldgen -> persistence                  4

@@ -40,7 +40,6 @@ pathlogic        <-> planning           68 / 84
 pathlogic        <-> postprocess        20 / 17
 pathlogic        <-> runtime            22 / 3
 pathlogic        <-> structures         12 / 2
-pathlogic        <-> worldgen           3 / 1
 persistence      <-> planning           1 / 29
 persistence      <-> runtime            5 / 5
 persistence      <-> structures         3 / 4

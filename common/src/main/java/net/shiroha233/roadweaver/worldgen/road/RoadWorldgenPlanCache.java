@@ -1,7 +1,6 @@
 /* 文件职责：按世界会话缓存不可变道路区块计划，隔离持久化与世界生成热路径。 */
 package net.shiroha233.roadweaver.worldgen.road;
 
-import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
