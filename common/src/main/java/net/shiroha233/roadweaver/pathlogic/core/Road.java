@@ -16,6 +16,7 @@ import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.spec.RoadSpec;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
@@ -56,6 +57,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlanner;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightRegistry;
@@ -75,6 +77,9 @@ import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
  * 道路生成器
  */
 public final class Road {
+
+    /** 数据完整性自检的累计违规数（只用于限流日志）。 */
+    private static final AtomicInteger SPEC_VIOLATIONS = new AtomicInteger();
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     /** T-21: 短浅滩(ROAD_CROSSING)甲板在水位之上的可涉水余量。 */
     static final int FORD_DECK_CLEARANCE = 2;
@@ -633,6 +638,7 @@ public final class Road {
             // D1: the quality numbers, once per finished road, plus a session rollup every ten roads,
             // so a real session yields the eleven measurements instead of only "it built".
             RoadQualityMetrics.record(rd, rawStart, rawEnd);
+            logSpecIntegrity(rd, rawStart, rawEnd);
             return rd;
         } finally {
             if (terrain != null) terrain.dispose();
@@ -763,4 +769,44 @@ public final class Road {
         return RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0);
     }
 
+
+    /**
+     * S1：道路数据的完整性自检 —— 每条路完成时跑一次。
+     *
+     * <h2>为什么值得接这一下</h2>
+     * <p>{@link RoadSpec#from} 做的事是「把三种事实（站序列 / 剖面 / 区间）对齐并校验」。
+     * 它对齐区间端点用的是：<b>BlockPos 精确匹配 → 同 XZ 且全序列唯一 → 否则失败</b>。</p>
+     *
+     * <p>这恰好是 0.9.036 修过的那个「桥被静默丢掉」缺陷的<b>同族解法</b>：
+     * 当时 {@code BridgeShareService.collectBridges} 用 {@code BlockPos.equals} 去站序列里
+     * 反查区间端点，一旦路网合并重建了站序列（Y 漂一格）就整座桥静默消失，
+     * 表现为 {@code bridgeShareCandidates=0}。修法是加了「同 XZ 唯一才认、歧义就放弃」
+     * 的收紧兜底。{@code RoadSpec} 把那套判定固化成了不变量。</p>
+     *
+     * <p>所以这条自检的真正价值不是「多一个日志」，而是：<b>如果某条路的区间端点在
+     * 站序列里对不上，这里会立刻说出来</b>，而不是等到施工时发现桥没了再回头查。</p>
+     *
+     * <h2>成本与安全</h2>
+     * <p>复杂度 O(区间数 × 站数)，典型值 5 × 2000 = 一万次坐标比较，微秒级 ——
+     * 相对整条路的规划（秒级）可忽略。全程 {@code try/catch}：
+     * <b>自检绝不能影响一条路能不能生出来</b>。失败只 warn 且限流（前 3 次 + 每 50 次一次），
+     * 避免一片路全对不上时刷屏。</p>
+     */
+    private static void logSpecIntegrity(RoadData rd, BlockPos from, BlockPos to) {
+        try {
+            RoadSpec spec = RoadSpec.from(rd);
+            LOGGER.info("RoadWeaver road spec OK connection={}->{} stations={} sections={} uncovered={}",
+                    from, to, spec.stationCount(), spec.sections().size(), spec.uncoveredStations());
+        } catch (RoadSpec.SpecViolationException e) {
+            int seen = SPEC_VIOLATIONS.incrementAndGet();
+            if (seen <= 3 || seen % 50 == 0) {
+                LOGGER.warn("RoadWeaver road spec VIOLATION connection={}->{} (累计 {} 条): {}",
+                        from, to, seen, e.getMessage());
+            }
+        } catch (Throwable t) {
+            // 自检本身出问题也必须吞掉 —— 它只是诊断
+            LOGGER.warn("RoadWeaver road spec self-check failed connection={}->{}: {}",
+                    from, to, t.toString());
+        }
+    }
 }

@@ -58,7 +58,6 @@ WorldDataProviderImpl                  # fabric/src/main/java/net/shiroha233/roa
 AbRunner                               # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/AbRunner.java   测试引用 10 次
 AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
 BandRouteSolver                        # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/BandRouteSolver.java   测试引用 6 次
-BuildPlanCompiler                      # common/src/main/java/net/shiroha233/roadweaver/spec/BuildPlanCompiler.java   测试引用 12 次
 QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
 RoadPipeline                           # common/src/main/java/net/shiroha233/roadweaver/pipeline/RoadPipeline.java   测试引用 11 次
 

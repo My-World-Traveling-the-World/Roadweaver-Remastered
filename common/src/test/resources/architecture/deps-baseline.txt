@@ -97,6 +97,7 @@ pathlogic -> planning                    68
 pathlogic -> postprocess                 20
 pathlogic -> runtime                     22
 pathlogic -> search                      13
+pathlogic -> spec                        1
 pathlogic -> structures                  12
 pathlogic -> util                        6
 pathlogic -> worldgen                    3
