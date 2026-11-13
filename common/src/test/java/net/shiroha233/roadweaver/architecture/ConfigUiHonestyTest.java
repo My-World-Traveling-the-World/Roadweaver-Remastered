@@ -13,6 +13,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import net.shiroha233.roadweaver.config.meta.ConfigKey;
+import net.shiroha233.roadweaver.config.meta.ConfigKeyTable;
+
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -147,30 +150,20 @@ public final class ConfigUiHonestyTest {
     }
 
     /** 元数据的「字段名 -> 状态」。 */
-    private static Map<String, String> declaredStatuses() throws IOException {
+    /**
+     * 「字段名 -> 状态」。
+     *
+     * <p><b>用 {@link ConfigKeyTable} 的真值，不再正则扫描 meta 源码。</b>
+     * 第一版是拿正则去解析那 16 个文件的列表字面量 —— 那是重复建设：
+     * {@code ConfigKeyTable.all()} 已经把同样的信息准备好了，而且是编译期绑定的，
+     * 比正则稳。改成用 API 之后 {@code ConfigKeyTable} 也终于有了真实消费者。</p>
+     */
+    private static Map<String, String> declaredStatuses() {
         Map<String, String> result = new LinkedHashMap<>();
-        List<Path> all = listJava(repoRoot.resolve("common").resolve("src").resolve("main").resolve("java"));
-        for (int f = 0; f < all.size(); f++) {
-            Path file = all.get(f);
-            if (!file.toString().replace('\\', '/').contains("/config/meta/")) {
-                continue;
-            }
-            String text = Files.readString(file, StandardCharsets.UTF_8);
-            Matcher m = KEY_ENTRY.matcher(text);
-            List<Integer> starts = new ArrayList<>();
-            List<String> names = new ArrayList<>();
-            while (m.find()) {
-                starts.add(m.start());
-                names.add(m.group(1));
-            }
-            for (int i = 0; i < starts.size(); i++) {
-                int from = starts.get(i);
-                int to = (i + 1 < starts.size()) ? starts.get(i + 1) : text.length();
-                Matcher s = STATUS.matcher(text.substring(from, to));
-                if (s.find()) {
-                    result.put(names.get(i), s.group(1));
-                }
-            }
+        List<ConfigKey> keys = ConfigKeyTable.all();
+        for (int i = 0; i < keys.size(); i++) {
+            ConfigKey key = keys.get(i);
+            result.put(key.jsonKey(), key.status().name());
         }
         return result;
     }

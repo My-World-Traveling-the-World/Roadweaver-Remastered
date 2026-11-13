@@ -19,6 +19,8 @@
 #                    守卫会**自动校验**：类名须是 XxxImpl 且主类 Xxx 里真声明了
 #                    @ExpectPlatform。不符合的判为「藏匿」，直接红。
 #   [C] 测试孤岛     生产零引用、只有测试在用。要么接进生产，要么连测试一起删。
+#   （2026-11-13：ConfigKeyTable 已接进生产 —— ConfigScreenFactoryImpl 打开界面时
+#     用 ConfigKeyTable.all() / byCategory() 打一行元数据自证日志，不再是孤岛。）
 #   [D] 对外契约     api / api-fabric 模块里的公共类型。零引用是正常的 ——
 #                    它们的存在意义就是给外部 mod 调用，不是给我们自己用。
 
@@ -57,7 +59,6 @@ AbRunner                               # common/src/main/java/net/shiroha233/roa
 AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
 BandRouteSolver                        # common/src/main/java/net/shiroha233/roadweaver/pipeline/ab/BandRouteSolver.java   测试引用 6 次
 BuildPlanCompiler                      # common/src/main/java/net/shiroha233/roadweaver/spec/BuildPlanCompiler.java   测试引用 12 次
-ConfigKeyTable                         # common/src/main/java/net/shiroha233/roadweaver/config/meta/ConfigKeyTable.java   测试引用 8 次
 QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
 RoadPipeline                           # common/src/main/java/net/shiroha233/roadweaver/pipeline/RoadPipeline.java   测试引用 11 次
 
