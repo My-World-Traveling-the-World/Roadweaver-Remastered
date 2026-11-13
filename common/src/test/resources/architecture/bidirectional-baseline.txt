@@ -43,3 +43,6 @@ persistence      <-> runtime            5 / 5
 persistence      <-> structures         3 / 4
 persistence      <-> worldgen           4 / 4
 planning         <-> runtime            18 / 5
+
+map                      <-> pathfinding             
+map                      <-> search                  

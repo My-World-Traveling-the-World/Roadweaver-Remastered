@@ -167,3 +167,7 @@ util -> runtime                          1
 worldgen -> config                       1
 worldgen -> core                         10
 worldgen -> persistence                  4
+
+map -> pathfinding                         18
+map -> search                              1
+map -> util                                1
