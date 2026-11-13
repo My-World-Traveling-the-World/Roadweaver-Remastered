@@ -15,35 +15,25 @@ dependencies {
     // transformProductionFabric 的 intermediary 变体，测试运行时就会出现
     // NoClassDefFoundError: net/minecraft/class_3218（测试 classpath 是 named）。
     implementation(project(path: ":api", configuration: "namedElements")) { transitive = false }
-    // ── 长城接口（只有 1 个 class 的极小 jar；compileOnly，不进产物）──────────
+    // 长城接口（只有 1 个 class 的极小 jar；compileOnly，不进产物）
     //
-    // ★ 2026-11-13 修正：原先只写死邻居仓库的相对路径
-    //     ../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar
-    //   结果是**这个仓库离开邻居目录就编不过**。独立审计实测：把仓库复制到 %TEMP%
-    //   后编译直接在 WallRoadAdapter.java:35 报「程序包 local.plaincraft.greatwall.api 不存在」。
+    // ⚠ 这两个工程是**独立的**，道路仓库不收录长城的任何产物 ——
+    //   所以这里引用邻居目录的构建输出，构建顺序是「先编长城 -> 再编道路」。
+    //   代价是道路离开长城编不了，这是已知且接受的事实（见 docs/STATUS-20261113.md）。
     //
-    //   现在优先用仓库内 vendored 副本（libs/，1423 字节，只有 WallRoadApi.class），
-    //   邻居目录存在时才用它覆盖 —— 既能独立构建，又不妨碍和长城同步。
-    //   两者 SHA 不一致时打警告，让「vendored 副本过期」这件事**可见**而不是静默。
-    def vendoredInterop = rootProject.file("libs/plaincraft-great-wall-interop.jar")
-    def upstreamInterop = rootProject.file("../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar")
-    def interopJar = upstreamInterop.exists() ? upstreamInterop : vendoredInterop
-    if (!interopJar.exists()) {
+    // 但「缺 jar」时的报错必须说人话：原来只会看到
+    //   WallRoadAdapter.java:35: 错误: 程序包 local.plaincraft.greatwall.api 不存在
+    // 根本看不出是依赖没准备，所以这里显式检查一次。
+    def greatWallInterop = rootProject.file(
+            "../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar")
+    if (!greatWallInterop.exists()) {
         throw new GradleException(
-                "缺长城 interop jar。请二选一：\n" +
-                "  1) 保留仓库内 libs/plaincraft-great-wall-interop.jar（默认，自包含）\n" +
-                "  2) 先编邻居仓库 plaincraft-great-wall 的 :interopJar 任务")
+                "缺长城 interop jar：${greatWallInterop}\n" +
+                "构建顺序要求「先编长城，再编道路」。请先执行：\n" +
+                "  cd ../plaincraft-great-wall && gradle :interopJar\n" +
+                "（道路与长城是两个独立仓库，道路不收录长城的任何产物。）")
     }
-    if (vendoredInterop.exists() && upstreamInterop.exists()) {
-        def sha = { f -> java.security.MessageDigest.getInstance("SHA-256")
-                .digest(f.bytes).encodeHex().toString() }
-        if (sha(vendoredInterop) != sha(upstreamInterop)) {
-            logger.warn("[roadweaver] libs/ 里的长城 interop jar 与邻居仓库产物不一致 —— " +
-                    "请把 ../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar " +
-                    "覆盖到 libs/ 后提交，否则 API 可能已漂移")
-        }
-    }
-    compileOnly(files(interopJar))
+    compileOnly(files(greatWallInterop))
 
     // LWJGL OpenCL - 编译时依赖，运行时 native 由平台模块提供
     compileOnly("org.lwjgl:lwjgl-opencl:3.3.3")
