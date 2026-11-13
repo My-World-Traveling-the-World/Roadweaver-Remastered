@@ -138,7 +138,24 @@ client / fabric   状态渲染分离 / 平台壳
 | `bridge` | foundation（含 `pathlogic` 避让判据）+ 全部求解层 | —— （**任何求解层不许 import bridge**）|
 | `client` | `pipeline`, `foundation`, `api` | 求解层内部实现 |
 
-**反向依赖 = 测试直接红。**
+**这句话的实际强度（2026-11-13 独立审计核实后修正）：**
+
+上面那张表**只约束 5 个包**（`metric` / `topology` / `band` / `pipeline` / `bridge`）。
+其余 **24 个顶层包没有任何方向规则** —— 它们的依赖由两份 ratchet 守着：
+
+| 守卫 | 管什么 | 管不了什么 |
+|---|---|---|
+| `deps-baseline.txt`（边 + 次数）| 新增一条边 / 已有边上的 import 变多 | **循环**：A→B 与 B→A 各自都是合法边 |
+| `bidirectional-baseline.txt`（34 对）| **新形成一对互相 import** | 已有循环的消除（那是重构任务） |
+
+所以准确说法是：
+
+> **对那 5 个求解包：方向错了会红。**
+> **对其余 24 个包：新增边、import 变多、新形成循环会红；已有的 34 对循环不会红（它们是已知债务）。**
+
+实测数据（审计 + 我复算，一致）：全仓 **157 条边**、**34 对双向依赖**。
+最重的几对：`pathlogic<->planning` 68/84、`generation<->pathlogic` 74/84、
+`generation<->planning` 85/30、`pathfinding<->pathlogic` 35/89。
 
 ---
 
