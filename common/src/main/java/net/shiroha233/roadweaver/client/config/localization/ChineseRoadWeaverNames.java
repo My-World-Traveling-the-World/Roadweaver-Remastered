@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import net.shiroha233.roadweaver.config.structure.StructureEntry;
+import net.shiroha233.roadweaver.config.structure.StructureTagEntry;
 
 public final class ChineseRoadWeaverNames {
    private static final Map<String, String> MOD_NAMES = new HashMap<>();
@@ -22,6 +23,18 @@ public final class ChineseRoadWeaverNames {
    private static final Map<String, String> WORDS = new HashMap<>();
 
    private ChineseRoadWeaverNames() {
+   }
+
+   /**
+    * 取结构标签的中文显示名 —— <b>UI 侧专用</b>。
+    *
+    * <p>数据层（{@code StructureTagEntry.displayName()}）2026-11-13 起只返回原始名，
+    * 本地化职责搬到了这里：{@code client} 依赖 {@code config} 是正常方向，
+    * 反过来就是层次错乱（还会把中文固化进结构缓存）。</p>
+    */
+   public static String tagDisplayName(StructureTagEntry tag) {
+      if (tag == null) return "";
+      return tagName(tag.tagId() == null ? "" : tag.tagId().toString(), tag.displayName());
    }
 
    public static String modName(String var0, String var1) {

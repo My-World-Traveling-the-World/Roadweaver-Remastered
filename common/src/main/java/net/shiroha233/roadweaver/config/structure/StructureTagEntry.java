@@ -3,7 +3,6 @@ package net.shiroha233.roadweaver.config.structure;
 
 import java.util.*;
 import net.minecraft.resources.ResourceLocation;
-import net.shiroha233.roadweaver.client.config.localization.ChineseRoadWeaverNames;
 
 /**
  * 结构标签条目，表示一个标签及其包含的所有结构
@@ -23,9 +22,21 @@ public final class StructureTagEntry implements Comparable<StructureTagEntry> {
     }
 
     public ResourceLocation tagId() { return tagId; }
-    public String displayName() {
-        return ChineseRoadWeaverNames.tagName(tagId == null ? "" : tagId.toString(), displayName);
-    }
+    /**
+     * 标签的<b>原始</b>显示名 —— 数据层不负责本地化。
+     *
+     * <h2>2026-11-13 修正：这里曾经调用客户端中文化字典</h2>
+     * <p>原实现是 {@code ChineseRoadWeaverNames.tagName(tagId, displayName)}，两个问题：</p>
+     * <ul>
+     *   <li><b>层次错乱</b>：{@code config} 是数据层，却反向依赖 {@code client} 的
+     *       UI 本地化字典（342 行），使 {@code client <-> config} 成为一对循环依赖；</li>
+     *   <li><b>真 bug</b>：{@code StructureDiscoveryService} 把本方法的返回值写进了
+     *       结构缓存 —— 于是<b>中文名被固化进磁盘缓存</b>，玩家切到英文后仍显示中文。</li>
+     * </ul>
+     * <p>现在数据层只给原始名；UI 要本地化请用
+     * {@code ChineseRoadWeaverNames.tagDisplayName(tag)}。</p>
+     */
+    public String displayName() { return displayName; }
     public List<StructureEntry> structures() { return Collections.unmodifiableList(structures); }
     public boolean isVanilla() { return isVanilla; }
     public String namespace() { return tagId.getNamespace(); }

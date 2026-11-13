@@ -15,7 +15,6 @@
 # 然后把该行从本文件删掉。
 
 bridge           <-> pathfinding        11 / 2
-client           <-> config             20 / 1
 client           <-> map                25 / 1
 client           <-> network            2 / 9
 client           <-> route              3 / 2

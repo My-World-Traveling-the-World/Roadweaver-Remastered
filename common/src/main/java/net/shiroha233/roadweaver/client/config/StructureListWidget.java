@@ -297,7 +297,7 @@ public class StructureListWidget extends RoadWeaverSelectionList<StructureListWi
                 graphics.fill(boxX + 3, boxY + 3, boxX + CHECKBOX_SIZE - 3, boxY + CHECKBOX_SIZE - 3, 0xFFFFFF55);
             }
 
-            String label = tag.displayName() + " (" + selectedCount + "/" + totalCount + ")";
+            String label = ChineseRoadWeaverNames.tagDisplayName(tag) + " (" + selectedCount + "/" + totalCount + ")";
             graphics.drawString(mc.font, label, boxX + 14, top + 7, 0xDDDDDD, false);
         }
 

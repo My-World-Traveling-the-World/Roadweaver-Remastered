@@ -23,7 +23,7 @@ bridge -> core                           1
 bridge -> metric                         12
 bridge -> pathfinding                    11
 bridge -> pathlogic                      4
-client -> config                         20
+client -> config                         21
 client -> core                           25
 client -> generation                     6
 client -> map                            25
@@ -37,7 +37,6 @@ client -> worldgen                       1
 command -> map                           3
 compat -> api                            1
 compat -> worldgen                       1
-config -> client                         1
 config -> core                           20
 config -> pathfinding                    1
 config -> pathlogic                      2

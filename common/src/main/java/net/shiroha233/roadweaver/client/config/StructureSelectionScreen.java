@@ -139,7 +139,7 @@ public class StructureSelectionScreen extends Screen {
             tagsByMod.computeIfAbsent(tag.namespace(), k -> new ArrayList<>()).add(tag);
         }
         for (List<StructureTagEntry> list : tagsByMod.values()) {
-            list.sort(Comparator.comparing(t -> t.displayName().toLowerCase(Locale.ROOT)));
+            list.sort(Comparator.comparing(t -> ChineseRoadWeaverNames.tagDisplayName(t).toLowerCase(Locale.ROOT)));
         }
 
         List<String> sortedModIds = new ArrayList<>(modIds);
@@ -178,7 +178,7 @@ public class StructureSelectionScreen extends Screen {
             }
             if (hasSearch && !contentMatchesFilter) {
                 for (StructureTagEntry tag : tagsByMod.getOrDefault(modId, Collections.emptyList())) {
-                    if (matchesFilter(tag.displayName()) || matchesFilter(tag.tagId().toString())) {
+                    if (matchesFilter(ChineseRoadWeaverNames.tagDisplayName(tag)) || matchesFilter(tag.tagId().toString())) {
                         contentMatchesFilter = true;
                         break;
                     }
@@ -239,7 +239,7 @@ public class StructureSelectionScreen extends Screen {
         for (StructureTagEntry tag : modTags) {
             List<StructureEntry> visibleStructures = tag.structures();
             if (visibleStructures.isEmpty()) continue;
-            boolean tagMatchesFilter = matchesFilter(tag.displayName()) || matchesFilter(tag.tagId().toString());
+            boolean tagMatchesFilter = matchesFilter(ChineseRoadWeaverNames.tagDisplayName(tag)) || matchesFilter(tag.tagId().toString());
             List<StructureEntry> matchingStructures = visibleStructures.stream()
                     .filter(s -> matchesFilter(s.displayName()) || matchesFilter(s.id().toString()))
                     .toList();
