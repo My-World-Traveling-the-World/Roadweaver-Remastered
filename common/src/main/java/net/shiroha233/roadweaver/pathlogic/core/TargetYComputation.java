@@ -450,7 +450,7 @@ public final class TargetYComputation {
         }
 
         // ── 剖面求解器模式分派（S7 第 1 级）──────────────────────────────
-        // ★ 默认已是 DP；{@code -Droadweaver.profileSolver=legacy} 可显式回退。
+        // ★ 默认 LEGACY；{@code -Droadweaver.profileSolver=legacy} 可显式回退。
         //
         // ★★ 必须在覆盖前留一份旧剖面快照：下面的 AB 观测器拿它当「legacy」臂。
         // 若不快照，观测器拿到的其实是 DP 自己的输出 —— 两条臂都是 DP，

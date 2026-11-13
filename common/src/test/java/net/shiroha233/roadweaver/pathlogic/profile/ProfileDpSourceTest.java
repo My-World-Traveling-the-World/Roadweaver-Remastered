@@ -309,31 +309,44 @@ final class ProfileDpSourceTest {
     // ── 模式开关 ──────────────────────────────────────────────
 
     /**
-     * 模式解析：<b>默认已是 DP</b>（2026-11-13 切换）。
+     * 模式解析：<b>默认是 LEGACY</b>（2026-11-13 二次变更，见下）。
      *
-     * <p>旧行为是「未设 ⇒ LEGACY」，那是为了先收集数据再决定。
-     * 数据到手、二阶坡度约束修好之后，用户拍板直接转向重构版，
-     * 于是默认翻成 DP；{@code legacy} / {@code classic} 仍可显式回退。</p>
+     * <h3>为什么从 DP 退回 LEGACY</h3>
+     * <p>同日曾把默认切成 DP（依据：DP 土方远优，57 次观测 325,346 → 8,996）。
+     * 但三份独立只读核查发现 {@code TargetYComputation:463} 是<b>在所有旧 pass
+     * 跑完之后整条替换剖面</b>，而 DP 的输入里<b>没有水位</b>
+     * （{@code ProfileDpSource} 全文 {@code water} 出现 0 次）：</p>
+     * <ul>
+     *   <li>桥面从「水位 + 净空」的平甲板变成两岸地形斜弦 ——
+     *       海平面河（河床 60 / 水面 63）甲板 65 → 63 下沉贴水；
+     *       山间河（河床 100 / 水面 103）甲板 105 → 100 <b>泡在水下</b>；</li>
+     *   <li>prefer-cut 契约翻转：旧「只降不升」，DP 代价 cut=1.0 / fill=0.7 ⇒ 路面会浮起；</li>
+     *   <li>约 10 项旧补丁仅在 LEGACY 分支生效（浅滩抬升、相邻桥甲板连续性、
+     *       峡谷稳定岸、河岸跳变、针尖、1-2-1 平滑、GradeCap 档位、山区 cut/fill 分档、
+     *       共享引道等）。</li>
+     * </ul>
+     * <p>所以默认退回 LEGACY，先把旧版行为保住；DP 改为显式开启，
+     * 后续把上面这些能力逐项补进 DP 内核、每补一项单独验证。</p>
      */
     @Test
-    void 求解器模式默认是DP且可显式回退到LEGACY() {
-        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(null), "case=null");
-        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(""), "case=blank");
-        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("dp2"), "case=typo-回落默认");
-        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("true"), "case=wrong-flag-回落默认");
+    void 求解器模式默认是LEGACY且可显式开启DP() {
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(null), "case=null");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse(""), "case=blank");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("dp2"), "case=typo-回落默认");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("true"), "case=wrong-flag-回落默认");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse("DP"), "case=dp-upper");
         assertEquals(ProfileSolverMode.DP, ProfileSolverMode.parse(" dp "), "case=dp-spaces");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy-显式回退");
-        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic-显式回退");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("legacy"), "case=legacy");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.parse("CLASSIC"), "case=classic");
     }
 
     @Test
-    void 未设属性时读出来是DP且legacy可回退() {
+    void 未设属性时读出来是LEGACY且dp可显式开启() {
         System.clearProperty(ProfileSolverMode.PROPERTY);
-        assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=unset-默认DP");
-        System.setProperty(ProfileSolverMode.PROPERTY, "legacy");
+        assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=unset-默认LEGACY");
+        System.setProperty(ProfileSolverMode.PROPERTY, "dp");
         try {
-            assertEquals(ProfileSolverMode.LEGACY, ProfileSolverMode.fromProperty(), "case=explicit-legacy");
+            assertEquals(ProfileSolverMode.DP, ProfileSolverMode.fromProperty(), "case=explicit-dp");
         } finally {
             System.clearProperty(ProfileSolverMode.PROPERTY);
         }
