@@ -52,6 +52,14 @@ tasks.withType(Test).configureEach {
     exclude '**/*'
 }
 
+// ⚠ registerMainRegression(taskName, testClass) 的第二个参数是**全限定类名**，
+//   写错时不会在配置期报错，只会在真正跑这个任务时抛 ClassNotFoundException ——
+//   于是任务"存在但不执行"，覆盖悄悄少掉一块。
+//
+//   2026-11-13 实测：本文件里有 7 个任务还写着重制前的旧包名
+//     features.path.pathlogic.core.*   ->  现在在 pathlogic/{structures,validation,grade}
+//     pathfinding.cache.opencl.*       ->  现在在 pathfinding/sampling/opencl
+//   这 7 个 harness 共 101 处断言，因为类名错**从未执行过**。已全部修正。
 def registerMainRegression = { String taskName, String testClass ->
     tasks.register(taskName, JavaExec) {
         dependsOn tasks.named('testClasses')
@@ -65,13 +73,13 @@ registerMainRegression('sharedEndpointReuseRegression',
 registerMainRegression('connectionFallbackPolicyRegression',
         'net.shiroha233.roadweaver.planning.ConnectionFallbackPolicyTest')
 registerMainRegression('structureAvoidanceRegression',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.StructureAvoidanceServiceTest')
+        'net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceServiceTest')
 registerMainRegression('roadDataValidatorRegression',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadDataValidatorTest')
+        'net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidatorTest')
 registerMainRegression('roadTopologyWaterSimulation',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadTopologyWaterSimulationTest')
+        'net.shiroha233.roadweaver.pathlogic.validation.RoadTopologyWaterSimulationTest')
 registerMainRegression('roadWholeFlowSimulation',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadWholeFlowSimulationTest')
+        'net.shiroha233.roadweaver.pathlogic.validation.RoadWholeFlowSimulationTest')
 registerMainRegression('tunnelJunctionGradeRegression',
         'net.shiroha233.roadweaver.postprocess.TunnelJunctionGradeSimulationTest')
 registerMainRegression('parallelCorridorReuseAudit',
@@ -83,11 +91,11 @@ registerMainRegression('parallelCorridorHeadingTest',
 registerMainRegression('savedEndpoint528Simulation',
         'net.shiroha233.roadweaver.postprocess.SavedEndpoint528SimulationTest')
 registerMainRegression('endpointLockSimulation',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.EndpointLockSimulationTest')
+        'net.shiroha233.roadweaver.pathlogic.grade.EndpointLockSimulationTest')
 registerMainRegression('waterOnlyBridgePolicy',
         'net.shiroha233.roadweaver.pathfinding.WaterOnlyBridgePolicyTest')
 registerMainRegression('roadConstructionSafetyPolicy',
-        'net.shiroha233.roadweaver.features.path.pathlogic.core.RoadConstructionSafetyPolicyTest')
+        'net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafetyPolicyTest')
 registerMainRegression('roadJUnitRegressionSuite',
         'net.shiroha233.roadweaver.RoadJUnitRegressionSuite')
 
@@ -196,7 +204,7 @@ registerMainRegression('preflightExemptionGuard',
 //   真机 RTX 4060 上报 8188 MiB = 7.996 GiB，(int)(7.996/4) = 1 —— 差 4 MiB 少一半并行度。
 //   本测试钉住「必须四舍五入」+ 「源码不得退回截断写法」。
 registerMainRegression('coarseLaneCountBoundary',
-        'net.shiroha233.roadweaver.pathfinding.cache.opencl.CoarseLaneCountBoundaryTest')
+        'net.shiroha233.roadweaver.pathfinding.sampling.opencl.CoarseLaneCountBoundaryTest')
 
 // ★ 0.8.412：合成地形离线寻路质量测量台（参数细化/调优 M1 基线 + M2 搜索用）。
 //   不依赖 Minecraft 世界：势场法 findRawPath 的 level/cache 传 null，走纯地形分支。

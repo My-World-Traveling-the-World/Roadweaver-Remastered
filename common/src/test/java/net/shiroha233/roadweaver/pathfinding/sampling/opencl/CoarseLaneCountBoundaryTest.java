@@ -121,9 +121,8 @@ public final class CoarseLaneCountBoundaryTest {
      * <p>防的是「重构时不小心改回 {@code (int) (memory / fourGiB)}」。</p>
      */
     private static void testNoTruncatingPatternInSource() throws Exception {
-        java.nio.file.Path src = locate(
-                "common/src/main/java/net/shiroha233/roadweaver/pathfinding/cache/opencl/OpenCLCoarseHeightBatchSampler.java");
-        check("能定位 OpenCLCoarseHeightBatchSampler 源码", src != null);
+        java.nio.file.Path src = locateMainSource("OpenCLCoarseHeightBatchSampler.java");
+        check("能定位 OpenCLCoarseHeightBatchSampler 源码（按文件名搜，不按包路径）", src != null);
         if (src == null) return;
 
         String text = java.nio.file.Files.readString(src, java.nio.charset.StandardCharsets.UTF_8);
@@ -165,13 +164,36 @@ public final class CoarseLaneCountBoundaryTest {
         return Math.max(1L, Math.min(4L, lanes));
     }
 
-    private static java.nio.file.Path locate(String relativePath) {
+    /**
+     * 按<b>文件名</b>在主源码树里定位一个类，<b>不按包路径</b>。
+     *
+     * <h2>为什么不能写死包路径（2026-11-13）</h2>
+     * <p>这里原来写死的是</p>
+     * <pre>common/src/main/java/…/pathfinding/cache/opencl/OpenCLCoarseHeightBatchSampler.java</pre>
+     * <p>重制把包挪到了 {@code pathfinding/sampling/opencl/}，于是这个 harness
+     * <b>永久失败</b>。而它之所以一直没被发现，是因为 {@code common/build.gradle}
+     * 里注册它的 gradle 任务也还写着旧包名 —— 任务存在但 {@code ClassNotFoundException}，
+     * <b>从未真正执行过</b>。两处错误互相掩护：任务不跑，所以测试不红；
+     * 测试不红，所以没人去修任务。</p>
+     *
+     * <p>改成按文件名搜之后，<b>包再搬也不会失效</b>。找不到或找到多个都返回
+     * {@code null}（宁可红，不猜）。</p>
+     */
+    private static java.nio.file.Path locateMainSource(String fileName) {
         java.nio.file.Path cwd = java.nio.file.Path.of("").toAbsolutePath();
-        for (java.nio.file.Path p : new java.nio.file.Path[]{
-                cwd.resolve(relativePath),
-                cwd.resolve("..").resolve(relativePath),
-                cwd.resolve("..").resolve("..").resolve(relativePath)}) {
-            if (java.nio.file.Files.isRegularFile(p)) return p.normalize();
+        for (java.nio.file.Path root : new java.nio.file.Path[]{
+                cwd, cwd.resolve(".."), cwd.resolve("..").resolve("..")}) {
+            java.nio.file.Path srcRoot = root.resolve("common/src/main/java");
+            if (!java.nio.file.Files.isDirectory(srcRoot)) continue;
+            try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(srcRoot)) {
+                java.util.List<java.nio.file.Path> hits = walk
+                        .filter(f -> f.getFileName().toString().equals(fileName))
+                        .toList();
+                if (hits.size() == 1) return hits.get(0).normalize();
+                if (hits.size() > 1) return null;   // 同名多份 = 歧义，不猜
+            } catch (java.io.IOException ignored) {
+                // 这个候选根不可读，试下一个
+            }
         }
         return null;
     }
