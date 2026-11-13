@@ -67,8 +67,8 @@ public final class PlanningKeys {
             ConfigKey.enumeration("planningAlgorithm", "PIPELINE",
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "路网拓扑算法", "Planning algorithm",
-                    "决定结构节点之间怎么连边。RNG 是离线最小生成树基线，KNN/ALPHA_MODEL 会生成更多环路",
-                    "可选：KNN / DELAUNAY / RNG / MST / SNAP_BRANCH / ALPHA_MODEL"),
+                    "决定结构节点之间怎么连边",
+                    "只剩 PIPELINE（测地距离 MST）。旧规划器已全部删除，此项不可切换"),
 
             ConfigKey.enumeration("terrainSamplingMode", "COARSE_CORRIDOR",
                     ConfigCategory.TERRAIN, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

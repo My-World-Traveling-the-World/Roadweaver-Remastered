@@ -16,13 +16,9 @@ public final class PathfindingCostConfig implements SubConfig {
  *
  * <p>{@link #BAND} 是 2026-11-12 新架构接入的第一个非 A* 算法：
  * Finsler 度量 + 快速行进 + 弹性带（见 {@code metric} / {@code topology} / {@code band}）。
- * 它<b>不是默认值</b> —— 出厂仍是 {@link #POTENTIAL_FIELD}，换算法必须显式选择。</p>
+ * 2026-11-13 起为唯一实现（旧 A* 系已全部删除）。</p>
  */
     public enum PathfindingAlgorithm {
-        ASTAR_BASIC,
-        ASTAR_BIDIRECTIONAL,
-        GRADIENT_DESCENT,
-        POTENTIAL_FIELD,
         /** 新架构：Finsler 度量 + Fast Marching + 弹性带。 */
         BAND
     }
@@ -222,13 +218,9 @@ public final class PathfindingCostConfig implements SubConfig {
         aStarMaxSteps = Math.max(RoadConstants.ASTAR_MAX_STEPS_MIN,
                 Math.min(RoadConstants.ASTAR_MAX_STEPS_MAX, aStarMaxSteps));
         if (pathfindingAlgorithm == null) pathfindingAlgorithm = PathfindingAlgorithm.BAND;
-        // 2026-11-13：旧 A* 系寻路器全部退役（用户拍板「全用最新的，旧的全部删除」）。
-        // 老配置里的 ASTAR_BASIC/ASTAR_BIDIRECTIONAL/GRADIENT_DESCENT/POTENTIAL_FIELD
-        // 一律迁移到 BAND（Finsler 度量 + Fast Marching + 弹性带）。
-        // 枚举名暂留是为了 GSON 不炸，行为上只剩一种。
-        if (pathfindingAlgorithm != PathfindingAlgorithm.BAND) {
-            pathfindingAlgorithm = PathfindingAlgorithm.BAND;
-        }
+        // 2026-11-13：旧 A* 系寻路器已全部删除，枚举只剩 BAND 一种。
+        // 老配置里写着的旧枚举名（ASTAR_BASIC 等）会被 GSON 当成未知值返回 null，
+        // 这里统一回落到 BAND。
         // POTENTIAL_FIELD 晋升常量：折扣/阈值落 [0,1]，惩罚非负；硬阈值不得低于软阈值（单调）。
         contourDiscount = finiteFraction(contourDiscount, RoadConstants.DEFAULT_CONTOUR_DISCOUNT);
         softGradeLimit = finiteFraction(softGradeLimit, RoadConstants.DEFAULT_SOFT_GRADE_LIMIT);

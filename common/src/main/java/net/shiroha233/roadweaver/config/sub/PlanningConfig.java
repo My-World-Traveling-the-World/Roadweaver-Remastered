@@ -11,20 +11,11 @@ public final class PlanningConfig implements SubConfig {
 
     /**
      * 规划算法枚举。
+     *
+     * <p>2026-11-13：旧规划器（KNN/Delaunay/RNG/MST/SnapBranch/AlphaModel）已全部删除，
+     * 只剩 PIPELINE（测地距离 MST）一种。</p>
      */
     public enum PlanningAlgorithm {
-        /** 每个结构连最近的 k 个。 */
-        KNN,
-        /** Delaunay 三角剖分。 */
-        DELAUNAY,
-        /** 相对邻域图（长边自动剪掉）。 */
-        RNG,
-        /** 直线距离的最小生成树。 */
-        MST,
-        /** 生成树 + 就近支线吸附。 */
-        SNAP_BRANCH,
-        /** Alpha 模型（交通量加权的 alpha shape）。 */
-        ALPHA_MODEL,
         /**
          * 新三层内核的<b>测地距离</b>最小生成树（2026-11-13 新增，实验性）。
          *
@@ -35,9 +26,6 @@ public final class PlanningConfig implements SubConfig {
          * <p>实现见 {@code PipelinePlanner}。它只接管<b>拓扑</b>，具体走线仍由
          * 后续 A* 算（{@code RoadPipeline} 顺带算出的弹性带曲线暂不消费 ——
          * 生成链没有接收预计算曲线的入口）。</p>
-         *
-         * <p><b>出厂默认仍是 RNG</b>，本项要手动选。第一次用建议配合日志观察
-         * 「测地距离的 MST 边」与「直线距离的 MST 边」差多少。</p>
          */
         PIPELINE
     }
@@ -351,12 +339,9 @@ public final class PlanningConfig implements SubConfig {
         }
         dynamicPlanStrideChunks = Math.min(RoadConstants.PLAN_TILE_MAX, dynamicPlanStrideChunks);
         if (planningAlgorithm == null) planningAlgorithm = PlanningAlgorithm.PIPELINE;
-        // 2026-11-13：旧规划算法全部退役（用户拍板「全用最新的，旧的全部删除」）。
-        // 老配置里写着的 KNN/DELAUNAY/RNG/MST/SNAP_BRANCH/ALPHA_MODEL 一律迁移到
-        // PIPELINE（测地距离 MST）—— 枚举名暂留是为了 GSON 不炸，行为上只剩一种。
-        if (planningAlgorithm != PlanningAlgorithm.PIPELINE) {
-            planningAlgorithm = PlanningAlgorithm.PIPELINE;
-        }
+        // 2026-11-13：旧规划器已全部删除，枚举只剩 PIPELINE 一种。
+        // 老配置里写着的旧枚举名（KNN/DELAUNAY/RNG/MST/SNAP_BRANCH/ALPHA_MODEL）
+        // 会被 GSON 当成未知值返回 null，这里统一回落到 PIPELINE。
         if (terrainSamplingMode == null) terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
         localConflictRadiusBlocks = Math.max(16, Math.min(512, localConflictRadiusBlocks));
         structureDetourRadiusStartBlocks = Math.max(16, Math.min(512, structureDetourRadiusStartBlocks));

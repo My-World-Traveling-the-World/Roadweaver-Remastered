@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>用户拍板「全用最新的，旧的全部删除」。此后：</p>
  * <ol>
  *   <li>无论配置枚举写什么，工厂都只产出 {@link BandPathfinder}；</li>
- *   <li>枚举名（ASTAR_BASIC 等）保留仅为老配置的 GSON 解析不炸；</li>
+ *   <li>旧枚举值已删除，老配置里的旧名会被 GSON 当成未知值返回 null，
+ *       sanitize() 统一回落到 BAND；</li>
  *   <li>AB 双跑仍可用，但 classic 侧也是 BandPathfinder（两臂同型，
  *       AB 观测只剩「新内核自身稳定性」的意义）。</li>
  * </ol>
@@ -50,7 +51,7 @@ final class SolverModeWiringTest {
         assertEquals(SolverMode.CLASSIC, SolverMode.fromProperty(), "case=no-property-default");
         // 2026-11-13：CLASSIC 模式下也是新内核 —— 旧 A* 实现已退役。
         assertInstanceOf(BandPathfinder.class,
-                PathfinderFactory.create(PathfindingAlgorithm.POTENTIAL_FIELD),
+                PathfinderFactory.create(PathfindingAlgorithm.BAND),
                 "case=old-enum-yields-band");
     }
 
@@ -79,21 +80,21 @@ final class SolverModeWiringTest {
     @Test
     void bandModeTakesOverRegardlessOfAlgorithm() {
         assertInstanceOf(BandPathfinder.class,
-                PathfinderFactory.decide(PathfindingAlgorithm.POTENTIAL_FIELD, SolverMode.BAND),
+                PathfinderFactory.decide(PathfindingAlgorithm.BAND, SolverMode.BAND),
                 "case=band-overrides-algorithm");
         assertInstanceOf(BandPathfinder.class,
-                PathfinderFactory.decide(PathfindingAlgorithm.ASTAR_BASIC, SolverMode.BAND),
+                PathfinderFactory.decide(PathfindingAlgorithm.BAND, SolverMode.BAND),
                 "case=band-overrides-astar");
     }
 
     @Test
     void abModeWrapsTheClassicAlgorithm() {
-        Pathfinder ab = PathfinderFactory.decide(PathfindingAlgorithm.ASTAR_BASIC, SolverMode.AB);
+        Pathfinder ab = PathfinderFactory.decide(PathfindingAlgorithm.BAND, SolverMode.AB);
         assertInstanceOf(AbObservingPathfinder.class, ab, "case=ab-wraps");
 
         Pathfinder viaCreate;
         System.setProperty(SolverMode.PROPERTY, "ab");
-        viaCreate = PathfinderFactory.create(PathfindingAlgorithm.ASTAR_BASIC);
+        viaCreate = PathfinderFactory.create(PathfindingAlgorithm.BAND);
         assertInstanceOf(AbObservingPathfinder.class, viaCreate, "case=ab-via-create");
     }
 
@@ -106,7 +107,7 @@ final class SolverModeWiringTest {
         assertEquals(SolverMode.CLASSIC, SolverMode.CLASSIC.effective(), "case=classic-effective-is-classic");
         // classic 侧也是 BandPathfinder（旧实现已删，AB 只剩同型对照）。
         assertInstanceOf(BandPathfinder.class,
-                PathfinderFactory.createClassic(PathfindingAlgorithm.ASTAR_BASIC),
+                PathfinderFactory.createClassic(PathfindingAlgorithm.BAND),
                 "case=classic-side-is-band");
     }
 }

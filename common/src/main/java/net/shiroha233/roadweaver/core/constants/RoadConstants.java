@@ -320,12 +320,7 @@ public final class RoadConstants {
     public static final int BELOW_DEPTH_1 = 1;
     public static final int BELOW_DEPTH_2 = 2;
 
-    public static final int GRADIENT_DESCENT_STEPS_MULTIPLIER = 3;
-    public static final double GRADIENT_DESCENT_SUCCESS_DISTANCE_FACTOR = 1.5;
-
-    public static final int POTENTIAL_FIELD_STEPS_MULTIPLIER = 4;
-    public static final double POTENTIAL_FIELD_SUCCESS_DISTANCE_FACTOR = 1.5;
-    public static final double POTENTIAL_FIELD_HEURISTIC_DAMPING = 0.6;
+    // 2026-11-13：GRADIENT_DESCENT_* / POTENTIAL_FIELD_* 五个常量随旧 A* 寻路器一并删除。
     public static final double DEFAULT_CONTOUR_DISCOUNT = 0.55;
     public static final double DEFAULT_SOFT_GRADE_LIMIT = 0.08;
     // 0.8.418：0.15 → 0.10。收紧硬坡闸门后道路更少硬爬（急转弯 −45%、贴地更好），

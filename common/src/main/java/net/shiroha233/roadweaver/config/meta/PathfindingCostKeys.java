@@ -69,7 +69,7 @@ public final class PathfindingCostKeys {
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "寻路算法", "Pathfinding algorithm",
                     "决定用哪套求解器选线",
-                    "可选：ASTAR_BASIC / ASTAR_BIDIRECTIONAL / GRADIENT_DESCENT / POTENTIAL_FIELD / BAND。出厂 POTENTIAL_FIELD；BAND 是 2026-11-12 接入的新架构（Finsler 度量 + 快速行进 + 弹性带），尚未真机验证"),
+                    "只剩 BAND（Finsler 度量 + Fast Marching + 弹性带）。旧 A* 系已全部删除，此项不可切换"),
 
             ConfigKey.decimal("heuristicWeight", RoadConstants.DEFAULT_HEURISTIC_WEIGHT, 0.0, 10.0D,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

@@ -102,8 +102,6 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.config.sub.PlanningConfigTest"),
                         DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.planning.PlannerOutputDiagnosticTest"),
-                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.ExistingRoadAttachmentTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.EndpointReuseStatusTest"),
