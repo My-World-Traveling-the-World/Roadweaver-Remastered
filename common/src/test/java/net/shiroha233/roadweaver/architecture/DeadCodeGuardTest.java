@@ -84,7 +84,25 @@ public final class DeadCodeGuardTest {
         /** 测试孤岛：生产零引用、只有测试在用。 */
         C,
         /** 对外契约：{@code api} 模块里的公共类型，给外部 mod 调用。 */
-        D
+        D,
+        /**
+         * 测试夹具：生产零引用、但<b>被测试用来验证内核行为</b>，长期保留。
+         *
+         * <h3>为什么需要这一组，以及它凭什么不是新的藏匿后门</h3>
+         * <p>[C] 的定义是「要么接进生产，要么连测试一起删」—— 那是<b>待办</b>。
+         * 但有些类型永远不会有生产消费者，因为它存在的意义就是给测试当夹具：
+         * 例如 {@code AvoidanceObstacleField} 是 {@code ObstacleField} 的参考实现，
+         * 让内核测试能验证「硬挡真的挡得住」「区域外不可通行」这类行为 ——
+         * 生产侧用的是另一个内联实现，两者本来就不该合并。</p>
+         *
+         * <p>把这类东西塞进 [C] 会让 [C] 永远清不干净（假待办）；
+         * 塞进 [A] 又会把测试一起删掉（真损失）。所以单列一组。</p>
+         *
+         * <p><b>它不是后门</b>：断言 ④ 要求 [E] 的每个成员<b>必须真的有测试引用</b>
+         * （即实际分类必须是 [C]，不能是 [A]）。也就是说 ——
+         * 一个连测试都不用的类型既不能进 [E]，也不能靠 [E] 躲过 [A]。</p>
+         */
+        E
     }
 
     /** 顶层类型声明（列 0）—— 不含嵌套类，嵌套类生命周期跟随外层。 */
@@ -262,20 +280,36 @@ public final class DeadCodeGuardTest {
         return out;
     }
 
-    /** 解析基线：按 {@code [A]/[B]/[C]/[D]} 分节标记分组。 */
+    /**
+     * 分节标题：形如 {@code # ── [C] 测试孤岛(...) ──────}。
+     *
+     * <h3>为什么必须是「标题形状」而不是「注释里出现 [X]」（2026-11-13 修）</h3>
+     * <p>原实现是 {@code comment.contains("[C]")} —— 于是<b>任何</b>提到组名的注释行
+     * 都会切换当前分组。第一次踩到就是写 [E] 的说明文字时顺口引用了
+     * 「连测试都不用的，那是 [A] 真死代码」，结果下一行的成员被归进了 [A]，
+     * 守卫报「基线写的是 [A]，实际是 [C]」—— 报错信息与真实原因完全对不上，
+     * 排查花了半轮。</p>
+     *
+     * <p>现在只认「{@code #} + 若干装饰横线 + {@code [X]}」这种标题形状。
+     * 说明文字里随便提组名都不再有副作用。</p>
+     */
+    private static final Pattern SECTION_HEADER = Pattern.compile(
+            "^\\s*#\\s*[\\u2500\\u2501\\-—=]{2,}\\s*\\[([ABCDE])\\]");
+
+    /** 解析基线：按 {@code [A]/[B]/[C]/[D]/[E]} 分节标题分组。 */
     private static Map<String, Kind> parseBaseline(Path file) throws IOException {
         Map<String, Kind> out = new LinkedHashMap<>();
         Kind current = null;
         for (String rawLine : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+            Matcher header = SECTION_HEADER.matcher(rawLine);
+            if (header.find()) {
+                current = Kind.valueOf(header.group(1));
+                continue;                                  // 标题行本身不是成员
+            }
             String line = rawLine;
             int hash = line.indexOf('#');
             if (hash >= 0) {
-                String comment = line.substring(hash);
-                if (comment.contains("[A]")) current = Kind.A;
-                else if (comment.contains("[B]")) current = Kind.B;
-                else if (comment.contains("[C]")) current = Kind.C;
-                else if (comment.contains("[D]")) current = Kind.D;
-                line = line.substring(0, hash);
+                line = line.substring(0, hash);             // 注释只用来写说明，不参与分组
             }
             line = line.trim();
             if (line.isEmpty() || current == null) continue;
@@ -285,7 +319,7 @@ public final class DeadCodeGuardTest {
     }
 
     @Test
-    void 死代码四组都只许减少不许新增且不许换组() throws IOException {
+    void 死代码五组都只许减少不许新增且不许换组() throws IOException {
         Assumptions.assumeTrue(repoRoot != null, "找不到仓库根（settings.gradle），跳过");
 
         Path baselineFile = repoRoot.resolve("common").resolve("src").resolve("test")
@@ -295,7 +329,7 @@ public final class DeadCodeGuardTest {
         Map<String, Kind> baseline = parseBaseline(baselineFile);
         Map<String, Kind> current = classify();
         assertTrue(baseline.size() > 10,
-                "基线只解析出 " + baseline.size() + " 条 —— 分节标记 [A]/[B]/[C]/[D] 可能被删了");
+                "基线只解析出 " + baseline.size() + " 条 —— 分节标记 [A]/[B]/[C]/[D]/[E] 可能被删了");
 
         List<String> problems = new ArrayList<>();
 
@@ -313,6 +347,9 @@ public final class DeadCodeGuardTest {
         List<String> moved = new ArrayList<>();
         for (Map.Entry<String, Kind> e : current.entrySet()) {
             Kind declared = baseline.get(e.getKey());
+            // [E] 的 actual 分类恒为 C（生产零引用 + 测试有引用），这是设计如此，
+            // 不算「换组藏债」。真正的把关在断言 ④。
+            if (declared == Kind.E && e.getValue() == Kind.C) continue;
             if (declared != null && declared != e.getValue()) {
                 moved.add(e.getKey() + "  基线写的是 [" + declared + "]，实际是 [" + e.getValue() + "]");
             }
@@ -338,6 +375,23 @@ public final class DeadCodeGuardTest {
                     + "\n    [B] 是「删了会崩」的保护区，不是藏死代码的地方。");
         }
 
+        // ④ [E] 的每个成员都必须真的有测试引用 —— 否则它是 [A] 真死代码伪装的
+        List<String> fakeFixtures = new ArrayList<>();
+        for (Map.Entry<String, Kind> e : baseline.entrySet()) {
+            if (e.getValue() != Kind.E) continue;
+            Kind actual = current.get(e.getKey());
+            if (actual == null) continue;                          // 不再是零引用，跳过
+            if (actual != Kind.C) {
+                fakeFixtures.add(e.getKey() + "（实际是 " + actual + " 类）");
+            }
+        }
+        if (!fakeFixtures.isEmpty()) {
+            problems.add("这些类型被放在 [E]「测试夹具，长期保留」里，但它们连测试都不引用：\n    "
+                    + String.join("\n    ", fakeFixtures)
+                    + "\n    [E] 要求「生产零引用 + 测试有引用」。连测试都不用的就是 [A] 真死代码，"
+                    + "\n    应当删除而不是换个组藏起来。");
+        }
+
         assertTrue(problems.isEmpty(),
                 "死代码守卫失败：\n\n" + String.join("\n\n", problems)
                         + "\n\n基线文件：common/src/test/resources/architecture/dead-code-baseline.txt");
@@ -352,12 +406,17 @@ public final class DeadCodeGuardTest {
                     + " 条已经不是零引用（可以删掉基线行）：" + stale);
         }
 
+        // 按**基线归属**统计 —— 这才是「有几笔债」的真实分布。
+        // 早先这里是按实际分类统计，于是 [C] 会把 [E] 测试夹具也算进去，
+        // 输出「[C]测试孤岛=3」而基线里只有 2 条 —— 每次看日志都要重新推一遍。
         Map<Kind, Integer> counts = new EnumMap<>(Kind.class);
-        for (Kind k : current.values()) counts.merge(k, 1, Integer::sum);
-        System.out.println("DeadCodeGuardTest: 当前零引用类型 " + current.size()
+        for (Kind k : baseline.values()) counts.merge(k, 1, Integer::sum);
+        System.out.println("DeadCodeGuardTest: 基线 " + baseline.size()
+                + " 条 / 实际零引用 " + current.size()
                 + " 个 —— [A]真死=" + counts.getOrDefault(Kind.A, 0)
                 + " [B]平台实现=" + counts.getOrDefault(Kind.B, 0)
-                + " [C]测试孤岛=" + counts.getOrDefault(Kind.C, 0)
-                + " [D]对外契约=" + counts.getOrDefault(Kind.D, 0));
+                + " [C]测试孤岛(待办)=" + counts.getOrDefault(Kind.C, 0)
+                + " [D]对外契约=" + counts.getOrDefault(Kind.D, 0)
+                + " [E]测试夹具=" + counts.getOrDefault(Kind.E, 0));
     }
 }

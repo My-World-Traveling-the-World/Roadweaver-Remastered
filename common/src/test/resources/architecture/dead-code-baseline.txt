@@ -19,6 +19,7 @@
 #                    守卫会**自动校验**：类名须是 XxxImpl 且主类 Xxx 里真声明了
 #                    @ExpectPlatform。不符合的判为「藏匿」，直接红。
 #   [C] 测试孤岛     生产零引用、只有测试在用。要么接进生产，要么连测试一起删。
+#   （生产零引用 + 测试有引用 = 待办：接线，或连测试一起删）
 #   （2026-11-13：ConfigKeyTable 已接进生产 —— ConfigScreenFactoryImpl 打开界面时
 #     用 ConfigKeyTable.all() / byCategory() 打一行元数据自证日志，不再是孤岛。）
 #   （2026-11-13：AbRunner 也接进生产了 —— AbObservingPathfinder 在 AB 模式下
@@ -59,7 +60,6 @@ ServerMapPlanningActivityBridgeImpl    # fabric/src/main/java/net/shiroha233/roa
 WorldDataProviderImpl                  # fabric/src/main/java/net/shiroha233/roadweaver/persistence/fabric/WorldDataProviderImpl.java
 
 # ── [C] 测试孤岛（接线，或连测试一起删）────────────────────
-AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
 QualityGate                            # common/src/main/java/net/shiroha233/roadweaver/pipeline/QualityGate.java   测试引用 16 次
 RoadPipeline                           # common/src/main/java/net/shiroha233/roadweaver/pipeline/RoadPipeline.java   测试引用 11 次
 
@@ -68,3 +68,8 @@ CruiseSignalsApi                       # api/src/main/java/net/shiroha233/roadwe
 PlanningReadinessApi                   # api/src/main/java/net/shiroha233/roadweaver/api/incoming/PlanningReadinessApi.java   测试引用 0 次
 RiverReadinessBroadcast                # api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RiverReadinessBroadcast.java   测试引用 0 次
 StructureReservationApi                # api/src/main/java/net/shiroha233/roadweaver/api/incoming/StructureReservationApi.java   测试引用 2 次
+
+# ── [E] 测试夹具（生产零引用 + 测试有引用，长期保留）──────────
+# 这一组不是「待办」也不是「可以删」：它存在的意义就是给测试当夹具。
+# 守卫要求每个成员都必须真的有测试引用（连测试都不用的，那是 [A] 真死代码）。
+AvoidanceObstacleField                 # common/src/main/java/net/shiroha233/roadweaver/bridge/AvoidanceObstacleField.java   测试引用 6 次
