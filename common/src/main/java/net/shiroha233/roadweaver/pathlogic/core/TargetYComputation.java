@@ -78,6 +78,7 @@ import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
+import net.shiroha233.roadweaver.pathlogic.profile.GroundBanSources;
 import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
@@ -582,8 +583,14 @@ public final class TargetYComputation {
         // S4：在同样的物理约束下让联合 DP 自己重新决定桥/隧道/地面。
         // groundBanned 喂的是「这里不能铺地面」这条物理事实（水面 / 已有公路 / 保护区），
         // **不喂**旧版判出来的桥/隧道选择 —— 否则 DP 只是在复现旧决策。
+        // ★ 禁地面掩码只算一次，剖面 AB 与桥隧 AB 两臂共用。
+        //   2026-11-15（独立复核）：原先桥隧臂用 GroundBanSources 的独立掩码、
+        //   剖面臂仍用 isCrossing（旧判定产物）⇒ 两臂口径不同、数据不可比。
+        //   现在统一由 GroundBanSources 提供，它才是唯一的禁地面来源。
+        GroundBanSources.Result groundBans = GroundBanSources.collect(
+                terrain, centers, n, Math.max(1, bridgeMinWaterDepth));
         if (legacySnapshot != null) {
-            ProfileAbObserver.observeModes(legacySnapshot, terrainY, isCrossing, tunnelMask,
+            ProfileAbObserver.observeModes(legacySnapshot, terrainY, groundBans.banned(), tunnelMask,
                     Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
                     cfg.maxSlopeStepPerTwoSegments(),
                     connection == null ? "?" : connection.from() + "->" + connection.to());
@@ -598,7 +605,7 @@ public final class TargetYComputation {
         // 开关：-Droadweaver.modeDp=ab（默认）/ off。
         // 禁地面来源已改为「水面 + 保护区」两条独立物理事实（见 GroundBanSources），
         // isCrossing 只作对照 —— 这样 DP 判出的桥才不是「复述旧判定」。
-        ModeDpBridge.observe(terrainY, terrain, isCrossing, bridgeMinWaterDepth,
+        ModeDpBridge.observe(terrainY, groundBans, isCrossing,
                 gradeLimits, cfg, centers, spans,
                 connection == null ? "?" : connection.from() + "->" + connection.to());
         // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。

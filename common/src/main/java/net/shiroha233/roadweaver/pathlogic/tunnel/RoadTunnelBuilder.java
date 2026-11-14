@@ -955,48 +955,4 @@ public final class RoadTunnelBuilder {
         TunnelClearLedger.reset();
     }
 
-    public record TunnelPlan(List<BlockPos> interior, List<BlockPos> walls, BlockPos lantern, boolean placeLantern,
-            RoadData road, boolean portal, boolean junction, boolean scenic, boolean blocked,
-            boolean protectedGap) {
-        static final TunnelPlan NONE =
-                new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, false, false);
-        static final TunnelPlan BLOCKED =
-                new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, true, false);
-        static final TunnelPlan PROTECTED_GAP =
-                new TunnelPlan(List.of(), List.of(), null, false, null, false, false, false, true, true);
-        public TunnelPlan { interior = List.copyOf(interior); walls = List.copyOf(walls); }
-        public static TunnelPlan none() { return NONE; }
-        public static TunnelPlan blockedPlan() { return BLOCKED; }
-        public static TunnelPlan protectedGapPlan() { return PROTECTED_GAP; }
-        public boolean active() { return !interior.isEmpty(); }
-        public List<BlockPos> shell() { Map<Long, BlockPos> all = unique(interior); all.putAll(unique(walls)); return List.copyOf(all.values()); }
-    }
-
-    public static record PlannedSection(List<BlockPos> road,
-                                 List<BlockPos> interior,
-                                 List<BlockPos> walls,
-                                 List<BlockPos> shell,
-                                 BlockPos lantern) {
-        boolean isRoadColumn(BlockPos column) {
-            return column != null && road.contains(column);
-        }
-    }
-
-    record SafetyCheck(boolean safe, String reason, BlockPos position) {
-        static SafetyCheck success() { return new SafetyCheck(true, "ready", null); }
-        static SafetyCheck failure(String reason, BlockPos position) {
-            return new SafetyCheck(false, reason, position);
-        }
-    }
-
-    record Span(int start, int end) {
-        int length(List<BlockPos> centers) {
-            double total = 0;
-            for (int i = start; i < end; i++) total += Math.hypot(centers.get(i + 1).getX() - centers.get(i).getX(), centers.get(i + 1).getZ() - centers.get(i).getZ());
-            return (int) Math.round(total);
-        }
-
-    }
-
-    record SpanKey(long first, long second, long ownerFirst, long ownerSecond) { }
 }

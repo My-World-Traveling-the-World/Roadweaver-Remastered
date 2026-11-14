@@ -202,9 +202,9 @@ class TunnelPortalAdvanceTest {
 
         int[] profile = targetY.stream().mapToInt(Integer::intValue).toArray();
         RoadTunnelBuilder.PortalTerrain sampler = (x, z) -> terrain[Math.floorDiv(x, STATION_BLOCKS)];
-        RoadTunnelBuilder.PlannedSection head = PlannedSectionBuilder.plannedSection(
+        PlannedSection head = PlannedSectionBuilder.plannedSection(
                 segments.get(first), first, centers, profile, first);
-        RoadTunnelBuilder.PlannedSection tail = PlannedSectionBuilder.plannedSection(
+        PlannedSection tail = PlannedSectionBuilder.plannedSection(
                 segments.get(last), last, centers, profile, first);
         assertNotNull(head, "洞口站的路面列必须能算出来");
         assertNotNull(tail, "洞口站的路面列必须能算出来");

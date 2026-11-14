@@ -38,6 +38,7 @@ import static net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair.*;
 
 // 仍留在其它同包类里的常量、代价函数与工具（包内可见）。
 import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner.*;
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.key;
 import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
 import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;

@@ -94,7 +94,9 @@ pathlogic -> config                      90
 #   需要 core.model.RoadSpan 与 core.model.SpanType 来表达「一段桥/隧道」，
 #   这是把 ModeDpSolver 的逐站模式翻译回跨度所必需的 2 个 import。
 # 2026-11-14 批3：BuildFrame 的跨度键需要 SpanType，保证桥改隧道不复用旧掩码。
-pathlogic -> core                        220
+# 2026-11-15 行数治理：220 -> 221。TunnelPlan 从 RoadTunnelBuilder 抽出成独立文件，
+#   新文件需自己 import core.model.RoadData（依赖方向未变，只是 import 语句多一条）。
+pathlogic -> core                        221
 pathlogic -> decoration                  23
 pathlogic -> generation                  84
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次

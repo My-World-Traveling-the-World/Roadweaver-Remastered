@@ -6,6 +6,7 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSection;
 import net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
@@ -271,7 +272,7 @@ public final class RoadConstructionVolumePlanner {
             if (masks.tunnel[index] || masks.tunnelJunction[index]) {
                 int spanStart = masks.tunnelStart[index] >= 0
                         ? masks.tunnelStart[index] : Math.max(0, index - 1);
-                RoadTunnelBuilder.PlannedSection section = PlannedSectionBuilder.plannedSection(
+                PlannedSection section = PlannedSectionBuilder.plannedSection(
                         segment, index, centers, profile, spanStart);
                 if (section != null) {
                     section.road().forEach(add);
@@ -439,7 +440,7 @@ public final class RoadConstructionVolumePlanner {
                                        RoadSegmentPlacement segment,
                                        int index) {
         int spanStart = masks.tunnelStart[index] >= 0 ? masks.tunnelStart[index] : Math.max(0, index - 1);
-        RoadTunnelBuilder.PlannedSection section = PlannedSectionBuilder.plannedSection(
+        PlannedSection section = PlannedSectionBuilder.plannedSection(
                 segment, index, centers, profile, spanStart);
         if (section == null) return true;
         boolean junction = masks.tunnelJunction[index];
@@ -474,7 +475,7 @@ public final class RoadConstructionVolumePlanner {
     private static boolean isPortal(Context context,
                                     List<BlockPos> centers,
                                     int[] profile,
-                                    RoadTunnelBuilder.PlannedSection section,
+                                    PlannedSection section,
                                     int index) {
         if (centers.get(index).getY() - profile[index] < RoadTunnelBuilder.minOverburden()) return true;
         for (BlockPos column : section.shell()) {

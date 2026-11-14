@@ -15,6 +15,11 @@ import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluat
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+
+// 2026-11-15：key / horizontalDistanceSquared 已随 Bounds 搬到 Bounds.java，
+// 这里用静态导入保持原有调用点不变（同包跨文件不能直接用简单名）。
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.horizontalDistanceSquared;
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.key;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -842,18 +847,8 @@ public final class AccurateGradeRepairPlanner {
         return Math.hypot(b.getX() - a.getX(), b.getZ() - a.getZ());
     }
 
-    static long horizontalDistanceSquared(int x1, int z1, int x2, int z2) {
-        long dx = (long) x1 - x2;
-        long dz = (long) z1 - z2;
-        return dx * dx + dz * dz;
-    }
-
     static int nearestGrid(int value, int origin, int step) {
         return origin + (int) Math.round((value - origin) / (double) step) * step;
-    }
-
-    static long key(int x, int z) {
-        return ((long) x << 32) ^ (z & 0xffffffffL);
     }
 
     static String format(double value) {
@@ -916,91 +911,4 @@ public final class AccurateGradeRepairPlanner {
         }
     }
 
-    record Bounds(int minX, int minZ, int maxX, int maxZ) {
-        static Bounds around(List<BlockPos> path, int margin, int step) {
-            return around(path, margin, step, null);
-        }
-
-        static Bounds around(List<BlockPos> path, int margin, int step, BoundingBox obstacle) {
-            int minX = Integer.MAX_VALUE;
-            int minZ = Integer.MAX_VALUE;
-            int maxX = Integer.MIN_VALUE;
-            int maxZ = Integer.MIN_VALUE;
-            for (BlockPos position : path) {
-                minX = Math.min(minX, position.getX());
-                minZ = Math.min(minZ, position.getZ());
-                maxX = Math.max(maxX, position.getX());
-                maxZ = Math.max(maxZ, position.getZ());
-            }
-            if (obstacle != null) {
-                minX = Math.min(minX, obstacle.minX());
-                minZ = Math.min(minZ, obstacle.minZ());
-                maxX = Math.max(maxX, obstacle.maxX());
-                maxZ = Math.max(maxZ, obstacle.maxZ());
-            }
-            minX = Math.floorDiv(minX - margin, step) * step;
-            minZ = Math.floorDiv(minZ - margin, step) * step;
-            maxX = Math.floorDiv(maxX + margin + step - 1, step) * step;
-            maxZ = Math.floorDiv(maxZ + margin + step - 1, step) * step;
-            return new Bounds(minX, minZ, maxX, maxZ);
-        }
-
-        static Bounds aroundConflict(BlockPos center, int radius, int step,
-                                     BlockPos start, BlockPos goal, BoundingBox obstacle) {
-            int minX = center.getX() - radius;
-            int minZ = center.getZ() - radius;
-            int maxX = center.getX() + radius;
-            int maxZ = center.getZ() + radius;
-            if (start != null) {
-                minX = Math.min(minX, start.getX());
-                minZ = Math.min(minZ, start.getZ());
-                maxX = Math.max(maxX, start.getX());
-                maxZ = Math.max(maxZ, start.getZ());
-            }
-            if (goal != null) {
-                minX = Math.min(minX, goal.getX());
-                minZ = Math.min(minZ, goal.getZ());
-                maxX = Math.max(maxX, goal.getX());
-                maxZ = Math.max(maxZ, goal.getZ());
-            }
-            if (obstacle != null) {
-                minX = Math.min(minX, obstacle.minX());
-                minZ = Math.min(minZ, obstacle.minZ());
-                maxX = Math.max(maxX, obstacle.maxX());
-                maxZ = Math.max(maxZ, obstacle.maxZ());
-            }
-            minX = Math.floorDiv(minX, step) * step;
-            minZ = Math.floorDiv(minZ, step) * step;
-            maxX = Math.floorDiv(maxX + step - 1, step) * step;
-            maxZ = Math.floorDiv(maxZ + step - 1, step) * step;
-            return new Bounds(minX, minZ, maxX, maxZ);
-        }
-
-        Collection<BlockPos> positions(int step) {
-            Map<Long, BlockPos> unique = new LinkedHashMap<>();
-            for (int x = minX; x <= maxX; x += step) {
-                for (int z = minZ; z <= maxZ; z += step) {
-                    unique.put(key(x, z), new BlockPos(x, 0, z));
-                }
-            }
-            return unique.values();
-        }
-
-        Collection<BlockPos> positionsWithinRadius(int step, BlockPos center, int radius) {
-            Map<Long, BlockPos> unique = new LinkedHashMap<>();
-            long radiusSquared = (long) radius * radius;
-            for (int x = minX; x <= maxX; x += step) {
-                for (int z = minZ; z <= maxZ; z += step) {
-                    if (horizontalDistanceSquared(x, z, center.getX(), center.getZ()) <= radiusSquared) {
-                        unique.put(key(x, z), new BlockPos(x, 0, z));
-                    }
-                }
-            }
-            return unique.values();
-        }
-
-        boolean contains(int x, int z) {
-            return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
-        }
-    }
 }

@@ -50,7 +50,7 @@ class RoadDeckAndTunnelGeometryTest {
         RoadSegmentPlacement segment = new RoadSegmentPlacement(middle, List.of(middle));
         int[] profile = new int[centers.size()];
         java.util.Arrays.fill(profile, 64);
-        RoadTunnelBuilder.PlannedSection section =
+        PlannedSection section =
                 PlannedSectionBuilder.plannedSection(segment, centers.size() / 2, centers, profile, 0);
         assertNotNull(section, "a three-station centre line must produce a section");
 

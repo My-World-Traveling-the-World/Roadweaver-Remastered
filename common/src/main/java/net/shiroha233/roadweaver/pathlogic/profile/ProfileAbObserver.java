@@ -161,7 +161,11 @@ public final class ProfileAbObserver {
      * <p>那会让 DP 复现旧版的决策，对比就没意义了。喂进去的只有
      * <b>「这里不能铺地面」</b>这一条物理约束，桥还是隧道由 DP 自己权衡。</p>
      *
-     * @param groundBanned 旧版认为不可铺地面的站（水面 / 已有公路 / 保护区）
+     * @param groundBanned 不可铺地面的站。**由 {@link GroundBanSources} 统一提供**
+     *                     （水面 + 保护区两条与旧判定无关的来源），
+     *                     不再传本观测器自己从旧 spans 推出的 isCrossing ——
+     *                     否则「DP 判桥 vs 旧判定判桥」会变成循环论证。
+     *                     2026-11-15 独立复核后统一：剖面 AB 与桥隧 AB 共用同一份掩码。
      * @param legacyTunnel 旧版判为隧道的站（仅用于对比展示，不参与求解）
      */
     public static void observeModes(int[] legacyProfile, int[] terrainY, boolean[] groundBanned,

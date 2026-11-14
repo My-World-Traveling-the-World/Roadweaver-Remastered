@@ -1,6 +1,7 @@
 /* 文件职责：局部窗口内的 A* 重路由 —— 只在窗口里找新走线，不管判据与预算。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.horizontalDistanceSquared;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -34,6 +35,8 @@ import java.util.concurrent.Future;
 
 // 仍留在 AccurateGradeRepairPlanner 里的常量、代价函数与工具（包内可见）。
 import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner.*;
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.key;
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.horizontalDistanceSquared;
 import static net.shiroha233.roadweaver.planning.terrain.ConflictDetector.*;
 import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;
 import static net.shiroha233.roadweaver.planning.terrain.LakeRiverRepair.*;

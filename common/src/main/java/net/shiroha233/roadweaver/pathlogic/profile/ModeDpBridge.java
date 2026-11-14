@@ -8,7 +8,6 @@ import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
-import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,9 +121,8 @@ public final class ModeDpBridge {
      * 观测：跑一次联合 DP，把与旧判定的差异记进日志。**不修改任何入参**。
      *
      * @param terrainY           每站地面高度
-     * @param terrain            地形场 —— 「水面」这条禁地面来源的<b>独立</b>证据
+     * @param bans               禁地面掩码（由调用方统一计算，两臂共用同一份）
      * @param isCrossing         旧判定判出的跨水站；<b>只作对照</b>，不再参与禁地面掩码
-     * @param bridgeMinWaterDepth 水深达到多少格才算「必须架桥」
      * @param gradeLimits        施工窗口快照（挖/填/覆土与旧链路同源）
      * @param cfg                生成配置（只用来取坡度口径，保证与 DP 剖面同参）
      * @param centers            每站的方块坐标（转 {@link RoadSpan} 用）
@@ -132,9 +130,8 @@ public final class ModeDpBridge {
      * @param tag                连接标识，进日志便于对账
      */
     public static void observe(int[] terrainY,
-                               PathTerrainField terrain,
+                               GroundBanSources.Result bans,
                                boolean[] isCrossing,
-                               int bridgeMinWaterDepth,
                                SurfaceGradeLimits gradeLimits,
                                RoadGenerationConfig cfg,
                                List<BlockPos> centers,
@@ -145,13 +142,9 @@ public final class ModeDpBridge {
         try {
             int n = terrainY.length;
 
-            // ★ 2026-11-15：禁地面掩码改由「水面 + 保护区」两条与旧判定无关的
-            //   物理事实构造，不再复制 isCrossing。这正是解除循环论证的关键 ——
-            //   原来 DP 被告知「旧判定说这里是桥的地方不能铺地面」，
-            //   再统计它「判出的桥覆盖了多少旧判定的桥」，结论必然偏高。
-            GroundBanSources.Result bans = GroundBanSources.collect(
-                    terrain, centers, n, Math.max(1, bridgeMinWaterDepth));
-            boolean[] groundBanned = bans.banned();
+            // ★ 2026-11-15：禁地面掩码由调用方统一算好传入（水面 + 保护区两条独立来源），
+            //   不再复制 isCrossing。两臂共用同一份掩码 ⇒ 口径可比。
+            boolean[] groundBanned = bans == null ? new boolean[n] : bans.banned();
             int banned = bans.bannedStations();
             // 旧判定的跨水站数：只作对照，用来量化「独立来源与旧判定差多少」。
             int legacyCrossing = 0;
@@ -169,8 +162,8 @@ public final class ModeDpBridge {
             if (solved.isEmpty()) {
                 LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
                                 + "(water={} structure={} snapshot={}) legacyCrossing={} legacy={}",
-                        tag, n, banned, bans.waterStations(), bans.structureStations(),
-                        bans.structureSnapshotAvailable() ? "ok" : "absent",
+                        tag, n, banned, (bans == null ? 0 : bans.waterStations()), (bans == null ? 0 : bans.structureStations()),
+                        (bans != null && bans.structureSnapshotAvailable()) ? "ok" : "absent",
                         legacyCrossing, describe(legacySpans));
                 return;
             }
@@ -187,8 +180,8 @@ public final class ModeDpBridge {
                             + "dp[bridge={}站/{}座 tunnel={}站/{}条] "
                             + "差异站={} dpCost={}",
                     tag, n, banned,
-                    bans.waterStations(), bans.structureStations(),
-                    bans.structureSnapshotAvailable() ? "ok" : "absent",
+                    (bans == null ? 0 : bans.waterStations()), (bans == null ? 0 : bans.structureStations()),
+                    (bans != null && bans.structureSnapshotAvailable()) ? "ok" : "absent",
                     legacyCrossing, perTwo,
                     lg.bridgeStations, lg.bridgeRuns, lg.tunnelStations, lg.tunnelRuns,
                     dp.bridgeStations, dp.bridgeRuns, dp.tunnelStations, dp.tunnelRuns,

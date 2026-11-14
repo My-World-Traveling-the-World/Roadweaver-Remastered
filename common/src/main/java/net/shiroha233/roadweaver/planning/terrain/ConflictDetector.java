@@ -35,6 +35,7 @@ import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 
 // 仍留在 AccurateGradeRepairPlanner 里的常量、代价函数与工具（包内可见）。
 import static net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner.*;
+import static net.shiroha233.roadweaver.planning.terrain.Bounds.key;
 import static net.shiroha233.roadweaver.planning.terrain.LocalRouteSearch.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.planningCollisionBox;
 import static net.shiroha233.roadweaver.planning.terrain.StructureRepair.*;

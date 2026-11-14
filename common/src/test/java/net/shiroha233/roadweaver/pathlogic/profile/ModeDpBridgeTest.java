@@ -174,9 +174,9 @@ class ModeDpBridgeTest {
     @Test
     void 观测遇到空输入不抛异常() {
         // 生产里 terrainY 理论上不会空，但观测层绝不能成为新的崩溃点
-        ModeDpBridge.observe(null, null, null, 2, null, null, null, null, "t");
-        ModeDpBridge.observe(new int[0], null, null, 2, null, null, null, null, "t");
-        ModeDpBridge.observe(new int[]{64}, null, null, 2, null, null, null, null, "t");
+        ModeDpBridge.observe(null, null, null, null, null, null, null, "t");
+        ModeDpBridge.observe(new int[0], null, null, null, null, null, null, "t");
+        ModeDpBridge.observe(new int[]{64}, null, null, null, null, null, null, "t");
         // 走到这里没抛异常即通过
         assertFalse(false);
     }
@@ -188,7 +188,7 @@ class ModeDpBridgeTest {
 
         // 给一份**会**让求解器难受的输入（长度 1、无 centers），
         // 若 off 没生效则会走到 DP 并可能抛错 —— 这里要求它安静返回。
-        ModeDpBridge.observe(new int[]{64}, null, new boolean[]{true}, 2, null, null,
+        ModeDpBridge.observe(new int[]{64}, null, new boolean[]{true}, null, null,
                 new ArrayList<>(), new ArrayList<>(), "off-test");
 
         assertEquals(ModeDpBridge.Mode.OFF, ModeDpBridge.mode());
