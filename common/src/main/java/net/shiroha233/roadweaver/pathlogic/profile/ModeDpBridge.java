@@ -231,7 +231,12 @@ public final class ModeDpBridge {
         int i = 0;
         while (i < limit) {
             ModeDpSolver.Mode m = modes[i];
-            if (m == ModeDpSolver.Mode.GROUND) {
+            // ★ null 必须当「无模式」跳过，不能落到下面的跨度收集里。
+            //   踩过：null == GROUND 为 false ⇒ 进入收集分支，
+            //   而 `m == BRIDGE` 也为 false ⇒ span 类型被定成 TUNNEL
+            //   ⇒ 凭空多出一条假隧道。DP 数组理论上不该有 null，
+            //   但这条路径是回写生产跨度的入口，宁可多一道防御。
+            if (m == null || m == ModeDpSolver.Mode.GROUND) {
                 i++;
                 continue;
             }
@@ -245,6 +250,81 @@ public final class ModeDpBridge {
                     m == ModeDpSolver.Mode.BRIDGE ? SpanType.BRIDGE : SpanType.TUNNEL));
         }
         return out;
+    }
+
+    /**
+     * 把 DP 判出的桥/隧道段合并进旧跨度列表（2026-11-15 新增，批 2 回写的第一步）。
+     *
+     * <h2>为什么是「合并」而不是「替换」</h2>
+     * <p>{@link ModeDpSolver.Mode} 只有 {@code GROUND / BRIDGE / TUNNEL} 三种，
+     * 而 {@link SpanType} 有 <b>七种</b>：</p>
+     * <pre>
+     *   DP 能判 ──► BRIDGE / TUNNEL
+     *   DP 判不了 ──► ROAD_CROSSING（路跨路）/ JUNCTION_ANCHOR / TUNNEL_JUNCTION
+     *                NETWORK_REUSE（路网复用）/ PROTECTED_GAP（保护缺口）
+     * </pre>
+     * <p>后五种来自完全不同的判定逻辑（路网复用、保护缺口、路口锚点），
+     * DP 既没有它们的输入也不知道它们的存在。所以回写必须<b>只动桥隧段</b>，
+     * 其余原样保留 —— 否则就是拿「桥隧判断更准」去换「丢功能」，
+     * 违反「旧版能力一个都不能丢」。</p>
+     *
+     * <h2>ROAD_CROSSING 为什么也算「保留」</h2>
+     * <p>它字面上是桥的一种（路跨路要架桥），但携带的语义是「这里跨的是另一条路」，
+     * 施工侧据此走路口接驳逻辑而不是普通过水桥。DP 的 modes 里没有这个区分
+     * （它的 BRIDGE 只表示「地面不可用」），所以不能拿 DP 的 BRIDGE 覆盖它。</p>
+     *
+     * <h2>排序</h2>
+     * <p>按 span 起点在 {@code centers} 里的索引升序输出，保证同输入同输出
+     * （下游多处按顺序读取跨度，顺序不稳会引入难查的偶发差异）。
+     * 起点找不到的排到最后，宁可顺序靠后也不丢跨度。</p>
+     *
+     * @param legacySpans 旧判定产出的跨度（可为 null）
+     * @param modes       DP 判出的每站模式（可为 null ⇒ 退化为原样返回旧跨度）
+     * @param centers     每站中心坐标
+     * @param n           站数
+     * @return 新的跨度列表；永不返回 null
+     */
+    public static List<RoadSpan> mergeByModes(List<RoadSpan> legacySpans,
+                                              ModeDpSolver.Mode[] modes,
+                                              List<BlockPos> centers, int n) {
+        // ★ DP 没有结果时**一个跨度都不动** —— 包括旧的桥隧判定。
+        //   这一点踩过：第一版只在这是「不加 DP 结果」，结果旧 BRIDGE 被当桥隧段丢掉，
+        //   等于「DP 没算出来 ⇒ 桥没了」。正确语义是「DP 没结果 ⇒ 保持原样」。
+        if (modes == null) {
+            List<RoadSpan> copy = new ArrayList<>();
+            if (legacySpans != null) {
+                for (RoadSpan sp : legacySpans) {
+                    if (sp != null && sp.type() != null
+                            && sp.start() != null && sp.end() != null) {
+                        copy.add(sp);
+                    }
+                }
+            }
+            return copy;
+        }
+        List<RoadSpan> out = new ArrayList<>();
+        // ① 旧判定里**非桥隧**的跨度原样保留（ROAD_CROSSING / JUNCTION_ANCHOR /
+        //    TUNNEL_JUNCTION / NETWORK_REUSE / PROTECTED_GAP）
+        if (legacySpans != null) {
+            for (RoadSpan sp : legacySpans) {
+                if (sp == null || sp.type() == null || sp.start() == null || sp.end() == null) continue;
+                if (isModeSpan(sp.type())) continue;   // 桥隧段交给 DP 重判
+                out.add(sp);
+            }
+        }
+        // ② 加上 DP 判出的桥隧段
+        out.addAll(spansFrom(modes, centers, n));
+        // ③ 按起点站索引排序，保证确定性
+        out.sort(java.util.Comparator.comparingInt(sp -> {
+            int idx = indexOf(sp.start(), centers);
+            return idx < 0 ? Integer.MAX_VALUE : idx;
+        }));
+        return out;
+    }
+
+    /** 这两种跨度由 DP 负责重判，其余类型一律保留。 */
+    private static boolean isModeSpan(SpanType type) {
+        return type == SpanType.BRIDGE || type == SpanType.TUNNEL;
     }
 
     /** 跨度统计：站数按「起止坐标在 centers 里的索引区间」精确算，不靠猜。 */
