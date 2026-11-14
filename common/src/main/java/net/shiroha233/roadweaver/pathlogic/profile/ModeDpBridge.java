@@ -31,10 +31,11 @@ import org.slf4j.LoggerFactory;
  * <pre>
  * -Droadweaver.modeDp=ab   只观测（默认）
  * -Droadweaver.modeDp=off  完全不跑（省 CPU）
- * -Droadweaver.modeDp=on   用 DP 结果替换旧判定 —— <b>未实现，故意抛错提示</b>
+ * -Droadweaver.modeDp=on   已解析但<b>仍未接决策</b>：当前与 ab 一样只观测，
+ *                          不回写 spans，也不会主动抛错
  * </pre>
- * <p>{@code on} 故意没有实现：在没有真机数据证明召回率之前就允许替换，
- * 等于给「桥隧判错」开了一道没有验收的门。</p>
+ * <p>{@code on} 的替换逻辑故意没有实现：在没有真机数据证明召回率之前就允许替换，
+ * 等于给「桥隧判错」开一道没有验收的门。注释必须如实说明它目前并非开关。</p>
  *
  * <h2>已知的输入简化（第一版有意为之，会低估桥隧需求）</h2>
  * <ul>

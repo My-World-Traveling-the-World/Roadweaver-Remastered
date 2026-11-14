@@ -52,7 +52,10 @@
 | 提交 | 内容 |
 |---|---|
 | `8590d27` | 新增 `ProfileFallback.terrainFollowing`（无状态回落解，满足全部硬约束、幂等）|
-| `bac8c18` | DP 先行；成功即跳过整段旧 pass（旧 pass 只在 DP 不可行或 `-Droadweaver.profileSolver=legacy` 时跑）|
+| `bac8c18` | DP 先行；成功即跳过整段旧 pass（本版当时：DP 不可行仍回旧 pass）|
+
+> 后续边界：`b7ef179` 起 DP 不可行也改走 `ProfileFallback`，但该提交**不在 0.9.102 内**。
+> 当前源码已领先本版 10 个提交；不能把本版台账当成当前源码的完整功能清单。
 
 ### 待真机验证（本版必须验的清单）
 
@@ -65,6 +68,6 @@
 
 ### 已知未做的三项（不要误认为已修）
 
-- **C 的收尾**：旧 pass 区仍在 `computeTargetY` 体内（约 150 行），待搬进独立文件；**搬迁前必须先给它补一个能触发的测试**（该分支现在无覆盖）。
+- **C 的后续边界**：旧 pass 编排块已按铁律原地打标，不强行搬迁；但 `stabilizeSurfaceProfile` 仍无条件先跑，RawPathSearch/精确高度解析/精确坡度修复也仍调旧 `RoadGradePlanner`，不能把「编排块退场」误写成「全生产零旧调用」。
 - **D**：`MountainSwitchbackPlanner` / `CoarseHeightAwarePlanner` 两处选线候选补充待评估；`LocalRouteSearch` 经核实是**局部修复基础设施**，不是残留。
 - **N2**：FMM 求解的是轴对齐对角黎曼度量，不含 Finsler 交叉项 `2λ·gx·gz`；会改路线形状，必须真机 A/B 后再动。
