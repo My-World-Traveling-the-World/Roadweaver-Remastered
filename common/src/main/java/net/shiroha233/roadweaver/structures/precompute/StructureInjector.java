@@ -29,6 +29,27 @@ import java.util.List;
  * 结构注入器
  */
 public final class StructureInjector {
+    /**
+     * 被丢弃的待注入项累计数（2026-11-15 新增，纯取证）。
+     *
+     * <p><b>为什么需要它：</b>本类每次扫完一个区块都会调用
+     * {@code markAsInjected(level, chunkPos)}，而该标记是<b>按区块</b>的、
+     * 不是按单条的。于是「解析失败」「类型不支持」「没有产出任何部件」这几种
+     * 情况下的待注入项，会在同一行标记里被一并清掉 —— <b>永久丢弃、不再重试</b>，
+     * 而日志里只有一条 ERROR，事后没有任何汇总能看出总共丢了多少。</p>
+     *
+     * <p>这个计数只用来回答「到底丢了多少」，<b>不参与任何逻辑</b>。
+     * 是否应该改成「全失败时不标记、保留重试」是另一个需要拍板的设计问题，
+     * 本轮不动标记语义（动它会改变注入结果，必须真机验证）。</p>
+     */
+    private static final java.util.concurrent.atomic.AtomicLong DROPPED_PENDING =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /** 被丢弃的待注入项累计数（只读取证；见字段 javadoc）。 */
+    public static long droppedPendingCount() {
+        return DROPPED_PENDING.get();
+    }
+
     private StructureInjector() {}
     
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver/StructureInjector");
@@ -51,6 +72,7 @@ public final class StructureInjector {
         StructureTemplateManager templateManager = level.getStructureManager();
         
         int injectedCount = 0;
+        int droppedCount = 0;
         
         for (PendingRoadsideStructure pendingStructure : pending) {
             try {
@@ -81,6 +103,7 @@ public final class StructureInjector {
                     );
                 } else {
                     LOGGER.warn("Structure {} is not a supported type, skipping", pendingStructure.structureId());
+                    droppedCount++;
                     continue;
                 }
                 
@@ -96,6 +119,7 @@ public final class StructureInjector {
                 injectedCount++;
                 
             } catch (Exception e) {
+                droppedCount++;
                 LOGGER.error("Failed to inject structure {} at {}", 
                     pendingStructure.structureId(), pendingStructure.anchor(), e);
             }
@@ -107,6 +131,14 @@ public final class StructureInjector {
         }
         
         PendingStructureStorage.markAsInjected(level, chunkPos);
+        // 2026-11-15：标记是按区块的，所以上面被跳过/失败的条目也会一起被清掉、不再重试。
+        // 这里把「本次丢了几条」明确打出来 —— 否则真机上没人知道投递了多少、又丢了哪些。
+        if (droppedCount > 0) {
+            DROPPED_PENDING.addAndGet(droppedCount);
+            LOGGER.warn("RoadWeaver dropped {} pending structure(s) in chunk [{}, {}]"
+                            + " — marked as injected, will NOT be retried (injected={})",
+                    droppedCount, chunkPos.x, chunkPos.z, injectedCount);
+        }
     }
 
     private static void injectRoadsideVillages(ServerLevel level, ChunkAccess chunk) {
@@ -121,18 +153,21 @@ public final class StructureInjector {
         StructureTemplateManager templateManager = level.getStructureManager();
         SectionPos sectionPos = SectionPos.of(chunkPos, 0);
         int injectedCount = 0;
+        int droppedCount = 0;
 
         for (PendingRoadsideVillage village : villages) {
             try {
                 Structure structure = structureRegistry.get(village.structureId());
                 if (!(structure instanceof RoadsideVillageStructure)) {
                     LOGGER.warn("Roadside village structure {} is not available", village.structureId());
+                    droppedCount++;
                     continue;
                 }
 
                 List<PoolElementStructurePiece> pieces = RoadsideVillageJigsawPlanner.createPieces(level, village, templateManager);
                 if (pieces.isEmpty()) {
                     LOGGER.debug("Roadside village {} produced no pieces", village.placementId());
+                    droppedCount++;
                     continue;
                 }
 
@@ -145,6 +180,7 @@ public final class StructureInjector {
                 structureManager.setStartForStructure(sectionPos, structure, start, chunk);
                 injectedCount++;
             } catch (Exception e) {
+                droppedCount++;
                 LOGGER.error("Failed to inject roadside village {}", village.placementId(), e);
             }
         }
@@ -154,5 +190,12 @@ public final class StructureInjector {
         }
 
         PendingRoadsideVillageStorage.markAsInjected(level, chunkPos);
+        // 同上：标记按区块，跳过/失败的条目一并清掉、不再重试，这里把「丢了几条」打出来。
+        if (droppedCount > 0) {
+            DROPPED_PENDING.addAndGet(droppedCount);
+            LOGGER.warn("RoadWeaver dropped {} pending roadside village(s) in chunk [{}, {}]"
+                            + " — marked as injected, will NOT be retried (injected={})",
+                    droppedCount, chunkPos.x, chunkPos.z, injectedCount);
+        }
     }
 }
