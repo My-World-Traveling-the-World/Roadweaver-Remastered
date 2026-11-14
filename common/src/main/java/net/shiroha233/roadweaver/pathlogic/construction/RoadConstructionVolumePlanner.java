@@ -25,6 +25,7 @@ import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadHeightInterpolator;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
+import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.util.Line;
 
 import java.util.ArrayList;
@@ -221,9 +222,11 @@ public final class RoadConstructionVolumePlanner {
             return List.of();
         }
         List<RoadSegmentPlacement> segments = road.roadSegmentList();
+        List<RoadSegmentPlacement> validSegments = new ArrayList<>(segments.size());
         List<BlockPos> centers = new ArrayList<>(segments.size());
         for (RoadSegmentPlacement segment : segments) {
             if (segment == null || segment.middlePos() == null) continue;
+            validSegments.add(segment);
             centers.add(segment.middlePos());
         }
         if (centers.isEmpty()) return List.of();
@@ -236,8 +239,11 @@ public final class RoadConstructionVolumePlanner {
         }
         SpanMasks masks = SpanMasks.from(centers, road.spans());
         ModConfig config = ConfigService.get();
-        BridgeRangeCalculator.RangeResult bridgeRanges = BridgeRangeCalculator.compute(
-                centers, road.spans(), config);
+        // 与 PathFeature 共用同一份按路缓存；spans 已进入 BuildFrame 的缓存键。
+        // validSegments 与 centers 一一对应，保持旧调用对空站点的过滤语义。
+        BridgeRangeCalculator.RangeResult bridgeRanges = BuildFrame.of(
+                RoadShardStorage.computeFingerprint(road), validSegments, road.spans(), config)
+                .copyForUser();
         BridgeSegment bridgeSegment = new BridgeSegment(bridgeRanges.isBridge(), segments, profile);
         LinkedHashMap<Long, BlockPos> unique = new LinkedHashMap<>();
         java.util.function.Consumer<BlockPos> add = position -> {
@@ -310,8 +316,10 @@ public final class RoadConstructionVolumePlanner {
         }
         int[] profile = road.targetY().stream().mapToInt(Integer::intValue).toArray();
         SpanMasks masks = SpanMasks.from(centers, road.spans());
-        BridgeRangeCalculator.RangeResult bridgeRanges = BridgeRangeCalculator.compute(
-                centers, road.spans(), context.config());
+        // 体积规划不再另算一套桥范围；copyForUser 防止后续就地修改污染缓存。
+        BridgeRangeCalculator.RangeResult bridgeRanges = BuildFrame.of(
+                RoadShardStorage.computeFingerprint(road), segments, road.spans(), context.config())
+                .copyForUser();
         BridgeSegment bridgeSegment = new BridgeSegment(bridgeRanges.isBridge(), segments, profile);
 
         for (int index = 0; index < segments.size(); index++) {

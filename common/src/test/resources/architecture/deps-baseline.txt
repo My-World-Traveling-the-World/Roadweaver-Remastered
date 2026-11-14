@@ -93,11 +93,13 @@ pathlogic -> config                      90
 # ★ 2026-11-14：217 -> 219。新增 pathlogic/profile/ModeDpBridge（桥隧 AB 观测桥）
 #   需要 core.model.RoadSpan 与 core.model.SpanType 来表达「一段桥/隧道」，
 #   这是把 ModeDpSolver 的逐站模式翻译回跨度所必需的 2 个 import。
-pathlogic -> core                        219
+# 2026-11-14 批3：BuildFrame 的跨度键需要 SpanType，保证桥改隧道不复用旧掩码。
+pathlogic -> core                        220
 pathlogic -> decoration                  23
 pathlogic -> generation                  84
 pathlogic -> pathfinding                 89
-pathlogic -> persistence                 26
+# 2026-11-14 批3：RoadConstructionVolumePlanner 用 RoadShardStorage.computeFingerprint 接 BuildFrame。
+pathlogic -> persistence                 27
 pathlogic -> planning                    68
 pathlogic -> postprocess                 20
 pathlogic -> runtime                     22

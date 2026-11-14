@@ -1867,4 +1867,36 @@ AccurateGradeRepairPlanner$ExactStructureRepairOutcome -> terrain/StructureRepai
    用户的 `config/roadweaver/roadweaver.json` 里存的是 `ALPHA_MODEL`。
 2. **KNN 灰化 + 橙色警告是原有行为**，不是本次重构新增 ——
    旧仓 `ConfigScreenFactoryImpl:219/:275` 就有同一段逻辑（"避免玩家白调参数"），
+
+---
+
+# 批 3 第一项实质修复：BuildFrame 缓存键补跨度内容（2026-11-14）
+
+## 缺陷
+
+`RoadFingerprint.compute` 只哈希中心线、宽度、类型与端点身份，**不含 `spans`**。
+`BuildFrame` 原先却只拿这个指纹 + 桥配置作缓存键，因此同一中心线重规划成
+「桥改隧道」或「桥段移位」时会复用旧桥掩码。
+
+这是条件性正确性缺陷，不是单纯性能问题。没有顺手改全局指纹：
+它同时承担存档替换、删除与施工账本语义，影响面远大于这个缓存。
+
+## 修法
+
+- `BuildFrame.Key` 新增不可变 `List<SpanKey>`，逐条包含起点、终点、`SpanType`；
+  保留精确值而不是再压成哈希，避免不同跨度表因碰撞共用掩码。
+- `RoadConstructionVolumePlanner.terrainSamplePositions` 与 `visit` 两处
+  直接 `BridgeRangeCalculator.compute` 改为 `BuildFrame.of(...).copyForUser()`，
+  与 PathFeature 共用按路缓存；可变掩码仍深拷贝，运行期就地修改不会污染缓存。
+- `terrainSamplePositions` 用与 centers 同步过滤的 validSegments 作缓存输入，
+  保留旧有空站点过滤语义。
+
+## 验证
+
+- 新增 2 个钉子：桥改隧道不得继承桥掩码；同类型桥段移位不得保留旧站。
+- **负控实证**：临时把 Key 的 spans 改成空表，两个测试同时失败；
+  恢复后 `PASS tests=749`，`:fabric:compileJava` 同过。
+- 守卫基线按实际新增 import 更新：pathlogic→core 219→220、
+  pathlogic→persistence 26→27，均在基线里注明原因。
+- 本项只改源码与测试，**未构建/部署新 jar**。
    拆分时逐字搬进了 `PlanningSection`。

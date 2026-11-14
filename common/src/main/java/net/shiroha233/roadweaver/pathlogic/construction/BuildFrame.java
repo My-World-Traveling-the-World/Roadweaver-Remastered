@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
+import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
 
@@ -30,8 +31,9 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
  * <ul>
  *   <li>{@code BridgeRangeCalculator.compute(positions, spans, cfg)} 是<b>纯函数</b>：
  *       不读世界、不写参数、没有随机；</li>
- *   <li>缓存 key = {@code RoadShardStorage.computeFingerprint(data)}（<b>内容指纹</b>，
- *       不是实例身份）+ 配置对象 —— 内容变了指纹就变，天然不会读到旧值；</li>
+ *   <li>缓存 key = 中心线内容指纹 + <b>跨度精确内容</b> + 桥配置标量。
+ *       2026-11-14 修正：全局 {@code RoadFingerprint} 不含 spans，单独用它会让
+ *       「同中心线、桥改隧道」命中旧桥掩码；现在跨度逐条进入 key。</li>
  *   <li>路数据是<b>不可变</b>的（{@code RoadData} 是 record 且紧凑构造器做了
  *       {@code List.copyOf}），不存在「同一条路被就地改写」。</li>
  * </ul>
@@ -57,7 +59,10 @@ public final class BuildFrame {
     private static final int MAX_ENTRIES = 512;
 
     /**
-     * 缓存键：内容指纹 + 影响本类计算的<b>配置版本标量</b>。
+     * 缓存键：中心线内容指纹 + 配置版本标量 + <b>跨度精确内容</b>。
+     *
+     * <p>第三部分在 2026-11-14 加入：同一条中心线可以在重规划后换桥/换隧道，
+     * 而全局道路指纹只看中心线；不纳入 spans 就会拿到旧桥掩码。</p>
      *
      * <h2>★ 为什么不能直接放 {@code ModConfig} 对象（2026-11-13 修正）</h2>
      * <p>{@code ModConfig} 是普通 class，<b>没有覆写 {@code equals/hashCode}</b>。
@@ -69,7 +74,28 @@ public final class BuildFrame {
      * <p>所以只取真正参与计算的那几个字段压成一个标量。false miss 只是慢，
      * false hit 才是错 —— 这个设计保证只会出现前者。</p>
      */
-    private record Key(long fingerprint, long configVersion) {
+    private record Key(long fingerprint, long configVersion, List<SpanKey> spans) {
+    }
+
+    /** 跨度内容键：BlockPos.asLong 含 X/Y/Z，类型区分桥、隧道与其它跨度。 */
+    private record SpanKey(long start, long end, SpanType type) {
+    }
+
+    /**
+     * 把跨度内容压进缓存键。
+     *
+     * <p>不能用全局 {@code RoadFingerprint} 代替这一段：它只哈希中心线，
+     * 同一中心线「桥改隧道」时指纹不变。这里保留精确值而不是再做一次哈希，
+     * 因此不会发生「两个不同跨度表因哈希碰撞而共用掩码」。</p>
+     */
+    private static List<SpanKey> spanKeys(List<RoadSpan> spans) {
+        if (spans == null || spans.isEmpty()) return List.of();
+        List<SpanKey> keys = new ArrayList<>(spans.size());
+        for (RoadSpan span : spans) {
+            if (span == null || span.start() == null || span.end() == null || span.type() == null) continue;
+            keys.add(new SpanKey(span.start().asLong(), span.end().asLong(), span.type()));
+        }
+        return List.copyOf(keys);
     }
 
     /**
@@ -141,7 +167,7 @@ public final class BuildFrame {
     public static Frames of(long fingerprint, List<RoadSegmentPlacement> segments,
                             List<RoadSpan> spans, ModConfig cfg) {
         if (CACHE.size() > MAX_ENTRIES) CACHE.clear();
-        Key key = new Key(fingerprint, configVersion(cfg));
+        Key key = new Key(fingerprint, configVersion(cfg), spanKeys(spans));
         return CACHE.computeIfAbsent(key, k -> compute(segments, spans, cfg));
     }
 

@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Test;
 import net.minecraft.core.BlockPos;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.core.model.RoadSpan;
+import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,5 +132,39 @@ final class BuildFrameTest {
         for (int[] r : second.mergedRanges()) {
             assertTrue(r[0] != 999, "case=int-array-not-shared");
         }
+    }
+
+    private static RoadSpan span(int from, int to, SpanType type) {
+        return new RoadSpan(new BlockPos(from, 64, 0), new BlockPos(to, 64, 0), type);
+    }
+
+    @Test
+    void 同中心线桥改隧道不得复用旧桥掩码() {
+        // 回归钉子：RoadFingerprint 只看中心线；若 BuildFrame 的键不额外纳入 spans，
+        // 两次调用会拿到同一 Frames，第二条的 isBridge 会被第一条污染。
+        ModConfig cfg = new ModConfig();
+        BuildFrame.Frames bridge = BuildFrame.of(888L, stations(8),
+                List.of(span(2, 5, SpanType.BRIDGE)), cfg);
+        BuildFrame.Frames tunnel = BuildFrame.of(888L, stations(8),
+                List.of(span(2, 5, SpanType.TUNNEL)), cfg);
+
+        assertNotSame(bridge, tunnel, "case=span-type-is-part-of-key");
+        assertTrue(bridge.copyForUser().isBridge()[2], "case=bridge-mask-present");
+        assertFalse(tunnel.copyForUser().isBridge()[2], "case=tunnel-must-not-inherit-bridge");
+        assertEquals(2, BuildFrame.size(), "case=distinct-span-content");
+    }
+
+    @Test
+    void 同类型跨度改起止坐标也必须换缓存条目() {
+        ModConfig cfg = new ModConfig();
+        BuildFrame.Frames first = BuildFrame.of(889L, stations(10),
+                List.of(span(2, 4, SpanType.BRIDGE)), cfg);
+        BuildFrame.Frames moved = BuildFrame.of(889L, stations(10),
+                List.of(span(6, 8, SpanType.BRIDGE)), cfg);
+
+        assertNotSame(first, moved, "case=span-coordinates-are-part-of-key");
+        assertTrue(first.copyForUser().isBridge()[2], "case=old-range-present");
+        assertFalse(moved.copyForUser().isBridge()[2], "case=moved-range-dropped-old-station");
+        assertTrue(moved.copyForUser().isBridge()[6], "case=moved-range-present");
     }
 }
