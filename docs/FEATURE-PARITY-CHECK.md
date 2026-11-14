@@ -59,6 +59,52 @@
 
 ---
 
+## 二之二、批 6（结构避让）—— 已核，68/68
+
+来源：`docs/functional-inventory/02-结构避让与路口.md` 的第一~四、六、七节
+（第五节是批 4，见上一节）。
+
+| 小节 | 项数 | 结论 |
+|---|---|---|
+| 一、村庄判据与建筑冲突（4 个小节）| 14 | ✅ 全在 |
+| 二、`PlanningSnapshot`（准备/缓存/失效/线程作用域）| 33 | ✅ 全在 |
+| 三、结构预测 | （含在上行 33 内）| ✅ |
+| 四、结构起点解析与 owner | （含在上行 33 内）| ✅ |
+| 六、`structures/` 预计算与占位注入（5 个小节）| 15 | ✅ 全在 |
+| 七、保护缺口（`PROTECTED_GAP`）| 6 | ✅ 全在 |
+
+**逐项清单**（分节列出，便于回查）：
+
+**一、村庄判据**（14/14）：`passThroughVillageClipping` / `passThroughVillageCrossings` /
+`CONSTRUCTION_BELOW=2` / `CONSTRUCTION_ABOVE=6` / `isVillageStructure` /
+`ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS=96` / `ENDPOINT_REPLACEMENT_MATCH_BLOCKS=24` /
+`findCollision` / `occupancyKind` / `MAX_CACHED_BLOCKS=200_000` / `forcedVerticalOwners` /
+`VILLAGE_CLUSTER_MIN_PIECES=3` / `CLUSTER_BOX_CACHE_CAP=16` /
+**`VILLAGE_GAP_BELOW_TOLERANCE`**（连盘点里标注「仅声明无消费点」的**死键**都搬过来了 ——
+说明这块是纯搬迁而不是重写）。
+
+**二~四、快照 / 预测 / 起点**（33/33）：`PlanningSnapshot` / `EMPTY` / `forRoute` / `merge` /
+`invalidate` / `discardPlanningSnapshot` / `PREPARED_CACHE_EVICTIONS` /
+`ACTIVE_PLANNING_SNAPSHOT` / `PlanningScope` / `additionalRoadRadius` /
+`PreparedStartKey` / 等（按反引号标识符逐个 grep，33 个全命中）。
+
+**六、预计算与注入**（15/15）：`maxStructuresPerRoad` / `MIN_ROAD_SEGMENTS_FOR_STRUCTURE=10` /
+`PendingStructureStorage` / `MAX_INJECTED=4096` / `markAsInjected` /
+`PendingRoadsideContentFileStorage` / `maxVillagesPerRoad` / `minRoadSegments` /
+`spawnChance` / `maxStepHeight` / `MAX_INJECTED=2048` / `class StructureInjector` /
+`RoadsideStructure` / `RoadsideVillageStructure` / `SimpleTemplatePiece`。
+
+**七、保护缺口**（6/6）：`ENDPOINT_PROTECTED_GAP_RADIUS_BLOCKS=32` / `PROTECTED_GAP` /
+`PlanningSnapshotUnavailableException` / `MAX_PROTECTED_GAP_FALLBACK` / `hasProtectedGap` /
+`class WorldgenAvoidance`。
+
+**★ 一个值得记的发现**：盘点第六节专门写了一小节「`WorldgenAvoidance` —— 未找到同名类」，
+说它的职责散在旧仓三处。而 **next 里这个类确实存在**（`class WorldgenAvoidance` 命中）——
+即拆分时把那三处职责**收拢成了一个类**。这不违反「能力不能丢」，反而是重构该有的样子；
+但读盘点时容易误以为「旧仓没有 ⇒ 我们也别建」，这条要记住。
+
+---
+
 ## 三、还没核的批次
 
 | 批 | 对应盘点 | 状态 |
@@ -67,7 +113,7 @@
 | 2 桥隧判定 | `03-跨度与桥隧.md` | **未核** —— 且已知有两处未完成（回写、已有公路来源）|
 | 3 桥体与施工 | `06-施工与装饰.md` | **未核** |
 | 5 几何后处理 | `05-纵断面与后处理.md` | **未核** |
-| 6 结构避让 | `02` 的一~四、六节 | **未核**（只核了第五节 = 批 4 的部分）|
+| 6 结构避让 | `02` 的一~四、六、七节 | ✅ **已核 68/68**（见二之二）|
 | 7 验证与收尾 | 散在 `01`/`07`/`08` | **未核** |
 
 **下一步**：按 `02` 的一~四、六节把批 6 核完，然后 `03`（批 2）、`06`（批 3）、`05`（批 5）。
