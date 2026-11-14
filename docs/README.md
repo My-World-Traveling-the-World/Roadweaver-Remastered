@@ -17,6 +17,7 @@
 | 桥隧回写怎么接（待拍板的设计稿） | [`DESIGN-SPAN-WRITEBACK.md`](DESIGN-SPAN-WRITEBACK.md) |
 | 旧仓库报的死码在新仓库还成不成立 | [`DEADCODE-AUDIT-20261115.md`](DEADCODE-AUDIT-20261115.md) |
 | **旧版到底有哪些功能、重制时一个都不能丢** | [`functional-inventory/README.md`](functional-inventory/README.md) ← **8 个功能域的逐条盘点，核对「旧功能没丢」就看这里** |
+| **旧功能保真核查做到哪了** | [`FEATURE-PARITY-CHECK.md`](FEATURE-PARITY-CHECK.md) ← **逐条符号级核对的结果 + 方法局限（先读局限）** |
 | 哪些旧代码可以删、删到什么粒度 | [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md) |
 | 后处理 20 个文件分别是留还是删 | [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md) |
 | 死代码怎么审（以及为什么不能批量删） | [`DEAD-METHOD-AUDIT.md`](DEAD-METHOD-AUDIT.md) |
