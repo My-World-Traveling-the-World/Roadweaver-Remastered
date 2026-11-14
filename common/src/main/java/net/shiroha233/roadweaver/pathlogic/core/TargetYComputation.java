@@ -78,6 +78,7 @@ import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
+import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
 /**
@@ -585,6 +586,16 @@ public final class TargetYComputation {
                     cfg.maxSlopeStepPerTwoSegments(),
                     connection == null ? "?" : connection.from() + "->" + connection.to());
         }
+        // ── 桥隧判定 AB 观测（重制台账批 2 / S7 第 2 级第 3 步）────────────
+        // 拿旧判定（PathSpanExtractor）的 spans 当基线，另外跑一次 ModeDpSolver，
+        // 把「几座桥 / 几条隧道 / 差异站数」记进日志。**不改任何决策** ——
+        // 这一版是纯观测，接错了也只是日志难看。
+        //
+        // 为什么先观测：S7 第 2 级的通过标准是「旧判定判出的每座必须的桥，
+        // 新解也判了（召回率 100%）」，而这个数字只能在真实存档上量。
+        // 开关：-Droadweaver.modeDp=ab（默认）/ off。
+        ModeDpBridge.observe(terrainY, isCrossing, gradeLimits, cfg, centers, spans,
+                connection == null ? "?" : connection.from() + "->" + connection.to());
         // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。
         // 只在地形、不录旧剖面 —— 我们要比的是「同一地形，两种算法各自算出的解」。
         ProfileTerrainRecorder.record(

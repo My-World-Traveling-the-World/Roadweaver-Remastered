@@ -87,8 +87,13 @@ pathlogic -> compat                      18
 #   从 RoadGradePlanner 抽成顶层类型 pathlogic/grade/SurfaceGradeLimits.java，
 #   新文件自带 ConfigService + PlanningConfig 两个 import（凭空多 2 次）。
 #   这是「同一份代码换位置」的直接后果，不是依赖恶化。
-pathlogic -> config                      89
-pathlogic -> core                        217
+#    同一提交再 +1：ModeDpBridge 需要 config.sub.RoadGenerationConfig 取坡度口径
+#    （与 DP 剖面求解同参，否则 AB 比的是两套坡度）。
+pathlogic -> config                      90
+# ★ 2026-11-14：217 -> 219。新增 pathlogic/profile/ModeDpBridge（桥隧 AB 观测桥）
+#   需要 core.model.RoadSpan 与 core.model.SpanType 来表达「一段桥/隧道」，
+#   这是把 ModeDpSolver 的逐站模式翻译回跨度所必需的 2 个 import。
+pathlogic -> core                        219
 pathlogic -> decoration                  23
 pathlogic -> generation                  84
 pathlogic -> pathfinding                 89
