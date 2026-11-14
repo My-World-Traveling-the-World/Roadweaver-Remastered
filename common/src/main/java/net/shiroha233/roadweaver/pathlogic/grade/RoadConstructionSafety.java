@@ -94,7 +94,42 @@ public final class RoadConstructionSafety {
     private static final int WATERCOURSE_HALF_WIDTH = 3;
     private static final int RUNTIME_BRIDGE_CHUNK_RADIUS = 5;
     private static final int CULVERT_MAX_WATER_DEPTH = 2;
-    private static final int CULVERT_MAX_SEGMENTS = 2;
+    /**
+     * 涵洞段允许的最大站数。
+     *
+     * <p><b>2026-11-15：从 2 改成 6，对齐规划期的 {@code culvertMaxStations}（默认 6）。</b></p>
+     *
+     * <h2>改之前是什么问题</h2>
+     * <p>这个判据有<b>两个调用点</b>，参数完全不同：</p>
+     * <ol>
+     *   <li>{@code prepareCulvertDeck} 传单站 {@code (segmentIndex, segmentIndex)}
+     *       ⇒ {@code end-start+1 = 1}，上限恒不生效；</li>
+     *   <li><b>{@code promoteRuntimeBridges} 传完整站段 {@code (start, end)}</b>
+     *       ⇒ 这里才真正起作用。</li>
+     * </ol>
+     * <p>于是 3..6 站的窄浅水会出现：<b>规划期</b> {@code CulvertPlanner} 按
+     * {@code culvertMaxStations=6} 判成涵洞、把甲板写进 {@code targetY}；
+     * <b>施工期</b> {@code promoteRuntimeBridges} 按本常量（2）判「不是浅涵洞」
+     * ⇒ {@code isBridge[i]=true} ⇒ 走桥体建造分支 ⇒ {@code prepareCulvertDeck}
+     * 根本不会被调用 ⇒ <b>最终架桥，不是涵洞</b>。
+     * 多建一座本不该建的桥（材料浪费 + 规划期的甲板高度计算白做）。</p>
+     *
+     * <h2>为什么是 6 而不是别的</h2>
+     * <p>{@code culvertMaxStations} 的出厂默认就是 6（{@code RoadAppearanceConfig}，夹 1..16），
+     * 说明旧版本来就打算支持到 6 站涵洞；施工期这个 2 更像早期只考虑单/双站时的遗留。
+     * 改成 6 让「规划判涵洞 ⇒ 施工就做涵洞」，不减少任何能力。</p>
+     *
+     * <h2>还没对齐的两条（有意保留，别以为漏了）</h2>
+     * <ul>
+     *   <li><b>水深</b>：规划期 {@code culvertMaxWaterDepth} 可配 1..4，这里仍是硬编码 2
+     *       ⇒ 用户配成 3/4 时又会出现「规划涵洞、施工架桥」。
+     *       要修得让这里读配置，属独立改动。</li>
+     *   <li><b>净空</b>：规划期<b>根本没有</b>这条判据，这里 {@code CULVERT_MAX_OVERHEAD=6}
+     *       是单向收紧。正确的修法是<b>给规划期补上</b>，不是放宽这里。</li>
+     * </ul>
+     * <p>详见 {@code docs/CULVERT-THRESHOLD-ANALYSIS-20261115.md}。</p>
+     */
+    private static final int CULVERT_MAX_SEGMENTS = 6;
     private static final int CULVERT_MAX_OVERHEAD = 6;
     private static final int MAX_WATER_SCAN_DEPTH = 128;
     private static final int MAX_WATER_ROOF_THICKNESS = 8;
