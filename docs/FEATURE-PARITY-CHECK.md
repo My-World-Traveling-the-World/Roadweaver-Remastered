@@ -145,14 +145,53 @@ ProfileDpSource:64          javadoc：下界由 bridgeDeckSurfaceY 提供
 
 ---
 
+## 二之四、批 3（施工与装饰）—— 已核，62/62（5 项「缺失」全是改名）
+
+来源：`docs/functional-inventory/06-施工与装饰.md`（10 节 + 配置附录）。
+
+**62 项符号，57 直接命中，5 项经核为「改名/前缀化」**：
+
+| 盘点里的写法 | next 实际 | 判读 |
+|---|---|---|
+| `PIER` | **`Kind.BRIDGE_PIER`** | 前缀化 |
+| `SUPPORT` | **`Kind.BRIDGE_SUPPORT`** | 前缀化 |
+| `TEMPLATE` | **`Kind.BRIDGE_TEMPLATE`** | 前缀化 |
+| `fallingCap` | **`ROAD_FALLING_CAP` / `BRIDGE_FALLING_CAP`** / `AboveColumnClearer.fallingCapStartY/EndY` / `stabilizeFallingCap` | 枚举化 + 拆分 |
+| `f18492b` | — | **误提取**（那是 commit hash，不是符号）|
+
+`Kind` 完整枚举（`RoadConstructionVolumePlanner:52-63`）：
+`ROAD` / `ROAD_FALLING_CAP` / `TUNNEL` / `TUNNEL_PORTAL` / `TUNNEL_JUNCTION` /
+`BRIDGE_DECK` / `BRIDGE_FALLING_CAP` / `BRIDGE_TEMPLATE` / `BRIDGE_SUPPORT` / `BRIDGE_PIER`
+—— 比盘点里点名的多，**没有少**。
+
+> **★ 这是第二次踩同一个坑**：上一节（批 4）已经记过「grep 报缺失先查是不是改名」，
+> 这一节又因为 `PIER`/`SUPPORT`/`TEMPLATE` 没带 `BRIDGE_` 前缀而误报 3 个。
+> ⇒ 遇缺失**必须看该符号在盘点里的上下文写法**（这里是 `Kind.` 限定），
+> 而不是只 grep 裸名字。
+
+---
+
+## 二之五、批 5（纵断面与后处理）—— 已核，127/127
+
+来源：`docs/functional-inventory/05-纵断面与后处理.md`（15 道 pass + 坡度 AUTO + 平滑 +
+端点锁定 + `PathPostProcessor` + 锯齿度量 + 急弯冻结）。
+
+**127 项符号，126 直接命中；唯一「缺失」的 `SawtoothMetricTest` 是测试类**
+（`common/src/test/java/.../postprocess/SawtoothMetricTest.java`），不在生产源码里 ⇒ **不算缺失**。
+
+> ★ 这一条反过来也是个提醒：盘点里会引用**测试类名**（用来指「这件事有测试守着」），
+> 只扫 `src/main` 会把它们误判成缺失。**核对脚本应当同时说清扫的是哪个根。**
+
+---
+
 ## 三、还没核的批次
 
 | 批 | 对应盘点 | 状态 |
 |---|---|---|
 | 1 纵断面与坡度 | `05-纵断面与后处理.md` | 未核（但「重制总纲」已标 DONE 且有独立证据）|
 | 2 桥隧判定 | `03-跨度与桥隧.md` | ✅ **已核 131/131**（见二之三）。注意：「符号全在」≠「批 2 完成」—— `ModeDpSolver` 生产回写与「已有公路」来源仍未做，那是**新内核接线**层面的未完成，不是旧功能丢失 |
-| 3 桥体与施工 | `06-施工与装饰.md` | **未核** |
-| 5 几何后处理 | `05-纵断面与后处理.md` | **未核** |
+| 3 桥体与施工 | `06-施工与装饰.md` | ✅ **已核 62/62**（见二之四）|
+| 5 几何后处理 | `05-纵断面与后处理.md` | ✅ **已核 127/127**（见二之五）|
 | 6 结构避让 | `02` 的一~四、六、七节 | ✅ **已核 68/68**（见二之二）|
 | 7 验证与收尾 | 散在 `01`/`07`/`08` | **未核** |
 
