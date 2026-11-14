@@ -13,7 +13,6 @@ import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.bridge.SampledTerrainField;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
@@ -21,11 +20,11 @@ import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
-import net.shiroha233.roadweaver.pipeline.RoadNetworkPlan;
 import net.shiroha233.roadweaver.pipeline.QualityGate;
 import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 import net.shiroha233.roadweaver.planning.NetworkPlanner;
 import net.shiroha233.roadweaver.topology.RoadNode;
+import net.shiroha233.roadweaver.topology.TopologyPlan;
 
 /**
  * 用新三层内核做<b>路网拓扑</b>的规划器 —— 第六种 {@code planningAlgorithm}。
@@ -150,32 +149,35 @@ public final class PipelinePlanner implements NetworkPlanner {
         }
         FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
 
-        // ④ 跑两层（度量 + 拓扑）。几何部分（ElasticBandSolver）只是让
-        //    RoadPipeline 能构造出来，本类不消费它算出的曲线。
-        RoadNetworkPlan plan;
+        // ④ 跑拓扑层（测地矩阵 + MST）
+        //
+        // 2026-11-14 修复（审计 NEW-3）：这里原来调 RoadPipeline.run，它会先在拓扑层
+        // 跑 N 次场求解得到距离矩阵、求出 MST，然后再对 MST 用到的每个源**重新求解一次**
+        // 场、回溯曲线、跑弹性带平滑 —— 但本类只用端点对，全部曲线算完即弃。
+        // 而下游的单条路线又会自己重建局部网格、自己跑场求解。
+        // 现在改调 planTopology：边集与原来**完全相同**（同一个 GeodesicMatrix + MST），
+        // 只是不再白算第二轮的几何，规划时间约减半。
+        TopologyPlan topology;
         try {
-            plan = new RoadPipeline(metric, ElasticBandSolver.defaults()).run(nodes);
+            topology = new RoadPipeline(metric, null).planTopology(nodes);
         } catch (RuntimeException pipelineFailure) {
             return fallbackMST(points, maxEdgeLenBlocks);
         }
 
-        // ⑤ 质量门 —— 只测不拦
+        // ⑤ 拓扑质量门 —— 只测不拦
         //
-        // QualityGate 的设计初衷是「把质量指标接到接受/拒绝的决策上，而不是只打日志」
-        // （它的类注释举了真机例子：fine regenerate 把 17 条路里的 8 条变长、9 条 dupXz
-        // 增加，却无条件全部接受）。但那套判据的阈值来自**旧链**的真机基线，
-        // 而本规划器走的是测地距离，绕行比的分布本来就不同 —— 直接拿旧阈值去拦，
-        // 很可能把整张路网判成不合格、然后一条路都不生成。
-        //
-        // 所以第一版**只测不拦**：把 Report 打进日志，让真实数据先出来。
-        // 等看过几局 nodes/edges/isolated/weightedDetour 的实际分布，再决定要不要拦、
-        // 以及阈值该定多少。用 lenient()（绕行比 3.0、允许孤立、不查曲率）而不是
-        // defaults()（1.5、不许孤立、曲率不增）就是为了让日志有信息量而不是满屏 FAIL。
-        QualityGate.Report report = QualityGate.evaluate(plan, QualityGate.Thresholds.lenient());
+        // 原来是 QualityGate.evaluate(plan, lenient())，它需要每边的曲线来查端点与曲率；
+        // 拓扑轮没有曲线，硬套会得到一堆「曲线少于 2 点」的假失败。改为
+        // QualityGate.evaluateTopology：保留能判的两项（连通性 + 加权绕行比），
+        // 曲线两项显式标 skipped。阈值仍用 lenient()（绕行比 3.0、允许孤立）——
+        // 这套阈值来自旧链真机基线，而本规划器走测地距离，分布本来就不同，
+        // 直接拿 defaults()（1.5、不许孤立）去拦很可能把整张路网判成不合格。
+        QualityGate.Report report = QualityGate.evaluateTopology(
+                topology, nodes, QualityGate.Thresholds.lenient());
         if (report.passed()) {
-            LOGGER.info("RoadWeaver network quality: {}", report.describe());
+            LOGGER.info("RoadWeaver network topology: {}", report.describe());
         } else {
-            LOGGER.warn("RoadWeaver network quality below gate (REPORT-ONLY, result still adopted): {}",
+            LOGGER.warn("RoadWeaver network topology below gate (REPORT-ONLY, still adopted): {}",
                     report.describe());
         }
 
@@ -183,8 +185,11 @@ public final class PipelinePlanner implements NetworkPlanner {
         long maxD2 = maxEdgeLenBlocks > 0
                 ? (long) maxEdgeLenBlocks * (long) maxEdgeLenBlocks
                 : Long.MAX_VALUE;
-        List<StructureConnection> out = new ArrayList<>(plan.edges().size());
-        for (RoadNetworkPlan.RoadEdge edge : plan.edges()) {
+        // 与 RoadPipeline.run 的第二轮同序（按 from 升序），保证下游拿到的连接顺序不变。
+        List<TopologyPlan.Edge> ordered = new ArrayList<>(topology.edges());
+        ordered.sort((a, b) -> Integer.compare(a.from(), b.from()));
+        List<StructureConnection> out = new ArrayList<>(ordered.size());
+        for (TopologyPlan.Edge edge : ordered) {
             if (edge.from() < 0 || edge.from() >= representatives.size()
                     || edge.to() < 0 || edge.to() >= representatives.size()) {
                 continue;                                  // 防御：索引错位绝不能铺路

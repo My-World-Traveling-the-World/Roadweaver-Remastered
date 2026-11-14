@@ -90,6 +90,26 @@ public final class RoadPipeline {
         return new RoadNetworkPlan(nodes, edges, topology.isolatedNodes());
     }
 
+    /**
+     * 只跑拓扑层：N 次场求解 → 测地距离矩阵 → 最小生成森林。
+     *
+     * <p><b>2026-11-14（审计 NEW-3）</b>：这是给「只要拓扑、不要曲线」的调用方准备的。
+     * {@link #run} 会在此基础上再跑第二轮（对 MST 用到的每个源重新求解 + 回溯 + 弹性带平滑），
+     * 但规划的拓扑决策只需要「连谁、多远」—— 下游的单条路线自己会重建局部网格、
+     * 自己跑场求解。原来 {@code PipelinePlanner} 调 {@link #run} 却只用端点对，
+     * 等于把第二轮的整份几何计算白算一遍（约一半规划时间）。</p>
+     *
+     * <p>边集与 {@link #run} 的第一轮<b>完全相同</b>（同一个 {@link GeodesicMatrix} 与
+     * {@link MinimumSpanningTree#solve}），只是不产曲线。</p>
+     */
+    public TopologyPlan planTopology(List<RoadNode> nodes) {
+        if (nodes == null || nodes.isEmpty()) {
+            throw new IllegalArgumentException("节点列表不能为空");
+        }
+        GeodesicMatrix matrix = GeodesicMatrix.build(metric, nodes);
+        return MinimumSpanningTree.solve(matrix);
+    }
+
     private RoadNetworkPlan.RoadEdge buildEdge(List<RoadNode> nodes,
                                                TopologyPlan.Edge edge,
                                                ArrivalTimeField field) {

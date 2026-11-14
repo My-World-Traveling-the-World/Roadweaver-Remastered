@@ -4,6 +4,9 @@ package net.shiroha233.roadweaver.pipeline;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.shiroha233.roadweaver.topology.RoadNode;
+import net.shiroha233.roadweaver.topology.TopologyPlan;
+
 /**
  * 质量门。
  *
@@ -67,6 +70,61 @@ public final class QualityGate {
                     + " | " + String.join(" ", metrics)
                     + (failures.isEmpty() ? "" : " | 拒绝原因: " + String.join("; ", failures));
         }
+    }
+
+    /**
+     * 只评估拓扑层 —— 给「不需要曲线」的调用方（2026-11-14，审计 NEW-3）。
+     *
+     * <p>{@link #evaluate} 的四项判据里有两项依赖几何轮的产物：端点必须等于节点坐标、
+     * 平滑后曲率不得上升。只跑拓扑轮的调用方拿不到曲线，硬套 {@link #evaluate} 会得到
+     * 一堆「曲线少于 2 点」的<b>假失败</b>（日志满屏 FAIL 却与质量无关）。</p>
+     *
+     * <p>这里保留<b>能判</b>的两项：连通性（孤立节点）与加权绕行比
+     * （Σ测地 / Σ直线，用 {@link TopologyPlan.Edge#distance()} 与实际节点坐标算）。
+     * 曲线相关的两项在 metrics 里显式标「几何轮未执行」，而不是假装通过。</p>
+     */
+    public static Report evaluateTopology(TopologyPlan topology,
+                                          List<RoadNode> nodes,
+                                          Thresholds thresholds) {
+        if (topology == null) throw new IllegalArgumentException("topology 不能为 null");
+        if (nodes == null) throw new IllegalArgumentException("nodes 不能为 null");
+        Thresholds limits = thresholds == null ? Thresholds.defaults() : thresholds;
+
+        List<String> failures = new ArrayList<>();
+        List<String> metrics = new ArrayList<>();
+
+        metrics.add("nodes=" + nodes.size());
+        metrics.add("edges=" + topology.edgeCount());
+        metrics.add("isolated=" + topology.isolatedNodes().size());
+
+        double sumGeodesic = 0.0;
+        double sumStraight = 0.0;
+        for (TopologyPlan.Edge edge : topology.edges()) {
+            RoadNode from = nodes.get(edge.from());
+            RoadNode to = nodes.get(edge.to());
+            sumGeodesic += edge.distance();
+            sumStraight += Math.hypot((double) to.x() - from.x(), (double) to.z() - from.z());
+        }
+        double detour = sumStraight <= 1e-9 ? 1.0 : sumGeodesic / sumStraight;
+        metrics.add(String.format(java.util.Locale.ROOT, "weightedDetour=%.3f", detour));
+
+        // ① 连通性
+        if (!limits.allowIsolatedNodes() && !topology.isolatedNodes().isEmpty()) {
+            failures.add("有 " + topology.isolatedNodes().size()
+                    + " 个孤立节点（下标 " + topology.isolatedNodes() + "）—— 这些端点连不上");
+        }
+
+        // ② 绕行比
+        if (detour > limits.maxDetourRatio()) {
+            failures.add(String.format(java.util.Locale.ROOT,
+                    "加权绕行比 %.3f 超过阈值 %.3f（旧实现真机基线 2.93，目标 ≤1.5）",
+                    detour, limits.maxDetourRatio()));
+        }
+
+        // ③ 曲线相关的两项在拓扑轮无从判断 —— 显式声明，不静默当作通过
+        metrics.add("curveChecks=skipped(topology-only)");
+
+        return new Report(failures.isEmpty(), failures, metrics);
     }
 
     private QualityGate() {}

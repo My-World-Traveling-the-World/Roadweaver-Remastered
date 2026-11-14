@@ -107,8 +107,7 @@ persistence -> structures                3
 persistence -> worldgen                  4
 pipeline -> band                         5
 pipeline -> metric                       6
-pipeline -> topology                     8
-planning -> band                         1
+pipeline -> topology                     10
 planning -> bridge                       1
 planning -> compat                       11
 planning -> config                       74
@@ -123,7 +122,7 @@ planning -> persistence                  29
 planning -> pipeline                     3
 planning -> runtime                      18
 planning -> search                       5
-planning -> topology                     1
+planning -> topology                     2
 planning -> util                         5
 postprocess -> config                    18
 postprocess -> core                      48

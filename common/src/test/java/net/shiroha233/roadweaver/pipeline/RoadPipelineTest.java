@@ -8,6 +8,7 @@ import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.GridTerrainField;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.topology.RoadNode;
+import net.shiroha233.roadweaver.topology.TopologyPlan;
 
 import org.junit.jupiter.api.Test;
 
@@ -196,6 +197,38 @@ class RoadPipelineTest {
                     "第 " + i + " 条边终点必须一致");
             assertEquals(first.edges().get(i).curve(), second.edges().get(i).curve(),
                     "第 " + i + " 条边曲线必须逐点一致");
+        }
+    }
+
+    // ── NEW-3 等价性钉子：只跑拓扑必须与完整流水线产出同一组边 ──────────────
+
+    /**
+     * {@link RoadPipeline#planTopology} 与 {@link RoadPipeline#run} 的拓扑轮必须完全等价。
+     *
+     * <p>审计 NEW-3 的修法是「PipelinePlanner 跳过第二轮几何」—— 这是纯提速，
+     * 前提是<b>边集一模一样</b>。这里逐边钉住：起点、终点、测地距离、总距离、
+     * 孤立节点集合全部相等。若哪天拓扑轮与几何轮分叉（比如给几何轮加了额外的
+     * 剪枝），这个测试会立刻炸。</p>
+     */
+    @Test
+    void 只跑拓扑与完整流水线必须产出同一组边() {
+        FinslerMetric metric = new FinslerMetric(flat(61), ObstacleField.NONE, 0.0, 0.0);
+        RoadPipeline pipeline = new RoadPipeline(metric, ElasticBandSolver.defaults());
+
+        TopologyPlan topology = pipeline.planTopology(squareCorners());
+        RoadNetworkPlan full = pipeline.run(squareCorners());
+
+        assertEquals(full.nodes().size(), topology.nodes().size(), "节点数必须一致");
+        assertEquals(full.edgeCount(), topology.edgeCount(), "边数必须一致");
+        assertEquals(full.isolatedNodes(), topology.isolatedNodes(), "孤立节点集合必须一致");
+
+        for (int i = 0; i < topology.edgeCount(); i++) {
+            RoadNetworkPlan.RoadEdge fullEdge = full.edges().get(i);
+            TopologyPlan.Edge topoEdge = topology.edges().get(i);
+            assertEquals(fullEdge.from(), topoEdge.from(), "第 " + i + " 条边起点必须一致");
+            assertEquals(fullEdge.to(), topoEdge.to(), "第 " + i + " 条边终点必须一致");
+            assertEquals(fullEdge.geodesicDistance(), topoEdge.distance(), 1e-9,
+                    "第 " + i + " 条边的测地距离必须一致");
         }
     }
 }
