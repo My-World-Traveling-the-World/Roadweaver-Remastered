@@ -26,6 +26,36 @@ public final class StructureIndexService {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final boolean CACHE_DEBUG = Boolean.getBoolean("roadweaver.structureCacheDebug");
 
+    /**
+     * 「整批预测项全部通过验证」的批次数（2026-11-15 新增，纯读取证）。
+     *
+     * <p><b>为什么需要它：</b>{@code verifyPredictedStructures} 在拿不到
+     * {@code ServerChunkCache} / {@code chunkScanner} 时会<b>原样返回全部预测项</b>，
+     * 而真正验证通过的也是原样返回 —— <b>「无法验证」与「验证了且都对」完全同形</b>。
+     * 生产环境里这个比例只在 {@code roadweaver.structureCacheDebug} 打开时才会打印，
+     * 等于默认情况下没人能知道验证有没有在工作。</p>
+     *
+     * <p>本计数器只回答「有多少批是一个都没被过滤掉的」，<b>不参与任何决策</b>。
+     * 它偏大不一定有问题（预测本来就准），但<b>偏大且伴随真机「路绕过根本没有的结构」</b>
+     * 时，就是验证失效的信号。</p>
+     */
+    private static final java.util.concurrent.atomic.AtomicLong FULL_PASS_BATCHES =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicBoolean FULL_PASS_WARNED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** 「整批全部通过验证」的累计批次数（只读取证；见字段 javadoc）。 */
+    public static long fullPassBatchCount() {
+        return FULL_PASS_BATCHES.get();
+    }
+
+    /** 重置取证计数（测试用）。 */
+    static void resetFullPassBatchCount() {
+        FULL_PASS_BATCHES.set(0);
+        FULL_PASS_WARNED.set(false);
+    }
+
+
     private StructureIndexService() {
     }
 
@@ -104,6 +134,19 @@ public final class StructureIndexService {
             } catch (Throwable t) {
                 StructureFileStorage.releaseScanWindow(level, cminx, cminz, cmaxx, cmaxz);
                 LOGGER.warn("StructureIndexService: scan window failed rect=[{},{}..{},{}]", cminx, cminz, cmaxx, cmaxz, t);
+            }
+        }
+
+        // 2026-11-15：无论 CACHE_DEBUG 开关如何，都把「整批一个都没被过滤」记下来并首次告警。
+        // 验证失效与「预测本来就准」同形，日志里必须能看出端倪。
+        if (predictedTotal > 0 && verifiedTotal >= predictedTotal) {
+            long n = FULL_PASS_BATCHES.incrementAndGet();
+            if (FULL_PASS_WARNED.compareAndSet(false, true)) {
+                LOGGER.warn("RoadWeaver structure verification let every predicted structure through"
+                                + " (first of possibly many; predicted={} verified={})"
+                                + " — this also happens when verification is unavailable,"
+                                + " so treat it as a hint, not a verdict (counter={})",
+                        predictedTotal, verifiedTotal, n);
             }
         }
 
