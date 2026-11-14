@@ -56,6 +56,17 @@ public final class GeodesicMatrix {
         double[][] d = new double[n][n];
         FastMarchingSolver solver = new FastMarchingSolver(metric);
 
+        // 2026-11-14（审计「目标早停」）：本矩阵只读**节点位置**上的 T，
+        // 不需要把整张场铺完。预先收集全部节点坐标，每个源求解到
+        // 「所有节点格都冻结」即停 —— 被冻结的格子 T 就是最终值，
+        // 所以矩阵每一项与全场求解**逐位相同**，只是少铺了无关的格子。
+        int[] nodeXs = new int[n];
+        int[] nodeZs = new int[n];
+        for (int j = 0; j < n; j++) {
+            nodeXs[j] = nodes.get(j).x();
+            nodeZs[j] = nodes.get(j).z();
+        }
+
         for (int i = 0; i < n; i++) {
             RoadNode from = nodes.get(i);
             if (!metric.terrain().contains(from.x(), from.z())) {
@@ -65,7 +76,7 @@ public final class GeodesicMatrix {
                 d[i][i] = 0.0;
                 continue;
             }
-            ArrivalTimeField field = solver.solve(from.x(), from.z());
+            ArrivalTimeField field = solver.solveReachingAll(from.x(), from.z(), nodeXs, nodeZs);
             for (int j = 0; j < n; j++) {
                 d[i][j] = (i == j) ? 0.0 : field.at(nodes.get(j).x(), nodes.get(j).z());
             }

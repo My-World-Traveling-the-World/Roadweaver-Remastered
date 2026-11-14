@@ -320,4 +320,60 @@ class FinslerMetricTest {
         assertTrue(field.at(0, 0) > 0,
                 "向下取整的格子 (0,0) 不该是源点（T 必须 > 0）");
     }
+
+    // ── 性质 8：目标早停与全场求解逐位等价（审计「目标早停」钉子）──────────────
+
+    /**
+     * 早停到目标格：目标点的 T 与整条回溯路径必须与全场求解完全相同。
+     *
+     * <p>证明要点：FMM 按 T 递增冻结，目标格被弹出的那一刻，所有 {@code t[u] < t_target}
+     * 的格都已冻结（{@code t[u]} 是历次入队键的最小值，若小于 t_target 必然先被弹出）。
+     * 而回溯只走 {@code nt < bestTime ≤ t_target} 的邻居，因此只会访问已冻结的格，
+     * 不会读到未冻结格的临时偏高值。</p>
+     */
+    @Test
+    void 早停到目标与全场求解结果逐位相同() {
+        // 带一道墙的地形，保证路径非直线（更严格）
+        ObstacleField wall = (x, z) -> (x == 25 && z <= 30) ? 1.0 : 0.0;
+        FinslerMetric metric = FinslerMetric.of(flat(0, 40), wall);
+        FastMarchingSolver solver = new FastMarchingSolver(metric);
+
+        ArrivalTimeField full = solver.solve(10, 10);
+        ArrivalTimeField early = new FastMarchingSolver(metric).solve(10, 10, 35, 20);
+
+        assertEquals(full.at(35, 20), early.at(35, 20), 1e-12,
+                "目标点 T 必须逐位相同");
+
+        List<int[]> fullPath = full.pathTo(35, 20);
+        List<int[]> earlyPath = early.pathTo(35, 20);
+        assertEquals(fullPath.size(), earlyPath.size(), "回溯路径长度必须相同");
+        for (int i = 0; i < fullPath.size(); i++) {
+            assertEquals(fullPath.get(i)[0], earlyPath.get(i)[0],
+                    "第 " + i + " 点 x 必须相同");
+            assertEquals(fullPath.get(i)[1], earlyPath.get(i)[1],
+                    "第 " + i + " 点 z 必须相同");
+        }
+    }
+
+    /**
+     * 预计算代价数组在多源复用下不得改变任何数值（同一 solver 连跑多次）。
+     */
+    @Test
+    void 多源复用同一求解器与逐源新建求解器结果一致() {
+        FinslerMetric metric = FinslerMetric.of(flat(0, 40), ObstacleField.NONE);
+
+        FastMarchingSolver reused = new FastMarchingSolver(metric);
+        ArrivalTimeField first = reused.solve(5, 5);
+        ArrivalTimeField second = reused.solve(30, 30);      // 复用预计算表
+
+        ArrivalTimeField freshFirst = new FastMarchingSolver(metric).solve(5, 5);
+        ArrivalTimeField freshSecond = new FastMarchingSolver(metric).solve(30, 30);
+
+        assertEquals(freshFirst.at(20, 20), first.at(20, 20), 1e-12,
+                "复用预计算表的第一次求解必须与新建求解器一致");
+        assertEquals(freshSecond.at(20, 20), second.at(20, 20), 1e-12,
+                "复用预计算表的第二次求解必须与新建求解器一致");
+        assertEquals(freshSecond.at(5, 5), second.at(5, 5), 1e-12,
+                "第二个源的任意点 T 必须一致");
+    }
 }

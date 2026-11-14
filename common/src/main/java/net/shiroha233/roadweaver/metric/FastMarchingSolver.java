@@ -43,19 +43,126 @@ public final class FastMarchingSolver {
 
     private final FinslerMetric metric;
 
+    // ── 与源点无关的预计算（2026-11-14，审计「FMM 预计算代价数组」）──────────
+    //
+    // 轴对齐慢度 costX/costZ 与硬可通行性只由**格子**决定，与源点无关；
+    // 而 solve 每冻结一个节点就要为它的 4 个邻居各算 2 次 metric.cost()。
+    // GeodesicMatrix 会复用同一个 solver 连跑 N 次（N≈23~30），
+    // 于是同一格的代价被重复计算上百次。这里按网格尺寸缓存一次、所有源共享。
+    //
+    // 前提：FinslerMetric 与其 terrain/obstacles 在 solver 生命周期内不可变
+    // （它们都是不可变 record / 纯函数式实现）。网格尺寸变化时自动失效重建。
+    private int cachedSize = -1;
+    private double[] cachedCostX;
+    private double[] cachedCostZ;
+    private boolean[] cachedPassable;
+
     public FastMarchingSolver(FinslerMetric metric) {
         if (metric == null) throw new IllegalArgumentException("metric 不能为 null");
         this.metric = metric;
     }
 
     /**
-     * 从源点求解到达时间场。
+     * 从源点求解到达时间场（跑到队列耗尽）。
      *
      * @param sourceX 源点 x（方块坐标）
      * @param sourceZ 源点 z（方块坐标）
      * @return 到达时间场（不可变快照）
      */
     public ArrivalTimeField solve(int sourceX, int sourceZ) {
+        return solveInternal(sourceX, sourceZ, null, 0);
+    }
+
+    /**
+     * 只求解到「目标格被冻结」为止（2026-11-14，审计「目标早停」）。
+     *
+     * <h2>为什么结果与全场求解逐位相同</h2>
+     * <p>FMM 按 T 递增弹出并冻结，被冻结的格子其 T 即为最终值。目标格被弹出的那一刻，
+     * 所有 {@code t[u] < t_target} 的格都已冻结：{@code t[u]} 是「历次入队键的最小值」，
+     * 若它小于 {@code t_target}，对应的队列条目必然先于目标被弹出 ⇒ u 已冻结。</p>
+     *
+     * <p>而回溯（{@link ArrivalTimeField#pathTo}）只走 {@code nt < bestTime ≤ t_target}
+     * 的邻居（严格递减），所以它<b>只会访问已冻结的格</b>，绝不会读到未冻结格的
+     * 临时（偏高）值。⇒ 回溯出的路径与全场求解完全相同。</p>
+     *
+     * <p><b>注意</b>：返回的场里未被冻结的格子保留的是临时值（偏高的上界），
+     * 因此只能用于「读目标点 + 回溯」，不要拿 {@link ArrivalTimeField#at} 去读别的点。</p>
+     */
+    public ArrivalTimeField solve(int sourceX, int sourceZ, int targetX, int targetZ) {
+        TerrainField terrain = metric.terrain();
+        int w = terrain.columns();
+        int d = terrain.rows();
+        int step = terrain.step();
+        boolean[] stopMask = new boolean[w * d];
+        int tix = Math.max(0, Math.min(w - 1, Math.round((targetX - terrain.minX()) / (float) step)));
+        int tiz = Math.max(0, Math.min(d - 1, Math.round((targetZ - terrain.minZ()) / (float) step)));
+        stopMask[tix + tiz * w] = true;
+        return solveInternal(sourceX, sourceZ, stopMask, 1);
+    }
+
+    /**
+     * 求解到「给定的全部目标格都冻结」为止（2026-11-14）。
+     *
+     * <p>给测地距离矩阵用：它只需要矩阵节点位置上的最终 T，不需要把整张场铺完。
+     * 若某个目标不可达，它会一直留在未冻结状态，于是队列自然跑空、该目标保持 ∞ ——
+     * 与全场求解的结论一致。</p>
+     *
+     * @param targetsX 目标 x 坐标数组
+     * @param targetsZ 目标 z 坐标数组（与 x 等长）
+     */
+    public ArrivalTimeField solveReachingAll(int sourceX, int sourceZ,
+                                             int[] targetsX, int[] targetsZ) {
+        if (targetsX == null || targetsZ == null || targetsX.length != targetsZ.length) {
+            throw new IllegalArgumentException("目标坐标数组不能为 null 且长度必须相等");
+        }
+        TerrainField terrain = metric.terrain();
+        int w = terrain.columns();
+        int d = terrain.rows();
+        int step = terrain.step();
+        int minX = terrain.minX();
+        int minZ = terrain.minZ();
+        boolean[] stopMask = new boolean[w * d];
+        int count = 0;
+        for (int i = 0; i < targetsX.length; i++) {
+            int ix = Math.max(0, Math.min(w - 1, Math.round((targetsX[i] - minX) / (float) step)));
+            int iz = Math.max(0, Math.min(d - 1, Math.round((targetsZ[i] - minZ) / (float) step)));
+            int index = ix + iz * w;
+            if (!stopMask[index]) {
+                stopMask[index] = true;
+                count++;
+            }
+        }
+        return solveInternal(sourceX, sourceZ, stopMask, count);
+    }
+
+    /**
+     * 取（或建立）与源点无关的预计算数组。网格尺寸不变时复用。
+     */
+    private void ensurePrecomputed(int minX, int minZ, int w, int d, int step) {
+        int size = w * d;
+        if (cachedSize == size && cachedCostX != null) return;
+        double[] costX = new double[size];
+        double[] costZ = new double[size];
+        boolean[] passable = new boolean[size];
+        for (int iz = 0; iz < d; iz++) {
+            for (int ix = 0; ix < w; ix++) {
+                int index = ix + iz * w;
+                int bx = minX + ix * step;
+                int bz = minZ + iz * step;
+                passable[index] = metric.isPassable(bx, bz);
+                // 硬不可通行的格子不进队列，代价填 1 占位（不会被用来推进）
+                costX[index] = Math.max(1e-9, step * metric.cost(bx, bz, 1.0, 0.0));
+                costZ[index] = Math.max(1e-9, step * metric.cost(bx, bz, 0.0, 1.0));
+            }
+        }
+        cachedCostX = costX;
+        cachedCostZ = costZ;
+        cachedPassable = passable;
+        cachedSize = size;
+    }
+
+    private ArrivalTimeField solveInternal(int sourceX, int sourceZ,
+                                           boolean[] stopMask, int stopCount) {
         TerrainField terrain = metric.terrain();
         int minX = terrain.minX();
         int minZ = terrain.minZ();
@@ -89,6 +196,12 @@ public final class FastMarchingSolver {
         Arrays.fill(t, UNREACHABLE);
         boolean[] frozen = new boolean[w * d];
 
+        // 预计算（与源点无关，多源共享；网格尺寸变了才重建）
+        ensurePrecomputed(minX, minZ, w, d, step);
+        double[] costX = cachedCostX;
+        double[] costZ = cachedCostZ;
+        boolean[] passable = cachedPassable;
+
         // 2026-11-14 修复（审计 NEW-2）：源点下标原来用向下取整 `(x - minX) / step`，
         // 与障碍场/地形场的 Math.round（就近吸附）口径冲突 —— step=8 时错位最多 7 格，
         // 源点被注入到与它实际位置差一个路宽的格子里。统一为就近吸附 + clamp 兜底。
@@ -100,15 +213,20 @@ public final class FastMarchingSolver {
         PriorityQueue<Entry> queue = new PriorityQueue<>();
         queue.add(new Entry(0.0, sourceIndex));
 
+        int remainingStops = stopCount;
+
         while (!queue.isEmpty()) {
             Entry entry = queue.poll();
             if (frozen[entry.index]) continue;          // 过期条目
             frozen[entry.index] = true;
 
+            // 目标早停：目标格冻结即为最终值，且回溯只会访问更小的 T（都已冻结）。
+            if (stopMask != null && stopMask[entry.index]) {
+                if (--remainingStops <= 0) break;
+            }
+
             int ix = entry.index % w;
             int iz = entry.index / w;
-            int x = minX + ix * step;
-            int z = minZ + iz * step;
 
             for (int dir = 0; dir < 4; dir++) {
                 int nix = ix + DX[dir];
@@ -124,7 +242,8 @@ public final class FastMarchingSolver {
                 // ★ 2026-11-13 修复：这里曾写成 `isPassable(minX + nix, minZ + niz)`，
                 // 漏乘了 step —— 网格下标被当成方块坐标，step=8 时硬障碍检查
                 // 落在离目标 8 倍近的错误位置，等价于硬约束大面积失明。
-                if (!metric.isPassable(minX + nix * step, minZ + niz * step)) continue;
+                // 2026-11-14：改为读预计算表（同口径，只是不再每次重算）。
+                if (!passable[nIndex]) continue;
 
                 // **慢度必须取「正在求解的那一格」的，不能取「已冻结的那一格」的。**
                 //
@@ -148,10 +267,8 @@ public final class FastMarchingSolver {
                 // 数值上用对角各向异性 fast marching（每轴一个慢度的 Godunov 格式），
                 // 是各向异性 Eikonal 里已验证稳定的离散，不需要 Ordered Upwind。
                 // 平地（∇h=0、无障碍）严格退化为原各向同性解。
-                int bx = minX + nix * step;
-                int bz = minZ + niz * step;
-                double hx = Math.max(1e-9, step * metric.cost(bx, bz, 1.0, 0.0));
-                double hz = Math.max(1e-9, step * metric.cost(bx, bz, 0.0, 1.0));
+                double hx = costX[nIndex];
+                double hz = costZ[nIndex];
                 double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz);
                 if (candidate < t[nIndex]) {
                     t[nIndex] = candidate;

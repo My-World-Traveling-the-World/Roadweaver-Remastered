@@ -78,8 +78,23 @@ public final class RoadPipeline {
         int index = 0;
         while (index < remaining.size()) {
             int source = remaining.get(index).from();
-            ArrivalTimeField field = solver.solve(
-                    nodes.get(source).x(), nodes.get(source).z());
+            // 2026-11-14（审计「目标早停」）：本组边只需要「源点到这些终点」的 T 与回溯，
+            // 求解到这些终点格全部冻结即停 —— 冻结值即最终值，回溯又只走更小的 T
+            // （必然已冻结），所以路径与全场求解逐位相同，只是不铺无关格子。
+            int groupStart = index;
+            int groupEnd = index;
+            while (groupEnd < remaining.size() && remaining.get(groupEnd).from() == source) {
+                groupEnd++;
+            }
+            int[] targetXs = new int[groupEnd - groupStart];
+            int[] targetZs = new int[groupEnd - groupStart];
+            for (int k = groupStart; k < groupEnd; k++) {
+                TopologyPlan.Edge edge = remaining.get(k);
+                targetXs[k - groupStart] = nodes.get(edge.to()).x();
+                targetZs[k - groupStart] = nodes.get(edge.to()).z();
+            }
+            ArrivalTimeField field = solver.solveReachingAll(
+                    nodes.get(source).x(), nodes.get(source).z(), targetXs, targetZs);
 
             while (index < remaining.size() && remaining.get(index).from() == source) {
                 TopologyPlan.Edge edge = remaining.get(index++);

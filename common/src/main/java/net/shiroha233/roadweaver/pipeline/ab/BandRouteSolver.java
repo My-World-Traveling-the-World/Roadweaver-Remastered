@@ -45,7 +45,11 @@ public final class BandRouteSolver implements RouteSolver {
             return RouteSolution.unreachable();
         }
 
-        ArrivalTimeField field = new FastMarchingSolver(metric).solve(from.x(), from.z());
+        // 2026-11-14（审计「目标早停」）：单条路线只需源点→终点的 T 与回溯，
+        // 求解到终点格冻结即停。冻结值即最终值，回溯只走更小的 T（必然已冻结），
+        // 所以路径与全场求解逐位相同，只是不铺无关格子。
+        ArrivalTimeField field = new FastMarchingSolver(metric)
+                .solve(from.x(), from.z(), to.x(), to.z());
         if (!field.reachable(to.x(), to.z())) {
             return RouteSolution.unreachable();
         }
