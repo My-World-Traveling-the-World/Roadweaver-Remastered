@@ -270,7 +270,7 @@ for (CompilationUnitTree u : units)
 1. 跑 `DeadCodeGuardTest` —— 删完旧实现后，`dead-code-baseline.txt` 里的
    `[A] 真死代码` 应当增加（原来被旧链路调用、现在没人用了）；
 2. 把新增的死代码搬进 `[A]` 组并逐个删除；
-3. 更新 `docs/METRICS-20261113.md` 快照。
+3. 更新 `docs/STATUS-20261113.md` 快照。
 
 **验证**：`verify.ps1` + `MaintainabilityReportTest`（职责头仍须 100%）。
 

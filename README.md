@@ -2,6 +2,7 @@
 
 > **接手先读**：[`docs/HANDOVER.md`](docs/HANDOVER.md)（怎么跑、改哪里、别踩什么）
 > **文档导航**：[`docs/README.md`](docs/README.md) ——
+> 重构总纲看 [`docs/重制总纲.md`](docs/重制总纲.md)；
 > 当前状态看 [`docs/STATUS-20261113.md`](docs/STATUS-20261113.md)；
 > 改动前必跑 [`verify.ps1`](verify.ps1)。
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/6jk8Pote?style=flat-square&logo=Modrinth&label=Modrinth)](https://modrinth.com/mod/roadweaver)
