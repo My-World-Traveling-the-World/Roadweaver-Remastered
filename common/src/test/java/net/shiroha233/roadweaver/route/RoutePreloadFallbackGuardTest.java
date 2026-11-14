@@ -51,8 +51,11 @@ public final class RoutePreloadFallbackGuardTest {
             "common/src/main/java/net/shiroha233/roadweaver/route/RouteChunkPreloader.java";
     private static final String SERVICE_SRC =
             "common/src/main/java/net/shiroha233/roadweaver/route/RouteBuildService.java";
+    // 2026-11-15：调度的那个 tick 在重构时从 RoadGenerationService 搬到了 RoadTaskExecutor
+    // （RoadGenerationService 里已经连 tick 方法都没有了）。架构事实没变：
+    // drainPending 必须仍在「pauseScheduling() 就 return」之前跑。
     private static final String TICK_SRC =
-            "common/src/main/java/net/shiroha233/roadweaver/generation/RoadGenerationService.java";
+            "common/src/main/java/net/shiroha233/roadweaver/generation/RoadTaskExecutor.java";
 
     /** 用户要求的检测间隔：0.5 秒。 */
     private static final long EXPECTED_INTERVAL_TICKS = 10L;
