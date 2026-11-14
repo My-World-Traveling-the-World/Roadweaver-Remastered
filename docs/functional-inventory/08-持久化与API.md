@@ -120,7 +120,6 @@
 - **长城只读守卫**：0.8.460 起**不用反射**——长城把接口编译进只含 `api` 包的极小 jar，道路侧 `compileOnly` 依赖它，于是**签名一变编译就失败**；没装时类加载风险全关在 `WallRoadAdapter`（`present()` `:17` 用 `Class.forName(...,false,cl)` 探一次并缓存，调方必须先问）。通道枚举 `Ch.` 含 `SURFACE`/`CLEAR`/`BRIDGE`/`BUOY`/`DECO`/`DENSITY`/`CUT`，`CUT`（挖方）是后加的——注释 `:19`–`:25` 记着它是「把墙挖成通高竖缝的真凶」：长城永远高于地表，高度图把墙顶当「地面」，施工期就把整面墙当十几格深的土方削平。
 - **长城预热门**：道路在长城预热完前**不开始初始生成**，让「河流→长城→道路」严格串行（注释 `:12`–`:20` 的实测：某局道路 15:01:01 就开工而长城细采样未完，两者抢核）。全异步非阻塞：探针调长城零超时 `awaitPrewarm(0, NANOSECONDS)`，daemon scheduler 每 `POLL_MILLIS=250` 轮询；`DEFAULT_TIMEOUT_MILLIS=0L`，靠「长城在所有退出路径都开门 + `STALL_WINDOW_MILLIS` 状态不变自动放行 + `ABSOLUTE_CAP_MILLIS`」三重界定。
 - **Streams**：反射读其公开河道计划，两条独立超时——`STREAMS_PREWARM_TIMEOUT_MS=60_000L`（原是无参 `join()`，实测卡 ≥2 分钟）、`STREAMS_QUERY_TIMEOUT_MS=15_000L`（实测卡过 186 秒）；超时后降级为「只用原版河道识别」=等于没装，**路会扭但不卡死不崩**。**反向桥** [RoadWeaverPathFeature.java](roadweaver/common/src/main/java/dev/streamsreflowing/compat/roadweaver/RoadWeaverPathFeature.java)（16 行）是**故意写进 Streams 包名**的 `PathFeature` 子类，让道路顶层施工 feature 不被 Streams 的通用植被否决。
-- **Mixin 接口（`roadweaver$` 前缀）**：`RoadBeardifierAccess` 挂区块道路密度计划到原版 Beardifier；另两个取结构模板/palette，供结构避让与路边结构预计算。
 
 - **Twilight —— 未找到**：`grep -rni "twilight"` 在 `common/src`、`fabric/src`、`api/src` 下**零命中**。`compat/` 只有长城 + Streams 两个外部 mod 桥，**没有 Twilight Forest（暮色森林）相关代码**。
 
@@ -146,6 +145,6 @@
 |---|---|
 | **`RoadData` 9 个 Codec 键名与顺序**（`:38`–`:50`），尤其 **`placements`（≠ 字段名 `roadSegmentList`）**、`materials`、`positions` 三个 **required** 键 | required 键改名/删除 → 每条 road 解码失败 → **全部被隔离**，玩家的路一夜消失 |
 | **`RoadSpan.type` 用 `SpanType::valueOf`（严格）+ `SpanType` 8 个常量名**（`RoadSpan:16`–`:18`、`SpanType:6`–`:20`） | 删/改任一枚举名 → 含该 span 的路解码抛异常 → 整条路被隔离 |
-| **三个 schema 字面量 `roadweaver.roads`/`.index`/`.chunk` 与 `version=2`**（`RoadChunkStore:52`、`:56`–`:58`） | `hasCurrentRootSchema` 判假 → 全量元数据重写；同时改 `ChunkDocument` 结构则 `chunkShardsMatch` 判假 → 反复重写 |
+| **三个 schema 字面量 `roadweaver.roads`/`.index`/`.chunk` 与 `version=2`**（`RoadChunkStore:52`、`:56`–`:58`）；**台账 `constructed-chunks-v3.txt` 的文件名 + `schema=3` + `entry=cx,cz,fp` 行格式**（`RoadConstructionLedger:27`–`:28`、`:66`–`:73`） | 前者判假 → 全量元数据重写；改 `ChunkDocument` 结构则 `chunkShardsMatch` 判假 → 反复重写；台账改 schema 不换文件名 → 整体判 stale → **全图重施工**，行格式错则 `parseInt/parseLong` 抛错进 catch 同样结果 |
 | **`WorldgenFingerprintService` 的 `DOMAIN` + 8 段喂入顺序 + `CURRENT_SCHEMA_VERSION=1`**（`:32`–`:33`、`:121`–`:129`）；**`routes.json` 外层 + `PlayerRoute`/`RoutePoint` 键名**（`PlayerRoute:38`、`RoutePoint:24`）；**存档根 `data/roadweaver/persistence` + `dimensionKey`**（`FileStoragePathResolver:14`/`:24`–`:27`） | 指纹全变 ⇒ 预热与路径缓存全部失效重算（不丢存档但等于让所有玩家重跑一次）；外层键变 → 空表 → 手绘路线丢失（`.bak` 可救）；目录变 → 读不到任何旧数据 |
 
