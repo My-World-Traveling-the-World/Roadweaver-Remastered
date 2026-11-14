@@ -169,13 +169,24 @@ roadweaver       冻结（2c6547a / tag roadweaver-frozen-0.9.098）→ 只修 b
      批 1/2/3 立刻被反向断��推进 IN_PROGRESS。
      注：批 1 与批 2 的新实现同在 pathlogic/profile（剖面 DP 与桥隧联合模式 DP
      是同一套求解器），将来删旧时按 docs/S5-METHOD-MAP.md 的方法粒度区分。 -->
-LEDGER|1|纵断面与坡度|pathlogic/grade|pathlogic/profile|IN_PROGRESS|3543
+LEDGER|1|纵断面与坡度|pathlogic/grade|pathlogic/profile|DONE|3543
 LEDGER|2|桥隧判定|pathlogic/tunnel|pathlogic/profile|IN_PROGRESS|2918
 LEDGER|3|桥体与施工|pathlogic/bridge|pathlogic/construction|IN_PROGRESS|4085
 LEDGER|4|路口与合并|pathlogic/junction|roadnet|TODO|1877
 LEDGER|5|几何后处理|postprocess|geometry|TODO|5615
 LEDGER|6|结构避让|pathlogic/structures|avoidance|TODO|6291
 LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
+<!-- ★ 2026-11-14：批 1 转 DONE。完成依据（三条都能核）：
+     ① 新实现 pathlogic/profile 有独立测试且全绿（ProfileDpSource / ProfileDpSolver /
+        ModeDpSolver / ProfileFallback 共 40+ 个钉子，含 300 组暴力枚举对拍）；
+     ② DP 已成为默认（ProfileSolverMode 默认 DP），且 **DP 不可行也走新回落解
+        ProfileFallback**，不再跑旧 15 道 pass —— 旧 pass 只剩两条入口：
+        -Droadweaver.profileSolver=legacy、玩家关掉坡度限制；
+     ③ pathlogic/grade 的 6 个文件全部带标记：3 个 REPLACE_BY_DP 打「待删（批1）」，
+        3 个 KEEP_INPUT（RoadConstructionSafety / UnknownEndpointHeightRegistry /
+        SurfaceGradeLimits）写明「不属于待删范围、继续存在」。
+     注：批 1 的旧实现包**不会整个消失**（含 KEEP_INPUT 的输入契约），
+     所以"删空该包"不是批 1 的完成条件，S7 第 3 级删除时按文件粒度区分。 -->
 <!-- LEDGER:END -->
 
 字段：`批号|域|旧实现包(相对 net.shiroha233.roadweaver)|新实现包|状态|旧代码行数`

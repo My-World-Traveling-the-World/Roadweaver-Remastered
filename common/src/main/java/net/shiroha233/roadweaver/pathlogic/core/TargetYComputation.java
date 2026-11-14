@@ -598,6 +598,32 @@ public final class TargetYComputation {
      * @param gradeLimits 本趟规划的施工上限快照（挖/填/覆土同源）
      */
     /**
+     * 已钉住的站数（{@code pin} 用 {@code -1} 表示「不钉」）。
+     *
+     * <p>注意它与 {@link #countDeckFloors(int[])} 的哨兵值<b>不同</b>：
+     * 两个数组语义不一样，混用一个统计函数会把日志写错 —— 而说谎的日志
+     * 比没有日志更糟（本项目已因「静默降级 + 日志不实」吃过多次亏）。</p>
+     */
+    private static int countPinned(int[] pin) {
+        if (pin == null) return 0;
+        int c = 0;
+        for (int v : pin) {
+            if (v >= 0) c++;
+        }
+        return c;
+    }
+
+    /** 已给定桥面下界的站数（{@code deckFloor} 用 {@link Integer#MIN_VALUE} 表示「无」）。 */
+    private static int countDeckFloors(int[] deckFloor) {
+        if (deckFloor == null) return 0;
+        int c = 0;
+        for (int v : deckFloor) {
+            if (v != Integer.MIN_VALUE) c++;
+        }
+        return c;
+    }
+
+    /**
      * 尝试用全局 DP 求解剖面。
      *
      * <p><b>2026-11-14（缺陷 C 第二步）</b>：返回值从 {@code int[]} 改成
@@ -676,16 +702,28 @@ public final class TargetYComputation {
             var solved = ProfileDpSource.solve(terrainY, isCrossing,
                     maxCut, maxFill, maxStep, perTwo, constraints);
             if (solved.isEmpty()) {
-                // 2026-11-14（缺陷 C 第一步）：不可行时不再回落旧 15 道 pass，
-                // 改用无状态的 ProfileFallback —— 它在硬约束（窗口/一阶二阶坡度/
-                // 站钉/桥面下界/隧道覆土）下把地形投影进可行域。
-                // 这样「去双跑」的第二半（删旧 pass）才有退路。
-                LOGGER.warn("RoadWeaver profile solver=dp infeasible, running legacy passes"
-                                + " stations={} connection={}->{}",
-                        n,
+                // 2026-11-14（缺陷 C 收尾）：DP 不可行 ⇒ 用无状态回落解，
+                // **不再跑旧 15 道 pass**。
+                //
+                // 这是「旧 pass 退出生产路径」的关键一步：改动前 DP 不可行会
+                // 返回 empty，调用方就去跑旧 pass；现在它返回 ProfileFallback 的解，
+                // 调用方直接采用。于是 empty 只剩两种「DP 不适用」的情形：
+                //   · profileSolver 不是 DP（显式 -Droadweaver.profileSolver=legacy）
+                //   · 玩家关掉了坡度限制（旧 pass 也不夹坡，DP 的硬约束会打架）
+                // 那两种情形本来就该走旧链路，语义没问题。
+                //
+                // 回落解取的是同一套硬约束（窗口 / 一阶二阶坡度 / 站钉 / 桥面下界 /
+                // 隧道覆土），所以结果一定合规 —— 它只是不做全局最优，不像旧 pass
+                // 那样有一堆互相打架的事后修正。
+                LOGGER.warn("RoadWeaver profile solver=dp infeasible, using constraint fallback"
+                                + " stations={} cut={} fill={} perTwo={} pins={} decks={}"
+                                + " connection={}->{}",
+                        n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
                         connection == null ? "?" : connection.from(),
                         connection == null ? "?" : connection.to());
-                return java.util.Optional.empty();
+                return java.util.Optional.of(ProfileFallback.terrainFollowing(
+                        terrainY, maxCut, maxFill, maxStep, perTwo,
+                        pin, tunnelMask, minCover, deckFloor));
             }
             LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
                     n, perTwo, maxStep, maxCut, maxFill, minCover,

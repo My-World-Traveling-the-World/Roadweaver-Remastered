@@ -1,4 +1,9 @@
-/* 文件职责：纵断面的「配置上限快照」—— 从 RoadGradePlanner 抽出的顶层类型（S7 第 3 级前置 A）。 */
+/* 文件职责：纵断面的「配置上限快照」—— 从 RoadGradePlanner 抽出的顶层类型（S7 第 3 级前置 A）。  *
+ * ── 批 1（纵断面与坡度）范围声明 ─────────────────────────────
+ * 本文件**不属于** 待删（批1）范围：配置上限快照（S7 第 3 级前置 A 抽出）。批 1 的保留输入，**不删**。
+ * 它给新内核提供输入（S5 台账分类 KEEP_INPUT），旧算法删完之后它继续存在。
+ */
+
 package net.shiroha233.roadweaver.pathlogic.grade;
 
 import net.shiroha233.roadweaver.config.ConfigService;
