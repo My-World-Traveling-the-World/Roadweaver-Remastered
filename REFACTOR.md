@@ -180,8 +180,12 @@ LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
      ① 新实现 pathlogic/profile 有独立测试且全绿（ProfileDpSource / ProfileDpSolver /
         ModeDpSolver / ProfileFallback 共 40+ 个钉子，含 300 组暴力枚举对拍）；
      ② DP 已成为默认（ProfileSolverMode 默认 DP），且 **DP 不可行也走新回落解
-        ProfileFallback**，不再跑旧 15 道 pass —— 旧 pass 只剩两条入口：
-        -Droadweaver.profileSolver=legacy、玩家关掉坡度限制；
+        ProfileFallback**，不再跑旧 15 道 pass 的**事后修补编排块** ——
+        该编排块只剩两条入口：-Droadweaver.profileSolver=legacy、玩家关掉坡度限制。
+        ★ 2026-11-15 边界更正：这句话**只适用于该编排块**，不代表旧 RoadGradePlanner
+        已退出全部生产链。stabilizeSurfaceProfile 仍在 DP 前无条件执行，
+        RawPathSearch、AccuratePathHeightResolver、AccurateGradeRepairPlanner
+        也仍有旧坡度工具调用；因此批 1 不能按「零旧调用」物理删空；
      ③ pathlogic/grade 的 6 个文件全部带标记：3 个 REPLACE_BY_DP 打「待删（批1）」，
         3 个 KEEP_INPUT（RoadConstructionSafety / UnknownEndpointHeightRegistry /
         SurfaceGradeLimits）写明「不属于待删范围、继续存在」。
