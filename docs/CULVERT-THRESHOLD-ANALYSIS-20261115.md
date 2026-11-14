@@ -1,8 +1,20 @@
-# 涵洞阈值「口径冲突」的精确分析（2026-11-15）
+# 涵洞阈值「口径冲突」的精确分析（2026-11-15，**已修正一次**）
 
-> **一句话结论**：这不是「两个阈值不一致导致某些路不处理」，
-> 而是「**施工期的站数上限检查从未生效**」，而它**实际无害**。
-> 三个可选方案在第三节，我倾向 B（诚实标注为死常量）或 A（对齐到 6）。
+> **一句话结论（修正后）**：这不是「某些路不处理」，也不是「无害的死常量」。
+> 真实后果是 **规划期判成涵洞、施工期却架桥** —— `CULVERT_MAX_SEGMENTS = 2` 在
+> `promoteRuntimeBridges` 里**真的生效**，它会让 3..6 站的窄浅水被提升成运行时桥。
+> **修法应选 A（把施工期上限对齐到 6）**。
+
+---
+
+## 零、我上一版写错了什么（必读）
+
+本文件的第一版结论是「施工期站数上限从未生效，实际无害」，并推荐「B 标注为死常量」。
+**那是错的**，原因是我只查了 `prepareCulvertDeck`（它确实只传单站），
+**漏了同一个判据还有第二个调用点 `promoteRuntimeBridges`，那里传的是完整站段**。
+
+这件事本身就是一条教训：**同一个判据（`isShallowCulvertCrossing`）有多个调用点，
+只核一个就下结论会得出相反答案。** 修正过程见第六节。
 
 ---
 
@@ -14,95 +26,129 @@
 > ⇒ 3..6 站窄浅水会落 `CULVERT` 跨度、甲板写进 `targetY`，
 > 但 `isShallowCulvertCrossing(start,end)` 只查单站不认（高度已在 `targetY`，实际不塌）。
 
-这个描述是**准确的**，但后半句「只查单站」容易读成「所以 3..6 站没被处理」。
-
-**实际不是**。下面把链路拆开。
-
----
-
-## 二、链路拆解（每个环节都读过源码）
-
-### 1. 规划期：`CulvertPlanner.cross`
-
-- 触发很窄：只在 `FinalRoadWaterValidator` 报 `ordinary_construction_in_water` 时调用。
-- 量的是**整段连续水**（不因中间深站截断）。
-- 逐站 `isCulvertStation`（本站有水、水深 ≤ `culvertMaxWaterDepth=2`、原路面低于水面），
-  **任一不合格整段放弃**。
-- 段长上限：`culvertMaxStations = 6`（`RoadAppearanceConfig:30`，夹 1..16）。
-- 产物：`deck = max(各站水面+2, 原路面)` 写进 `targetY`；两侧 `ramp` 每站 1 格回原剖面。
-
-### 2. 施工期：`SegmentPaver.planGrade` → `prepareCulvertDeck`
-
-```
-positions = seg.positions()          // ★ 一个「站」的横截面方块列表
-heights   = batchInterpolate(positions, segmentIndex, centers, targetY)
-RoadConstructionSafety.prepareCulvertDeck(world, positions, heights, segmentIndex, centers);
-```
-
-`prepareCulvertDeck` 做两件事：
-
-1. **门禁**：`isShallowCulvertCrossing(world, centers, segmentIndex, segmentIndex)`
-   —— 注意两个实参**都是 `segmentIndex`**，即 `start == end`，查的是**单站**。
-2. **压平**：`deck = max(该站各列 profile[i], 水面+2)`，然后
-   `for (i) profile[i] = deck` —— 把**这个站的横截面**压平到 deck。
-
-（`positions` 是横截面，所以 `profile[i] = deck` 是**横向压平**，不是纵向把整条路压平。
-两者语义完全不同，这一点容易误读。）
-
-### 3. 于是 `CULVERT_MAX_SEGMENTS = 2` 从未生效
-
-`isShallowCulvertCrossing` 的设计**是支持多站的**（签名有 `start, end`，内部有
-`if (end - start + 1 > CULVERT_MAX_SEGMENTS) return false;`）。
-
-但因为 `prepareCulvertDeck` 永远传 `(segmentIndex, segmentIndex)`：
-
-```
-end - start + 1 = 1
-1 > 2 ?          → false         ⇒ 这一步恒通过
-```
-
-⇒ **这个上限检查是死代码**。全仓 `CULVERT_MAX_SEGMENTS` 只有两处引用
-（`:97` 定义、`:787` 与 `:810` 的判断），而 `:810` 那条走的是另一个函数
-（`isCulvertGeometry`，由 `isShallowCulvertCrossing` 间接调用），同样拿不到多站范围。
-
-### 4. 所以 3..6 站的窄浅水**会被逐站处理**，不是被忽略
-
-每一站各自跑一遍 `prepareCulvertDeck`，各自的横截面被压平到
-`max(该站 profile, 该站水面+2)`。
-
-由于 `profile` 是从 `targetY` 插值来的、而规划期已经把统一的 `deck` 写进了 `targetY`，
-所以施工期算出的 deck 与规划期一致 ⇒ **不会出现台阶或塌陷**。
+描述里的「只查单站」指的是 `prepareCulvertDeck` 那条路径 —— **这部分是准确的**。
+但它遗漏了另一条路径，而那一条才是真正产生后果的地方。
 
 ---
 
-## 三、三个方案
+## 二、两条独立路径（这是关键）
 
-| 方案 | 做法 | 代价 | 我的看法 |
+`isShallowCulvertCrossing(world, centers, start, end)` 有两个调用点，参数完全不同：
+
+### 路径 1：`prepareCulvertDeck`（施工铺路，传单站）
+
+```
+SegmentPaver.planGrade
+  → prepareCulvertDeck(world, positions, heights, segmentIndex, centers)
+      → isShallowCulvertCrossing(world, centers, segmentIndex, segmentIndex)   // start == end
+```
+
+`end - start + 1 = 1`，`1 > 2` 恒 false ⇒ 这一步的上限检查**确实不生效**。
+（这一条我第一版看对了。）
+
+### 路径 2：`promoteRuntimeBridges`（运行期桥提升，传完整站段）★
+
+`RoadConstructionSafety:452-465`：
+
+```java
+if (!inWindow(processingChunk, centers.get(i)) || !hasWatercourseAcrossRoad(world, centers, i)) { i++; continue; }
+int start = i;
+while (i + 1 < centers.size() && inWindow(...) && hasWatercourseAcrossRoad(world, centers, i + 1)) i++;
+int end = i;                                  // ← 整段连续水的范围
+if (isShallowCulvertCrossing(world, centers, start, end)) {
+    // 窄浅涵洞：保持开敞、不架桥、不填河床
+    i++; continue;
+}
+int waterY = waterSurfaceY(...);
+RuntimeRange stable = expandRuntimeBridgeRange(centers, start, end, waterY);
+detectedNow.add(stable);                       // ← 提升为桥
+```
+
+**这里 `end - start + 1` 就是整段水的站数** ⇒ `3..6 > 2` ⇒ 返回 `false`
+⇒ 走不到「保持开敞」分支 ⇒ **被提升为运行时桥**。
+
+**所以 `CULVERT_MAX_SEGMENTS = 2` 不是死常量，它在这里真的决定了「架桥还是做涵洞」。**
+
+---
+
+## 三、真实后果链
+
+```
+规划期：3..6 站窄浅水
+  → CulvertPlanner.cross 按 culvertMaxStations=6 判定为涵洞
+  → deck = max(各站水面+2, 原路面) 写进 targetY
+  → spans 里记 SpanType.CULVERT
+
+施工期（每区块）：
+  → PathFeature:411  promoteRuntimeBridges(...)
+      → 该段 3..6 站 > CULVERT_MAX_SEGMENTS(2)
+      → isShallowCulvertCrossing = false
+      → isBridge[i] = true                    ← ★ 提升为桥
+
+  → PathFeature:510  if (bridgeEnabled && isBridge[i]) → 桥体建造分支
+  → 永远进不到 PathFeature:528 的 else 分支
+  → 因此 prepareCulvertDeck 根本不会被调用
+```
+
+**结论：3..6 站的窄浅水最终会架桥，而不是按规划意图做涵洞。**
+
+另外 `preserveCrossingGrade` 也帮不上：它由 `buildPreserveCrossingGradeMask` 从
+`road.spans()` 里只取 `SpanType.BRIDGE` / `ROAD_CROSSING` 生成
+（`PathFeature:685-694`），**CULVERT 不在其中**，运行期提升的桥也不在 spans 里。
+
+**不会塌、不会穿村**（桥本身是更保守的做法），但代价是：
+**多建了一座本不该建的桥** —— 材料浪费、视觉上不必要，而且规划期的甲板高度计算白做。
+
+---
+
+## 四、三个方案（修正后）
+
+| 方案 | 做法 | 代价 | 结论 |
 |---|---|---|---|
-| **A 对齐到 6** | `CULVERT_MAX_SEGMENTS` 改 6，并让 `prepareCulvertDeck` 支持传入整段范围 | 要把 `SegmentPaver` 的逐站调用改成「段级」处理（需新建一次段扫描），改动中等；而且**当前无害**，改它不解决任何已知问题 | 可做，但收益是「让常量不再是死的」 |
-| **B 诚实标注为死常量** | 不动行为，在 `CULVERT_MAX_SEGMENTS` 上加注释说明「因调用方只传单站，本上限从未生效」；并在盘点/STATUS 里登记 | 零风险、零行为变化 | **推荐** —— 与仓库既有的「死键诚实标注」约定一致（见 `BridgeKeys` / `PlanningKeys`） |
-| **C 规划期改 2** | `culvertMaxStations` 6 → 2，与施工期「看起来」一致 | **会减少能力**：3..6 站的窄浅水将不再算涵洞，退化成填方或桥。违反「旧功能不能丢」 | 不推荐 |
+| **A 对齐到 6** ★ | `CULVERT_MAX_SEGMENTS` 2 → 6（或改为读 `culvertMaxStations`）| 改一个常量，1 行；让施工期与规划期同口径，3..6 站恢复成涵洞 | **推荐** —— 这是唯一「既修好冲突又不减少能力」的方案 |
+| **B 标注为死常量** | 不动行为，只加注释 | 我上一版推荐的这个 —— **错了**，它不是死常量 | **撤回** |
+| **C 规划期改 2** | `culvertMaxStations` 6 → 2 | 3..6 站规划期就标 BRIDGE，口径也一致 | 能修一致，但**减少了涵洞适用面**，违反「旧功能不能丢」 |
 
-**为什么我倾向 B 而不是 A**：这个上限从来没生效过，也就意味着**从来没有路因为「超过 2 站」
-而不被处理**。改 A 是「让一个不影响行为的检查开始影响行为」——反而可能引入新问题
-（3..6 站突然开始被拒绝）。除非有真机数据证明「3..6 站涵洞会出问题」，否则不该动。
+**为什么 A 最优**：`culvertMaxStations` 的默认值就是 6，说明旧版
+**本来就打算支持到 6 站涵洞**；施工期那个 2 更像是早期只考虑了单站/双站时的遗留。
+把施工期上限对齐到规划的 6，等于让施工跟上规划的设计意图。
+
+**A 的一个前置**：`CULVERT_MAX_SEGMENTS` 改成 6 后，`promoteRuntimeBridges` 里
+1..6 站的窄浅水都不会再架桥。要确认这是期望行为 —— 从规划期 `culvertMaxStations=6`
+的语义看，是的。
 
 ---
 
-## 四、这段分析本身的局限
+## 五、局限（如实标注）
 
-1. **只读了代码，没有真机数据**。3..6 站涵洞在游戏里的实际观感（水道是否通畅、
-   两侧 ramp 是否自然）**未经真机验证**，这一条必须如实标注。
+1. **只读代码，没有真机数据**。3..6 站窄浅水目前「架桥」的实际观感、
+   改成涵洞后是否真的更自然，**都需要真机验证**。
 2. `hasWatercourseAcrossRoad` / `waterOverhead` / `waterDepth` 都**读世界**，
-   它们的判据无法离线复现，所以「每站各自判定」的实际结果可能与规划期不一致
-   （规划期用的是采样数据，施工期读的是当前方块）。
-3. 本文只覆盖「站数上限」这一条口径；水深（≤2）与净空（≤6）两条**没有做同样的追踪**。
+   规划期用采样数据、施工期读当前方块，两者结果可能不同 ——
+   即「规划判涵洞、施工判不是」还可能由采样差异引起，不只是站数上限。
+3. 本文只覆盖「站数上限」这一条；**水深（≤2）与净空（≤6）两条没有做同样的多调用点排查**。
+   ⚠️ 按第一节的教训，**这两条也应该先查全部调用点再下结论**。
 
 ---
 
-## 五、给决策用的最短版本
+## 六、修正过程（为什么会有第一版那个错误）
 
-- **不改也安全**：现状无害，`CULVERT_MAX_SEGMENTS` 是死常量而已。
-- **想干净**：方案 B，加注释 + 登记，零风险。
-- **别选 C**：会砍掉 3..6 站涵洞这个能力。
-- **A 只在有真机证据说「多站涵洞有问题」时才做。**
+第一版的分析路径：
+
+1. 读到盘点说「施工期判据 ≤2 站」；
+2. grep `CULVERT_MAX_SEGMENTS` → 只看到 `:97` 定义与 `:787`/`:810` 两处判断；
+3. 看 `prepareCulvertDeck` 的调用 → 传 `(segmentIndex, segmentIndex)` → 得出「上限恒不生效」；
+4. **没有再搜 `isShallowCulvertCrossing` 的全部调用点**就下了结论。
+
+漏掉的是：`grep CULVERT_MAX_SEGMENTS` 只能找到**常量**的引用，
+而 `isShallowCulvertCrossing` 是**函数**，它的调用点不会出现在常量的 grep 结果里。
+**正确做法是搜函数名**：
+
+```
+grep -rn "isShallowCulvertCrossing(" --include=*.java
+```
+
+⇒ 会同时看到 `prepareCulvertDeck`（单站）与 `promoteRuntimeBridges`（整段）两个调用点。
+
+**教训（可复用）**：追一条判据的影响面时，**要 grep 判据函数名，不是常量名**。
+常量只出现在判据内部，调用点全在函数外面。
