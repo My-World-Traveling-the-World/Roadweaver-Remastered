@@ -184,6 +184,67 @@ ProfileDpSource:64          javadoc：下界由 bridgeDeckSurfaceY 提供
 
 ---
 
+## 二之六、批 7（验证与收尾）—— 已核；并彻底澄清「病根 B」的准确状态
+
+批 7 没有专属的盘点文件（它的能力散在各域里），所以改用**目录级对比**。
+
+### 1. `pathlogic/validation` —— 4/4 继承完好
+
+| 类 | oracle | next | 判读 |
+|---|---|---|---|
+| `RoadDataValidator` | 544 行 | 549 行 | ✅ |
+| `FinalRoadStructureValidator` | 455 行 | 462 行 | ✅ |
+| `FinalRoadWaterValidator` | 371 行 | 373 行 | ✅ |
+| `RoadPlanConsistencyService` | 216 行 | 220 行 | ✅ |
+
+行数微增来自中文注释，**类一个不少**。
+
+### 2. `metric` —— 8 类是 **next 新增**，oracle 根本没有这个包
+
+| 类 | 行数 |
+|---|---|
+| `FastMarchingSolver` | 338 |
+| `ArrivalTimeField` | 203 |
+| `ObstaclePotential` | 187 |
+| `GridTerrainField` | 162 |
+| `FinslerMetric` | 133 |
+| `TerrainField` | 105 |
+| `ObstacleField` | 54 |
+| `package-info` | 33 |
+
+⇒ **这不是「旧功能迁移」，是新内核的建设成果**。核对「旧功能没丢」时不该把它们算进来。
+
+### 3. ★ 彻底澄清「病根 B：指标不进决策」的准确状态
+
+之前多处记录写「`QualityGate` **零调用**」，**这句话从一开始就搞错了对象**。实测：
+
+- **`QualityGate` 是 next 新写的**（引入提交 `8f4ccfc`「端到端流水线 + 质量门 —— 新架构五层全部就绪」），
+  **oracle 里完全没有这个类**（`grep -rl QualityGate roadweaver/` 零命中）。
+  它的 javadoc 自己写着存在的理由：「旧实现 `RoadQualityMetrics` 的 javadoc 已经写着
+  「every number on it is a regression guard」，但那些数字**只打日志、从不参与决策**」。
+  **它不是「零调用」**——`PipelinePlanner:183` 每轮拓扑规划都调 `evaluateTopology`，
+  只是 `report.passed()` 只决定打 `INFO` 还是 `WARN ... (REPORT-ONLY, still adopted)`。
+
+- **真正「只打日志」的是旧指标 `RoadQualityMetrics`**（oracle 461 行 / next 462 行），
+  它仍活着：`Road.java:640` 调 `RoadQualityMetrics.record(rd, rawStart, rawEnd)`
+  —— **oracle 与 next 各 1 处调用**，继承完好、不是死代码。
+
+⇒ **病根 B 的准确状态（三层）**：
+  1. ✅ **「能拦」的机制已经建好了**（`QualityGate`，next 新增且已接线）；
+  2. ⏳ **但阈值未标定所以不敢拦**（`Thresholds.lenient()` = 绕行比 3.0、允许孤立；
+     `defaults()` 的 1.5 会把整张路网判死）—— **必须真机数据标定**；
+  3. 🔴 **旧的 `RoadQualityMetrics` 仍在只打日志** —— 它的数字至今没接进任何决策。
+
+  **所以「病根 B 已解决」和「病根 B 零调用」两种说法都不对。**
+  准确说法是：**机制已建、阈值待标定、旧指标仍在空转**。
+
+> **教训**：同一个概念在重构里会「换对象」——
+> 旧的 `RoadQualityMetrics`（只打日志）→ 新的 `QualityGate`（能拦但不敢拦）。
+> 记录时**必须写清楚是哪一个类**，否则「零调用」这种结论会挂在错误的类上，
+> 一传十十传百，最后谁也不知道到底在说谁。
+
+---
+
 ## 三、还没核的批次
 
 | 批 | 对应盘点 | 状态 |
@@ -193,7 +254,7 @@ ProfileDpSource:64          javadoc：下界由 bridgeDeckSurfaceY 提供
 | 3 桥体与施工 | `06-施工与装饰.md` | ✅ **已核 62/62**（见二之四）|
 | 5 几何后处理 | `05-纵断面与后处理.md` | ✅ **已核 127/127**（见二之五）|
 | 6 结构避让 | `02` 的一~四、六、七节 | ✅ **已核 68/68**（见二之二）|
-| 7 验证与收尾 | 散在 `01`/`07`/`08` | **未核** |
+| 7 验证与收尾 | 无专属盘点 → 用目录级对比 | ✅ **已核**（见二之六）；`validation` 4/4 + `metric` 8 类为新增 |
 
 **下一步**：按 `02` 的一~四、六节把批 6 核完，然后 `03`（批 2）、`06`（批 3）、`05`（批 5）。
 
