@@ -97,7 +97,10 @@ pathlogic -> config                      90
 pathlogic -> core                        220
 pathlogic -> decoration                  23
 pathlogic -> generation                  84
-pathlogic -> pathfinding                 89
+# 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次
+#   pathfinding.terrain.PathTerrainField —— 禁地面掩码需要「水面」这一独立证据源，
+#   不再复用旧判定的 isCrossing（解除循环论证）。
+pathlogic -> pathfinding                 91
 # 2026-11-14 批3：RoadConstructionVolumePlanner 用 RoadShardStorage.computeFingerprint 接 BuildFrame。
 pathlogic -> persistence                 27
 pathlogic -> planning                    68

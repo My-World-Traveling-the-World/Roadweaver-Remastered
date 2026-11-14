@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,25 +28,30 @@ import org.slf4j.LoggerFactory;
  * 河宽分布、没有村庄保护区，也没有「已有公路必须桥」这类历史约束。
  * 所以先让它跑一局，拿 {@code [SPAN-AB]} 日志看召回率，达标后再切 {@code on}。</p>
  *
- * <h2>★ 当前观测有一个循环论证（2026-11-15 独立复核发现，必须知道）</h2>
+ * <h2>★ 循环论证已解除（2026-11-15，同日发现并修复）</h2>
  *
- * <p>{@code groundBanned} 目前只有一个来源：{@code isCrossing}。而 {@code isCrossing}
- * 是调用方从<b>旧判定产出的 spans</b> 里推出来的（{@code TargetYComputation} 只把
- * {@code SpanType.BRIDGE} / {@code ROAD_CROSSING} 的站标成 true）。</p>
- *
+ * <p><b>曾经的问题：</b>{@code groundBanned} 直接复制 {@code isCrossing}，而
+ * {@code isCrossing} 是调用方从<b>旧判定产出的 spans</b> 里推出来的。于是：</p>
  * <pre>
  *   旧 spans ──► isCrossing ──► groundBanned ──► DP 只能在这些站选桥/隧道
  *        └────────────────────────────────────► 再拿 DP 结果与旧 spans 比对
  * </pre>
+ * <p>DP 被告知「旧判定认为这里是桥的地方不能铺地面」，再统计它「覆盖了多少旧判定的桥」
+ * —— 数字必然偏高，不是独立验证。</p>
  *
- * <p>也就是说：DP 被告知「旧判定认为这里是桥的地方不能铺地面」，
- * 然后我们再统计「DP 判出的桥覆盖了多少旧判定的桥」——
- * 这个数字<b>必然偏高</b>，它不是独立验证。</p>
+ * <p><b>现在的做法：</b>禁地面掩码改由 {@link GroundBanSources} 从
+ * <b>与旧判定无关的物理事实</b>构造 —— 水面（地形场水深）与保护区（结构占地快照）。
+ * {@code isCrossing} 降级为<b>对照量</b>，只用于日志里比较「独立来源与旧判定差多少」，
+ * 不再参与掩码。</p>
  *
- * <p><b>所以：{@code [SPAN-AB]} 里的「差异站」只能当作「两套代价模型在同一组
- * 禁地面约束下的分歧量」，不能当作召回率证据。</b>
- * 要让召回率有意义，必须先给 {@code groundBanned} 接上不依赖旧判定的来源
- * （水面高度图 / 保护区快照 / 已有公路索引），这是批 2 的下一项。</p>
+ * <p><b>仍需注意两点：</b></p>
+ * <ul>
+ *   <li>「已有公路」这条来源还没接（现有 API 语义是防树、且被配置门控），属批 4；</li>
+ *   <li>保护区快照若不在作用域内会静默返回 false，日志用
+ *       {@code snapshot=ok/absent} 如实区分「没有结构」与「没有证据」。</li>
+ * </ul>
+ * <p>即便解除了循环，{@code [SPAN-AB]} 也只是**同参对照**；
+ * 要让 DP 真正接管桥隧决策，还要真机证明「必桥不漏、多判可解释」。</p>
  *
  * <h2>开关</h2>
  * <pre>
@@ -59,10 +65,10 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>已知的输入简化（第一版有意为之，会低估桥隧需求）</h2>
  * <ul>
- *   <li>{@code groundBanned} 目前只取「水面」一条（{@code isCrossing}）——
- *       <b>而 isCrossing 又来自旧判定的 spans</b>，所以本观测存在循环论证（见上面那一节）。
- *       保护区 / 遗产地 / 已有公路这几类「地面不可用」还没接进来。
- *       日志会同时打 {@code banned=N}，方便判断覆盖了多少站。</li>
+ *   <li>{@code groundBanned} 现由 {@link GroundBanSources} 从「水面 + 保护区」两条
+ *       独立物理事实构造（见上面那一节）。<b>「已有公路」仍未接</b> ——
+ *       现有 API 语义是防树且受配置门控，属批 4 范围。日志会分别打
+ *       {@code water=} / {@code structure=} / {@code snapshot=}，判断各来源贡献。</li>
  *   <li>桥高 / 隧深 / 单价用 {@link ModeDpSolver.Settings#defaults()}，
  *       没有从玩家配置翻译 —— 单价是产品决策，等召回率达标后再统一。</li>
  * </ul>
@@ -115,15 +121,20 @@ public final class ModeDpBridge {
     /**
      * 观测：跑一次联合 DP，把与旧判定的差异记进日志。**不修改任何入参**。
      *
-     * @param terrainY    每站地面高度
-     * @param isCrossing  每站是否跨水（本版唯一的「地面不可用」来源）
-     * @param gradeLimits 施工窗口快照（挖/填/覆土与旧链路同源）
-     * @param cfg         生成配置（只用来取坡度口径，保证与 DP 剖面同参）
-     * @param centers     每站的方块坐标（转 {@link RoadSpan} 用）
-     * @param legacySpans 旧判定产出的跨度（基线）
-     * @param tag         连接标识，进日志便于对账
+     * @param terrainY           每站地面高度
+     * @param terrain            地形场 —— 「水面」这条禁地面来源的<b>独立</b>证据
+     * @param isCrossing         旧判定判出的跨水站；<b>只作对照</b>，不再参与禁地面掩码
+     * @param bridgeMinWaterDepth 水深达到多少格才算「必须架桥」
+     * @param gradeLimits        施工窗口快照（挖/填/覆土与旧链路同源）
+     * @param cfg                生成配置（只用来取坡度口径，保证与 DP 剖面同参）
+     * @param centers            每站的方块坐标（转 {@link RoadSpan} 用）
+     * @param legacySpans        旧判定产出的跨度（基线）
+     * @param tag                连接标识，进日志便于对账
      */
-    public static void observe(int[] terrainY, boolean[] isCrossing,
+    public static void observe(int[] terrainY,
+                               PathTerrainField terrain,
+                               boolean[] isCrossing,
+                               int bridgeMinWaterDepth,
                                SurfaceGradeLimits gradeLimits,
                                RoadGenerationConfig cfg,
                                List<BlockPos> centers,
@@ -133,14 +144,20 @@ public final class ModeDpBridge {
         if (terrainY == null || terrainY.length == 0) return;
         try {
             int n = terrainY.length;
-            boolean[] groundBanned = new boolean[n];
-            int banned = 0;
+
+            // ★ 2026-11-15：禁地面掩码改由「水面 + 保护区」两条与旧判定无关的
+            //   物理事实构造，不再复制 isCrossing。这正是解除循环论证的关键 ——
+            //   原来 DP 被告知「旧判定说这里是桥的地方不能铺地面」，
+            //   再统计它「判出的桥覆盖了多少旧判定的桥」，结论必然偏高。
+            GroundBanSources.Result bans = GroundBanSources.collect(
+                    terrain, centers, n, Math.max(1, bridgeMinWaterDepth));
+            boolean[] groundBanned = bans.banned();
+            int banned = bans.bannedStations();
+            // 旧判定的跨水站数：只作对照，用来量化「独立来源与旧判定差多少」。
+            int legacyCrossing = 0;
             if (isCrossing != null) {
                 for (int i = 0; i < Math.min(n, isCrossing.length); i++) {
-                    if (isCrossing[i]) {
-                        groundBanned[i] = true;
-                        banned++;
-                    }
+                    if (isCrossing[i]) legacyCrossing++;
                 }
             }
 
@@ -150,8 +167,11 @@ public final class ModeDpBridge {
 
             var solved = ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
-                LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={} legacy={}",
-                        tag, n, banned, describe(legacySpans));
+                LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
+                                + "(water={} structure={} snapshot={}) legacyCrossing={} legacy={}",
+                        tag, n, banned, bans.waterStations(), bans.structureStations(),
+                        bans.structureSnapshotAvailable() ? "ok" : "absent",
+                        legacyCrossing, describe(legacySpans));
                 return;
             }
             var solution = solved.get();
@@ -161,11 +181,15 @@ public final class ModeDpBridge {
             Counts dp = count(dpSpans, centers);
             int differingStations = differingStations(solution.modes(), legacySpans, centers, n);
 
-            LOGGER.info("[SPAN-AB] tag={} stations={} banned={} perTwo={} "
+            LOGGER.info("[SPAN-AB] tag={} stations={} banned={}"
+                            + "(water={} structure={} snapshot={}) legacyCrossing={} perTwo={} "
                             + "legacy[bridge={}站/{}座 tunnel={}站/{}条] "
                             + "dp[bridge={}站/{}座 tunnel={}站/{}条] "
                             + "差异站={} dpCost={}",
-                    tag, n, banned, perTwo,
+                    tag, n, banned,
+                    bans.waterStations(), bans.structureStations(),
+                    bans.structureSnapshotAvailable() ? "ok" : "absent",
+                    legacyCrossing, perTwo,
                     lg.bridgeStations, lg.bridgeRuns, lg.tunnelStations, lg.tunnelRuns,
                     dp.bridgeStations, dp.bridgeRuns, dp.tunnelStations, dp.tunnelRuns,
                     differingStations, String.format("%.1f", solution.totalCost()));

@@ -30,6 +30,20 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class StructureAvoidanceCache {
     private StructureAvoidanceCache() {}
 
+    /**
+     * 当前线程是否装有规划快照（2026-11-15 新增）。
+     *
+     * <p><b>为什么需要这个查询：</b>{@code shouldAvoidPlanning} 在快照不存在时
+     * 静默返回 {@code false} —— 与「这个位置确实没有结构」完全同形。
+     * 桥隧观测需要区分这两件事：前者是<b>没有证据</b>，后者是<b>有证据说明没有</b>。
+     * 混为一谈会把「保护区来源没生效」误读成「保护区没有贡献」。</p>
+     *
+     * @return {@code true} 表示本线程处于规划快照作用域内，查询结果可信
+     */
+    public static boolean planningSnapshotPresent() {
+        return ACTIVE_PLANNING_SNAPSHOT.get() != null;
+    }
+
     /** CHUNK_BBOX_CACHE 的 LRU 容量。 */
     static final int CACHE_CAPACITY = 8192;
 

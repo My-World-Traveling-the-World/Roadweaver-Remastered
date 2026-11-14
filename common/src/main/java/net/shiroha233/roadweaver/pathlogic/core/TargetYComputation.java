@@ -596,7 +596,10 @@ public final class TargetYComputation {
         // 为什么先观测：S7 第 2 级的通过标准是「旧判定判出的每座必须的桥，
         // 新解也判了（召回率 100%）」，而这个数字只能在真实存档上量。
         // 开关：-Droadweaver.modeDp=ab（默认）/ off。
-        ModeDpBridge.observe(terrainY, isCrossing, gradeLimits, cfg, centers, spans,
+        // 禁地面来源已改为「水面 + 保护区」两条独立物理事实（见 GroundBanSources），
+        // isCrossing 只作对照 —— 这样 DP 判出的桥才不是「复述旧判定」。
+        ModeDpBridge.observe(terrainY, terrain, isCrossing, bridgeMinWaterDepth,
+                gradeLimits, cfg, centers, spans,
                 connection == null ? "?" : connection.from() + "->" + connection.to());
         // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。
         // 只在地形、不录旧剖面 —— 我们要比的是「同一地形，两种算法各自算出的解」。
