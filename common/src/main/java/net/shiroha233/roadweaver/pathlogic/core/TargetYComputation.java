@@ -76,6 +76,7 @@ import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
 /**
@@ -564,6 +565,28 @@ public final class TargetYComputation {
      *                   <b>不是</b> tunnelMask —— 曾经传错，导致桥面甲板高度被整条覆盖掉
      * @param gradeLimits 本趟规划的施工上限快照（挖/填/覆土同源）
      */
+    /**
+     * DP 不可行时的回落解（2026-11-14，缺陷 C 第一步）。
+     *
+     * <p>把「硬约束」原样交给 {@link ProfileFallback}：施工端窗口（与旧流水线同一套
+     * {@code SurfaceGradeLimits}）、一阶/二阶坡度、站钉、桥面下界、隧道覆土。
+     * 站钉与桥面下界在这里重算一次而不是传参，是因为本方法在 {@code try} 外，
+     * 作用域上拿不到那些局部变量。</p>
+     */
+    private static int[] constraintFallback(int[] terrainY, boolean[] tunnelMask,
+                                            int[] pin, int[] deckFloor,
+                                            RoadGenerationConfig cfg,
+                                            RoadGradePlanner.SurfaceGradeLimits gradeLimits) {
+        int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
+        int maxStep = Math.max(1, (perTwo + 1) / 2);
+        return ProfileFallback.terrainFollowing(
+                terrainY,
+                Math.max(0, gradeLimits.plainCut()),
+                Math.max(0, gradeLimits.plainFill()),
+                maxStep, perTwo,
+                pin, tunnelMask, Math.max(1, gradeLimits.tunnelCoreOverburden()), deckFloor);
+    }
+
     private static int[] applyProfileSolver(ServerLevel level, List<BlockPos> centers,
                                             int[] smoothed, int[] terrainY, boolean[] isCrossing,
                                             boolean[] tunnelMask, boolean[] pinnedMask,
@@ -626,12 +649,16 @@ public final class TargetYComputation {
             var solved = ProfileDpSource.solve(terrainY, isCrossing,
                     maxCut, maxFill, maxStep, perTwo, constraints);
             if (solved.isEmpty()) {
-                LOGGER.warn("RoadWeaver profile solver=dp infeasible, falling back to legacy"
+                // 2026-11-14（缺陷 C 第一步）：不可行时不再回落旧 15 道 pass，
+                // 改用无状态的 ProfileFallback —— 它在硬约束（窗口/一阶二阶坡度/
+                // 站钉/桥面下界/隧道覆土）下把地形投影进可行域。
+                // 这样「去双跑」的第二半（删旧 pass）才有退路。
+                LOGGER.warn("RoadWeaver profile solver=dp infeasible, using constraint fallback"
                                 + " stations={} connection={}->{}",
                         n,
                         connection == null ? "?" : connection.from(),
                         connection == null ? "?" : connection.to());
-                return smoothed;
+                return constraintFallback(terrainY, tunnelMask, pin, deckFloor, cfg, gradeLimits);
             }
             LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
                     n, perTwo, maxStep, maxCut, maxFill, minCover,
@@ -639,9 +666,16 @@ public final class TargetYComputation {
                     connection == null ? "?" : connection.to());
             return solved.get();
         } catch (Throwable t) {
-            // 实验性求解器绝不能让一条路算不出来
-            LOGGER.warn("RoadWeaver profile solver=dp failed, falling back to legacy: {}", t.toString());
-            return smoothed;
+            // 实验性求解器绝不能让一条路算不出来。
+            // 2026-11-14（缺陷 C 第一步）：回落目标从「旧 pass 结果」改成无状态回落解。
+            LOGGER.warn("RoadWeaver profile solver=dp failed, using constraint fallback: {}",
+                    t.toString());
+            return ProfileFallback.terrainFollowing(
+                    terrainY, Math.max(0, gradeLimits.plainCut()),
+                    Math.max(0, gradeLimits.plainFill()),
+                    Math.max(1, (Math.max(1, cfg.maxSlopeStepPerTwoSegments()) + 1) / 2),
+                    Math.max(1, cfg.maxSlopeStepPerTwoSegments()),
+                    null, tunnelMask, Math.max(1, gradeLimits.tunnelCoreOverburden()), null);
         }
     }
 
