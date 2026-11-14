@@ -1,7 +1,7 @@
 # S5 台账：后处理降级为「网络缝合器」
 
 > **相关文档**：本文是**文件级**分类（20 个文件留还是删）。
-> 方法级删除边界见 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（44 个方法里 36 个随旧链路消失）；
+> 方法级删除边界见 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（当前 39 个受管方法里 33 个待旧链路下线后删除）；
 > 删除顺序与每步验收见 [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md)。
 
 > 本文件由 `PostprocessLedgerTest` 机器校验。**删文件必须同步删台账行**，

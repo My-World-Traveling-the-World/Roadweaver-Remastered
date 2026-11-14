@@ -10,13 +10,14 @@
 |---|---|
 | **重构的总方向、现状、下一步** | [`重制总纲.md`](重制总纲.md) ← **唯一权威路线图**（方案 + 现状 + 5 缺陷 + 路线图）|
 | **明天接手要做什么** | [`HANDOVER.md`](HANDOVER.md) ← **只读这一页也能动起来** |
-| 现在这个仓库能做什么、怎么用、还差什么 | [`STATUS-20261113.md`](STATUS-20261113.md) |
+| 现在这个仓库能做什么、怎么用、还差什么 | [`STATUS-20261115.md`](STATUS-20261115.md) |
 | 重构的过程、每一次判断与误判 | [`REFACTOR.md`](../REFACTOR.md) |
+| 当前发布件、SHA-256、回退与真机验收清单 | [`RELEASES.md`](RELEASES.md) |
 | 怎么把新内核切成默认 | [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md) |
 | 哪些旧代码可以删、删到什么粒度 | [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md) |
 | 后处理 20 个文件分别是留还是删 | [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md) |
 | 死代码怎么审（以及为什么不能批量删） | [`DEAD-METHOD-AUDIT.md`](DEAD-METHOD-AUDIT.md) |
-| 维护性指标快照 | [`STATUS-20261113.md`](STATUS-20261113.md) 的「九、附录」节（原 METRICS 已并入）|
+| 维护性指标快照 | [`STATUS-20261115.md`](STATUS-20261115.md) 的「九、附录」节（原 METRICS 已并入）|
 
 ---
 
@@ -40,7 +41,7 @@
 
 ```
 重制总纲.md（权威路线图，入口）
-  ├─► STATUS-20261113.md（当前状态 + 指标附录）
+  ├─► STATUS-20261115.md（当前状态 + 指标附录）
   ├─► S7-SWITCH-CHECKLIST（怎么切默认）
   │     ├─► S5-METHOD-MAP（删什么，方法级边界）
   │     │     └─► S5-POSTPROCESS-LEDGER（文件级分类）
@@ -84,4 +85,4 @@ archive/（历史封存）──► 只读，不再更新
 | [`verify.ps1`](../verify.ps1) | 双模块闸门（fabric 编译 + common 回归），**每次提交前必跑** |
 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) | 分层与包职责 —— **先读它顶部的「时效性更正」**：`foundation.*` 那套分层从未落地，真实架构是保留旧顶层包就地重构 |
 | [`CONVENTIONS.md`](../CONVENTIONS.md) | 编码约定 —— **先读顶部「时效性更正」**：它描述的是旧仓；仍然成立的是 §4.1 三个环境坑（JDK21 / Gradle 8.8 / 离线）与 §4.3 部署规矩 |
-| `common/src/test/java/.../architecture/` | 8 个守卫类的实现 |
+| `common/src/test/java/.../architecture/` | 架构、台账、UI 与配置守卫的实现（数量以回归套件登记为准）|

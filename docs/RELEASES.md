@@ -16,6 +16,8 @@
 | jar | `roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar` |
 | 体积 | 6,861,221 B（`fabric/build/final/` 的 `embedApiJar` 产物）|
 | SHA-256 | `22751e3b3f0954db…` |
+| 回归 | **PASS tests=723**（`RoadJUnitRegressionSuite`）|
+| 回退 | 客户端 mods 里 `0.9.101.jar.bak` 改回 `.jar` 即可 |
 
 > ★ **部署件必须取自 `fabric/build/final/`，不是 `build/libs/`**。
 > `build/libs` 那个同名 jar 只有 4 个内嵌 jar、**缺 `META-INF/jars/roadweaver-api.jar`**，
@@ -23,8 +25,6 @@
 > 判据：`Entries | Where FullName -match '\.jar$'` 必须 **5 个**且含 `roadweaver-api.jar`。
 > （本次第一版就装错了 `build/libs` 的 6,858,008 B 件，读到 `HANDOVER.md` 第 6.5 节才发现并改正 ——
 > 当时台账里记的 SHA `785d84b3` 是**错件**的，已作废。）
-| 回归 | **PASS tests=723**（`RoadJUnitRegressionSuite`）|
-| 回退 | 客户端 mods 里 `0.9.101.jar.bak` 改回 `.jar` 即可 |
 
 ### 本版相对 0.9.101 的改动（12 个提交）
 

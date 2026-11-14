@@ -21,7 +21,7 @@
 
 > **相关文档**：要删哪些方法看 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（当前 33/39 待旧链路整体下线后删除）；
 > 文件级分类看 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)；
-> 每步验收跑 [`verify.ps1`](../verify.ps1)；当前整体状态见 [`STATUS-20261113.md`](STATUS-20261113.md)。
+> 每步验收跑 [`verify.ps1`](../verify.ps1)；当前整体状态见 [`STATUS-20261115.md`](STATUS-20261115.md)。
 
 > 本文是**照着做就行**的操作手册。每一级都写明：前置条件、要改什么、怎么验证、怎么回滚。
 > 铁律：**任何一级验证不过，就停在这一级，不许往下走。**
@@ -296,7 +296,7 @@ for (CompilationUnitTree u : units)
 1. 跑 `DeadCodeGuardTest` —— 删完旧实现后，`dead-code-baseline.txt` 里的
    `[A] 真死代码` 应当增加（原来被旧链路调用、现在没人用了）；
 2. 把新增的死代码搬进 `[A]` 组并逐个删除；
-3. 更新 `docs/STATUS-20261113.md` 快照。
+3. 更新最新状态快照（当前为 `docs/STATUS-20261115.md`），不要回写历史快照。
 
 **验证**：`verify.ps1` + `MaintainabilityReportTest`（职责头仍须 100%）。
 
