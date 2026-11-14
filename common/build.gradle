@@ -60,6 +60,28 @@ tasks.withType(Test).configureEach {
 //     features.path.pathlogic.core.*   ->  现在在 pathlogic/{structures,validation,grade}
 //     pathfinding.cache.opencl.*       ->  现在在 pathfinding/sampling/opencl
 //   这 7 个 harness 共 101 处断言，因为类名错**从未执行过**。已全部修正。
+// ── 手写自测的 JavaExec 入口 ────────────────────────────────────────────────
+//
+// ⚠️ 2026-11-15 状态说明（历史很重要，别误删也误留着）：
+//
+// 这些类都是「只有 public static void main、没有 @Test」的手写自测。
+// 历史上它们**从不被执行** —— 标准 `test` 任务被 `exclude '**/*'` 关掉了，
+// 而这里是唯一的入口，但没有人会记得手工敲 `gradle structureAvoidanceRegression`。
+//
+// 现在它们已经被 `SelfTestRunnerTest`（architecture 包）**全部接进
+// `roadJUnitRegressionSuite`** —— 那个 runner 用反射逐个调用本清单里这些类的 main()，
+// 所以常规验证（verify.ps1 → roadJUnitRegressionSuite）**已经覆盖到它们**。
+//
+// ⇒ 下面这些 JavaExec 任务保留的意义只剩「单独调试某一个自测」：
+//     `gradle :common:roadBrakeRegression` 之类可以直接看它自己的完整 stdout。
+//    **不是**必需的验证步骤；删掉不会造成覆盖缺口，但保留也无害。
+//
+// ⇒ 新增手写自测时请**只登记进 `SelfTestRunnerTest.SELF_TESTS`**（那才是回归入口）；
+//    要不要在这里加 JavaExec 入口纯看是否需要单独调试。
+//
+// 判据（以后核查用）：测试目录下有 main、没有 @Test ⇒ 必须出现在
+// `SelfTestRunnerTest.SELF_TESTS` 里；本文件的任务清单不是权威名单。
+
 def registerMainRegression = { String taskName, String testClass ->
     tasks.register(taskName, JavaExec) {
         dependsOn tasks.named('testClasses')
