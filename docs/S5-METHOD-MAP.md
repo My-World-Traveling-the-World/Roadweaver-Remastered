@@ -88,8 +88,9 @@ S5M|SlopeContinuityEnforcer|constrainRun|0||DELETE_WITH_LEGACY
 | `KEEP_INPUT` | 2 |
 | `AMBIGUOUS`（待人工核） | 4 |
 
-`DELETE_WITH_LEGACY` + `LEGACY_ONLY` = **35** 个方法会随旧链路一起消失，
-占这 3 个文件全部方法的 80%。这就是 S7 第一波删除的真实体量。
+`DELETE_WITH_LEGACY` + `LEGACY_ONLY` = **33** 个方法待旧链路整体下线后删除，
+占当前台账 39 个方法的约 **85%**。这是 S7 第一波删除的真实体量。
+（2026-11-15 更正：此前把 15+18 错写成 35。）
 
 **必须等旧链路整体下线再一起删** —— 同包内部还在互相调用，单独删任何一个都会编译失败。
 这也正是它们被归为「与旧链路同生共死」的原因。

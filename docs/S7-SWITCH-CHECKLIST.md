@@ -19,7 +19,7 @@
 > 旧 pass 只在「DP 不可行 / 显式 `-Droadweaver.profileSolver=legacy`」时才跑。
 > 新增的 `ProfileFallback.terrainFollowing` 是 DP 异常时的几何回落解。
 
-> **相关文档**：要删哪些方法看 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（36/44 会随旧链路消失）；
+> **相关文档**：要删哪些方法看 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（当前 33/39 待旧链路整体下线后删除）；
 > 文件级分类看 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)；
 > 每步验收跑 [`verify.ps1`](../verify.ps1)；当前整体状态见 [`STATUS-20261113.md`](STATUS-20261113.md)。
 
@@ -263,7 +263,7 @@ for (CompilationUnitTree u : units)
 
 **前置**：第 1、2 级都通过，且**默认值已切成新内核并稳定一段时间**。
 
-**删除顺序**（来自 `docs/S5-METHOD-MAP.md`，36/44 个方法会消失）：
+**删除顺序**（来自 `docs/S5-METHOD-MAP.md`，当前 33/39 个方法待旧链路整体下线后删除）：
 
 | 子级 | 删什么 | 每步验证 |
 |---|---|---|

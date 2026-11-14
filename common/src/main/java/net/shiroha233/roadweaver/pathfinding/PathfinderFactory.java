@@ -23,10 +23,10 @@ import net.shiroha233.roadweaver.bridge.BandPathfinder;
  *       检测到同型即短路、只跑一次，并打一次 WARN 说明原因。</li>
  * </ul>
  *
- * <h2>★ 出厂行为必须与 0.9.098 逐字节一致</h2>
- * <p>没设系统属性时 {@code SolverMode.fromProperty()} 回落 CLASSIC，
- * 本工厂返回的对象与重构前<b>完全相同</b>。这一点由
- * {@code SolverModeWiringTest} 钉住。</p>
+ * <h2>★ 当前行为：CLASSIC 也只是兼容键，不代表旧算法</h2>
+ * <p>旧 A* 已全部删除。没设系统属性时 {@code SolverMode.fromProperty()} 回落 CLASSIC，
+ * 但 {@link #createClassic} 仍返回 {@link BandPathfinder}；因此不能把 CLASSIC 理解成
+ * 「与 0.9.098 逐字节一致」。这一点由 {@code SolverModeWiringTest} 钉住。</p>
  */
 public final class PathfinderFactory {
 
@@ -47,8 +47,8 @@ public final class PathfinderFactory {
     /**
      * 纯函数形式的决策，便于单测（不需要 MC 运行时）。
      *
-     * <p>AB 模式下 classic 侧仍按 {@code algorithm} 建 —— 所以
-     * 「algorithm=POTENTIAL_FIELD + mode=AB」跑的是「势场 + 新链双跑」。</p>
+     * <p>AB 模式下 classic 侧虽仍接收 {@code algorithm}，但工厂已统一返回 BAND；
+     * 两臂同型时 {@link AbObservingPathfinder} 会短路，不再产生「旧算法 vs 新链」的假对照。</p>
      */
     public static Pathfinder decide(PathfindingAlgorithm algorithm, SolverMode mode) {
         SolverMode m = mode == null ? SolverMode.CLASSIC : mode;
