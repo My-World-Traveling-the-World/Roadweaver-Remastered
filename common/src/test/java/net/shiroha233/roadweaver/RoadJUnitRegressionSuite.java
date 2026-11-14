@@ -62,6 +62,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.metric.GridTerrainFieldStepTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.metric.ArrivalTimeFieldTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.AvoidanceObstacleFieldStepTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.DeadCodeGuardTest"),

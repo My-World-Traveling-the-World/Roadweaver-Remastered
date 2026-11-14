@@ -96,8 +96,17 @@ public final class ArrivalTimeField {
     /**
      * 回溯到指定点的路径。
      *
-     * <p>每步在 8 邻域里选 {@code T} 最小的邻居；若前方是平台（多个邻居同值），
-     * 优先选<b>离终点方向的直线更近</b>的那个 —— 只影响平地上的取直，不改变代价最优性。</p>
+     * <p>每步在 8 邻域里选<b>单位弧长下降量最大</b>的方向
+     * （{@code (T_cur − T_nb) / 邻接弧长}，见 {@link #bestDescentDirection}）——
+     * 不是「T 最小」，后者会系统性偏爱对角方向（最大偏差 41.4%，审计 NEW-5）。</p>
+     *
+     * <p><b>为什么不查 {@code isPassable}</b>（2026-11-14 核实，审计 E）：
+     * 硬不可通行的格子在 {@code FastMarchingSolver} 里<b>根本不入队</b>，
+     * 因此它们的 T 恒为 +∞，永远不会被选中。再加一次判定是冗余的 ——
+     * 原审计条目这一半不成立（Claude 复核时已推翻）。</p>
+     *
+     * <p>步数上限用 {@code width·depth + 16} 兜底（每步 T 严格下降，正常远小于此值），
+     * 与 {@code BandPathfinder} 的 {@code maxSteps} 参数无关。</p>
      *
      * @return 从源点到终点的点列（含两端）；不可达时返回空列表
      */
@@ -112,23 +121,21 @@ public final class ArrivalTimeField {
         // 步数上限：防止数值异常导致死循环（每步 T 严格下降，正常远小于此值）
         int guard = width * depth + 16;
         while (at(x, z) > 1e-12 && guard-- > 0) {
-            int bestX = x;
-            int bestZ = z;
-            double bestTime = at(x, z);
-            for (int dir = 0; dir < 8; dir++) {
-                int nx = x + DX[dir] * step;
-                int nz = z + DZ[dir] * step;
-                if (!contains(nx, nz)) continue;
-                double nt = at(nx, nz);
-                if (nt < bestTime - 1e-12) {
-                    bestTime = nt;
-                    bestX = nx;
-                    bestZ = nz;
-                }
-            }
-            if (bestX == x && bestZ == z) break;     // 数值上是平台，停止
-            x = bestX;
-            z = bestZ;
+            // 2026-11-14 修复（审计 NEW-5）：邻居比选改成「下降率最大」。
+            //
+            // 原来比的是**原始 T 最小**，这系统性偏爱对角方向：
+            // 沿 φ 方向的邻居 ΔT = h·(cosφ + sinφ)，对角（45° 步长 √2·h）
+            // 拿到的 ΔT 恒为轴向的 (cosφ+sinφ) 倍 —— φ 越小越明显。
+            // φ=10° 时对角 ΔT=1.159h、轴向 0.985h ⇒ 对角 T 更小 ⇒ 被选中，
+            // 但它实际步长 1.414h，真实下降率只有 0.82 对 0.985 ——
+            // 于是下降最陡的方向被系统性跳过，最大偏差 √2−1 = 41.4%，
+            // 表现为路径带不必要的对角折线（「之字」的一个成因）。
+            // 正确判据是「单位弧长的下降量」(T_cur − T_nb)/dist 最大化。
+            double current = at(x, z);
+            int bestDir = bestDescentDirection(current, neighborTimes(x, z));
+            if (bestDir < 0) break;                  // 数值上是平台，停止
+            x = x + DX[bestDir] * step;
+            z = z + DZ[bestDir] * step;
             reversed.add(new int[]{x, z});
         }
 
@@ -138,6 +145,43 @@ public final class ArrivalTimeField {
             path.add(reversed.get(i));
         }
         return path;
+    }
+
+    /** 取 8 邻域的 T（不在场内的填 +∞）。 */
+    private double[] neighborTimes(int x, int z) {
+        double[] times = new double[8];
+        for (int dir = 0; dir < 8; dir++) {
+            int nx = x + DX[dir] * step;
+            int nz = z + DZ[dir] * step;
+            times[dir] = contains(nx, nz) ? at(nx, nz) : Double.POSITIVE_INFINITY;
+        }
+        return times;
+    }
+
+    /**
+     * 在 8 邻域里选「单位弧长下降量」最大的方向。
+     *
+     * <p>判据是 {@code (T_cur − T_nb) / 邻接弧长} 最大化（轴向弧长 = {@code step}、
+     * 对角 = {@code step·√2}），而不是「T 最小」—— 后者会系统性偏爱对角方向
+     * （见 {@link #pathTo} 里的说明）。</p>
+     *
+     * @param neighborTimes 8 邻域的 T，顺序与 {@code DX}/{@code DZ} 一致
+     * @return 方向下标；没有任何严格下降的邻居时返回 {@code -1}
+     */
+    static int bestDescentDirection(double current, double[] neighborTimes) {
+        int bestDir = -1;
+        double bestRate = 0.0;
+        for (int dir = 0; dir < 8; dir++) {
+            double nt = neighborTimes[dir];
+            if (!(nt < current - 1e-12)) continue;        // 必须严格下降，避免平台死循环
+            double arc = (dir < 4) ? 1.0 : Math.sqrt(2.0); // 以 step 为单位的弧长
+            double rate = (current - nt) / arc;
+            if (rate > bestRate + 1e-15) {
+                bestRate = rate;
+                bestDir = dir;
+            }
+        }
+        return bestDir;
     }
 
     /** 度量（供上层计算路径代价）。 */

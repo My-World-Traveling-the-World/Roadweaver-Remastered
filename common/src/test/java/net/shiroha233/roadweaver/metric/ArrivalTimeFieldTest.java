@@ -1,0 +1,119 @@
+/* 文件职责：钉住到达时间场的回溯方向判据 —— 不许系统性偏爱对角方向。 */
+package net.shiroha233.roadweaver.metric;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * 到达时间场回溯测试（2026-11-14，审计 NEW-5 / E）。
+ *
+ * <h2>缺陷是什么</h2>
+ * <p>回溯原本在 8 邻域里选 <b>T 最小</b>的邻居。这系统性偏爱对角方向：
+ * 沿 φ 方向的邻居 ΔT = h·(cosφ + sinφ)，对角（步长 √2·h）拿到的 ΔT
+ * 恒为轴向的 (cosφ+sinφ) 倍 —— φ 越小越明显。φ=10° 时
+ * 对角 ΔT=1.159h、轴向 0.985h ⇒ 对角 T 更小被选中，
+ * 但它实际步长 1.414h，真实下降率只有 0.82 对 0.985 ⇒ 最陡方向被跳过，
+ * 最大偏差 √2−1 = 41.4%。这是「之字」的一个成因。</p>
+ *
+ * <p>修复后的判据是「单位弧长下降量」最大化：(T_cur − T_nb) / 邻接弧长。</p>
+ *
+ * @see ArrivalTimeField
+ */
+class ArrivalTimeFieldTest {
+
+    private static final double STEP = 8.0;      // 推导中的 h（采样步长）
+
+    /**
+     * 复刻审计里那个 φ=10° 的反例：原始 T 更小的是对角，但下降率更大的是轴向。
+     */
+    @Test
+    void 对角原始T更小时必须仍然选轴向() {
+        double current = 100.0;
+        double[] times = new double[8];
+        for (int dir = 0; dir < 8; dir++) {
+            times[dir] = Double.POSITIVE_INFINITY;
+        }
+        // 轴向 +x（dir 0）：ΔT = 0.985h
+        times[0] = current - 0.985 * STEP;
+        // 对角（dir 4）：ΔT = 1.159h —— 原始 T 更小！
+        times[4] = current - 1.159 * STEP;
+
+        assertTrue(times[4] < times[0], "前提：对角方向的原始 T 确实更小");
+
+        int dir = ArrivalTimeField.bestDescentDirection(current, times);
+
+        assertEquals(0, dir,
+                "必须选轴向（下降率 0.985 对 1.414 分之 1.159 = 0.820）；"
+                        + "选 4 就是原来那个 41.4% 的对角偏爱");
+    }
+
+    @Test
+    void 对角确实更陡时才选对角() {
+        double current = 100.0;
+        double[] times = new double[8];
+        for (int dir = 0; dir < 8; dir++) {
+            times[dir] = Double.POSITIVE_INFINITY;
+        }
+        times[0] = current - 0.5 * STEP;              // 轴向很缓
+        times[4] = current - 1.4 * STEP;              // 对角很陡（1.4/1.414 ≈ 0.99）
+
+        assertEquals(4, ArrivalTimeField.bestDescentDirection(current, times),
+                "对角下降率更大时必须选对角，不能一律压成轴向");
+    }
+
+    @Test
+    void 没有任何下降时返回负一() {
+        double current = 5.0;
+        double[] times = new double[8];
+        for (int dir = 0; dir < 8; dir++) {
+            times[dir] = current;                      // 平台
+        }
+        assertEquals(-1, ArrivalTimeField.bestDescentDirection(current, times),
+                "平台必须返回 -1（停止），不能原地打转");
+    }
+
+    @Test
+    void 不可达邻居不参与比选() {
+        double current = 5.0;
+        double[] times = new double[8];
+        for (int dir = 0; dir < 8; dir++) {
+            times[dir] = Double.POSITIVE_INFINITY;
+        }
+        times[2] = current - 1.0 * STEP;              // 只有 +z 下降
+
+        assertEquals(2, ArrivalTimeField.bestDescentDirection(current, times),
+                "只有唯一下降方向时必须选它");
+    }
+
+    /**
+     * 平地直路的回溯必须完全沿轴向、不许有 z 抖动。
+     */
+    @Test
+    void 平地直路回溯不带对角抖动() {
+        TerrainField flat = new TerrainField() {
+            @Override public int height(int x, int z) { return 0; }
+            @Override public int minX() { return 0; }
+            @Override public int maxX() { return 40; }
+            @Override public int minZ() { return 0; }
+            @Override public int maxZ() { return 40; }
+        };
+        FinslerMetric metric = FinslerMetric.of(flat, ObstacleField.NONE);
+        ArrivalTimeField field = new FastMarchingSolver(metric).solve(2, 20);
+
+        List<int[]> path = field.pathTo(37, 20);
+
+        assertTrue(path.size() >= 2, "应回溯出至少两点");
+        for (int[] p : path) {
+            assertEquals(20, p[1],
+                    "平地上源点与终点同一 z，路径必须完全水平；实际点 (" + p[0] + "," + p[1] + ")");
+        }
+        int[] first = path.get(0);
+        int[] last = path.get(path.size() - 1);
+        assertEquals(2, first[0], "路径起点必须是源点 x");
+        assertEquals(37, last[0], "路径终点必须是目标 x");
+    }
+}

@@ -122,6 +122,15 @@ public final class BandPathfinder implements Pathfinder {
         };
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>关于 {@code maxSteps}（2026-11-14，审计 E）</b>：本实现<b>有意不使用</b>它。
+     * 旧 A* 拿它限制「扩展节点数」—— 那是防止启发式失效时爆内存的手段。
+     * FMM 的开销由<b>网格点数</b>决定（本身就受包围盒约束），不存在「扩展数爆炸」
+     * 这个失败模式；硬要按步数截断反而会把一条合法但较长的路判成失败。
+     * 参数保留只为满足 {@link Pathfinder} 接口约定（旧链仍在调用方签名里传它）。</p>
+     */
     @Override
     public PathResult findPath(BlockPos start, BlockPos end, int width,
                                ServerLevel level, int maxSteps,
