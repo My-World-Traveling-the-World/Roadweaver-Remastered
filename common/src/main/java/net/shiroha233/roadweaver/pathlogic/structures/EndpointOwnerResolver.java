@@ -89,7 +89,19 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
  * <p>本类是从 2790 行的 {@code StructureAvoidanceService} 里<b>纯搬迁</b>出来的，
  * 逻辑未改（含缩进）。为让两侧调用点零改动用了双向静态导入。</p>
  */
-public final class EndpointOwnerResolver {
+public final class EndpointOwnerResolver {
+    /**
+     * 端点归属四段解析全失败的累计次数（2026-11-15 新增，纯取证）。
+     *
+     * <p>四段依次是：①精确 identity（XZ 匹配）②盒内唯一同 id ③同名族替换（ctov 之类改名村庄）
+     * ④附近已验证建筑推断。全失败时<b>一个 owner 键都不会加</b>，
+     * 意味着这个端点所在的结构不再享受豁免 —— 而它与「端点本来就在结构外面」完全同形。</p>
+     */
+    private static final java.util.concurrent.atomic.AtomicLong UNRESOLVED_ENDPOINT_OWNERS =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicBoolean UNRESOLVED_WARNED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     static Set<StructureOwnerKey> endpointOwnersForRoad(ServerLevel level, RoadData road) {
         if (level == null || road == null || !road.hasOwnerPair()) return Set.of();
         RouteKey key = routeKey(level, road);
@@ -211,7 +223,15 @@ public final class EndpointOwnerResolver {
                 result.add(inferred.owner());
                 LOGGER.info("RoadWeaver inferred endpoint owner from nearby verified building endpoint={} owner={} distance={}",
                         endpoint, inferred.owner(), Math.sqrt(inferred.distanceSquared()));
+                return;
             }
+            // 2026-11-15：**这是唯一的零 owner 出口** —— 精确 identity 没找到，
+            // 附近推断也失败，于是这个端点拿不到任何 owner 键。
+            // 后果：端点所在结构不再享受豁免，路可能被自己的目的地建筑挡回来；
+            // 而它与「端点本来就在结构外面」完全同形，原来日志里一个字都没有。
+            // 注意：identity 找到时会无条件加 expected（见下面的 result.add），
+            // 所以那条路径不可能零 owner —— 不要把计数搬到方法末尾，那里不可达。
+            noteUnresolvedEndpointOwner(endpoint, null);
             return;
         }
         StructureOwnerKey expected = new StructureOwnerKey(
@@ -296,7 +316,35 @@ public final class EndpointOwnerResolver {
                         endpoint, identity.structureId(), inferred.owner().structureId(),
                         Math.sqrt(inferred.distanceSquared()));
             }
+            return;
         }
+    }
+
+    /**
+     * 记一次「端点四段归属解析全失败」（2026-11-15 新增，纯取证）。
+     *
+     * <p>只在首次打 warning（{@code compareAndSet} 保证），之后只累加计数 ——
+     * 解析发生在每次规划、每条路的两端，逐次打日志会把 latest.log 冲爆。</p>
+     */
+    private static void noteUnresolvedEndpointOwner(BlockPos endpoint, String registeredId) {
+        long n = UNRESOLVED_ENDPOINT_OWNERS.incrementAndGet();
+        if (UNRESOLVED_WARNED.compareAndSet(false, true)) {
+            LOGGER.warn("RoadWeaver could not resolve any owner for endpoint {} (registered={})"
+                            + " — this endpoint's structure loses its exemption, so the road may be"
+                            + " blocked by its own destination building. First of possibly many (count={})",
+                    endpoint, registeredId, n);
+        }
+    }
+
+    /** 「端点归属四段解析全失败」的累计次数（只读取证）。 */
+    public static long unresolvedEndpointOwnerCount() {
+        return UNRESOLVED_ENDPOINT_OWNERS.get();
+    }
+
+    /** 重置取证计数（测试用）。 */
+    static void resetUnresolvedEndpointOwnerCount() {
+        UNRESOLVED_ENDPOINT_OWNERS.set(0);
+        UNRESOLVED_WARNED.set(false);
     }
 
     static InferredEndpointOwner inferNearbyEndpointOwner(

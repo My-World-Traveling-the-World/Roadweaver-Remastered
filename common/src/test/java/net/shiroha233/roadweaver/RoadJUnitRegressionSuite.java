@@ -108,6 +108,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.structures.FallbackBoxQueryCountTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerUnresolvedCountTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.structures.precompute.StructureInjectorDropCountTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.search.StructureVerificationObservabilityTest"),
