@@ -106,6 +106,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.grade.CrossSectionFlattenTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.pathcalc.GeometryDriftObserverTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.profile.ProfileAbStudyTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainReplayTest"),

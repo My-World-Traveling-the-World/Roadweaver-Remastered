@@ -199,6 +199,11 @@ public final class PathMetricsOps {
         return hash;
     }
 
+    /** 几何观测用的连接标识（与其它 AB 日志同口径）。 */
+    private static String geometryTag(StructureConnection connection) {
+        return connection == null ? "?" : connection.from() + "->" + connection.to();
+    }
+
     /** 0.8.318：成段失败的细分原因（纯观测），见 {@link #consumeRebuildFailureReason()}。 */
     public static final ThreadLocal<String> LAST_SEGMENT_FAILURE = new ThreadLocal<>();
 
@@ -215,6 +220,16 @@ public final class PathMetricsOps {
                                                              PathTerrainField terrain,
                                                              AccurateHeightSampler accurate,
                                                              StructureConnection connection) {
+        // ── 几何漂移观测（批 5 前置，默认关闭）────────────────────────────
+        // 入参 path 是**弹性带平滑之后**的路径；下面 PathPostProcessor 会再平滑一遍。
+        // 两处各打一份指标，才能回答「谁把路形改了多少」。
+        // 开关：-Droadweaver.geometryAb=on
+        String geometryTag = geometryTag(connection);
+        GeometryDriftObserver.Metrics bandMetrics = null;
+        if (GeometryDriftObserver.enabled()) {
+            bandMetrics = GeometryDriftObserver.measure(path);
+            GeometryDriftObserver.observe(geometryTag, "band", path);
+        }
         List<RoadSegmentPlacement> curved = PathPostProcessor.process(
                 path,
                 width,
@@ -224,6 +239,13 @@ public final class PathMetricsOps {
                 PathPostProcessor.configuredBridgeMinWaterDepth(),
                 net.shiroha233.roadweaver.postprocess.SplineHelper.CurveMode.CATMULL_ROM,
                 accurate);
+        if (GeometryDriftObserver.enabled()) {
+            GeometryDriftObserver.Metrics postMetrics =
+                    GeometryDriftObserver.measure(GeometryDriftObserver.centersOf(curved));
+            GeometryDriftObserver.observe(geometryTag, "post",
+                    GeometryDriftObserver.centersOf(curved));
+            GeometryDriftObserver.report(geometryTag, bandMetrics, postMetrics);
+        }
         if (curved == null || curved.size() < 2) {
             curved = null;
             LAST_SEGMENT_FAILURE.set("curved_null");
