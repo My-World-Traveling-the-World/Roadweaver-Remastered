@@ -139,9 +139,32 @@ public final class RoadPipeline {
         // 弹性带只做曲率平滑：端点锁死、曲率最小、保形
         BandResult smoothed = bandSolver.smooth(raw);
 
+        // 2026-11-14 修复（审计 NEW-4）：弹性带的算子用镜像虚点（2·v[0] − v[1]）
+        // 处理边界，所以平滑后首尾会被推离真实端点；而 QualityGate 的端点校验
+        // 要求曲线两端严格等于节点坐标（否则接不上）。这里显式把首尾改回节点坐标 ——
+        // 与 BandPathfinder 同口径（它在平滑后也 set(0)/set(size-1)）。
+        List<BandResult.Point> aligned = alignEndpoints(smoothed.points(), from, to);
+
         double straight = Math.hypot((double) to.x() - from.x(), (double) to.z() - from.z());
         return new RoadNetworkPlan.RoadEdge(edge.from(), edge.to(),
-                edge.distance(), straight, smoothed.points(), smoothed);
+                edge.distance(), straight, aligned, smoothed);
+    }
+
+    /**
+     * 把曲线首尾对齐到节点坐标（2026-11-14，审计 NEW-4）。
+     *
+     * <p>两端都对齐，而不是只对齐起点：回溯的<b>终点</b>理论上就是传入的 to，
+     * 但弹性带平滑会用镜像虚点处理边界，首尾都会被推开一点点。两处都改回来
+     * 才与 {@code BandPathfinder}（生产路径）同一口径。</p>
+     */
+    private static List<BandResult.Point> alignEndpoints(List<BandResult.Point> points,
+                                                         RoadNode from,
+                                                         RoadNode to) {
+        if (points.isEmpty()) return points;
+        List<BandResult.Point> out = new ArrayList<>(points);
+        out.set(0, new BandResult.Point(from.x(), from.z()));
+        out.set(out.size() - 1, new BandResult.Point(to.x(), to.z()));
+        return out;
     }
 
     /** 度量（供上层查配置）。 */

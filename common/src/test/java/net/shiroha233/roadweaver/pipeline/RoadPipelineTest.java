@@ -7,6 +7,7 @@ import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.GridTerrainField;
 import net.shiroha233.roadweaver.metric.ObstacleField;
+import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.topology.RoadNode;
 import net.shiroha233.roadweaver.topology.TopologyPlan;
 
@@ -77,6 +78,47 @@ class RoadPipelineTest {
             assertEquals(from.z(), start.z(), "边 " + edge.from() + "->" + edge.to() + " 起点 z");
             assertEquals(to.x(), end.x(), "边 " + edge.from() + "->" + edge.to() + " 终点 x");
             assertEquals(to.z(), end.z(), "边 " + edge.from() + "->" + edge.to() + " 终点 z");
+        }
+    }
+
+    /**
+     * 采样步长 &gt; 1 且节点坐标不在网格点上时，端点也必须精确对齐（审计 NEW-4）。
+     *
+     * <p>上面那个用例用 step=1 的网格地形、节点恰好落在格点上，所以即使不显式对齐
+     * 也能通过 —— 缺陷只在「步长 &gt; 1 + 坐标非网格对齐」时暴露：
+     * 回溯只能在采样格上落点（就近吸附），首尾天然偏离真实节点；
+     * 弹性带又用镜像虚点处理边界，会再推一下。生产路径是 step=8，正好命中这个组合。</p>
+     */
+    @Test
+    void 步长大于1且坐标非网格对齐时端点仍精确对齐() {
+        // step=8 的平地（0..64，网格点 0/8/16/.../64）
+        TerrainField step8 = new TerrainField() {
+            @Override public int height(int x, int z) { return 0; }
+            @Override public int minX() { return 0; }
+            @Override public int maxX() { return 64; }
+            @Override public int minZ() { return 0; }
+            @Override public int maxZ() { return 64; }
+            @Override public int step() { return 8; }
+        };
+        FinslerMetric metric = new FinslerMetric(step8, ObstacleField.NONE, 0.0, 0.0);
+
+        // 三个节点全部不在 8 的倍数上
+        List<RoadNode> nodes = List.of(
+                new RoadNode("a", 5, 5),
+                new RoadNode("b", 37, 21),
+                new RoadNode("c", 11, 45));
+        RoadNetworkPlan plan = new RoadPipeline(metric, ElasticBandSolver.defaults()).run(nodes);
+
+        assertFalse(plan.edges().isEmpty(), "应有至少一条边");
+        for (RoadNetworkPlan.RoadEdge edge : plan.edges()) {
+            RoadNode from = plan.nodes().get(edge.from());
+            RoadNode to = plan.nodes().get(edge.to());
+            var start = edge.curve().get(0);
+            var end = edge.curve().get(edge.curve().size() - 1);
+            assertEquals(from.x(), start.x(), "边 " + edge.from() + "->" + edge.to() + " 起点 x 必须对齐节点");
+            assertEquals(from.z(), start.z(), "边 " + edge.from() + "->" + edge.to() + " 起点 z 必须对齐节点");
+            assertEquals(to.x(), end.x(), "边 " + edge.from() + "->" + edge.to() + " 终点 x 必须对齐节点");
+            assertEquals(to.z(), end.z(), "边 " + edge.from() + "->" + edge.to() + " 终点 z 必须对齐节点");
         }
     }
 
