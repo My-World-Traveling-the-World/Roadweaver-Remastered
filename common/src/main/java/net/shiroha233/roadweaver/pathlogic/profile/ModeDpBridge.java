@@ -27,6 +27,26 @@ import org.slf4j.LoggerFactory;
  * 河宽分布、没有村庄保护区，也没有「已有公路必须桥」这类历史约束。
  * 所以先让它跑一局，拿 {@code [SPAN-AB]} 日志看召回率，达标后再切 {@code on}。</p>
  *
+ * <h2>★ 当前观测有一个循环论证（2026-11-15 独立复核发现，必须知道）</h2>
+ *
+ * <p>{@code groundBanned} 目前只有一个来源：{@code isCrossing}。而 {@code isCrossing}
+ * 是调用方从<b>旧判定产出的 spans</b> 里推出来的（{@code TargetYComputation} 只把
+ * {@code SpanType.BRIDGE} / {@code ROAD_CROSSING} 的站标成 true）。</p>
+ *
+ * <pre>
+ *   旧 spans ──► isCrossing ──► groundBanned ──► DP 只能在这些站选桥/隧道
+ *        └────────────────────────────────────► 再拿 DP 结果与旧 spans 比对
+ * </pre>
+ *
+ * <p>也就是说：DP 被告知「旧判定认为这里是桥的地方不能铺地面」，
+ * 然后我们再统计「DP 判出的桥覆盖了多少旧判定的桥」——
+ * 这个数字<b>必然偏高</b>，它不是独立验证。</p>
+ *
+ * <p><b>所以：{@code [SPAN-AB]} 里的「差异站」只能当作「两套代价模型在同一组
+ * 禁地面约束下的分歧量」，不能当作召回率证据。</b>
+ * 要让召回率有意义，必须先给 {@code groundBanned} 接上不依赖旧判定的来源
+ * （水面高度图 / 保护区快照 / 已有公路索引），这是批 2 的下一项。</p>
+ *
  * <h2>开关</h2>
  * <pre>
  * -Droadweaver.modeDp=ab   只观测（默认）
@@ -39,10 +59,10 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>已知的输入简化（第一版有意为之，会低估桥隧需求）</h2>
  * <ul>
- *   <li>{@code groundBanned} 目前只取「水面」一条（{@code isCrossing}）。
- *       保护区 / 遗产地 / 已有公路这几类「地面不可用」还分散在
- *       {@code StructureAvoidanceService} 的 ThreadLocal 快照里，没有接进来。
- *       日志会同时打 {@code banned=N}，方便判断低估了多少。</li>
+ *   <li>{@code groundBanned} 目前只取「水面」一条（{@code isCrossing}）——
+ *       <b>而 isCrossing 又来自旧判定的 spans</b>，所以本观测存在循环论证（见上面那一节）。
+ *       保护区 / 遗产地 / 已有公路这几类「地面不可用」还没接进来。
+ *       日志会同时打 {@code banned=N}，方便判断覆盖了多少站。</li>
  *   <li>桥高 / 隧深 / 单价用 {@link ModeDpSolver.Settings#defaults()}，
  *       没有从玩家配置翻译 —— 单价是产品决策，等召回率达标后再统一。</li>
  * </ul>

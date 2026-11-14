@@ -66,8 +66,11 @@ public final class GradleTestEntryTest {
 
     @BeforeAll
     static void locate() {
-        Assumptions.assumeTrue(Files.isRegularFile(BUILD_FILE),
-                "工作目录不是 common 模块（找不到 build.gradle），跳过");
+        // ★ 2026-11-15（独立复核）：同 RegressionRegistrationTest，
+        // 「找不到就跳过」会让守卫静默失效 —— 改成硬失败。
+        assertTrue(Files.isRegularFile(BUILD_FILE),
+                "找不到 " + BUILD_FILE.toAbsolutePath()
+                        + " —— 本守卫需要读取 gradle 入口配置，找不到就无法校验。");
     }
 
     private static Path classFile(String fqcn) {

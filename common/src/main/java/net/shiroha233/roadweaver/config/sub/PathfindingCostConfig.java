@@ -10,14 +10,13 @@ import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
  */
 public final class PathfindingCostConfig implements SubConfig {
 
-    /** 寻路算法枚举 */
     /**
- * 寻路算法。
- *
- * <p>{@link #BAND} 是 2026-11-12 新架构接入的第一个非 A* 算法：
- * Finsler 度量 + 快速行进 + 弹性带（见 {@code metric} / {@code topology} / {@code band}）。
- * 2026-11-13 起为唯一实现（旧 A* 系已全部删除）。</p>
- */
+     * 寻路算法枚举 —— 只剩 {@link #BAND}，旧 A* 系已全部删除（2026-11-13）。
+     *
+     * <p>{@code BAND} 的实现是 Finsler 度量 + 快速行进 + 弹性带
+     * （见 {@code metric} / {@code topology} / {@code band} 三个包）。
+     * 保留枚举本身只为让老配置里那个字符串还能被 GSON 解析。</p>
+     */
     public enum PathfindingAlgorithm {
         /** 新架构：Finsler 度量 + Fast Marching + 弹性带。 */
         BAND
@@ -36,15 +35,17 @@ public final class PathfindingCostConfig implements SubConfig {
     private int aStarStep = RoadConstants.DEFAULT_ASTAR_STEP;
     private int aStarMaxSteps = RoadConstants.DEFAULT_ASTAR_MAX_STEPS;
     /**
-     * 选路算法。
+     * 选路算法 —— <b>现在只是 GSON 兼容键，不再是算法选择</b>。
      *
-     * <p>0.9.020 更正：这里原来是 {@code GRADIENT_DESCENT}，与生产配置和调参基线
-     * （都是 {@code POTENTIAL_FIELD}）不一致 —— 后果是**新装 / 配置重置 / 缺这个键**
-     * 时静默落进梯度下降，而 0.8.418「蜿蜒优先」那 20 多个旋钮
-     * （{@code elevationSegmentedCost} / {@code contour*} / {@code deviation*} /
-     * {@code biomeCost*} …）里有一大批**只被势场法读取** ⇒ 玩家调了半天一个都没生效，
-     * 而且看不出原因。同一份配置在两套算法下含义不同，同一个种子换台机器形状会不一样。
-     * 现在与生产、与 {@code RouteQualityHarness} 的调参基线统一。</p>
+     * <p>{@link PathfindingAlgorithm} 枚举已删到只剩 {@link PathfindingAlgorithm#BAND}，
+     * 生产链由 {@code PathfinderFactory} 统一返回 {@code BandPathfinder}；
+     * 校验时 null / 旧值全部归一成 BAND。保留这个字段只为让老配置文件
+     * 里那个字符串还能被解析、不至于报错。</p>
+     *
+     * <p>历史（0.9.020）：这里曾经因为「默认 GRADIENT_DESCENT 与生产
+     * POTENTIAL_FIELD 不一致」导致新装玩家静默落进梯度下降、20 多个旋钮失效。
+     * 那段历史已随旧 A* 寻路器整体退役而结束 —— 现在没有「两套算法语义不同」
+     * 的可能了。相关旋钮是否仍生效，要看它们各自的读取点，不能按算法名推断。</p>
      */
     private PathfindingAlgorithm pathfindingAlgorithm = PathfindingAlgorithm.BAND;
 

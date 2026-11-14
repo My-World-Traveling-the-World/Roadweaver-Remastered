@@ -60,8 +60,14 @@ public final class RegressionRegistrationTest {
 
     @BeforeAll
     static void locate() {
-        Assumptions.assumeTrue(Files.isRegularFile(SUITE),
-                "工作目录不是 common 模块（找不到 " + SUITE + "），跳过");
+        // ★ 2026-11-15（独立复核）：原来这里是 assumeTrue —— 找不到套件文件就
+        // **跳过**。后果是这个守卫在套件被改名/移动后会「绿着失效」，
+        // 而它的职责恰恰是防止测试类漏登记。所以改成硬失败：
+        // 套件文件不存在 = 守卫本身失去意义，必须有人看见。
+        assertTrue(Files.isRegularFile(SUITE),
+                "找不到回归套件文件 " + SUITE.toAbsolutePath()
+                        + " —— 本守卫依赖它，找不到就无法判定测试是否漏登记。"
+                        + "若工作目录不是 common 模块，请修正测试运行配置，不要跳过。");
     }
 
     private static java.util.Set<String> registered() throws IOException {
