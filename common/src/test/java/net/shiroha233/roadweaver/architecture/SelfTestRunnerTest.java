@@ -137,13 +137,34 @@ class SelfTestRunnerTest {
     @Test
     void 全部自测都必须通过() {
         StringBuilder failures = new StringBuilder();
+        StringBuilder skippedNames = new StringBuilder();
         int passed = 0;
+        int skipped = 0;
         for (String fqcn : SELF_TESTS) {
             try {
                 Class<?> type = Class.forName(fqcn);
                 Method main = type.getMethod("main", String[].class);
-                main.invoke(null, (Object) new String[0]);
-                passed++;
+                // 2026-11-15：捕获 stdout 有两个目的 ——
+                //   ① 32 个自测会打印大量诊断文本，全量回归里是纯噪音；
+                //   ② 更重要的：有几个自测是**条件性**的（缺夹具就打印 SKIP 并正常退出），
+                //      如果不区分，它们会被算作「通过」⇒ **虚报覆盖率**。
+                //      这里把它们单独数出来，让「名义覆盖」在报告里显形。
+                java.io.PrintStream original = System.out;
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                String out;
+                try {
+                    System.setOut(new java.io.PrintStream(buf, true, java.nio.charset.StandardCharsets.UTF_8));
+                    main.invoke(null, (Object) new String[0]);
+                } finally {
+                    System.setOut(original);
+                    out = buf.toString(java.nio.charset.StandardCharsets.UTF_8);
+                }
+                if (out.contains("SKIP") || out.contains("skipped")) {
+                    skipped++;
+                    skippedNames.append("\n  ").append(fqcn);
+                } else {
+                    passed++;
+                }
             } catch (InvocationTargetException e) {
                 Throwable cause = e.getCause() == null ? e : e.getCause();
                 failures.append("\n  ").append(fqcn).append(" → ").append(cause);
@@ -152,8 +173,15 @@ class SelfTestRunnerTest {
             }
         }
         if (failures.length() > 0) {
-            fail("手写自测有失败（" + passed + "/" + SELF_TESTS.length + " 通过）：" + failures);
+            fail("手写自测有失败（" + passed + " 真通过 / " + skipped + " 跳过 / "
+                    + SELF_TESTS.length + " 总数）：" + failures);
         }
-        assertTrue(passed > 0, "至少要跑通一个自测，实际 " + passed);
+        if (skipped > 0) {
+            // 用 System.out 而不是 fail：条件跳过是设计如此（缺存档不能把回归弄红），
+            // 但必须让人看见「有多少覆盖是名义上的」。
+            System.out.println("[SELFTEST] " + skipped + "/" + SELF_TESTS.length
+                    + " 个自测因缺夹具而跳过（覆盖是名义上的）：" + skippedNames);
+        }
+        assertTrue(passed > 0, "至少要有一个真通过的自测，实际 " + passed);
     }
 }
