@@ -122,7 +122,7 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.BraidRunExtractionTest"),
                         DiscoverySelectors.selectClass(
-                                "net.shiroha233.roadweaver.route.RouteSelfTestRunnerTest"),
+                                "net.shiroha233.roadweaver.architecture.SelfTestRunnerTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.VolumeKindContractTest"),
                         DiscoverySelectors.selectClass(
