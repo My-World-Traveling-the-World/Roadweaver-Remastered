@@ -1,3 +1,4 @@
+/* 文件职责：把道路的顶层施工 feature 从 Streams Reflowing 的通用植被否决里排除（Streams 靠 feature 类型识别自家兼容项）。 */
 package dev.streamsreflowing.compat.roadweaver;
 
 import com.mojang.serialization.Codec;

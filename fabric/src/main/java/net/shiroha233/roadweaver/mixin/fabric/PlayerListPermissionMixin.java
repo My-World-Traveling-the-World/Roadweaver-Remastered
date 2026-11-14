@@ -1,3 +1,4 @@
+/* 文件职责：玩家列表权限注入：让道路的 OP 判定与服务器权限一致。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import com.mojang.authlib.GameProfile;

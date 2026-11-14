@@ -1,3 +1,4 @@
+/* 文件职责：第三方「ReTerraForged」灌木特征：在路面上阻止生成（该 mod 不在时 mixin 自动跳过）。 */
 package net.shiroha233.roadweaver.mixin.fabric.rtf;
 
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;

@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的长城就绪查询：是否就绪、可等待。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import net.shiroha233.roadweaver.api.outgoing.GreatWallReadiness;

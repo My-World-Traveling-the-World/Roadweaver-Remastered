@@ -1,3 +1,4 @@
+/* 文件职责：在路面上阻止原版树木生成（同上模式：命中路面直接返回 false）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.levelgen.feature.TreeFeature;

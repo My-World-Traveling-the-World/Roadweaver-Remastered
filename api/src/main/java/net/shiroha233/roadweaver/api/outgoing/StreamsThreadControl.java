@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod（streams）提供给我们的线程控制契约：设供应线程数、是否独占。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

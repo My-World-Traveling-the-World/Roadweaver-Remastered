@@ -1,3 +1,4 @@
+/* 文件职责：在路面上阻止竹子生成（生成前查 RoadPositionQuery，命中即取消）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.levelgen.feature.BambooFeature;

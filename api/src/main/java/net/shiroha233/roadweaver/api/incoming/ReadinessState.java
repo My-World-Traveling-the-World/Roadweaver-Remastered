@@ -1,3 +1,4 @@
+/* 文件职责：区域就绪的三态（可开始 / 应等待 / 未请求）——「不知道」不等于「可以开始」。 */
 package net.shiroha233.roadweaver.api.incoming;
 /**
  * 规划区域的就绪状态。

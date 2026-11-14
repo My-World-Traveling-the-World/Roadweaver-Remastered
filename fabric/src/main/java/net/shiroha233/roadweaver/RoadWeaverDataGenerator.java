@@ -1,3 +1,4 @@
+/* 文件职责：Fabric 侧数据生成主入口（datagen）。 */
 package net.shiroha233.roadweaver;
 
 import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;

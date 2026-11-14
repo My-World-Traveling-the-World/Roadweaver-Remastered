@@ -1,3 +1,4 @@
+/* 文件职责：外部负载的类型标签（预生成/传送/巡航/前台/其它）——决定道路要不要让路。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

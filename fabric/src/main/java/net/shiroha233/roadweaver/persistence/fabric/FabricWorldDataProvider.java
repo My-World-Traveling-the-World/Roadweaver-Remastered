@@ -1,3 +1,4 @@
+/* 文件职责：世界数据提供者的 Fabric 实现（存档/维度切换时的数据装载与保存）。 */
 package net.shiroha233.roadweaver.persistence.fabric;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;

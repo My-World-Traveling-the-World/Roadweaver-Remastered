@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod 往路网注册结构端点的公开入口（incoming 契约的门面）。 */
 package net.shiroha233.roadweaver.api;
 
 import net.minecraft.core.BlockPos;

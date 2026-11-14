@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod 提供给我们的负载信号契约：是否忙、是否该暂停道路协调、推荐线程数/规划道数。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

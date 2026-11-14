@@ -1,3 +1,4 @@
+/* 文件职责：第三方「ReTerraForged」模板特征：在路面上阻止生成。 */
 package net.shiroha233.roadweaver.mixin.fabric.rtf;
 
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;

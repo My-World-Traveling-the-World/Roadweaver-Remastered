@@ -1,3 +1,4 @@
+/* 文件职责：告示牌方块实体注入：路面上的告示牌内容/更新保护。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.nbt.CompoundTag;

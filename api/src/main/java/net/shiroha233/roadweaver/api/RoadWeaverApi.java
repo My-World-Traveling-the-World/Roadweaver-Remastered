@@ -1,3 +1,4 @@
+/* 文件职责：道路模组的对外门面：安装/查询后端（backend）与能力位。 */
 package net.shiroha233.roadweaver.api;
 
 import java.util.Collections;

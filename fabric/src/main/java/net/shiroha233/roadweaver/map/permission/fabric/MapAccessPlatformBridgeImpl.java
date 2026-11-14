@@ -1,3 +1,4 @@
+/* 文件职责：地图访问权限桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.map.permission.fabric;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentTarget;

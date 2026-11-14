@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的巡航信号查询：CPU 保护是否生效、Sodium 建造线程上限。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import net.shiroha233.roadweaver.api.outgoing.CruiseSignals;

@@ -1,3 +1,4 @@
+/* 文件职责：服务端地图补丁桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.network.fabric;
 
 import net.minecraft.resources.ResourceLocation;

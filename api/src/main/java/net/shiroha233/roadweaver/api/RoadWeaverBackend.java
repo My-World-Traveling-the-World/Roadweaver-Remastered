@@ -1,3 +1,4 @@
+/* 文件职责：后端契约：别的模组实现它来接管结构预留/释放（我们只调接口）。 */
 package net.shiroha233.roadweaver.api;
 
 import java.util.Set;

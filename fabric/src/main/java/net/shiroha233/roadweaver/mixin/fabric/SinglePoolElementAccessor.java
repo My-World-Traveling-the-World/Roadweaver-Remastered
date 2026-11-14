@@ -1,3 +1,4 @@
+/* 文件职责：暴露 SinglePoolElement 的私有字段供模板解析使用（@Accessor）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;

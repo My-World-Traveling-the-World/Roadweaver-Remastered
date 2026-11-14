@@ -1,3 +1,4 @@
+/* 文件职责：Fabric 世界数据附件注册（把道路存档数据挂到 ServerLevel 上）。 */
 package net.shiroha233.roadweaver.persistence.attachments;
 
 import com.mojang.serialization.Codec;

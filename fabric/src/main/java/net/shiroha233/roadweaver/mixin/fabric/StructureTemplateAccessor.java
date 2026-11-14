@@ -1,3 +1,4 @@
+/* 文件职责：暴露 StructureTemplate 的私有成员供模板方块读取使用（@Accessor）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;

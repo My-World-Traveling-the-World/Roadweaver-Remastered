@@ -1,3 +1,4 @@
+/* 文件职责：鼠标滚轮注入：手绘路线编辑器里用滚轮缩放/滚动。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.client.MouseHandler;

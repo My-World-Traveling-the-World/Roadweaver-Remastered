@@ -1,3 +1,4 @@
+/* 文件职责：同上 V2 版本（该 mod 有两个版本的同类特征，需分别拦）。 */
 package net.shiroha233.roadweaver.mixin.fabric.tyg;
 
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;

@@ -1,3 +1,4 @@
+/* 文件职责：结构选择入口的 Fabric 实现（@ExpectPlatform 的平台侧）。 */
 package net.shiroha233.roadweaver.client.fabric;
 
 import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;

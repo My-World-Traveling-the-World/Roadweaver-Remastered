@@ -1,3 +1,4 @@
+/* 文件职责：chunky 契约的注册表：按 ownerId 注册/注销，重名直接拒绝。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 import java.util.List;

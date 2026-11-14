@@ -1,3 +1,4 @@
+/* 文件职责：暴露 ServerChunkCache 的私有方法供结构查询使用（@Invoker，不是行为改动）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.chunk.ChunkAccess;

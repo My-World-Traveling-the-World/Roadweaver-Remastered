@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod（chunky）提供给我们的运行时契约：是否有活跃任务、能否重载配置。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

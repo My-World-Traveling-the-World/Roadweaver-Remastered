@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线按键桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.route.editor.fabric;
 
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;

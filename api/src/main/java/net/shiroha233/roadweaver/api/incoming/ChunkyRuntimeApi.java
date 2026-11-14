@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的 chunky 运行时查询：是否有活跃任务、能否重载配置。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import net.shiroha233.roadweaver.api.outgoing.ChunkyRuntime;

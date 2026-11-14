@@ -1,3 +1,4 @@
+/* 文件职责：负载信号契约的注册表：按 ownerId 注册/注销，并对「多源负载」做聚合。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 import java.util.ArrayList;

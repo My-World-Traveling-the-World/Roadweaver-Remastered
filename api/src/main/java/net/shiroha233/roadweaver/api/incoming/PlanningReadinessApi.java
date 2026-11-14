@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的区域就绪请求：请求区域、查状态、查进度摘要。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import net.minecraft.server.level.ServerLevel;

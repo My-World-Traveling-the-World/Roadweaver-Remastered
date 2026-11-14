@@ -1,3 +1,4 @@
+/* 文件职责：客户端网络桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.network.fabric;
 
 import net.minecraft.resources.ResourceLocation;

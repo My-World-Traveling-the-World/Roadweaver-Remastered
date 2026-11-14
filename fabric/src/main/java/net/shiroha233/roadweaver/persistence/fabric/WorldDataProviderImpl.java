@@ -1,3 +1,4 @@
+/* 文件职责：世界数据提供者契约的 Fabric 平台侧实现（@ExpectPlatform 的落地）。 */
 package net.shiroha233.roadweaver.persistence.fabric;
 
 import net.shiroha233.roadweaver.persistence.WorldDataProvider;

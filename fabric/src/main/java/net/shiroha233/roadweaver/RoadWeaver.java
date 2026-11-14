@@ -1,3 +1,4 @@
+/* 文件职责：RoadWeaver 模组主类（Fabric）：注册入口，把平台实现挂到 common 的契约上。 */
 package net.shiroha233.roadweaver;
 
 import net.fabricmc.api.ModInitializer;

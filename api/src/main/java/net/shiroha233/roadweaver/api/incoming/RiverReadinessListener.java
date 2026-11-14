@@ -1,3 +1,4 @@
+/* 文件职责：河流就绪回调契约（只一个方法，避免把内部状态漏给消费方）。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 /**

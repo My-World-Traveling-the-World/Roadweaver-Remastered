@@ -1,3 +1,4 @@
+/* 文件职责：规划生命周期回调契约（河流预热完 / 初始生成开始与结束）。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 /**

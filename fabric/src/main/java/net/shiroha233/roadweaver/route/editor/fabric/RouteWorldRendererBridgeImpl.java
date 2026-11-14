@@ -1,3 +1,4 @@
+/* 文件职责：手绘路线世界渲染桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.route.editor.fabric;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;

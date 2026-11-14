@@ -1,3 +1,4 @@
+/* 文件职责：客户端按键文本桥的 Fabric 实现。 */
 package net.shiroha233.roadweaver.client.loading.fabric;
 
 /**

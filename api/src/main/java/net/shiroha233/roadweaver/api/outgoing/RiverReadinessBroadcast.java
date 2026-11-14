@@ -1,3 +1,4 @@
+/* 文件职责：河流就绪的一次性广播：发布就绪、查是否就绪与监听器数量、可重置。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 import net.shiroha233.roadweaver.api.incoming.RiverReadinessApi;

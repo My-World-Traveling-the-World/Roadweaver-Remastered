@@ -1,3 +1,4 @@
+/* 文件职责：加载界面的进度/文字注入（显示道路规划阶段）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.client.gui.GuiGraphics;

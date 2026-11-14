@@ -1,3 +1,4 @@
+/* 文件职责：第三方「Oh The Trees You'll Grow」结构树特征：在路面上阻止生成。 */
 package net.shiroha233.roadweaver.mixin.fabric.tyg;
 
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;

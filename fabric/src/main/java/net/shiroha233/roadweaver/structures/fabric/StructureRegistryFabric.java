@@ -1,3 +1,4 @@
+/* 文件职责：结构类型注册的 Fabric 实现（把道路自带的结构注册进原版注册表）。 */
 package net.shiroha233.roadweaver.structures.fabric;
 
 import net.minecraft.core.Registry;

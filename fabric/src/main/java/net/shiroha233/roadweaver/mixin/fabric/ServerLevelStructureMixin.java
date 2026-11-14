@@ -1,3 +1,4 @@
+/* 文件职责：服务器世界的结构相关注入（结构起点查询路径）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.chunk.ChunkAccess;

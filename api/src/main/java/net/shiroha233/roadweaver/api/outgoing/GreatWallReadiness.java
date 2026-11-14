@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod（长城）提供给我们的就绪契约：是否就绪、等待、进度签名。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

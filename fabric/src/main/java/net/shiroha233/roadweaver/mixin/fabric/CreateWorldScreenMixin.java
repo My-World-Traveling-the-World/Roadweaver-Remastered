@@ -1,3 +1,4 @@
+/* 文件职责：创建世界界面的逻辑注入（与 InitMixin 分工：这里改行为，那里只做初始化）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.network.chat.Component;

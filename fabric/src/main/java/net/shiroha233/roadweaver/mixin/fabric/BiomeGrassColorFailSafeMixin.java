@@ -1,3 +1,4 @@
+/* 文件职责：草色计算的兼容性兜底：第三方模组动态扩展 GrassColorModifier 时可能出现 AbstractMethodError，这里在渲染线程兜底成基础草色而不是崩溃。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.biome.Biome;

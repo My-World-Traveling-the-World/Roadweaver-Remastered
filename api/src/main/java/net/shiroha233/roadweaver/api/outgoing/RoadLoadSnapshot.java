@@ -1,3 +1,4 @@
+/* 文件职责：某一时刻聚合后的负载快照（只读），供道路侧决策使用。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 import java.util.List;

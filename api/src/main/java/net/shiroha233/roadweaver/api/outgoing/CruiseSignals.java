@@ -1,3 +1,4 @@
+/* 文件职责：别的 mod 提供给我们的巡航信号契约：CPU 保护、Sodium 建造线程上限、资源阶段名。 */
 package net.shiroha233.roadweaver.api.outgoing;
 
 /**

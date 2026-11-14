@@ -1,3 +1,4 @@
+/* 文件职责：暴露 StructureManager 的私有成员供结构解析使用（@Accessor）。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.LevelAccessor;

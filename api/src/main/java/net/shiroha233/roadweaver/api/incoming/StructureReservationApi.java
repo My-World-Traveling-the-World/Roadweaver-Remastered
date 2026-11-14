@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的结构预留：预留/查询/按区块释放。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import net.minecraft.core.BlockPos;

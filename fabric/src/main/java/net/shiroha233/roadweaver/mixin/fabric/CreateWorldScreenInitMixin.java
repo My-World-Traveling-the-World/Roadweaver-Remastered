@@ -1,3 +1,4 @@
+/* 文件职责：创建世界界面的初始化注入：把道路模组的选项挂进该界面。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.core.Registry;

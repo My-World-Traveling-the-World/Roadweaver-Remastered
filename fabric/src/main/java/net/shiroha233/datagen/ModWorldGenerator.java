@@ -1,3 +1,4 @@
+/* 文件职责：Fabric 侧世界生成器数据生成入口（datagen）。 */
 package net.shiroha233.datagen;
 
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;

@@ -1,3 +1,4 @@
+/* 文件职责：在路面上阻止巨型菌类生成。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
 import net.minecraft.world.level.levelgen.feature.HugeFungusConfiguration;

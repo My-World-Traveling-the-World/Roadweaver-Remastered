@@ -1,3 +1,4 @@
+/* 文件职责：我们暴露给别的 mod 的河流就绪订阅：注册/通知/注销监听器。 */
 package net.shiroha233.roadweaver.api.incoming;
 
 import java.util.List;

@@ -1,3 +1,4 @@
+/* 文件职责：客户端初始化：在 CLIENT_STARTED 时自证各契约的运行时占用（谁提供、谁消费），供主菜单即可验证接线。 */
 package net.shiroha233.roadweaver.client.fabric;
 
 import net.fabricmc.api.ClientModInitializer;
