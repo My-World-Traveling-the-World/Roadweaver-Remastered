@@ -1,0 +1,77 @@
+# 文件职责头基线（ratchet：只许缩小，不许扩大）
+#
+# 约定：每个生产 java 文件的第一行是
+#   /* 文件职责：这一行用中文说清这个文件干什么 */
+#
+# 本文件登记「暂时还没有职责头」的文件。补好一个就从这里删一行。
+# 新文件必须有头 —— 基线里找不到它，守卫会直接红。
+#
+# 2026-11-15 建立时的缺口：62 / 679（90% 已有头）。
+# 其中 api 25 个、mixin 20 个占 73% —— 契约层与字节码注入层，
+# 恰恰最需要一句话说明「这个东西为什么存在」。
+#
+# 维护方式：补好一个文件的头 → 从本文件删掉对应行 → 提交。
+# 守卫会同时检查两个方向：新增无头文件（红）与基线虚高（红）。
+
+api/src/main/java/net/shiroha233/roadweaver/api/RoadNetworkApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/RoadWeaverApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/RoadWeaverBackend.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/ChunkyRuntimeApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/CruiseSignalsApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/GreatWallReadinessApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/PlanningLifecycleApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/PlanningLifecycleListener.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/PlanningReadinessApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/ReadinessState.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/RiverReadinessApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/RiverReadinessListener.java
+api/src/main/java/net/shiroha233/roadweaver/api/incoming/StructureReservationApi.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/ChunkyRuntime.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/ChunkyRuntimeRegistry.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/CruiseSignals.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/CruiseSignalsRegistry.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/GreatWallReadiness.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/GreatWallReadinessRegistry.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/LoadKind.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RiverReadinessBroadcast.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RoadLoadSignals.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RoadLoadSignalsRegistry.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/RoadLoadSnapshot.java
+api/src/main/java/net/shiroha233/roadweaver/api/outgoing/StreamsThreadControl.java
+common/src/main/java/dev/streamsreflowing/compat/roadweaver/RoadWeaverPathFeature.java
+fabric/src/main/java/net/shiroha233/datagen/ModWorldGenerator.java
+fabric/src/main/java/net/shiroha233/roadweaver/RoadWeaver.java
+fabric/src/main/java/net/shiroha233/roadweaver/RoadWeaverDataGenerator.java
+fabric/src/main/java/net/shiroha233/roadweaver/client/fabric/ClientInit.java
+fabric/src/main/java/net/shiroha233/roadweaver/client/fabric/OpenPresetEditorEntry.java
+fabric/src/main/java/net/shiroha233/roadweaver/client/fabric/OpenStructureSelectionEntry.java
+fabric/src/main/java/net/shiroha233/roadweaver/client/loading/fabric/OpenMapKeyTextBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/map/permission/fabric/MapAccessPlatformBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/BambooFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/BiomeGrassColorFailSafeMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/CreateWorldScreenInitMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/CreateWorldScreenMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/HugeFungusFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/HugeMushroomFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/LevelLoadingScreenMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/PlayerListPermissionMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/RouteScrollMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/ServerChunkCacheFutureInvoker.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/ServerLevelStructureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/SignBlockEntityMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/SinglePoolElementAccessor.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/StructureManagerAccessor.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/StructureTemplateAccessor.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/TreeFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/rtf/RTFBushFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/rtf/RTFTemplateFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/tyg/TreeFromStructureNBTFeatureMixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/mixin/fabric/tyg/TreeFromStructureNBTFeatureV2Mixin.java
+fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ClientNetBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/network/fabric/ServerMapPatchBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/persistence/attachments/WorldDataAttachment.java
+fabric/src/main/java/net/shiroha233/roadweaver/persistence/fabric/FabricWorldDataProvider.java
+fabric/src/main/java/net/shiroha233/roadweaver/persistence/fabric/WorldDataProviderImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/route/editor/fabric/RouteKeysBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/route/editor/fabric/RouteWorldRendererBridgeImpl.java
+fabric/src/main/java/net/shiroha233/roadweaver/structures/fabric/StructureRegistryFabric.java
