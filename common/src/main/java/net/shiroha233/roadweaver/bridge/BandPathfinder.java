@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.bridge;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
+import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.shouldAvoidPlanning;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -107,6 +108,15 @@ public final class BandPathfinder implements Pathfinder {
         // 若直接信任它则 clearance=0，硬避让半径归零（路直接穿过村庄建筑）。
         // 这里改用 planningRoadRadius() —— 与四个旧寻路器完全同一口径。
         boolean[] blocked = new boolean[columns * rows];
+        // 2026-11-14 修复（审计缺陷 A）：硬掩码与软掩码必须分开。
+        //   硬掩码 blocked：走 blocksPlanningObstacle，受 BuildingObstacleMode 门控 ——
+        //     HARD 模式硬禁穿建筑；PENALTY 模式不硬禁（这是「搜索失败自动降级」的语义）。
+        //   软掩码 penalized：走 shouldAvoidPlanning，**不受模式门控** ——
+        //     它只查真实快照，任何模式下都返回真实的建筑占用。
+        // 旧实现里软势从 blocked 派生，PENALTY 下 blocked 全 false ⇒ 软势也恒 0，
+        // 降级重搜等于在完全无障碍的地图上找路（直接穿村穿楼）。
+        // 现在 PENALTY 下降级重搜仍能感知建筑：不硬禁，但软势非零、尽量绕开。
+        boolean[] penalized = new boolean[columns * rows];
         int clearance = planningRoadRadius();
         for (int iz = 0; iz < rows; iz++) {
             for (int ix = 0; ix < columns; ix++) {
@@ -115,12 +125,14 @@ public final class BandPathfinder implements Pathfinder {
                 int x = minX + ix * step;
                 int z = minZ + iz * step;
                 int y = heights[index];
-                blocked[index] = blocksPlanningObstacle(
-                        new BlockPos(x, y, z), clearance);
+                BlockPos pos = new BlockPos(x, y, z);
+                boolean hard = blocksPlanningObstacle(pos, clearance);
+                blocked[index] = hard;
+                penalized[index] = hard || shouldAvoidPlanning(pos, clearance);
             }
         }
         ObstacleField obstacles = new StridedObstacleField(
-                minX, minZ, columns, rows, step, blocked, outOfTerrain);
+                minX, minZ, columns, rows, step, blocked, penalized, outOfTerrain);
 
         // ③ 新内核：度量 → 场求解 → 回溯 → 曲率平滑
         FinslerMetric metric = new FinslerMetric(
@@ -167,15 +179,20 @@ public final class BandPathfinder implements Pathfinder {
      *
      * <p>{@code ObstaclePotential} 只认 1:1 网格，所以这里先按<b>网格坐标</b>
      * 建势场，再把方块坐标吸附进来 —— 与 {@link StridedTerrainField} 的吸附口径一致。</p>
+     *
+     * <p><b>2026-11-14（审计缺陷 A）</b>：软势从 {@code penalized}（真实障碍判定，
+     * 不受模式门控）派生，而不是从 {@code blocked}（受 BuildingObstacleMode 门控）
+     * 派生 —— 否则 PENALTY 降级重搜时软势恒 0，等于放弃避障。</p>
      */
     private record StridedObstacleField(int minX, int minZ, int columns, int rows, int step,
-                                        boolean[] blocked, boolean[] outOfTerrain,
+                                        boolean[] blocked, boolean[] penalized,
+                                        boolean[] outOfTerrain,
                                         ObstaclePotential soft) implements ObstacleField {
 
         StridedObstacleField(int minX, int minZ, int columns, int rows, int step,
-                             boolean[] blocked, boolean[] outOfTerrain) {
-            this(minX, minZ, columns, rows, step, blocked, outOfTerrain,
-                    ObstaclePotential.fromMask(0, 0, columns, rows, blocked, 3.0));
+                             boolean[] blocked, boolean[] penalized, boolean[] outOfTerrain) {
+            this(minX, minZ, columns, rows, step, blocked, penalized, outOfTerrain,
+                    ObstaclePotential.fromMask(0, 0, columns, rows, penalized, 3.0));
         }
 
         @Override
