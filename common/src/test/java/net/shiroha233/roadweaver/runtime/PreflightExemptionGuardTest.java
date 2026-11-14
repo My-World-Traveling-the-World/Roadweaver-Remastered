@@ -223,7 +223,14 @@ public final class PreflightExemptionGuardTest {
     /** 读取某方法的方法体（从签名行到其配对花括号结束）。找不到返回 null。 */
     private static String readMethodBody(String relativePath, String methodMarker) throws Exception {
         Path path = locate(relativePath);
-        if (path == null) return null;
+        if (path == null) {
+            // 2026-11-15：原来这里 return null，而 6 个调用点都不判空 ⇒ 等到
+            // body.indexOf(...) 才抛 NPE，报错是「Cannot invoke String.indexOf because body is null」，
+            // 完全看不出是「源码文件找不到」还是「方法被改名」。这里直接给出可读原因。
+            throw new IllegalStateException("守卫需要读取的源码不存在：" + relativePath
+                    + " —— 若文件被移动请更新本守卫；当前工作目录 "
+                    + Path.of("").toAbsolutePath());
+        }
         var lines = Files.readAllLines(path, StandardCharsets.UTF_8);
         int start = -1;
         for (int i = 0; i < lines.size(); i++) {
@@ -234,7 +241,11 @@ public final class PreflightExemptionGuardTest {
                 break;
             }
         }
-        if (start < 0) return null;
+        if (start < 0) {
+            // 同上：方法被改名/删除时给明确原因，而不是让调用方 NPE。
+            throw new IllegalStateException("在 " + relativePath + " 里找不到方法体 "
+                    + methodMarker + " —— 方法被改名或删除了？请同步更新本守卫");
+        }
         StringBuilder sb = new StringBuilder();
         int depth = 0;
         boolean seen = false;
