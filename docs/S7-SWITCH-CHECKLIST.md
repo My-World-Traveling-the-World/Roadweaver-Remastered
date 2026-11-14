@@ -1,5 +1,24 @@
 # S7 切换清单：从「新内核待命」到「默认启用」
 
+> ## ⚠ 时效性更正（2026-11-14 补，**读下文前先读这一节**）
+>
+> 本文写于 2026-11-13，当时计划是「第 1 级只加开关、**默认仍走 LEGACY**」。
+> **实际执行已经越过这个计划**，逐条更正如下：
+>
+> | 下文写的 | 现在的实际 |
+> |---|---|
+> | 「尚未接线：`ProfileDpSource` 还没进生产路径的开关」（§现状）| **已接线**：`ProfileSolverMode.fromProperty()` 默认返回 **DP**，生产走 `TargetYComputation.applyProfileSolver` |
+> | 「第 1 级：剖面求解器加开关（**默认仍走旧链路**）| 默认**已经是 DP**（用户 2026-11-13 拍板「全面转向新算法，禁止退回旧版」）|
+> | 「模式 `LEGACY`/`DP`/**`AB`**」| 实际只有 `LEGACY`/`DP`；AB 是独立的 `-Droadweaver.profileAb=on` 观测开关 |
+> | 「`DP` 失败 ⇒ 返回**旧剖面**」| 仍是旧剖面（DP 不可行 ⇒ `Optional.empty()` ⇒ 调用方跑旧 pass），这条没变 |
+> | ★「**不许**在没有真实地形数据的情况下把默认值切成 `DP`」| **与用户决定冲突**：默认已切 DP。第 0 级数据的用途从「决定能不能切」变成「**验证 DP 质量是否真的更好**」|
+> | 「游戏崩溃 ⇒ 立刻把默认值切回 `LEGACY`」| **不可用**：用户明确禁止「新实现不完善就退回旧版」。正确回滚是**整包回滚 jar**（改回上一版部署件），不是切 LEGACY |
+>
+> **2026-11-14 又前进一步**：缺陷 C（纵断面双跑）主体完成 ——
+> DP 现在**先求解，成功就跳过整段旧 pass**（不再「旧 pass 跑完再被 DP 覆盖」）。
+> 旧 pass 只在「DP 不可行 / 显式 `-Droadweaver.profileSolver=legacy`」时才跑。
+> 新增的 `ProfileFallback.terrainFollowing` 是 DP 异常时的几何回落解。
+
 > **相关文档**：要删哪些方法看 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（36/44 会随旧链路消失）；
 > 文件级分类看 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)；
 > 每步验收跑 [`verify.ps1`](../verify.ps1)；当前整体状态见 [`STATUS-20261113.md`](STATUS-20261113.md)。
@@ -19,8 +38,10 @@
 | `BuildFrame`（桥范围按路缓存） | ✅ 已上线（唯一已生效的性能改动）|
 | `verify.ps1` | ✅ 双模块闸门（fabric 编译 + common 回归）|
 
-**尚未接线**：`ProfileDpSource` / `ModeDpSolver` 还没有进入生产路径的开关。
-下面第 1 级是纯数据采集（已有），第 2 级起需要写代码。
+**接线现状（2026-11-14 更正）**：`ProfileDpSource` **已进入生产路径**
+（`TargetYComputation.applyProfileSolver`，默认 `ProfileSolverMode=DP`）；
+`ModeDpSolver` 仍只经 `ProfileAbObserver.observeModes` 跑日志、**决策不回写 spans**
+（对应第 2 级，未做）。
 
 ---
 
@@ -57,7 +78,7 @@
 
 ---
 
-## 第 1 级：剖面求解器加开关（默认仍走旧链路）
+## 第 1 级：剖面求解器加开关（**已越过：默认已是 DP**）
 
 **前置**：第 0 级通过。
 
@@ -282,14 +303,17 @@ for (CompilationUnitTree u : units)
 
 | 症状 | 处置 |
 |---|---|
-| 游戏崩溃 / 存档报错 | 立刻把默认值切回 `LEGACY` 并重新部署；**不要**继续调参 |
+| 游戏崩溃 / 存档报错 | 立刻**整包回滚到上一版 jar**（`docs/RELEASES.md` 有 SHA 与回退件）；**不要**把默认切回 LEGACY —— 用户明确禁止「新实现不完善就退回旧版」|
 | 路面明显变差（浮空/深槽) | 同上；把该批路线的 `tag` 记下来，回头看 `worstCases()` |
 | `verify.ps1` 红 | 不提交；若是编译错，先 `git status` 看有没有半成品 |
 | 部署后世界生成卡住 | 检查是否误删了 `promoteRuntimeBridges` 相关路径（**它是安全网，不能删**）|
 
 ## ★ 三条不许做
 
-1. **不许**在没有真实地形数据的情况下把默认值切成 `DP`；
+1. ~~**不许**在没有真实地形数据的情况下把默认值切成 `DP`~~
+   —— **已作废（2026-11-14）**：默认已是 DP（用户 2026-11-13 拍板全面转新算法）。
+   现在这条的正确含义是：**没有第 0 级数据，不许宣称 DP 质量更好** ——
+   默认可以是 DP，但「更好」必须有 `[PROFILE-REPLAY]` 的土方/p95 数字支撑。
 2. **不许**在第 1 级验证通过前动第 2 级（桥隧依赖剖面的高度契约）；
 3. **不许**删 `promoteRuntimeBridges` —— 它是「别把半边河床填平」的安全网
    （见 `REFACTOR.md` 的自我更正段）。
