@@ -26,7 +26,24 @@ public final class CostModel {
     private CostModel() {
     }
 
-    /** 代价参数。默认值取自旧版经验值：挖比方贵（破坏地形更显眼），深挖额外惩罚更重。 */
+    /**
+     * 代价参数。
+     *
+     * <p><b>默认值（2026-11-14 修正，审计 NEW-7）</b>：{@code cutWeight=0.7}、
+     * {@code fillWeight=1.0} —— <b>填方严格比挖方贵</b>，也就是 prefer-cut。</p>
+     *
+     * <p>原来这里是 {@code (1.0, 0.7)}，即填方比挖方便宜 30%，语义正好写反了：
+     * DP 会系统性选择「垫土抬高」而不是「削平开挖」，产出长距离人工路堤与天桥。
+     * 旧版（oracle）的做法是<b>硬约束</b>：{@code limits.fill()} 默认 0，
+     * 剖面只许降不许升（{@code RoadGradePlanner} 与 {@code RoadSnapService}
+     * 的多处注释都写着「prefer-cut：只降不升，绝不造天桥」）。</p>
+     *
+     * <p>DP 内不能直接用 0 当权重（那样填方永远不被选择、桥面也就无从谈起），
+     * 所以把 prefer-cut 表达成<b>权重次序</b>：同一深度下 {@code fillCost > cutCost}，
+     * 只要挖方可行就优先挖。数值取镜像（0.7 / 1.0）而不是放大到 10:1，
+     * 是为了让总代价量级与旧的 (1.0, 0.7) 保持一致 —— 深挖惩罚
+     * {@code deepMultiplier=3.0} 与阈值 {@code deepThreshold=16} 的相对关系不变。</p>
+     */
     public record Settings(
             double cutWeight,
             double fillWeight,
@@ -34,7 +51,7 @@ public final class CostModel {
             double deepMultiplier) {
 
         public static Settings defaults() {
-            return new Settings(1.0, 0.7, 16, 3.0);
+            return new Settings(0.7, 1.0, 16, 3.0);
         }
 
         public Settings {
