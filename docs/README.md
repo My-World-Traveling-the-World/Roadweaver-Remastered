@@ -21,6 +21,7 @@
 | 后处理 20 个文件分别是留还是删 | [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md) |
 | 死代码怎么审（以及为什么不能批量删） | [`DEAD-METHOD-AUDIT.md`](DEAD-METHOD-AUDIT.md) |
 | 维护性指标快照 | [`STATUS-20261115.md`](STATUS-20261115.md) 的「九、附录」节（原 METRICS 已并入）|
+| **下一步该给哪补测试** | [`TEST-BLIND-SPOTS-20261115.md`](TEST-BLIND-SPOTS-20261115.md) ← **盲区清单，先读它的「判据局限」再看结论** |
 
 ---
 
