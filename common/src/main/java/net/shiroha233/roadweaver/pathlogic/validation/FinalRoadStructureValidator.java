@@ -217,16 +217,18 @@ public final class FinalRoadStructureValidator {
      * {@code AboveColumnClearer.fallingCapStartY/EndY} with the same surface Y
      * and clear height.</p>
      *
-     * <p>{@code SHOULDER} deliberately stays excluded: shoulders are not built
-     * at all ({@code SegmentPaver.paveSegment} returns before grading them and
-     * {@code RoadConstructionSafety.gradeShoulders} has no caller), so a
-     * shoulder-only collision can never fail construction.</p>
+     * <p><b>2026-11-15</b>：{@code SHOULDER} 这个种类已从
+     * {@code RoadConstructionVolumePlanner.Kind} 里删除 ——
+     * 路肩本来就不建（{@code SegmentPaver} 原文「Road shoulders are intentionally
+     * disabled」，{@code RoadConstructionSafety.gradeShoulders} 全仓无调用方），
+     * 而本校验器是体积规划的唯一消费方、又把这个种类直接排除，
+     * 等于让 Planner 每站白算两侧各 5 列的水系查询与地形采样。
+     * 现在源头不再产出，这里的排除分支也随之消失。</p>
      */
-    private static boolean isRoadBodyVolume(RoadConstructionVolumePlanner.Kind kind) {
+    static boolean isRoadBodyVolume(RoadConstructionVolumePlanner.Kind kind) {
         return switch (kind) {
             case ROAD, TUNNEL, TUNNEL_PORTAL, TUNNEL_JUNCTION, BRIDGE_DECK -> true;
             case ROAD_FALLING_CAP, BRIDGE_FALLING_CAP -> true;
-            case SHOULDER -> false;
             case BRIDGE_TEMPLATE, BRIDGE_SUPPORT, BRIDGE_PIER -> true;
         };
     }

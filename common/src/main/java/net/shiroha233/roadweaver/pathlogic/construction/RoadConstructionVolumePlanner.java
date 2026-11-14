@@ -43,7 +43,6 @@ import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 
 /** Pure geometry for every block column a finalized road can modify. */
 public final class RoadConstructionVolumePlanner {
-    private static final int SHOULDER_DEPTH = 5;
     private static final int BRIDGE_BODY_PERIOD = 7;
     private static final int BRIDGE_SUPPORT_PHASE = 3;
 
@@ -53,7 +52,6 @@ public final class RoadConstructionVolumePlanner {
     public enum Kind {
         ROAD,
         ROAD_FALLING_CAP,
-        SHOULDER,
         TUNNEL,
         TUNNEL_PORTAL,
         TUNNEL_JUNCTION,
@@ -282,23 +280,7 @@ public final class RoadConstructionVolumePlanner {
                 }
                 continue;
             }
-            if (masks.roadCrossing[index] || centers.size() < 2) continue;
-            BlockPos before = centers.get(Math.max(0, index - 1));
-            BlockPos after = centers.get(Math.min(centers.size() - 1, index + 1));
-            int nx = Integer.compare(after.getZ(), before.getZ());
-            int nz = Integer.compare(before.getX(), after.getX());
-            if (nx == 0 && nz == 0) continue;
-            int maxProjection = Integer.MIN_VALUE;
-            for (BlockPos pos : segment.positions()) {
-                if (pos != null) maxProjection = Math.max(maxProjection, pos.getX() * nx + pos.getZ() * nz);
-            }
-            if (maxProjection == Integer.MIN_VALUE) continue;
-            for (BlockPos edge : segment.positions()) {
-                if (edge == null || edge.getX() * nx + edge.getZ() * nz != maxProjection) continue;
-                for (int width = 1; width <= SHOULDER_DEPTH; width++) {
-                    add.accept(edge.offset(nx * width, 0, nz * width));
-                }
-            }
+            // 路肩列不再采样（见下方 visit 里的说明：路肩已停建）。
         }
         return List.copyOf(unique.values());
     }
@@ -371,64 +353,13 @@ public final class RoadConstructionVolumePlanner {
             if (!visitFallingCap(visitor, index, Kind.ROAD_FALLING_CAP,
                     column.getX(), column.getZ(), target, clearHeight)) return false;
         }
-        if (!masks.roadCrossing[index]) {
-            return visitShoulders(road, context, visitor, centers, positions, heights, index);
-        }
-        return true;
-    }
-
-    private static boolean visitShoulders(RoadData road,
-                                          Context context,
-                                          VolumeVisitor visitor,
-                                          List<BlockPos> centers,
-                                          List<BlockPos> positions,
-                                          int[] profile,
-                                          int index) {
-        if (centers.size() < 2) return true;
-        BlockPos before = centers.get(Math.max(0, index - 1));
-        BlockPos after = centers.get(Math.min(centers.size() - 1, index + 1));
-        int dx = Integer.compare(after.getX(), before.getX());
-        int dz = Integer.compare(after.getZ(), before.getZ());
-        if (dx == 0 && dz == 0) return true;
-        return visitShoulderSide(road, context, visitor, positions, profile, -dz, dx, index)
-                && visitShoulderSide(road, context, visitor, positions, profile, dz, -dx, index);
-    }
-
-    private static boolean visitShoulderSide(RoadData road,
-                                             Context context,
-                                             VolumeVisitor visitor,
-                                             List<BlockPos> positions,
-                                             int[] profile,
-                                             int nx,
-                                             int nz,
-                                             int segmentIndex) {
-        int maxProjection = Integer.MIN_VALUE;
-        for (BlockPos pos : positions) {
-            if (pos != null) maxProjection = Math.max(maxProjection, pos.getX() * nx + pos.getZ() * nz);
-        }
-        if (maxProjection == Integer.MIN_VALUE) return true;
-        Set<Long> visited = new HashSet<>();
-        for (int i = 0; i < positions.size(); i++) {
-            BlockPos edge = positions.get(i);
-            if (edge == null || edge.getX() * nx + edge.getZ() * nz != maxProjection) continue;
-            int roadY = profile[i];
-            for (int width = 1; width <= SHOULDER_DEPTH; width++) {
-                BlockPos shoulder = edge.offset(nx * width, 0, nz * width);
-                long key = columnKey(shoulder.getX(), shoulder.getZ());
-                if (!visited.add(key) || context.watercourse().isWatercourse(
-                        shoulder.getX(), shoulder.getZ())) continue;
-                int terrain = context.terrain().sample(shoulder.getX(), shoulder.getZ());
-                if (terrain == roadY) continue;
-                int target = terrain < roadY
-                        ? Math.max(terrain, roadY - width)
-                        : Math.min(terrain, roadY + width);
-                if (terrain < target && road.roadType() == 0) continue;
-                int minY = Math.min(terrain, target);
-                int maxY = Math.max(terrain, target) - 1;
-                if (minY <= maxY && !visitor.visit(new ColumnVolume(segmentIndex, Kind.SHOULDER,
-                        shoulder.getX(), shoulder.getZ(), minY, maxY))) return false;
-            }
-        }
+        // 2026-11-15：路肩（SHOULDER）产出已删除。
+        // 施工端 `SegmentPaver` 明确写着「Road shoulders are intentionally disabled」，
+        // `RoadConstructionSafety.gradeShoulders` 全仓无调用方，
+        // 而本类唯一消费方 `FinalRoadStructureValidator` 也把它排除
+        // （`isRoadBodyVolume` 里 `case SHOULDER -> false`）。
+        // 也就是说：每站白算两侧各 5 列的「水系查询 + 地形采样 + 体积产出」，
+        // 拿到下游立刻被丢掉。删掉零行为变化，省掉这部分采样预算。
         return true;
     }
 
