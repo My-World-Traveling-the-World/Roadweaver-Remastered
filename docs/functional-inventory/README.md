@@ -166,12 +166,23 @@ aStarStep=8                              （A* 步长 8 格）
 
 ## 七、与重构版的对比
 
+> **统计日期：2026-11-15**（数字会随代码漂移；要看当前值请重新统计，不要引用本表当现状）
+
 | 维度 | 旧版 | 重构版（当前） | 差异 |
 |---|---|---|---|
-| 类数量 | 531 | 680 | +149 |
-| 有效代码行 | 89,670 | 97,756 | +8,086 |
-| 回归测试 | 482 | 708 | +226 |
-| 架构守卫 | 0 | 12 | 全新 |
-| 新算法包 | 0 | 33 文件 / 3,446 行 | metric/topology/band/pipeline/bridge |
+| 类数量（`.java` 文件数）| 531 | 679 | +148 |
+| 生产源码总行数（三模块 `src/main/java`）| 119,112 | 132,930 | +13,818 |
+| 回归测试（`PASS tests=` 实跑）| 482 | **811** | +329 |
+| 架构守卫类 | 0 | 13 | 全新 |
+| 新算法包 | 0 | 32 文件 / 4,150 行 | metric 8/1,215、topology 5/350、band 3/445、pipeline 10/1,045、bridge 6/1,095 |
 
-**重构版的新架构包目前只有 `bridge/BandPathfinder` 在生产路径上（≈888 行），其余 2,558 行还没接完。**
+**★ 更正（2026-11-15）：新架构五包现在都已进入生产路径，不再是「只有 BandPathfinder 接上」。**
+证据链：
+- `PipelinePlanner:167` → `new RoadPipeline(metric, null).planTopology(nodes)` ⇒ **pipeline + topology 在生产**（网络级拓扑：测地矩阵 + MST）
+- `BandPathfinder:279` → `new BandRouteSolver(metric, ElasticBandSolver.defaults())` ⇒ 单路链走 `pipeline/ab`
+- `BandRouteSolver:63` → `bandSolver.smooth(raw, !metric.isPassable)` ⇒ **band 在生产**
+- `BandRouteSolver` 内部调 `FastMarchingSolver`，后者 `:154-155` 调 `FinslerMetric.cost(dirX, dirZ)` ⇒ **metric 在生产**
+
+仍属观测/未接管的部分（与「新架构没接」是两件事）：
+- `ModeDpSolver` 桥隧决策**只观测不回写 spans**（设计稿见 `docs/DESIGN-SPAN-WRITEBACK.md`）
+- `RoadPipeline.run()`（完整含曲线那条）**无生产调用者**，生产只调 `planTopology`
