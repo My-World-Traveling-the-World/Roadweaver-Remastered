@@ -1923,3 +1923,83 @@ AccurateGradeRepairPlanner$ExactStructureRepairOutcome -> terrain/StructureRepai
   pathlogic→persistence 26→27，均在基线里注明原因。
 - 本项只改源码与测试，**未构建/部署新 jar**。
    拆分时逐字搬进了 `PlanningSection`。
+
+
+---
+
+# 2026-11-15 连续整理轮（不碰功能的机械清理）
+
+> 这一批没有改任何功能，全部是「让代码形态与真实复杂度对齐」的机械工作。
+> 之所以单独记一笔，是因为它们每一件的收益都**不能用测试数量衡量**，
+> 但累积起来会改变「读这个仓库的第一印象」。
+
+## 一、瘦类胖 import（两轮，净减 336 行）
+
+**起因是一次误判**：扫 `structures` 包时 `StructureKeys.java` 显示「被 0 个文件引用」，
+差点当死代码删掉。打开发现**这个文件里根本没有 `StructureKeys` 这个类型** ——
+它装的是 11 个包内顶层 record（`PredictedCandidateKey` / `ChunkRequestKey` /
+`ManualStartBatch` / `ObstacleTileKey` / `RouteStartPlan` / `PathCorridorPlan` …）。
+
+**为什么守卫抓不到**：`DeadCodeGuardTest` 匹配的是 `record`/`class` 声明，
+拿到的是那 11 个 record 名，它们都有引用 ⇒ 当然不报错。
+「文件名没有对应类型」不在任何守卫的检查范围里。
+**为什么能编译**：Java 只要求 public 类与文件名匹配，这些全是包内可见的。
+
+顺着这条线索查出**同一批拆分工作的副产物**：从上帝类搬出来的小类型，
+把原来那一整串 import 一起搬了过来，还保留着嵌套时的 4 空格缩进。
+
+判据推成 `import 行数 / 总行数 > 35%`，命中 9 个：
+
+| 文件 | 原行数 | import | 现行数 |
+|---|---|---|---|
+| `EndpointFilterOutcome` | 90 | **70（占比 78%）** | 29 |
+| `StructureCacheKeys` | 127 | 70 | 76 |
+| `RoadCrossingOps` | 177 | 66 | 127 |
+| `SpanState` | 99 | 37 | 72 |
+| `ChunkEntry` | 83 | 70（实际只用 3 个） | 22 |
+| `RoadIndex` / `SegmentGrid` / `SnapInternals` / `LevelLoadingScreenMixin` | — | — | — |
+
+**删法边界**：只删「正文里完全没出现简单名」的**非静态** import（`\b` 词边界，
+避免 `Map` 命中 `HashMap`）；**静态通配一律保留**（无法判定，删错直接编译失败）。
+
+## 二、文件职责头：90% → 100%
+
+`/* 文件职责：中文说明 */` 这条约定不影响编译，所以破坏了也没人能发现。
+实测 679 个生产文件里 617 有头，缺的 62 个里 `api` 25 + `mixin` 20 占 73% ——
+**恰是契约层与字节码注入层，最需要一句话说明「为什么存在」的地方**。
+
+先加守卫 `DutyHeaderGuardTest` + ratchet 基线（62 条），再分三批补齐：
+
+1. `api` 25 个（契约层，零引用是设计如此：我们不调自己、别人调）
+2. `mixin` 20 个（绝大多数是「在路面上阻止 XX 生成」；
+   `BiomeGrassColorFailSafeMixin` 是草色兜底，防第三方 mod 动态扩展枚举致 `AbstractMethodError`）
+3. 平台实现 17 个（fabric 侧 `*Impl` / `*Bridge` / 主入口 / datagen / 存档附件）
+
+**守卫双向校验（两条都做了负控）**：
+新增无头文件 ⇒ 红；**基线虚高（已补头但基线没删）⇒ 红**。
+第二条尤其重要 —— 没有它，基线会长期虚高，后人无法判断真实缺口。
+
+## 三、顺带核实的两件事（都推翻了原先的判断）
+
+1. **`BASELINE_DUTY_HEADERS = 172` 这个常量不存在** —— 此前记的「586 文件 / 298 有头」
+   已过时，实际 617/679。说明中间被人补过，**记忆里的旧数字不能再当现状**。
+2. **55 个空 `catch` 块的变量名全是 `ignored` / `_` / `unused` / `expected`** ——
+   全部是约定式忽略，**没有一个无说明的**。所以「空 catch 是隐患」这个直觉在本仓库不成立。
+
+## 四、当前质量仪表盘（2026-11-15）
+
+| 指标 | 值 | 备注 |
+|---|---|---|
+| 生产文件 / 测试文件 | 679 / 180 | |
+| 生产总行数 | 133,840 | 旧仓 119,112 |
+| 最大文件 | **1000 行**（`RoadMapScreen`）| **贴线，加一行就破** |
+| >950 行（预警）| 10 个 | 全部 ≤1000 |
+| `TODO`/`FIXME`/`XXX` | 1 | |
+| 无说明空 catch | **0** | 55 个都是约定式 `ignored` |
+| public 类型无 javadoc | 49 | |
+| 静态通配导入 | 408 | 分派键，非死码 |
+
+## 五、验证
+
+改动前后 `PASS tests=829`（import 两轮）与 `PASS tests=831`（守卫 + 文件头）一致；
+`:common:compileJava :fabric:compileJava` 同过；架构守卫 13 → 14 个。
