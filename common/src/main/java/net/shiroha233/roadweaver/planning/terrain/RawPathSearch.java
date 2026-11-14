@@ -156,8 +156,16 @@ final class RawPathSearch {
             }
             if (hasTunnelHeightHints(route, modeRoute)) {
                 PathTerrainField hintedTerrain = new TunnelHintTerrainField(terrain, route, modeRoute, step);
-                PathResult hintedResult = pathfinder.findRawPath(
-                        start, end, level, config.aStarMaxSteps(), cache, hintedTerrain, config);
+                // 2026-11-14 修复（审计 NEW-8）：这次隧道提示重搜原先在 HARD 作用域之外
+                // 直接调 findRawPath —— 此时 BuildingObstacleMode 已回落到 PENALTY，
+                // 硬障碍被全部无视。与主搜索同一口径包进 HARD 作用域。
+                final PathResult hintedResult;
+                try (StructureAvoidanceService.BuildingObstacleScope tunnelScope =
+                             withBuildingObstacleMode(
+                                     StructureAvoidanceService.BuildingObstacleMode.HARD_BUILDINGS_AND_CLUSTERS)) {
+                    hintedResult = pathfinder.findRawPath(
+                            start, end, level, config.aStarMaxSteps(), cache, hintedTerrain, config);
+                }
                 if (hintedResult.success() && hintedResult.hasRawPath()) {
                     List<BlockPos> rerouted = MountainSwitchbackPlanner.replaceIfSafer(
                             hintedResult.rawPath(), start, end, hintedTerrain, config);
