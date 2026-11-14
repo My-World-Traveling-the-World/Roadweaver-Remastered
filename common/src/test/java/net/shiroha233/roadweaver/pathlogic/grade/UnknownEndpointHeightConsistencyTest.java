@@ -20,8 +20,8 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
  */
 final class UnknownEndpointHeightConsistencyTest {
 
-    private final RoadGradePlanner.SurfaceGradeLimits limits =
-            RoadGradePlanner.SurfaceGradeLimits.capture();
+    private final SurfaceGradeLimits limits =
+            SurfaceGradeLimits.capture();
 
     @AfterEach
     void clearRegistry() {

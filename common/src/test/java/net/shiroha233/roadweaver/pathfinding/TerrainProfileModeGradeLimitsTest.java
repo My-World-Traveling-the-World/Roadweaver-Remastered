@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.pathfinding;
 
+import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
@@ -33,14 +34,14 @@ final class TerrainProfileModeGradeLimitsTest {
         planning().setTerrainProfileMode(PlanningConfig.TerrainProfileMode.AUTO);
     }
 
-    private static RoadGradePlanner.SurfaceGradeLimits capture(PlanningConfig.TerrainProfileMode mode) {
+    private static SurfaceGradeLimits capture(PlanningConfig.TerrainProfileMode mode) {
         planning().setTerrainProfileMode(mode);
-        return RoadGradePlanner.SurfaceGradeLimits.capture();
+        return SurfaceGradeLimits.capture();
     }
 
     @Test
     void autoIsTheBalancedBaseline() {
-        RoadGradePlanner.SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.AUTO);
+        SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.AUTO);
         assertEquals(5, limits.cut(false));
         assertEquals(2, limits.fill(false));
         assertEquals(3, limits.cut(true));
@@ -51,7 +52,7 @@ final class TerrainProfileModeGradeLimitsTest {
 
     @Test
     void tunnelFirstTightensCutOnly() {
-        RoadGradePlanner.SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.TUNNEL_FIRST);
+        SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.TUNNEL_FIRST);
         assertEquals(3, limits.cut(false));
         assertEquals(3, limits.cut(true));
         assertEquals(2, limits.fill(false));
@@ -60,7 +61,7 @@ final class TerrainProfileModeGradeLimitsTest {
 
     @Test
     void bridgeFirstTightensFillOnly() {
-        RoadGradePlanner.SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.BRIDGE_FIRST);
+        SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.BRIDGE_FIRST);
         assertEquals(5, limits.cut(false));
         assertEquals(3, limits.cut(true));
         assertEquals(1, limits.fill(false));
@@ -69,7 +70,7 @@ final class TerrainProfileModeGradeLimitsTest {
 
     @Test
     void lightCutTightensBothCutAndFill() {
-        RoadGradePlanner.SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.LIGHT_CUT);
+        SurfaceGradeLimits limits = capture(PlanningConfig.TerrainProfileMode.LIGHT_CUT);
         assertEquals(3, limits.cut(false));
         assertEquals(3, limits.cut(true));
         assertEquals(1, limits.fill(false));
@@ -95,7 +96,7 @@ final class TerrainProfileModeGradeLimitsTest {
     @Test
     void tunnelClassificationInputsAreModeIndependent() {
         for (PlanningConfig.TerrainProfileMode mode : PlanningConfig.TerrainProfileMode.values()) {
-            RoadGradePlanner.SurfaceGradeLimits limits = capture(mode);
+            SurfaceGradeLimits limits = capture(mode);
             assertEquals(8, limits.tunnelCoreOverburden(), mode.name());
             assertEquals(3, limits.tunnelMinRun(), mode.name());
         }
@@ -115,7 +116,7 @@ final class TerrainProfileModeGradeLimitsTest {
         try {
             terrain.setPlainSurfaceFillMaxBlocks(4);
             terrain.setMountainSurfaceFillMaxBlocks(3);
-            RoadGradePlanner.SurfaceGradeLimits limits =
+            SurfaceGradeLimits limits =
                     capture(PlanningConfig.TerrainProfileMode.BRIDGE_FIRST);
             assertEquals(3, limits.fill(false),
                     "配 4 格填方在 BRIDGE_FIRST 下必须拿到 3，不能再被压成 1");

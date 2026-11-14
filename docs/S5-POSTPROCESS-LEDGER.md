@@ -62,6 +62,7 @@ S5|postprocess/SegmentGrid.java|KEEP_INPUT|栅格索引工具|—
 S5|postprocess/SnapInternals.java|KEEP_SEAM|吸附的内部工具|—
 S5|postprocess/SplineHelper.java|KEEP_INPUT|样条几何工具|—
 S5|pathlogic/grade/GradeOptimizer.java|REPLACE_BY_DP|剖面的局部启发式优化，与全局 DP 的目标函数重叠|pathlogic/profile/ProfileDpSolver
+S5|pathlogic/grade/SurfaceGradeLimits.java|KEEP_INPUT|配置上限快照（挖/填/覆土/最短隧道段）。2026-11-14 从 RoadGradePlanner 抽成顶层类型：被 4 个文件引用，其中 TunnelFootprintSampler 与 UnknownEndpointHeightRegistry 不在旧链路里|—
 S5|pathlogic/grade/RoadConstructionSafety.java|KEEP_INPUT|地形采样、保护判定、施工安全门。注意 promoteRuntimeBridges 属 S2 范围|—
 S5|pathlogic/grade/RoadGradePlanner.java|REPLACE_BY_DP|15 道剖面 pass 的家：夹坡度、平滑、隧道剖面、去尖峰……|pathlogic/profile/ProfileDpSolver + ModeDpSolver
 S5|pathlogic/grade/SlopeContinuityEnforcer.java|REPLACE_BY_DP|事后强制坡率连续，DP 的 maxStep 硬约束已覆盖|pathlogic/profile/ProfileDpSolver

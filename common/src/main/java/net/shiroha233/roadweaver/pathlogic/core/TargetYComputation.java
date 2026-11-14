@@ -1,6 +1,7 @@
 /* 文件职责：目标高度（纵断面）计算 —— 纯函数，只吃参数、吐每站的目标 Y。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
@@ -249,7 +250,7 @@ public final class TargetYComputation {
                             PlanningUtils.pos2dKey(connection.from()),
                             crossingPreciseHeight(accurate, startCross, terrainY[0]),
                             terrainY, smoothed, 0,
-                            RoadGradePlanner.SurfaceGradeLimits.capture());
+                            SurfaceGradeLimits.capture());
                     applyPreferCutBoundaryGrade(smoothed, 0, startBoundary);
                 }
             } else if (startVillage) {
@@ -267,7 +268,7 @@ public final class TargetYComputation {
                             PlanningUtils.pos2dKey(connection.to()),
                             crossingPreciseHeight(accurate, endCross, terrainY[terrainY.length - 1]),
                             terrainY, smoothed, smoothed.length - 1,
-                            RoadGradePlanner.SurfaceGradeLimits.capture());
+                            SurfaceGradeLimits.capture());
                     applyPreferCutBoundaryGrade(smoothed, smoothed.length - 1, endBoundary);
                 }
             } else if (endVillage) {
@@ -319,8 +320,8 @@ public final class TargetYComputation {
 
         // 施工端的真实挖填上限。DP 与旧流水线必须用同一套窗口，否则 DP 会挖出
         // 施工端直接拒收的深度（审计实测：24/12 实验窗口下约 0.3% 的站被判死）。
-        RoadGradePlanner.SurfaceGradeLimits gradeLimits =
-                RoadGradePlanner.SurfaceGradeLimits.capture();
+        SurfaceGradeLimits gradeLimits =
+                SurfaceGradeLimits.capture();
 
         // ── 2026-11-14（缺陷 C 第三步）：先跑 DP，成功就**跳过整段旧 pass**。
         //
@@ -587,7 +588,7 @@ public final class TargetYComputation {
      *       少传任何一条都会让入口高度偏离实测地表 —— 那正是玩家一眼能看出来的错误。</li>
      * </ol>
      *
-     * <p>窗口与坡度口径<b>必须与生产一致</b>：窗口用 {@link RoadGradePlanner.SurfaceGradeLimits}
+     * <p>窗口与坡度口径<b>必须与生产一致</b>：窗口用 {@link SurfaceGradeLimits}
      * 的实时上限（施工端同一套），坡度用配置原值传给二阶约束。
      * 曾经用「AB 实验窗口 24/12 + ceil(N/2) 每站步长」，两者都让 DP 比生产允许的更激进 ——
      * 2026-11-13 独立审计发现并修正。</p>
@@ -618,7 +619,7 @@ public final class TargetYComputation {
             boolean[] tunnelMask, boolean[] pinnedMask,
             int startBoundary, int endBoundary,
             RoadGenerationConfig cfg,
-            RoadGradePlanner.SurfaceGradeLimits gradeLimits,
+            SurfaceGradeLimits gradeLimits,
             StructureConnection connection) {
         if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
             return java.util.Optional.empty();

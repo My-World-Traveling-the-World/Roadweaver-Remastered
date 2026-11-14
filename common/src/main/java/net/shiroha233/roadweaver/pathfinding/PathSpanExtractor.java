@@ -1,6 +1,7 @@
 /* 文件职责：从道路段中心线中提取桥梁与隧道跨度。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.core.model.RoadData;
@@ -284,7 +285,7 @@ public final class PathSpanExtractor {
         }
         // One snapshot per refine pass: the per-station loop below must not
         // hit the synchronized ConfigService for every road station.
-        RoadGradePlanner.SurfaceGradeLimits limits = RoadGradePlanner.SurfaceGradeLimits.capture();
+        SurfaceGradeLimits limits = SurfaceGradeLimits.capture();
         // 0.9.026: 这一行不再是「仅日志」—— 见下方 `buried`，开关现在真的会拦断陆上隧道。
         // 0.9.005-B 当时是 LOGGING ONLY（判定保持不变：!bridge + footprint max）。
         // 0.9.063（任务二）：`buried` 的判据已换成下面的**独立山体包络**（envelopeBuried），

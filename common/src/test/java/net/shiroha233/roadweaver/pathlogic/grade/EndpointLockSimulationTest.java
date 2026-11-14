@@ -119,7 +119,7 @@ public final class EndpointLockSimulationTest {
      */
     private static int[] buildLockedProfile() {
         int[] profile = new int[STATIONS];
-        int overburden = RoadGradePlanner.SurfaceGradeLimits.capture().tunnelCoreOverburden();
+        int overburden = SurfaceGradeLimits.capture().tunnelCoreOverburden();
         for (int i = 0; i < STATIONS; i++) {
             int terrain = TERRAIN_HEAD[Math.min(i, TERRAIN_HEAD.length - 1)];
             profile[i] = Math.max(terrain - overburden, terrain - 18);

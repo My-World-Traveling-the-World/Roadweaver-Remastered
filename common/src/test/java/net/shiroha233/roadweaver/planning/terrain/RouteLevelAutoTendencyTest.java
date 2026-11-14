@@ -1,5 +1,6 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
+import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.Biome;
@@ -96,7 +97,7 @@ final class RouteLevelAutoTendencyTest {
         assertEquals(PlanningConfig.TerrainProfileMode.TUNNEL_FIRST,
                 RouteProfileTendency.effectiveMode(connection));
         // Cut tightened to 3 and the height-aware search triggers.
-        RoadGradePlanner.SurfaceGradeLimits limits = RoadGradePlanner.SurfaceGradeLimits.capture(
+        SurfaceGradeLimits limits = SurfaceGradeLimits.capture(
                 RouteProfileTendency.effectiveMode(connection));
         assertEquals(3, limits.cut(false));
         assertTrue(RawPathSearch.wantsHeightAware(true, false, true, true));
@@ -115,7 +116,7 @@ final class RouteLevelAutoTendencyTest {
         assertEquals(PlanningConfig.TerrainProfileMode.BRIDGE_FIRST,
                 RouteProfileTendency.effectiveMode(connection));
         // Fill tightened to 1 and the bridge depth threshold relaxes to 1.
-        RoadGradePlanner.SurfaceGradeLimits limits = RoadGradePlanner.SurfaceGradeLimits.capture(
+        SurfaceGradeLimits limits = SurfaceGradeLimits.capture(
                 RouteProfileTendency.effectiveMode(connection));
         assertEquals(1, limits.fill(false));
         assertEquals(1, PathSpanExtractor.effectiveBridgeMinDepth(
@@ -132,7 +133,7 @@ final class RouteLevelAutoTendencyTest {
         assertEquals(RouteProfileTendency.Tendency.BALANCED, tendency);
         assertEquals(PlanningConfig.TerrainProfileMode.AUTO,
                 RouteProfileTendency.effectiveMode(connection));
-        RoadGradePlanner.SurfaceGradeLimits limits = RoadGradePlanner.SurfaceGradeLimits.capture(
+        SurfaceGradeLimits limits = SurfaceGradeLimits.capture(
                 RouteProfileTendency.effectiveMode(connection));
         assertEquals(5, limits.cut(false));
         assertEquals(2, limits.fill(false));

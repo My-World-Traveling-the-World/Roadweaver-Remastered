@@ -1,6 +1,7 @@
 /* 文件职责：隧道洞口与覆盖层采样 —— 判断这一段挖得出来、覆土够不够。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
@@ -58,7 +59,7 @@ public final class TunnelFootprintSampler {
             Map<Long, AccurateHeightSample> samples,
             AccurateHeightSampler accurate,
             int buriedStart, int buriedEnd,
-            RoadGradePlanner.SurfaceGradeLimits limits) {
+            SurfaceGradeLimits limits) {
         if (buriedEnd - buriedStart + 1 < TUNNEL_RUN_MIN_LENGTH) return;
 
         // Include the complete approach up to the last surface-height segment.
@@ -128,7 +129,7 @@ public final class TunnelFootprintSampler {
                                                      Map<Long, AccurateHeightSample> samples,
                                                      AccurateHeightSampler accurate,
                                                      int index,
-                                                     RoadGradePlanner.SurfaceGradeLimits limits) {
+                                                     SurfaceGradeLimits limits) {
         // Same cut/fill source as RoadGradePlanner (TerrainProfileConfig +
         // terrain profile mode) so tunnel portal selection cannot disagree
         // with the profile clamps that produced the road height.

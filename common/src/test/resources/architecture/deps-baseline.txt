@@ -83,7 +83,11 @@ pathfinding -> persistence               3
 pathfinding -> pipeline                  1
 pathfinding -> runtime                   9
 pathlogic -> compat                      18
-pathlogic -> config                      87
+# ★ 2026-11-14：87 -> 89。原因是 S7「第 3 级前置 A」把 SurfaceGradeLimits
+#   从 RoadGradePlanner 抽成顶层类型 pathlogic/grade/SurfaceGradeLimits.java，
+#   新文件自带 ConfigService + PlanningConfig 两个 import（凭空多 2 次）。
+#   这是「同一份代码换位置」的直接后果，不是依赖恶化。
+pathlogic -> config                      89
 pathlogic -> core                        217
 pathlogic -> decoration                  23
 pathlogic -> generation                  84

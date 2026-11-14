@@ -58,7 +58,7 @@ public final class UnknownEndpointHeightRegistry {
                                    int[] terrainY,
                                    int[] profile,
                                    int endpointStation,
-                                   RoadGradePlanner.SurfaceGradeLimits limits) {
+                                   SurfaceGradeLimits limits) {
         // A pre-planned agreed height (set before generation from every
         // incoming route) wins: all roads into this endpoint build to the same
         // negotiated low height instead of the first road locking a tall one.
@@ -142,7 +142,7 @@ public final class UnknownEndpointHeightRegistry {
                             int[] terrainY,
                             int[] profile,
                             int endpointStation,
-                            RoadGradePlanner.SurfaceGradeLimits limits) {
+                            SurfaceGradeLimits limits) {
         long surfaceCost = approachCost(structureSurfaceY, terrainY, profile, endpointStation, limits);
         long feasibleCost = approachCost(approachFeasibleY, terrainY, profile, endpointStation, limits);
         return feasibleCost < surfaceCost ? approachFeasibleY : structureSurfaceY;
@@ -181,7 +181,7 @@ public final class UnknownEndpointHeightRegistry {
                              int[] terrainY,
                              int[] profile,
                              int endpointStation,
-                             RoadGradePlanner.SurfaceGradeLimits limits) {
+                             SurfaceGradeLimits limits) {
         int n = profile.length;
         if (n == 0 || terrainY == null || terrainY.length != n) return 0L;
         int station = Math.max(0, Math.min(n - 1, endpointStation));

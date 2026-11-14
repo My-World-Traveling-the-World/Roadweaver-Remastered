@@ -13,10 +13,10 @@
 
 | 类别 | 含义 |
 |---|---|
-| `DELETE_WITH_LEGACY` | **16** |
-| `LEGACY_ONLY` | 19 |
-| `KEEP_INPUT` | 3 |
-| `AMBIGUOUS`（待人工核） | 6 |
+| `DELETE_WITH_LEGACY` | **15** |
+| `LEGACY_ONLY` | 18 |
+| `KEEP_INPUT` | 2 |
+| `AMBIGUOUS`（待人工核） | 4 |
 
 ## 旧链路成员（一起消失）
 
@@ -34,11 +34,6 @@
      这也正是 docs/S7-SWITCH-CHECKLIST.md「第 3 级前置 A」要求先把它抽成顶层类型的原因。 -->
 S5M|类|方法|外部引用文件数|调用方(次数)|分类
 S5M|RoadGradePlanner|RoadGradePlanner|1|TunnelFootprintSampler(1)|KEEP_INPUT
-S5M|RoadGradePlanner|SurfaceGradeLimits|4|PathSpanExtractor,TargetYComputation,TunnelFootprintSampler,UnknownEndpointHeightRegistry|KEEP_INPUT
-S5M|RoadGradePlanner|capture|2|PathSpanExtractor(1),TargetYComputation(2)|LEGACY_ONLY
-S5M|RoadGradePlanner|logReducedLimits|0||DELETE_WITH_LEGACY
-S5M|RoadGradePlanner|cut|2|TunnelFootprintSampler(1),UnknownEndpointHeightRegistry(1)|AMBIGUOUS
-S5M|RoadGradePlanner|fill|46|AlphaModelPlanner(7),BlockCandidateWidget(4),ContextMenu(5),EndpointConnectOps(1)|AMBIGUOUS
 S5M|RoadGradePlanner|constrainProfile|0||DELETE_WITH_LEGACY
 S5M|RoadGradePlanner|robustWindowHeight|1|TargetYComputation(1)|LEGACY_ONLY
 S5M|RoadGradePlanner|robustFootprintSupport|1|TargetYComputation(2)|LEGACY_ONLY
@@ -77,16 +72,21 @@ S5M|SlopeContinuityEnforcer|twoStepAt|0||DELETE_WITH_LEGACY
 S5M|SlopeContinuityEnforcer|configuredStationSpacing|2|AccuratePathHeightResolver(1),TargetYComputation(1)|LEGACY_ONLY
 S5M|SlopeContinuityEnforcer|stationSpacing|1|GradeCap(3)|AMBIGUOUS
 S5M|SlopeContinuityEnforcer|constrainRun|0||DELETE_WITH_LEGACY
+<!-- ★ 2026-11-14：SurfaceGradeLimits 与 capture 两行已删除 ——
+     按 S7「第 3 级前置 A」把该 record 抽成了顶层类型
+     pathlogic/grade/SurfaceGradeLimits.java。它不再是 RoadGradePlanner 的方法，
+     所以不该留在本台账（否则 S5MethodMapTest 会报「台账登记了不存在的方法」）。
+     新类型的归属见 S5-POSTPROCESS-LEDGER.md（KEEP_INPUT）。 -->
 <!-- S5M:END -->
 
 ## 汇总
 
 | 分类 | 数量 |
 |---|---|
-| `DELETE_WITH_LEGACY` | **16** |
-| `LEGACY_ONLY` | 19 |
-| `KEEP_INPUT` | 3 |
-| `AMBIGUOUS`（待人工核） | 6 |
+| `DELETE_WITH_LEGACY` | **15** |
+| `LEGACY_ONLY` | 18 |
+| `KEEP_INPUT` | 2 |
+| `AMBIGUOUS`（待人工核） | 4 |
 
 `DELETE_WITH_LEGACY` + `LEGACY_ONLY` = **35** 个方法会随旧链路一起消失，
 占这 3 个文件全部方法的 80%。这就是 S7 第一波删除的真实体量。
