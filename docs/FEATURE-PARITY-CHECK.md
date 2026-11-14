@@ -245,6 +245,63 @@ ProfileDpSource:64          javadoc：下界由 bridgeDeckSurfaceY 提供
 
 ---
 
+## 二之七、★ 生产调用链核对（补上「符在但没人调用」这个盲区）
+
+第一节的局限④说「符号在但生产链根本没调用，grep 完全看不出」。这一节就是专门补这一条的：
+**对批 3（施工与装饰）的 7 个职责，逐个追「谁在调它」**。
+
+| 职责 | 符号/类 | 外部调用方 | 结论 |
+|---|---|---|---|
+| 单列放置入口 | `RoadBlockPlacer` | `SurfacePlacementUtil` | ✅ 在链上 |
+| 三态保护列 | `ColumnAction` | `SegmentPaver` 内部（`:263` `SKIP`、`:289` `PAVE_SURFACE_ONLY`）| ✅ 在链上 |
+| 上方清空 | `AboveColumnClearer` | `BridgeBuilder` / `BuoyBuilder` / `SurfacePlacementUtil` / **`SegmentPaver`** | ✅ 在链上 |
+| 施工高度解析 | `SegmentPaver.planGrade` | `PathFeature:563/:580` | ✅ 在链上 |
+| 运行期桥提升 | `promoteRuntimeBridges` | `PathFeature` | ✅ 在链上 |
+| 隧道清空台账 | `TunnelClearLedger` | `RoadTunnelBuilder` | ✅ 在链上 |
+| 保护判定 | `isProtectedExactConstructionBlock` | `BridgeBuilder` / `BridgeSegmentPlannerNew` / `ScenicDomeBuilder` | ✅ 在链上 |
+
+**完整施工链（自底向上追到底）**：
+
+```
+LoadedChunkRoadBackfill:159   PathFeature.placeChunk(...)
+  → PathFeature:580           SegmentPaver.planGrade(...)
+  → SegmentPaver:311          SurfacePlacementUtil.placeOnSurface(...)
+  →                           RoadBlockPlacer.placeRoadBlock(...)
+```
+
+链路接通，**没有断点**。
+
+### ★ 顺带核实两条最关键的施工硬约束（都完好）
+
+**① `PAVE_SURFACE_ONLY` 绝不走 `placeOnSurface`**（`SegmentPaver:289-311`）：
+
+```java
+if (columnAction == ColumnAction.PAVE_SURFACE_ONLY) {
+    // 受保护的是 pos.below()，这一列绝不能走 placeOnSurface ——
+    // RoadBlockPlacer.placeRoadBlock 会无条件 setBlock(pos.below(), chosen)，
+    // 正好把受保护方块的状态改掉
+    AboveColumnClearer.clearAboveColumn(...);      // 只清净空
+    world.setBlock(pos, ..., 3);                    // 只铺路面那一格，pos.below() 一个字节不碰
+} else {
+    SurfacePlacementUtil.placeOnSurface(...);       // 只有 PAVE_NORMAL 才走这里
+}
+```
+
+**② 隧道洞身禁止向上清空**（同处）：
+
+```java
+if (tunnelBody) {
+    // 0.9.065：洞身段只清洞身净空 —— 上方岩体就是顶板，不能往上削
+    AboveColumnClearer.clearTunnelBoreHeadroom(...);
+} else {
+    AboveColumnClearer.clearAboveColumn(...);
+}
+```
+
+两条都在注释里写明**原因**与**历史版本号**，不是靠记忆维持的。
+
+---
+
 ## 三、总账（七个批次全部核完，2026-11-15）
 
 | 批 | 对应盘点 | 项数 | 结论 | 一节内位置 |
