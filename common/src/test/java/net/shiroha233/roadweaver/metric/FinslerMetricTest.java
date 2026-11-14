@@ -288,4 +288,36 @@ class FinslerMetricTest {
         assertFalse(field.reachable(100, 100), "区域外源点不可达");
         assertFalse(field.reachable(0, 0), "不可达场：场内点也不可达");
     }
+
+    // ── 性质 7：坐标量化全仓同口径（就近吸附），审计 NEW-2 钉子 ──────────────
+
+    /**
+     * 源点坐标量化必须就近吸附（与障碍场/地形场同一口径）。
+     *
+     * <p>旧实现里 {@code FastMarchingSolver} 与 {@code ArrivalTimeField} 用向下取整
+     * {@code (x - minX) / step}，而 {@code GridTerrainField}/{@code BandPathfinder}/
+     * {@code StridedTerrainField} 用 {@code Math.round}（就近吸附）—— 两套口径并存时
+     * step=8 的网格会错位最多 7 格（恰好一个路宽），障碍判定与求解注入落在不同的格子。</p>
+     */
+    @Test
+    void 源点坐标量化与障碍场同为就近吸附() {
+        // step=8 的平地：网格点是 0, 8, 16, ..., 64
+        TerrainField terrain = new TerrainField() {
+            @Override public int height(int x, int z) { return 0; }
+            @Override public int minX() { return 0; }
+            @Override public int maxX() { return 64; }
+            @Override public int minZ() { return 0; }
+            @Override public int maxZ() { return 64; }
+            @Override public int step() { return 8; }
+        };
+        FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
+
+        // 源点 (5,5)：就近吸附 → 格子 (8,8)；向下取整 → 格子 (0,0)
+        ArrivalTimeField field = new FastMarchingSolver(metric).solve(5, 5);
+
+        assertEquals(0.0, field.at(8, 8), 1e-9,
+                "源点必须注入到就近吸附的格子 (8,8)，T=0");
+        assertTrue(field.at(0, 0) > 0,
+                "向下取整的格子 (0,0) 不该是源点（T 必须 > 0）");
+    }
 }

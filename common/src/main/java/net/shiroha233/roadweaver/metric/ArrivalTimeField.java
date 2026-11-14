@@ -143,10 +143,15 @@ public final class ArrivalTimeField {
     /** 度量（供上层计算路径代价）。 */
     public FinslerMetric metric() { return metric; }
 
-    /** 方块坐标 → 场下标（按步长取整到最近的采样点）。 */
+    /** 方块坐标 → 场下标（按步长就近吸附到最近的采样点）。 */
     private int indexOf(int x, int z) {
-        int ix = (x - minX) / step;
-        int iz = (z - minZ) / step;
+        // 2026-11-14 修复（审计 NEW-2）：这里原来是向下取整 `(x - minX) / step`，
+        // 而 GridTerrainField/BandPathfinder/StridedTerrainField 用的是 Math.round
+        // （就近吸附）—— 两套口径并存时，step=8 的网格会错位最多 7 格
+        // （恰好一个路宽），障碍场与到达时间场在世界坐标上系统性平移。
+        // 统一为就近吸附（与障碍场/地形场同口径）。
+        int ix = Math.round((x - minX) / (float) step);
+        int iz = Math.round((z - minZ) / (float) step);
         ix = Math.max(0, Math.min(width - 1, ix));
         iz = Math.max(0, Math.min(depth - 1, iz));
         return ix + iz * width;

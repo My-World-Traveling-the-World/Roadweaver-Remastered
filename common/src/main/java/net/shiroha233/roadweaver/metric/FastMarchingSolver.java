@@ -89,7 +89,12 @@ public final class FastMarchingSolver {
         Arrays.fill(t, UNREACHABLE);
         boolean[] frozen = new boolean[w * d];
 
-        int sourceIndex = ((sourceX - minX) / step) + ((sourceZ - minZ) / step) * w;
+        // 2026-11-14 修复（审计 NEW-2）：源点下标原来用向下取整 `(x - minX) / step`，
+        // 与障碍场/地形场的 Math.round（就近吸附）口径冲突 —— step=8 时错位最多 7 格，
+        // 源点被注入到与它实际位置差一个路宽的格子里。统一为就近吸附 + clamp 兜底。
+        int sourceIx = Math.max(0, Math.min(w - 1, Math.round((sourceX - minX) / (float) step)));
+        int sourceIz = Math.max(0, Math.min(d - 1, Math.round((sourceZ - minZ) / (float) step)));
+        int sourceIndex = sourceIx + sourceIz * w;
         t[sourceIndex] = 0.0;
 
         PriorityQueue<Entry> queue = new PriorityQueue<>();
