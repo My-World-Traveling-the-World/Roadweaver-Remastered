@@ -136,8 +136,10 @@ public final class RoadPipeline {
                 .map(p -> new BandResult.Point(p[0], p[1]))
                 .toList();
 
-        // 弹性带只做曲率平滑：端点锁死、曲率最小、保形
-        BandResult smoothed = bandSolver.smooth(raw);
+        // 弹性带：曲率平滑 + 硬障碍投影（2026-11-14 修复，审计 B）
+        // metric 与 ObstaclePotential 的注释都写着「『绝不穿结构』由 band 层的硬投影负责」，
+        // 而原本这层完全不认识障碍 —— 契约是断的。这里把度量层的不可通行判据喂给它。
+        BandResult smoothed = bandSolver.smooth(raw, blockers());
 
         // 2026-11-14 修复（审计 NEW-4）：弹性带的算子用镜像虚点（2·v[0] − v[1]）
         // 处理边界，所以平滑后首尾会被推离真实端点；而 QualityGate 的端点校验
@@ -169,6 +171,16 @@ public final class RoadPipeline {
 
     /** 度量（供上层查配置）。 */
     public FinslerMetric metric() { return metric; }
+
+    /**
+     * 把度量层的硬障碍判据适配成 band 层的 {@code BlockedCheck} 端口。
+     *
+     * <p>band 层按分层规则不能依赖 metric 包，所以它自己定义端口、由这里适配 ——
+     * 与 metric 用 {@code ObstacleField} 当输入端口是同一个手法。</p>
+     */
+    private ElasticBandSolver.BlockedCheck blockers() {
+        return (x, z) -> !metric.isPassable(x, z);
+    }
 
     /** 弹性带求解器。 */
     public ElasticBandSolver bandSolver() { return bandSolver; }

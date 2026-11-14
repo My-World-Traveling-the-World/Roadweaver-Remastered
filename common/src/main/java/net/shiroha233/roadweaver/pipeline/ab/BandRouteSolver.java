@@ -57,7 +57,10 @@ public final class BandRouteSolver implements RouteSolver {
         List<BandResult.Point> raw = field.pathTo(to.x(), to.z()).stream()
                 .map(p -> new BandResult.Point(p[0], p[1]))
                 .toList();
-        BandResult smoothed = bandSolver.smooth(raw);
+        // 2026-11-14 修复（审计 B）：曲率平滑之后必须做硬障碍投影 ——
+        // 度量层只让「尽量少走」，真正「绝不穿过」由 band 层负责（契约见
+        // FinslerMetric / ObstaclePotential 的注释）。这里把不可通行判据喂进去。
+        BandResult smoothed = bandSolver.smooth(raw, (x, z) -> !metric.isPassable(x, z));
 
         int n = smoothed.points().size();
         int[] xs = new int[n];

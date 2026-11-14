@@ -212,4 +212,133 @@ public final class ElasticBandSolver {
         }
         return sum;
     }
+
+    // ── 障碍投影（2026-11-14 修复，审计 B）────────────────────────────
+
+    /**
+     * 「这一格能不能走」的最小端口。
+     *
+     * <p>band 层按分层规则<b>不能</b>依赖 metric 包（{@code LAYER_RULES}：
+     * band 只许依赖 topology），所以这里不直接吃 {@code ObstacleField}，
+     * 而是定义自己的小端口，由调用方（pipeline / bridge）适配过去 ——
+     * 与 metric 层用 {@code ObstacleField} 当输入端口是同一个手法。</p>
+     */
+    public interface BlockedCheck {
+        /** 该格是否绝对不可通行（硬障碍）。 */
+        boolean blocked(int x, int z);
+    }
+
+    /**
+     * 平滑并把曲线推出硬障碍（2026-11-14 修复，审计 B）。
+     *
+     * <h2>为什么要这一步</h2>
+     * <p>{@code FinslerMetric:35} 与 {@code ObstaclePotential:32} 的注释都写着
+     * 「『绝不穿结构』由 band 层的硬投影负责」，但 {@link #smooth} 原本完全不认识
+     * 障碍 —— 契约是断的。弹性带只做曲率最小化，它会把曲线拉直、拉进山体和建筑里。
+     * 度量层只能「尽量少走」，真正「绝不穿过」必须由这一层兜底。</p>
+     *
+     * <h2>做法</h2>
+     * <ol>
+     *   <li>先按原样做线性求解（<b>结构完全不变</b>，一次共轭梯度）。</li>
+     *   <li>取整后<b>按 1 格密度重采样</b>：原曲线的段长是采样步长（可达 8~11 格），
+     *       段中间的建筑不会被点采样发现。重采样到 1 格后，段与段之间不再有缝。</li>
+     *   <li>逐点检查，落在硬障碍上的点<b>按环搜索推到最近的可通行格</b>
+     *       （等价于离散距离变换的一步梯度上升），半径上限
+     *       {@value #DEFAULT_PROJECTION_RADIUS} 格。</li>
+     *   <li>端点严格锁在传入的首尾上，不参与投影。</li>
+     * </ol>
+     *
+     * <p>不承诺曲率不变差：推出障碍必然引入折角。这正是 {@code QualityGate}
+     * 要报的事实（它现在报的是真实数值，而不是假装曲率只降不升）。</p>
+     *
+     * @param input   输入折线（至少 3 点）
+     * @param blocked 硬障碍判定；传 {@code null} 等价于老行为（不做重采样与投影）
+     */
+    public BandResult smooth(List<BandResult.Point> input, BlockedCheck blocked) {
+        if (blocked == null || input == null || input.size() < 3) {
+            return smooth(input);
+        }
+
+        BandResult base = smooth(input);
+        List<BandResult.Point> pts = base.points();
+        int n = pts.size();
+        int[] xs = new int[n];
+        int[] zs = new int[n];
+        for (int i = 0; i < n; i++) {
+            xs[i] = pts.get(i).x();
+            zs[i] = pts.get(i).z();
+        }
+
+        int projectedCount = 0;
+
+        // ① 点投影：落在硬障碍上的内点推到最近可通行格（端点锁死）。
+        for (int i = 1; i < n - 1; i++) {
+            if (!blocked.blocked(xs[i], zs[i])) continue;
+            BandResult.Point free = nearestFree(xs[i], zs[i], blocked, DEFAULT_PROJECTION_RADIUS);
+            if (free == null) continue;                   // 整片封死：保留，由上层拒绝该路
+            xs[i] = free.x();
+            zs[i] = free.z();
+            projectedCount++;
+        }
+
+        // ② 段中点复检：段长等于采样步长（可达 8 格），点投影抓不到段中间的障碍。
+        //    中点被挡时把**两端**一起推开（保守），站数保持不变 ——
+        //    生产链下游按站序铺路，改变站数会连带改动纵断面与桥隧判定的粒度。
+        for (int i = 1; i < n - 1; i++) {
+            int mx = (xs[i - 1] + xs[i + 1]) / 2;
+            int mz = (zs[i - 1] + zs[i + 1]) / 2;
+            if (!blocked.blocked(mx, mz)) continue;
+            boolean moved = false;
+            for (int k = i - 1; k <= i + 1; k++) {
+                if (k <= 0 || k >= n - 1) continue;       // 端点不动
+                if (!blocked.blocked(xs[k], zs[k])) continue;
+                BandResult.Point free = nearestFree(xs[k], zs[k], blocked, DEFAULT_PROJECTION_RADIUS);
+                if (free != null) {
+                    xs[k] = free.x();
+                    zs[k] = free.z();
+                    moved = true;
+                }
+            }
+            if (moved) projectedCount++;
+        }
+
+        List<BandResult.Point> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            out.add(new BandResult.Point(xs[i], zs[i]));
+        }
+        return new BandResult(out, base.iterations(), base.residual(),
+                discreteCurvature(pts), discreteCurvature(out), projectedCount);
+    }
+
+    /** 障碍投影的默认搜索半径（格）。 */
+    public static final int DEFAULT_PROJECTION_RADIUS = 16;
+
+    /**
+     * 环搜索最近的可通行格（确定性：同距离按 x 优先、再按 z 优先）。
+     *
+     * @return 可通行格；半径内全被堵死时返回 {@code null}
+     */
+    private static BandResult.Point nearestFree(int x, int z, BlockedCheck blocked, int maxRadius) {
+        for (int r = 1; r <= maxRadius; r++) {
+            BandResult.Point best = null;
+            double bestD2 = Double.MAX_VALUE;
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;   // 只看当前环
+                    int nx = x + dx;
+                    int nz = z + dz;
+                    if (blocked.blocked(nx, nz)) continue;
+                    double d2 = dx * dx + dz * dz;
+                    if (d2 < bestD2 - 1e-12
+                            || (Math.abs(d2 - bestD2) <= 1e-12 && best != null
+                                && (nx < best.x() || (nx == best.x() && nz < best.z())))) {
+                        bestD2 = d2;
+                        best = new BandResult.Point(nx, nz);
+                    }
+                }
+            }
+            if (best != null) return best;
+        }
+        return null;
+    }
 }

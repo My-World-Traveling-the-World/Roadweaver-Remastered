@@ -20,15 +20,23 @@ import java.util.List;
  * @param residual      最终相对残差
  * @param curvatureBefore 输入曲线的离散曲率能量 {@code Σ|γ_{i+1}−2γ_i+γ_{i-1}|²}
  * @param curvatureAfter  输出曲线的离散曲率能量
+ * @param projectedPoints 被障碍投影推开的点数（0 表示没做投影或没有违例）
  */
 public record BandResult(List<Point> points,
                          int iterations,
                          double residual,
                          double curvatureBefore,
-                         double curvatureAfter) {
+                         double curvatureAfter,
+                         int projectedPoints) {
 
     public BandResult {
         points = List.copyOf(points);
+    }
+
+    /** 不含障碍投影的老构造（投影点数为 0）。 */
+    public BandResult(List<Point> points, int iterations, double residual,
+                      double curvatureBefore, double curvatureAfter) {
+        this(points, iterations, residual, curvatureBefore, curvatureAfter, 0);
     }
 
     /** 一个二维点（x, z）。 */
@@ -51,8 +59,8 @@ public record BandResult(List<Point> points,
     /** 便于日志的一行摘要。 */
     public String describe() {
         return String.format(java.util.Locale.ROOT,
-                "points=%d iters=%d residual=%.2e curvature %.1f -> %.1f (降 %.1f%%)",
+                "points=%d iters=%d residual=%.2e curvature %.1f -> %.1f (降 %.1f%%) projected=%d",
                 points.size(), iterations, residual,
-                curvatureBefore, curvatureAfter, curvatureReduction() * 100.0);
+                curvatureBefore, curvatureAfter, curvatureReduction() * 100.0, projectedPoints);
     }
 }
