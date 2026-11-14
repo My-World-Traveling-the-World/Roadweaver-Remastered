@@ -248,4 +248,44 @@ class FinslerMetricTest {
         assertEquals(1.0, field.at(20, 21), 1e-9, "平地 z 向每格 1");
         assertEquals(10.0, field.at(30, 20), 1e-9, "平地正交 10 格 = 10");
     }
+
+    // ── 性质 6：源点不可通行 / 出界时不抛异常，返回全不可达场（审计 NEW-1 钉子）──
+
+    /**
+     * 源点落在硬障碍格：不抛异常，返回全不可达场。
+     *
+     * <p>整条调用链（BandRouteSolver → BandPathfinder → RawPathSearch →
+     * CoarseCorridorPlanningAdapter）没有任何一层捕获 IllegalArgumentException；
+     * 旧实现在这里抛异常会把整批区域规划腰斩。修复后与「目标点不可通行」完全对称：
+     * 返回全不可达场，上层走既有的不可达降级路径。</p>
+     */
+    @Test
+    void 源点是硬障碍格时不抛异常而返回不可达场() {
+        // 硬障碍场：只有源点 (20,20) 绝对不可通行
+        ObstacleField hardPoint = new ObstacleField() {
+            @Override public double potential(int x, int z) { return 0.0; }
+            @Override public boolean impassable(int x, int z) { return x == 20 && z == 20; }
+        };
+        FinslerMetric metric = FinslerMetric.of(flat(0, 40), hardPoint);
+
+        ArrivalTimeField field = new FastMarchingSolver(metric).solve(20, 20);
+
+        assertFalse(field.reachable(20, 20), "源点本身不可达");
+        assertFalse(field.reachable(0, 0), "全不可达场：任意点都不可达");
+        assertFalse(field.reachable(40, 40), "全不可达场：边界点也不可达");
+    }
+
+    /**
+     * 源点在采样区域外：同样不抛异常，返回不可达场。
+     */
+    @Test
+    void 源点在采样区域外时不抛异常而返回不可达场() {
+        FinslerMetric metric = FinslerMetric.of(flat(0, 40), ObstacleField.NONE);
+
+        // (100,100) 明显超出 [0,40] 的区域
+        ArrivalTimeField field = new FastMarchingSolver(metric).solve(100, 100);
+
+        assertFalse(field.reachable(100, 100), "区域外源点不可达");
+        assertFalse(field.reachable(0, 0), "不可达场：场内点也不可达");
+    }
 }

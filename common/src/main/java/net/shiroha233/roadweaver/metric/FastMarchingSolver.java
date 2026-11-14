@@ -4,6 +4,9 @@ package net.shiroha233.roadweaver.metric;
 import java.util.Arrays;
 import java.util.PriorityQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * 快速行进法（Fast Marching）求解器。
  *
@@ -33,6 +36,8 @@ import java.util.PriorityQueue;
  */
 public final class FastMarchingSolver {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+
     /** 不可达。 */
     static final double UNREACHABLE = Double.POSITIVE_INFINITY;
 
@@ -61,12 +66,23 @@ public final class FastMarchingSolver {
         int d = terrain.rows();
         int step = terrain.step();
         if (!terrain.contains(sourceX, sourceZ)) {
-            throw new IllegalArgumentException(
-                    "源点 (" + sourceX + "," + sourceZ + ") 不在可行区域内");
+            // 2026-11-14 修复（审计 NEW-1）：源点在区域外时**不抛异常** ——
+            // 整条调用链（BandRouteSolver → BandPathfinder → RawPathSearch →
+            // CoarseCorridorPlanningAdapter）没有任何一层捕获它，一个落在边界外的
+            // 源点会把整批 16 条道路任务全部腰斩。改为返回「全不可达」的时间场：
+            // 上层看到 at() 全是 ∞，按既有的不可达路径优雅降级。
+            LOGGER.warn("RoadWeaver FMM: 源点 ({},{}) 不在采样区域内 [{},{}]~[{},{}]，返回不可达场",
+                    sourceX, sourceZ, minX, minZ, minX + (w - 1) * step, minZ + (d - 1) * step);
+            return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
         if (!metric.isPassable(sourceX, sourceZ)) {
-            throw new IllegalArgumentException(
-                    "源点 (" + sourceX + "," + sourceZ + ") 是硬不可通行格");
+            // 2026-11-14 修复（审计 NEW-1）：源点落在硬障碍格时**不抛异常**。
+            // 结构与目标点完全对称：目标点不可通行时 FMM 正常输出不可达时间场，
+            // BandRouteSolver 返回 unreachable()，RawPathSearch 走降级重搜；
+            // 源点也必须走同一条路 —— 否则一个村庄边缘的端点会瘫痪整片区域的规划。
+            LOGGER.warn("RoadWeaver FMM: 源点 ({},{}) 是硬不可通行格，返回不可达场（上层将走降级重搜）",
+                    sourceX, sourceZ);
+            return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
         double[] t = new double[w * d];

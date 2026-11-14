@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.metric;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,6 +47,19 @@ public final class ArrivalTimeField {
         this.depth = depth;
         this.step = Math.max(1, step);
         this.metric = metric;
+    }
+
+    /**
+     * 全不可达的时间场（2026-11-14，审计 NEW-1）。
+     *
+     * <p>源点落在硬障碍格或采样区域外时，{@link FastMarchingSolver#solve} 不抛异常，
+     * 而是返回这个场：每格 at() 都是 ∞，上层按既有「不可达」路径优雅降级。</p>
+     */
+    public static ArrivalTimeField unreachable(int minX, int minZ, int width, int depth,
+                                               int step, FinslerMetric metric) {
+        double[] times = new double[width * depth];
+        Arrays.fill(times, Double.POSITIVE_INFINITY);
+        return new ArrivalTimeField(times, minX, minZ, width, depth, step, metric);
     }
 
     /** 到该点的最小代价；不可达返回 {@link Double#POSITIVE_INFINITY}。 */
