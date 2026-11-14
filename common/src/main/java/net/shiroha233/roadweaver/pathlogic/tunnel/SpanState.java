@@ -1,44 +1,17 @@
 /* 文件职责：隧道 span 的状态与决策类型 —— SpanState（每段的状态容器）与 Decision（未决/批准/拒绝）。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.LanternBlock;
 import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.tags.FluidTags;
-import net.shiroha233.roadweaver.config.ConfigService;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
-import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadHeightInterpolator;
-import net.shiroha233.roadweaver.decoration.ScenicGlassShell;
-import net.shiroha233.roadweaver.decoration.system.AboveColumnClearer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
-import java.util.concurrent.atomic.AtomicLong;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
-import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
-import net.shiroha233.roadweaver.pathlogic.construction.SegmentPaver;
-import net.shiroha233.roadweaver.pathlogic.core.Road;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.PortalSafetyRules.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.ScenicDomeBuilder.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder.*;
-
 
 /**
  * span 决策缓存。
