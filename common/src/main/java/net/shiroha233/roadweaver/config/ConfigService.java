@@ -167,10 +167,6 @@ public final class ConfigService {
         root.addProperty("elevationCliffThreshold", INSTANCE.pathfindingCost().elevationCliffThreshold());
         root.addProperty("elevationCliffWeight", INSTANCE.pathfindingCost().elevationCliffWeight());
         root.addProperty("deviationWeight", INSTANCE.pathfindingCost().deviationWeight());
-        root.addProperty("deviationFreeRadius", INSTANCE.pathfindingCost().deviationFreeRadius());
-        root.addProperty("deviationSquared", INSTANCE.pathfindingCost().deviationSquared());
-        root.addProperty("deviationHardCap", INSTANCE.pathfindingCost().deviationHardCap());
-        root.addProperty("contourFactorFloor", INSTANCE.pathfindingCost().contourFactorFloor());
         return GSON.toJson(root);
     }
 

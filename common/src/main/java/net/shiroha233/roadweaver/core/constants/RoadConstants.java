@@ -1,7 +1,6 @@
 /* 文件职责：集中定义全局常量。 */
 package net.shiroha233.roadweaver.core.constants;
 
-
 public final class RoadConstants {
 
     private RoadConstants() {}
@@ -25,7 +24,6 @@ public final class RoadConstants {
     public static final int ASTAR_STEP_MAX = 128;
     /** A smaller lattice step is a finer route sample; local repair uses the 1-block floor. */
     public static final int ASTAR_STEP_MIN = 1;
-
 
     public static final int DEFAULT_PLAN_MAX_EDGE_LEN_BLOCKS = 2048;
     public static final int DEFAULT_BRIDGE_JOIN_LEN_BLOCKS = 1536;
@@ -253,31 +251,12 @@ public final class RoadConstants {
     public static final int DEFAULT_ELEVATION_CLIFF_THRESHOLD = 5;
     public static final int DEFAULT_ELEVATION_CLIFF_WEIGHT = 400;
 
-    // 偏差分段：偏离直线 ≤ freeRadius 免罚（绕单个障碍免费），超出部分平方增长（大绕行重罚），
-    // 超过 hardCap 直接拒绝。默认 hardCap=512 与 corridorHalfWidth 对齐。
-    public static final int DEFAULT_DEVIATION_FREE_RADIUS = 64;
-    public static final boolean DEFAULT_DEVIATION_SQUARED = true;
-    public static final int DEFAULT_DEVIATION_HARD_CAP = 512;
-
-    // 近水软衰减：离水越近越重，每远离 1 格乘 decayRate。
-    public static final int DEFAULT_NEAR_WATER_DECAY_RADIUS = 8;
-    public static final double DEFAULT_NEAR_WATER_DECAY_RATE = 0.7;
-
-    // 等高线奖励：|Δy|==0 时给负分（奖励沿等高线走）。
-    public static final int DEFAULT_CONTOUR_BONUS = -8;
-
-    // 累计坡度惩罚：滚动窗口内连续上坡/下坡的累计高度差惩罚，避免一路爬坡。
-    public static final int DEFAULT_ACCUMULATED_SLOPE_WINDOW = 3;
-    public static final int DEFAULT_ACCUMULATED_SLOPE_WEIGHT = 40;
-
     // ── 0.8.409 麻花/重叠判定（禁麻花 + 允许丁字/十字）────────────────────────
     // 两条路方向点积 ≥ 此值视为「平行可合并」（麻花危险区）；< 此值则视为「相交」（丁字/十字，允许）。
     public static final double DEFAULT_BRAID_MIN_DIRECTION_DOT = 0.75;
     // 方向点积落在此值之上仍视为「接近平行」，即便未合并成功也禁止并排重叠（禁麻花）。
     // 与 minDirectionDot 构成危险区间 (minDirectionDot, nearParallelDot]。
     public static final double DEFAULT_BRAID_NEAR_PARALLEL_DOT = 0.90;
-    // 允许丁字/十字路口（方向接近正交的两条路交叉不合并、不禁止）。
-    public static final boolean DEFAULT_BRAID_ALLOW_JUNCTION_CROSS = true;
     // 禁止并排重叠（麻花）：方向接近平行但未合并的两条路，强制拉开或拒绝重叠。
     public static final boolean DEFAULT_BRAID_ALLOW_PARALLEL_OVERLAP = false;
 
@@ -391,13 +370,6 @@ public final class RoadConstants {
     // 等高线跟随强度：>1 放大柔和地形上的等高线折扣，产生更蜿蜒的走向。
     public static final double DEFAULT_CONTOUR_FOLLOW_WEIGHT = 1.0;
 
-    // ── 0.8.418 势场法奖励惩罚补全（缺口① + 蜿蜒旋钮）──────────────────────────
-    // 等高线折扣地板：contourFactor 的钳位下限（原为硬编码 0.3）。1.0 等于彻底关闭等高线偏好。
-    // ⚠️ 实测（10 原型 × 300 种子）：这一族「等高线」参数（floor / discount / followWeight）
-    // 对走向的影响都测不出来——基础步进代价只有 1~1.4，而坡度/水域/稳定性罚款动辄上千，
-    // 折扣最多省 1 格代价，被彻底淹没（cd=0.90、floor=0.20 与 baseline 逐位相同）。
-    // 保留为可调项是为了忠实暴露原硬编码常量，不要指望靠它加弯。
-    public static final double DEFAULT_CONTOUR_FACTOR_FLOOR = 0.3;
     // 竖向代价模型：true=0.8.409 三段台阶（默认，Q1 已接入）；false=旧二次式
     // （高度²×elevationWeight×0.5），保留以便对比与回退。
     public static final boolean DEFAULT_ELEVATION_COST_SEGMENTED = true;
@@ -415,7 +387,6 @@ public final class RoadConstants {
     public static final int MAX_STRUCTURE_SLOPE = 3;
 
     public static final int CHUNK_SIZE_BLOCKS = 16;
-
 
     // 道路吸附后处理
     public static final int ROAD_SNAP_THRESHOLD = 12;

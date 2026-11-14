@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <h2>顺带解决的两件事</h2>
  * <ul>
  *   <li><b>只检查真的暴露在界面上的键</b> —— 元数据里有些 UNWIRED 键（如
- *       {@code landTunnelEnabled}、{@code braidAllowJunctionCross}）压根没进 UI，
+ *       {@code landTunnelEnabled}、五个群系代价键）压根没进 UI，
  *       玩家看不到，自然不要求 lang 有文案。</li>
  *   <li><b>自动跟随元数据</b> —— 以后把某个键标成 UNWIRED，这里立刻要求补文案，
  *       不用再去改手写名单。</li>

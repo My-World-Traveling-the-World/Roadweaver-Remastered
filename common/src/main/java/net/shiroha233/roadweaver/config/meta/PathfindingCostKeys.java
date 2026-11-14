@@ -21,15 +21,26 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
  *   <li><b>5 个群系代价是死键</b>：{@code PathTerrainField.biomeCategory()}
  *       全仓只有默认实现、0 处覆写，而默认实现只返回 WATER 与 OTHER
  *       ⇒ Plains/Forest/Mountain/Swamp/Desert 五档永远不会被产生。</li>
- *   <li><b>{@code braidAllowJunctionCross} 零引用</b>：全仓没有任何读取点。</li>
  * </ul>
  *
  * <h2>本表的状态列是逐键取证得来的，不是猜的</h2>
  * <p>标 {@link ConfigStatus#UNWIRED} 的 6 个键，依据是把每个键名放到
  * 全部 462 个非配置源文件里数引用：5 个群系代价只在
  * {@code PlannedPathFingerprintService}（算指纹）里出现，
- * {@code braidAllowJunctionCross} 是 0 次。其余 51 个键都至少被一个
  * 真正的代价计算点读取。</p>
+ *
+ * <h2>★ 2026-11-14：10 个死键已物理删除</h2>
+ * <p>下面这 10 个键当时被标成 {@code ACTIVE}，但严格全仓复核（扫
+ * {@code .java}/字符串引用，排除 config 自身）<b>剩余引用全部为 0</b> ——
+ * 属元数据标注错误（该标 UNWIRED 却标了 ACTIVE）。既然旧 A* 寻路器整族已删
+ * （重制「旧的全部删除」），它们再没有接线的那一天，于是从
+ * {@code PathfindingCostConfig} / 本表 / {@code ConfigService} / {@code RoadConstants}
+ * 一并删除：{@code accumulatedSlopeWeight}、{@code accumulatedSlopeWindow}、
+ * {@code braidAllowJunctionCross}、{@code contourBonus}、{@code contourFactorFloor}、
+ * {@code deviationFreeRadius}、{@code deviationHardCap}、{@code deviationSquared}、
+ * {@code nearWaterDecayRadius}、{@code nearWaterDecayRate}。</p>
+ * <p>删掉不丢任何能力 —— 它们本来就没生效；玩家配置文件里残留的旧键会被
+ * GSON 当未知字段忽略。</p>
  *
  * @see ConfigKey
  * @see ConfigKeyTable
@@ -83,24 +94,6 @@ public final class PathfindingCostKeys {
                     "偏离起点终点连线的惩罚权重，防止路绕太远",
                     "权重", ""),
 
-            ConfigKey.integer("deviationFreeRadius", RoadConstants.DEFAULT_DEVIATION_FREE_RADIUS, 0, 512,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "偏离免罚半径", "Deviation free radius",
-                    "离连线这么远以内不罚，给自然蜿蜒留空间",
-                    "格", ""),
-
-            ConfigKey.bool("deviationSquared", RoadConstants.DEFAULT_DEVIATION_SQUARED,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "偏离按平方计", "Deviation squared",
-                    "开启后偏离惩罚按距离平方增长，远处绕行会变得非常昂贵",
-                    ""),
-
-            ConfigKey.integer("deviationHardCap", RoadConstants.DEFAULT_DEVIATION_HARD_CAP, 0, 4096,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "偏离硬上限", "Deviation hard cap",
-                    "偏离超过这个距离直接判为不可接受",
-                    "格", ""),
-
             ConfigKey.decimal("softGradeLimit", RoadConstants.DEFAULT_SOFT_GRADE_LIMIT, 0.0, 2.0D,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "软坡度上限", "Soft grade limit",
@@ -153,30 +146,6 @@ public final class PathfindingCostKeys {
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "等高线跟随权重", "Contour follow weight",
                     "鼓励沿等高线走的权重",
-                    "权重", ""),
-
-            ConfigKey.decimal("contourFactorFloor", RoadConstants.DEFAULT_CONTOUR_FACTOR_FLOOR, 0.0, 1.0D,
-                    ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "等高线系数下限", "Contour factor floor",
-                    "等高线折扣的乘数下限，防止折到几乎免费",
-                    "系数", ""),
-
-            ConfigKey.integer("contourBonus", RoadConstants.DEFAULT_CONTOUR_BONUS, 0, 10000,
-                    ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "等高线奖励", "Contour bonus",
-                    "沿等高线走的固定奖励值",
-                    "值", ""),
-
-            ConfigKey.integer("accumulatedSlopeWindow", RoadConstants.DEFAULT_ACCUMULATED_SLOPE_WINDOW, 1, 64,
-                    ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "累计坡度窗口", "Accumulated slope window",
-                    "统计累计爬升时往回看多少步。防止连续缓坡累积成陡坡",
-                    "步", ""),
-
-            ConfigKey.integer("accumulatedSlopeWeight", RoadConstants.DEFAULT_ACCUMULATED_SLOPE_WEIGHT, 0, 1000,
-                    ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "累计坡度权重", "Accumulated slope weight",
-                    "累计爬升在总代价里的权重",
                     "权重", ""),
 
             ConfigKey.integer("elevationWeight", RoadConstants.DEFAULT_ELEVATION_WEIGHT, 0, 1000,
@@ -292,18 +261,6 @@ public final class PathfindingCostKeys {
                     "按与水的距离分档收费",
                     "代价", ""),
 
-            ConfigKey.integer("nearWaterDecayRadius", RoadConstants.DEFAULT_NEAR_WATER_DECAY_RADIUS, 0, 64,
-                    ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "临水衰减半径", "Near-water decay radius",
-                    "临水代价在多少格内衰减到 0",
-                    "格", ""),
-
-            ConfigKey.decimal("nearWaterDecayRate", RoadConstants.DEFAULT_NEAR_WATER_DECAY_RATE, 0.0, 10.0D,
-                    ConfigCategory.CROSSING, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "临水衰减率", "Near-water decay rate",
-                    "临水代价随距离衰减的速率",
-                    "速率", ""),
-
             ConfigKey.decimal("pfWaterBasePenalty", RoadConstants.DEFAULT_PF_WATER_BASE_PENALTY, 0.0, 100000.0D,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "势场过水基础代价", "Potential-field water base penalty",
@@ -333,12 +290,6 @@ public final class PathfindingCostKeys {
                     "近平行点积", "Braid near-parallel dot",
                     "判定「近平行」的点积阈值，比同向宽松",
                     "点积", ""),
-
-            ConfigKey.bool("braidAllowJunctionCross", RoadConstants.DEFAULT_BRAID_ALLOW_JUNCTION_CROSS,
-                    ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.UNWIRED,
-                    "允许路口交叉", "Allow junction cross",
-                    "是否允许并排的两条路在路口处交叉",
-                    "★ 已实证未接线：全仓对本键的引用为 0 次（配置类自身与指纹服务之外无任何读取点），改了不会有任何效果"),
 
             ConfigKey.bool("braidAllowParallelOverlap", RoadConstants.DEFAULT_BRAID_ALLOW_PARALLEL_OVERLAP,
                     ConfigCategory.PATHFIND, ConfigTier.EXPERT, ConfigStatus.ACTIVE,

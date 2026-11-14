@@ -76,19 +76,10 @@ public final class PathfindingCostConfig implements SubConfig {
     private int elevationSteepWeight = RoadConstants.DEFAULT_ELEVATION_STEEP_WEIGHT;
     private int elevationCliffThreshold = RoadConstants.DEFAULT_ELEVATION_CLIFF_THRESHOLD;
     private int elevationCliffWeight = RoadConstants.DEFAULT_ELEVATION_CLIFF_WEIGHT;
-    private int deviationFreeRadius = RoadConstants.DEFAULT_DEVIATION_FREE_RADIUS;
-    private boolean deviationSquared = RoadConstants.DEFAULT_DEVIATION_SQUARED;
-    private int deviationHardCap = RoadConstants.DEFAULT_DEVIATION_HARD_CAP;
-    private int nearWaterDecayRadius = RoadConstants.DEFAULT_NEAR_WATER_DECAY_RADIUS;
-    private double nearWaterDecayRate = RoadConstants.DEFAULT_NEAR_WATER_DECAY_RATE;
-    private int contourBonus = RoadConstants.DEFAULT_CONTOUR_BONUS;
-    private int accumulatedSlopeWindow = RoadConstants.DEFAULT_ACCUMULATED_SLOPE_WINDOW;
-    private int accumulatedSlopeWeight = RoadConstants.DEFAULT_ACCUMULATED_SLOPE_WEIGHT;
 
     // ── 0.8.409 麻花/重叠判定（禁麻花 + 允许丁字/十字）────────────────────────
     private double braidMinDirectionDot = RoadConstants.DEFAULT_BRAID_MIN_DIRECTION_DOT;
     private double braidNearParallelDot = RoadConstants.DEFAULT_BRAID_NEAR_PARALLEL_DOT;
-    private boolean braidAllowJunctionCross = RoadConstants.DEFAULT_BRAID_ALLOW_JUNCTION_CROSS;
     private boolean braidAllowParallelOverlap = RoadConstants.DEFAULT_BRAID_ALLOW_PARALLEL_OVERLAP;
 
     // ── 0.9.018 D2 平行双桥「方案 C：后者整体改道」───────────────────────────
@@ -136,7 +127,6 @@ public final class PathfindingCostConfig implements SubConfig {
     // ── 0.8.418 奖励惩罚补全（势场法真实生效的旋钮）──────────────────────────
     // 等高线折扣地板（原为硬编码 0.3）：调低 → 沿等高线走的步进代价可低至 baseCost×floor
     // （0.1 即 10 倍偏好），是增强「沿坡蜿蜒」的主杠杆；1.0 = 彻底关闭等高线偏好。
-    private double contourFactorFloor = RoadConstants.DEFAULT_CONTOUR_FACTOR_FLOOR;
     // 竖向代价模型：true=0.8.409 三段台阶（默认，Q1 已接入）；false=旧二次式
     // （高度²×elevationWeight×0.5）。让 elevationWeight 在势场法下恢复可切换。
     private boolean elevationSegmentedCost = RoadConstants.DEFAULT_ELEVATION_COST_SEGMENTED;
@@ -245,16 +235,7 @@ public final class PathfindingCostConfig implements SubConfig {
         elevationSteepWeight = Math.max(0, elevationSteepWeight);
         elevationCliffThreshold = Math.max(elevationGentleMax + 1, Math.min(32, elevationCliffThreshold));
         elevationCliffWeight = Math.max(0, elevationCliffWeight);
-        deviationFreeRadius = Math.max(0, Math.min(2048, deviationFreeRadius));
-        deviationHardCap = Math.max(deviationFreeRadius, Math.min(8192, deviationHardCap));
-        nearWaterDecayRadius = Math.max(1, Math.min(64, nearWaterDecayRadius));
-        nearWaterDecayRate = finiteFraction(nearWaterDecayRate, RoadConstants.DEFAULT_NEAR_WATER_DECAY_RATE);
-        contourBonus = Math.min(0, contourBonus);
-        accumulatedSlopeWindow = Math.max(2, Math.min(16, accumulatedSlopeWindow));
-        accumulatedSlopeWeight = Math.max(0, accumulatedSlopeWeight);
         // 0.8.418：等高线地板落 [0.02,1]（1 = 关闭折扣）。
-        contourFactorFloor = finiteFraction(contourFactorFloor, RoadConstants.DEFAULT_CONTOUR_FACTOR_FLOOR);
-        if (contourFactorFloor < 0.02D) contourFactorFloor = 0.02D;
         // 麻花：保证 minDirectionDot ≤ nearParallelDot，且方向点积落在 [0,1]。
         braidMinDirectionDot = finiteFraction(braidMinDirectionDot, RoadConstants.DEFAULT_BRAID_MIN_DIRECTION_DOT);
         braidNearParallelDot = finiteFraction(braidNearParallelDot, RoadConstants.DEFAULT_BRAID_NEAR_PARALLEL_DOT);
@@ -325,19 +306,9 @@ public final class PathfindingCostConfig implements SubConfig {
         copy.elevationSteepWeight = this.elevationSteepWeight;
         copy.elevationCliffThreshold = this.elevationCliffThreshold;
         copy.elevationCliffWeight = this.elevationCliffWeight;
-        copy.deviationFreeRadius = this.deviationFreeRadius;
-        copy.deviationSquared = this.deviationSquared;
-        copy.deviationHardCap = this.deviationHardCap;
-        copy.nearWaterDecayRadius = this.nearWaterDecayRadius;
-        copy.nearWaterDecayRate = this.nearWaterDecayRate;
-        copy.contourBonus = this.contourBonus;
-        copy.accumulatedSlopeWindow = this.accumulatedSlopeWindow;
-        copy.accumulatedSlopeWeight = this.accumulatedSlopeWeight;
         copy.braidMinDirectionDot = this.braidMinDirectionDot;
         copy.braidNearParallelDot = this.braidNearParallelDot;
-        copy.braidAllowJunctionCross = this.braidAllowJunctionCross;
         copy.braidAllowParallelOverlap = this.braidAllowParallelOverlap;
-        copy.contourFactorFloor = this.contourFactorFloor;
         copy.elevationSegmentedCost = this.elevationSegmentedCost;
         copy.slopePenaltyByLength = this.slopePenaltyByLength;
         copy.headingFlipCost = this.headingFlipCost;
@@ -427,8 +398,6 @@ public final class PathfindingCostConfig implements SubConfig {
     public void setBiomeCostOther(double v) { this.biomeCostOther = v; }
     public double contourFollowWeight() { return contourFollowWeight; }
     public void setContourFollowWeight(double v) { this.contourFollowWeight = v; }
-    public double contourFactorFloor() { return contourFactorFloor; }
-    public void setContourFactorFloor(double v) { this.contourFactorFloor = v; }
     public boolean elevationSegmentedCost() { return elevationSegmentedCost; }
     /** 0.9.028 / H-01：坡度罚改按「超出的竖向格数」计价（默认 false = 旧行为逐位相同）。 */
     public boolean slopePenaltyByLength() { return slopePenaltyByLength; }
@@ -470,28 +439,10 @@ public final class PathfindingCostConfig implements SubConfig {
     public void setElevationCliffThreshold(int v) { this.elevationCliffThreshold = v; }
     public int elevationCliffWeight() { return elevationCliffWeight; }
     public void setElevationCliffWeight(int v) { this.elevationCliffWeight = v; }
-    public int deviationFreeRadius() { return deviationFreeRadius; }
-    public void setDeviationFreeRadius(int v) { this.deviationFreeRadius = v; }
-    public boolean deviationSquared() { return deviationSquared; }
-    public void setDeviationSquared(boolean v) { this.deviationSquared = v; }
-    public int deviationHardCap() { return deviationHardCap; }
-    public void setDeviationHardCap(int v) { this.deviationHardCap = v; }
-    public int nearWaterDecayRadius() { return nearWaterDecayRadius; }
-    public void setNearWaterDecayRadius(int v) { this.nearWaterDecayRadius = v; }
-    public double nearWaterDecayRate() { return nearWaterDecayRate; }
-    public void setNearWaterDecayRate(double v) { this.nearWaterDecayRate = v; }
-    public int contourBonus() { return contourBonus; }
-    public void setContourBonus(int v) { this.contourBonus = v; }
-    public int accumulatedSlopeWindow() { return accumulatedSlopeWindow; }
-    public void setAccumulatedSlopeWindow(int v) { this.accumulatedSlopeWindow = v; }
-    public int accumulatedSlopeWeight() { return accumulatedSlopeWeight; }
-    public void setAccumulatedSlopeWeight(int v) { this.accumulatedSlopeWeight = v; }
     public double braidMinDirectionDot() { return braidMinDirectionDot; }
     public void setBraidMinDirectionDot(double v) { this.braidMinDirectionDot = v; }
     public double braidNearParallelDot() { return braidNearParallelDot; }
     public void setBraidNearParallelDot(double v) { this.braidNearParallelDot = v; }
-    public boolean braidAllowJunctionCross() { return braidAllowJunctionCross; }
-    public void setBraidAllowJunctionCross(boolean v) { this.braidAllowJunctionCross = v; }
     public boolean braidAllowParallelOverlap() { return braidAllowParallelOverlap; }
     public void setBraidAllowParallelOverlap(boolean v) { this.braidAllowParallelOverlap = v; }
 
