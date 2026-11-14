@@ -29,6 +29,22 @@
 > **下表是早期里程碑索引，不是当前完成度。** 当前默认、生产接线、批次状态和真机边界
 > 以 [`docs/STATUS-20261115.md`](docs/STATUS-20261115.md) 与 [`docs/重制总纲.md`](docs/重制总纲.md) 为准。
 
+> **★ 台账行数是旧仓库口径（2026-11-15 核实）**：`LEDGER|` 行里的行数来自旧仓库
+> `roadweaver` 的包统计，与 `roadweaver-next` 当前实际不一致 —— 实测
+> `pathlogic/bridge` 14 类 2831 行（台账记 4085）、`pathlogic/tunnel` 8 类 2083 行
+> （台账记 2918）、`pathlogic/construction` 4 类 1474 行。
+> 差异来自重构过程中类型被拆分/合并/搬移，**不要把台账行数当当前工作量**，
+> 需要数字时重新统计。
+>
+> **★ 另一处更关键的差距（2026-11-15 核实）**：台账里批 4–7 的「新包」
+> `roadnet` / `geometry` / `avoidance` / `validate` **在当前仓库里全都不存在**
+> （顶层包实测只有 api/apiimpl/band/bridge/client/command/compat/config/core/
+> decoration/generation/map/metric/mixin/network/pathfinding/pathlogic/persistence/
+> pipeline/planning/postprocess/route/runtime/search/spec/structures/topology/util/worldgen）。
+> 也就是说：**批 1–3 是「有目标包、把实现迁过去」，批 4–7 是「目标包本身还没开始建」**。
+> 这解释了为什么批 4–7 一直标 TODO —— 不是"还没迁完"，而是"还没设计"。
+> 排期时应按「设计 + 实现」估算，不要按"搬迁"估算。
+
 | 步骤 | 状态 | 关键结论 |
 |---|---|---|
 | S1 `RoadSpec` | ✅ 结案 | 权威表示 + 站索引解析；静态验收：4 个重算热点触发文件数均 ≤2 |
