@@ -63,6 +63,65 @@ public final class BandPathfinder implements Pathfinder {
     /** 包围盒在起终点外侧额外留的余量（格）—— 给绕行留空间。 */
     private static final int BOUNDS_PADDING = 64;
 
+    /** 边级采样的结果位：中间点踩到硬障碍（受 BuildingObstacleMode 门控）。 */
+    private static final int EDGE_HARD = 1;
+    /** 边级采样的结果位：中间点踩到真实建筑占用（不受模式门控）。 */
+    private static final int EDGE_SOFT = 2;
+
+    /**
+     * 边级采样的判定端口（2026-11-14，审计 N1）。
+     *
+     * <p>抽成接口是为了让「一条 step 长的边上到底采了哪几个点」这件事
+     * 可以脱离 {@code PlanningSnapshot} 单独验证 —— 那套快照要解析结构，
+     * 在单测里搭不起来，而采样几何本身才是修复的核心。</p>
+     */
+    interface EdgeProbe {
+        /** 该点是否命中硬障碍（受 BuildingObstacleMode 门控）。 */
+        boolean hard(int x, int y, int z);
+
+        /** 该点是否命中真实建筑占用（不受模式门控）。 */
+        boolean soft(int x, int y, int z);
+    }
+
+    /**
+     * 沿一条网格边采 3 个中间点（1/4、1/2、3/4），返回命中的障碍类型位。
+     *
+     * <p>2026-11-14（审计 N1）：格点采样会漏掉「宽度小于 step − 2·clearance、
+     * 整体夹在两个格点之间」的建筑。相邻采样间隔 step/4 = 2 格（step=8），
+     * 因此任何 ≥2 格宽的结构都必然被采到。</p>
+     */
+    static int sampleEdge(int ax, int ay, int az, int bx, int by, int bz, EdgeProbe probe) {
+        int hits = 0;
+        for (int k = 1; k <= 3; k++) {
+            double t = k / 4.0;
+            int px = (int) Math.round(ax + (bx - ax) * t);
+            int py = (int) Math.round(ay + (by - ay) * t);
+            int pz = (int) Math.round(az + (bz - az) * t);
+            if (probe.hard(px, py, pz)) {
+                return hits | EDGE_HARD;                      // 硬命中已是最强结论，提前退出
+            }
+            if (probe.soft(px, py, pz)) {
+                hits |= EDGE_SOFT;
+            }
+        }
+        return hits;
+    }
+
+    /** 生产用的边级判定：走既有避让判据，口径与格点采样完全一致。 */
+    private static EdgeProbe avoidanceProbe(int clearance) {
+        return new EdgeProbe() {
+            @Override
+            public boolean hard(int x, int y, int z) {
+                return blocksPlanningObstacle(new BlockPos(x, y, z), clearance);
+            }
+
+            @Override
+            public boolean soft(int x, int y, int z) {
+                return shouldAvoidPlanning(new BlockPos(x, y, z), clearance);
+            }
+        };
+    }
+
     @Override
     public PathResult findPath(BlockPos start, BlockPos end, int width,
                                ServerLevel level, int maxSteps,
@@ -131,6 +190,65 @@ public final class BandPathfinder implements Pathfinder {
                 penalized[index] = hard || shouldAvoidPlanning(pos, clearance);
             }
         }
+
+        // ②b 边级障碍采样（2026-11-14 修复，审计 N1）
+        //
+        // 上面的循环只测**格点**。FMM 的一条边跨 step(=8) 格，宽度小于
+        // step − 2·clearance 的建筑可以整个夹在两个格点之间而完全不被发现 ——
+        // 路会直接穿过去。旧链有 PathfindingHelper.edgeIntersectsPlanningObstacle
+        // 做沿边采样，新链漏了这一步。
+        //
+        // 这里对每个格点的 +x / +z 两条边各采 3 个中间点（1/4、1/2、3/4 处，
+        // 相邻采样间隔 2 格 ⇒ 任何 ≥2 格宽的结构都逃不掉），命中则把**两端格点**
+        // 一起标记（保守膨胀）：硬命中进 blocked，软命中只进 penalized。
+        // 膨胀方向是「宁可多禁一格」，因为一条 8 格长的边只要中间被挡，
+        // 这条路就真的过不去 —— 不允许它「从缝里钻」。
+        EdgeProbe probe = avoidanceProbe(clearance);
+        for (int iz = 0; iz < rows; iz++) {
+            for (int ix = 0; ix < columns; ix++) {
+                int index = ix + iz * columns;
+                if (outOfTerrain[index]) continue;
+                int x = minX + ix * step;
+                int z = minZ + iz * step;
+                int y = heights[index];
+                // +x 边
+                if (ix + 1 < columns && !outOfTerrain[index + 1]) {
+                    int nx = x + step;
+                    int nz = z;
+                    int ny = heights[index + 1];
+                    int hits = sampleEdge(x, y, z, nx, ny, nz, probe);
+                    if ((hits & EDGE_HARD) != 0) {
+                        blocked[index] = true;
+                        blocked[index + 1] = true;
+                        penalized[index] = true;
+                        penalized[index + 1] = true;
+                    } else if ((hits & EDGE_SOFT) != 0) {
+                        penalized[index] = true;
+                        penalized[index + 1] = true;
+                    }
+                }
+                // +z 边
+                if (iz + 1 < rows) {
+                    int nIndex = index + columns;
+                    if (!outOfTerrain[nIndex]) {
+                        int nx = x;
+                        int nz = z + step;
+                        int ny = heights[nIndex];
+                        int hits = sampleEdge(x, y, z, nx, ny, nz, probe);
+                        if ((hits & EDGE_HARD) != 0) {
+                            blocked[index] = true;
+                            blocked[nIndex] = true;
+                            penalized[index] = true;
+                            penalized[nIndex] = true;
+                        } else if ((hits & EDGE_SOFT) != 0) {
+                            penalized[index] = true;
+                            penalized[nIndex] = true;
+                        }
+                    }
+                }
+            }
+        }
+
         ObstacleField obstacles = new StridedObstacleField(
                 minX, minZ, columns, rows, step, blocked, penalized, outOfTerrain);
 
