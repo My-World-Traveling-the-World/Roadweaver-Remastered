@@ -614,16 +614,15 @@ public final class StructureAvoidanceService {
         };
     }
 
-    /** Returns true only for a verified structure piece intersecting the road construction band. */
+    /** Returns true only for a verified structure piece intersecting the road construction band.
+     * <p>2026-11-15：实现搬到 {@link StructureAvoidanceCache}（本类贴线）；快照缺失会记警告。 */
     public static boolean shouldAvoidPlanning(BlockPos pos) {
-        PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        return snapshot != null && snapshot.blocks(pos);
+        return StructureAvoidanceCache.shouldAvoidPlanning(pos);
     }
 
     /** Checks a planning position with an explicit horizontal safety margin. */
     public static boolean shouldAvoidPlanning(BlockPos pos, int horizontalClearance) {
-        PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        return snapshot != null && snapshot.blocks(pos, Math.max(0, horizontalClearance));
+        return StructureAvoidanceCache.shouldAvoidPlanning(pos, horizontalClearance);
     }
 
     /**

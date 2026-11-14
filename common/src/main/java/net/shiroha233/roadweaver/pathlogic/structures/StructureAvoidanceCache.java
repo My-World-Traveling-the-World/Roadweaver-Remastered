@@ -1,6 +1,7 @@
 /* 文件职责：结构避让的核心缓存（从 {@link StructureAvoidanceService} 拆出）。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
@@ -42,6 +43,85 @@ public final class StructureAvoidanceCache {
      */
     public static boolean planningSnapshotPresent() {
         return ACTIVE_PLANNING_SNAPSHOT.get() != null;
+    }
+
+    // ── 结构避让查询 + 静默降级观测（2026-11-15 从 Service 搬来，见下）──
+    //
+    // 实现放在本类而不是 StructureAvoidanceService 的原因很实际：
+    // Service 已经 998 行，贴着「单文件不超过 1000 行」的硬约束（守卫见
+    // SourceFileSizeGuardTest），加任何实现都会破线。而这些方法的全部状态
+    // （ACTIVE_PLANNING_SNAPSHOT）本来就归本类管，放这里更内聚。
+
+    private static final java.util.concurrent.atomic.AtomicLong BLIND_QUERIES =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicBoolean BLIND_WARNED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final org.slf4j.Logger LOGGER =
+            org.slf4j.LoggerFactory.getLogger("roadweaver");
+
+    /**
+     * 结构避让查询（带水平安全边距）。
+     *
+     * <p><b>快照缺失时不再「静默」</b>：本方法返回 false 的两种原因曾经完全同形 ——</p>
+     * <ul>
+     *   <li>「这个位置确实没有已验证结构」（正常，可以铺路）；</li>
+     *   <li>「本线程根本没装规划快照」（异常，<b>整条链什么都不会挡</b>）。</li>
+     * </ul>
+     * <p>第二种是真机上出现过的「路穿建筑」病根之一：规划跑在 worker 线程上，
+     * 而快照是 ThreadLocal —— 作用域没铺到就会全链失明，且日志里一个字都没有。
+     * 现在缺失时会记一次警告 + 累加计数，让「失明」这件事可见。</p>
+     *
+     * <p>注意：返回值语义<b>不变</b>（仍然返回 false）。这是可观测性改动，
+     * 不是行为改动 —— 贸然改成 true 会把整个路网判成处处不可铺。</p>
+     */
+    public static boolean shouldAvoidPlanning(BlockPos pos, int horizontalClearance) {
+        PlanningSnapshot snapshot = ACTIVE_PLANNING_SNAPSHOT.get();
+        if (snapshot == null) {
+            noteBlindQuery();
+            return false;
+        }
+        return snapshot.blocks(pos, Math.max(0, horizontalClearance));
+    }
+
+    /** 结构避让查询（无额外边距）。语义与观测同上面的重载。 */
+    public static boolean shouldAvoidPlanning(BlockPos pos) {
+        PlanningSnapshot snapshot = ACTIVE_PLANNING_SNAPSHOT.get();
+        if (snapshot == null) {
+            noteBlindQuery();
+            return false;
+        }
+        return snapshot.blocks(pos);
+    }
+
+    /**
+     * 记一次「无快照查询」。
+     *
+     * <p>只在<b>首次</b>打警告（用 compareAndSet 保证一次），之后只累加计数 ——
+     * 这条路径可能被每秒调用上万次（规划期逐站逐列问），
+     * 每次都打日志会把 latest.log 冲爆。</p>
+     */
+    private static void noteBlindQuery() {
+        long n = BLIND_QUERIES.incrementAndGet();
+        if (BLIND_WARNED.compareAndSet(false, true)) {
+            LOGGER.warn("RoadWeaver structure avoidance queried WITHOUT a planning snapshot"
+                    + " (first of possibly many) — each such query returns false,"
+                    + " which is indistinguishable from \"no structure here\"."
+                    + " If routes cut through buildings, check the planning-snapshot thread scope.");
+        }
+        if (n % 100_000L == 0L) {
+            LOGGER.warn("RoadWeaver structure avoidance blind queries reached {}", n);
+        }
+    }
+
+    /** 累计「无快照查询」次数（诊断用；真机看这个数就能判断作用域有没有铺到）。 */
+    public static long blindQueryCount() {
+        return BLIND_QUERIES.get();
+    }
+
+    /** 重置计数与警告位（测试用）。 */
+    public static void resetBlindQueryCount() {
+        BLIND_QUERIES.set(0);
+        BLIND_WARNED.set(false);
     }
 
     /** CHUNK_BBOX_CACHE 的 LRU 容量。 */
