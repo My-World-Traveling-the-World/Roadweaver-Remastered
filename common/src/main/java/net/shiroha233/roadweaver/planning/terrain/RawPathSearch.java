@@ -291,9 +291,15 @@ final class RawPathSearch {
     /**
      * 先按"建筑硬障碍"搜索；无解时自动降级为历史的高代价模式重搜一次。
      *
-     * <p>硬障碍让 A* 真正绕开已验证建筑（用户要求"建筑该绕行还是得绕行"），
-     * 但村庄封死整条走廊时硬障碍会无解，所以必须保留降级兜底：
-     * 降级后的结果与改动前完全一致。</p>
+     * <p>硬障碍让搜索真正绕开已验证建筑（用户要求"建筑该绕行还是得绕行"），
+     * 但村庄封死整条走廊时硬障碍会无解，所以必须保留降级兜底。</p>
+     *
+     * <p><b>2026-11-14（审计 A / NEW-8）更正</b>：这里原本写着「降级后的结果与改动前
+     * 完全一致」，现在<b>不再成立</b>，而且那个「一致」本身就是缺陷 ——
+     * 降级时 {@code BuildingObstacleMode} 回落到 PENALTY，
+     * {@code blocksPlanningObstacle} 直接返回 false ⇒ 障碍场全空、软势恒 0，
+     * 等于在无障碍地图上找路（穿村穿楼）。现在降级路径仍有真实的软障碍势，
+     * 只是不再硬禁；隧道提示重搜也已纳入同一个 HARD 作用域。</p>
      */
     private static PathResult searchWithHardBuildingObstacles(Pathfinder pathfinder,
                                                               BlockPos start,

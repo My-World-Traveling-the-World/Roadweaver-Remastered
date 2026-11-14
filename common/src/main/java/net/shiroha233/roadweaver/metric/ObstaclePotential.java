@@ -30,7 +30,9 @@ package net.shiroha233.roadweaver.metric;
  * </pre>
  * <p>取值域被压在 [0, 1]，方便上层用 {@code obstacleWeight} 统一缩放。
  * <b>注意</b>：这里的势是<b>软</b>约束 —— 它让路径「尽量少穿」，不保证「绝不穿」。
- * 「绝不穿结构」由 {@code band} 层的硬投影负责。把硬约束写成「很大的软代价」
+ * 「绝不穿结构」由 {@code band} 层的硬投影负责
+ * <b>（2026-11-14 起已实现：{@code ElasticBandSolver.smooth(input, BlockedCheck)}
+ * 由 {@code RoadPipeline} / {@code BandRouteSolver} 喂入不可通行判据；此前是空头承诺）</b>。把硬约束写成「很大的软代价」
  * 是旧实现已有的教训。</p>
  *
  * @see ObstacleField

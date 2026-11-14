@@ -1,4 +1,4 @@
-/* 文件职责：剖面求解器的模式开关 —— 默认 LEGACY，DP 仅显式开启。 */
+/* 文件职责：剖面求解器的模式开关 —— 默认 DP（2026-11-13 起），LEGACY 仅用于回退对照。 */
 package net.shiroha233.roadweaver.pathlogic.profile;
 
 /**

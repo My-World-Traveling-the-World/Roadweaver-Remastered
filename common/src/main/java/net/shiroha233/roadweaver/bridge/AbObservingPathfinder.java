@@ -50,10 +50,27 @@ public final class AbObservingPathfinder implements Pathfinder {
     private final java.util.concurrent.atomic.AtomicLong calls =
             new java.util.concurrent.atomic.AtomicLong();
 
+    /** 「两臂其实是同一个类」的告警只打一次。 */
+    private final java.util.concurrent.atomic.AtomicBoolean identicalWarned =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    /**
+     * 两臂是否为同一个实现类。
+     *
+     * <p><b>2026-11-14（审计 G）</b>：四个旧 A* 寻路器删除后，
+     * {@code PathfinderFactory.createClassic} 也返回 {@link BandPathfinder} ——
+     * 于是 AB 模式的 classic 与 band 两臂是<b>同一个类</b>，跑两遍得到逐字节相同的
+     * 结果。此时再打 {@code [ROAD-AB] verdict=...} 是假对比：既白花一倍算力，
+     * 又会让读日志的人以为「新链和旧链有差异」。</p>
+     *
+     * <p>所以检测到同型时直接短路：只跑一次、不打对比日志，并用一条 WARN 说清原因。</p>
+     */
+    private final boolean armsIdentical;
+
     public AbObservingPathfinder(Pathfinder classic, Pathfinder band) {
         if (classic == null) throw new IllegalArgumentException("classic 不能为 null");
         this.classic = classic;
         this.band = band;
+        this.armsIdentical = band != null && classic.getClass() == band.getClass();
     }
 
     @Override
@@ -64,6 +81,16 @@ public final class AbObservingPathfinder implements Pathfinder {
         PathResult authoritative = classic.findPath(start, end, width, level, maxSteps,
                 cache, terrain, config);
         if (band == null) return authoritative;
+
+        // 2026-11-14（审计 G）：两臂同型 ⇒ 双跑毫无信息量，直接短路。
+        if (armsIdentical) {
+            if (identicalWarned.compareAndSet(false, true)) {
+                LOGGER.warn("[ROAD-AB] AB 双跑已停用：两臂都是 {} —— 旧 A* 已全部删除，"
+                        + "classic 侧不再存在独立实现。请把 solverMode 设为 BAND（或留空用默认）。"
+                        + "本条只提示一次。", classic.getClass().getName());
+            }
+            return authoritative;
+        }
 
         long n = calls.incrementAndGet();
         boolean log = (n % LOG_EVERY) == 1L;

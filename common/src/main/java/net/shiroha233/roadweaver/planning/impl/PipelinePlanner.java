@@ -98,6 +98,8 @@ public final class PipelinePlanner implements NetworkPlanner {
         if (level == null) {
             // 没有世界就建不了地形场。退回直线距离的 MST —— 宁可退化也不抛异常：
             // 规划器挂掉会让整局一条路都不生成，那比「用旧算法」严重得多。
+            LOGGER.warn("RoadWeaver pipeline planner: level 为 null，退回直线距离 MST（{} 个点）",
+                    points.size());
             return fallbackMST(points, maxEdgeLenBlocks);
         }
 
@@ -144,7 +146,12 @@ public final class PipelinePlanner implements NetworkPlanner {
             terrain = SampledTerrainField.fromAccurateSampler(
                     AccurateHeightSampler.create(level), minX, minZ, width, depth, step);
         } catch (RuntimeException samplingFailure) {
-            // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败
+            // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败。
+            // 2026-11-14 修复（审计 F）：原来这个异常被完全吞掉、零日志 ——
+            // 表现为「路网莫名其妙变成直线」，事后无从排查。
+            LOGGER.warn("RoadWeaver pipeline planner: 地形采样失败，退回直线距离 MST"
+                    + "（区域 {}x{} step={} points={}）", width, depth, step, points.size(),
+                    samplingFailure);
             return fallbackMST(points, maxEdgeLenBlocks);
         }
         FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
@@ -161,6 +168,9 @@ public final class PipelinePlanner implements NetworkPlanner {
         try {
             topology = new RoadPipeline(metric, null).planTopology(nodes);
         } catch (RuntimeException pipelineFailure) {
+            // 2026-11-14 修复（审计 F）：同样原来是静默吞掉。
+            LOGGER.warn("RoadWeaver pipeline planner: 测地拓扑求解失败，退回直线距离 MST"
+                    + "（nodes={}）", nodes.size(), pipelineFailure);
             return fallbackMST(points, maxEdgeLenBlocks);
         }
 

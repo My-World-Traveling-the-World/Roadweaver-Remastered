@@ -32,7 +32,9 @@ package net.shiroha233.roadweaver.metric;
  *   <li>{@code gradeWeight} 越大越不愿意爬坡（平原上会绕着缓坡走）</li>
  *   <li>{@code obstacleWeight} 越大越远离障碍（等价于加宽安全距离）</li>
  * </ul>
- * <p>两者都是软约束。硬约束（一定不能穿结构）由 {@code band} 层的投影负责，
+ * <p>两者都是软约束。硬约束（一定不能穿结构）由 {@code band} 层的投影负责
+ * <b>（2026-11-14 起真的做了：{@code ElasticBandSolver.smooth(input, BlockedCheck)}，
+ * 接收本类 {@code isPassable} 的适配端口；此前这句话是空头承诺，审计缺陷 B）</b>，
  * 不在度量里叠加 —— 把一个硬约束写成「很大的软代价」是旧实现
  * {@code PROTECTED_GAP} 缺 fail-safe 的成因。</p>
  *

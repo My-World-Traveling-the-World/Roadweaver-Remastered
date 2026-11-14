@@ -11,9 +11,16 @@ import net.shiroha233.roadweaver.bridge.BandPathfinder;
  *
  * <h2>两层开关，各管一件事</h2>
  * <ul>
- *   <li>{@code pathfindingAlgorithm}（配置键）—— 决定<b>用哪个旧算法</b>；</li>
+ *   <li>{@code pathfindingAlgorithm}（配置键）—— <b>2026-11-13 起只是 GSON 兼容键</b>：
+ *       四个旧 A* 寻路器（BasicAStar / Bidirectional / GradientDescent / PotentialField）
+ *       已全部删除，枚举里只剩 {@code BAND}，任何旧值都由 {@code sanitize()} 归一它。
+ *       它不再「决定用哪个算法」；</li>
  *   <li>{@link SolverMode}（系统属性 {@code -Droadweaver.solverMode}）—— 决定
- *       <b>要不要让新三层内核参与</b>：CLASSIC 不参与、BAND 由它接管、AB 双跑观察。</li>
+ *       <b>要不要让新三层内核参与</b>：CLASSIC 不参与、BAND 由它接管。</li>
+ *   <li><b>AB 双跑已停用（2026-11-14，审计 G）</b>：旧 A* 全部删除后 classic 侧
+ *       也是 {@link BandPathfinder}，两臂同型 ⇒ 双跑只会白算一倍并打出假对比。
+ *       枚举值 {@code AB} 仍可解析（老配置不炸），但 {@link AbObservingPathfinder}
+ *       检测到同型即短路、只跑一次，并打一次 WARN 说明原因。</li>
  * </ul>
  *
  * <h2>★ 出厂行为必须与 0.9.098 逐字节一致</h2>
