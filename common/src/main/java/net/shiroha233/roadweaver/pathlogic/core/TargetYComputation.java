@@ -338,6 +338,25 @@ public final class TargetYComputation {
             smoothed = dpProfile.get();
             legacySnapshot = null;
         } else {
+            // ════════════════════════════════════════════════════════════════
+            // 待删（批1）：旧纵断面 pass 编排层。
+            //
+            // 它在默认配置下**一行都不跑** —— 只有两种「DP 本来就不适用」的情形
+            // 会进到这里：
+            //   · profileSolver 不是 DP（显式 -Droadweaver.profileSolver=legacy）
+            //   · 玩家关掉坡度限制（旧 pass 也不夹坡，DP 的硬约束会打架）
+            //
+            // 删除条件（与 pathlogic/grade 那三个类同一批，三条全满足）：
+            //   ① pathlogic/profile 的 DP 内核有独立测试且全绿；
+            //   ② 这两条 legacy 入口被正式移除（或改成抛异常提示已废弃）；
+            //   ③ 删完回归全绿。
+            //
+            // 为什么不现在搬成独立文件：它用了 19 个局部变量 + 本类的
+            // applyCrossingProfiles / closeTunnelWaterBoundary 两个私有方法，
+            // 搬走要么造 19 字段的参数对象、要么把私有方法也拖出去。
+            // 按 REFACTOR.md 的铁律「重制期间旧实现原地保留、打标记、进台账」，
+            // 原地标记就够了 —— 搬迁属于可选的结构整理，不改变它的性质。
+            // ════════════════════════════════════════════════════════════════
             // ── 旧 pass 区（逐行沿用，仅整体缩进 4 格）──────────────────────
             int[] tunnelProfile;
             if (crossingRanges.isEmpty()) {

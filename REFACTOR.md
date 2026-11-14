@@ -185,8 +185,14 @@ LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
      ③ pathlogic/grade 的 6 个文件全部带标记：3 个 REPLACE_BY_DP 打「待删（批1）」，
         3 个 KEEP_INPUT（RoadConstructionSafety / UnknownEndpointHeightRegistry /
         SurfaceGradeLimits）写明「不属于待删范围、继续存在」。
-     注：批 1 的旧实现包**不会整个消失**（含 KEEP_INPUT 的输入契约），
-     所以"删空该包"不是批 1 的完成条件，S7 第 3 级删除时按文件粒度区分。 -->
+     注 1：批 1 的旧实现包**不会整个消失**（含 KEEP_INPUT 的输入契约），
+     所以「删空该包」不是批 1 的完成条件，S7 第 3 级删除时按文件粒度区分。
+     注 2：除了 pathlogic/grade 那 3 个类，还有一处旧实现登记进本批 ——
+     TargetYComputation.computeTargetY 里 `else` 分支的**旧 pass 编排层**
+     （约 140 行，已打「待删（批1）」标记）。它默认不跑，只在
+     profileSolver=legacy 或玩家关掉坡度限制时进入。按铁律「原地保留 + 打标记」
+     处理，不搬成独立文件（它用了 19 个局部变量与两个私有方法，
+     搬迁属于可选整理，不改变性质）。 -->
 <!-- LEDGER:END -->
 
 字段：`批号|域|旧实现包(相对 net.shiroha233.roadweaver)|新实现包|状态|旧代码行数`
