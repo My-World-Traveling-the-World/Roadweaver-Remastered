@@ -161,8 +161,9 @@ public final class ModeDpBridge {
             var solved = ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
                 LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
-                                + "(water={} structure={} snapshot={}) legacyCrossing={} legacy={}",
+                                + "(water={} structure={} road={} snapshot={}) legacyCrossing={} legacy={}",
                         tag, n, banned, (bans == null ? 0 : bans.waterStations()), (bans == null ? 0 : bans.structureStations()),
+                        (bans == null ? 0 : bans.roadStations()),
                         (bans != null && bans.structureSnapshotAvailable()) ? "ok" : "absent",
                         legacyCrossing, describe(legacySpans));
                 return;
@@ -175,12 +176,13 @@ public final class ModeDpBridge {
             int differingStations = differingStations(solution.modes(), legacySpans, centers, n);
 
             LOGGER.info("[SPAN-AB] tag={} stations={} banned={}"
-                            + "(water={} structure={} snapshot={}) legacyCrossing={} perTwo={} "
+                            + "(water={} structure={} road={} snapshot={}) legacyCrossing={} perTwo={} "
                             + "legacy[bridge={}站/{}座 tunnel={}站/{}条] "
                             + "dp[bridge={}站/{}座 tunnel={}站/{}条] "
                             + "差异站={} dpCost={}",
                     tag, n, banned,
                     (bans == null ? 0 : bans.waterStations()), (bans == null ? 0 : bans.structureStations()),
+                    (bans == null ? 0 : bans.roadStations()),
                     (bans != null && bans.structureSnapshotAvailable()) ? "ok" : "absent",
                     legacyCrossing, perTwo,
                     lg.bridgeStations, lg.bridgeRuns, lg.tunnelStations, lg.tunnelRuns,

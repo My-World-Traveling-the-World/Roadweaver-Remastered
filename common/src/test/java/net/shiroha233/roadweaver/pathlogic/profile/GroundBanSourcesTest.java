@@ -132,6 +132,44 @@ class GroundBanSourcesTest {
     }
 
     @Test
+    void 已有公路来源能独立置位并与其它来源分别统计() {
+        GroundBanSources.RoadProbe road =
+                (x, z) -> x == 4 || x == 8;      // 第 1、2 站已有别的路
+        GroundBanSources.Result r = GroundBanSources.collect(
+                waterAt(0), null, road, false, line(5), 5);
+
+        assertEquals(1, r.waterStations(), "水面只贡献第 0 站");
+        assertEquals(2, r.roadStations(), "已有公路贡献第 1、2 站");
+        assertEquals(3, r.bannedStations(), "两个来源不重叠，总置位 3 站");
+        assertTrue(r.banned()[0], "水站置位");
+        assertTrue(r.banned()[1] && r.banned()[2], "已有公路站置位");
+        assertFalse(r.banned()[3] && r.banned()[4], "其余不置位");
+    }
+
+    @Test
+    void 三个来源重叠时总置位数不重复计算() {
+        // 水面、结构、已有公路同时命中第 1 站
+        GroundBanSources.StructureProbe structure = pos -> pos.getX() == 4;
+        GroundBanSources.RoadProbe road = (x, z) -> x == 4;
+
+        GroundBanSources.Result r = GroundBanSources.collect(
+                waterAt(1), structure, road, true, line(3), 3);
+
+        assertEquals(1, r.waterStations());
+        assertEquals(1, r.structureStations());
+        assertEquals(1, r.roadStations());
+        assertEquals(1, r.bannedStations(), "三个来源命中同一站，总置位仍只有 1 站");
+    }
+
+    @Test
+    void 已有公路探针为null时贡献恒为零() {
+        GroundBanSources.Result r = GroundBanSources.collect(
+                null, null, null, false, line(4), 4);
+        assertEquals(0, r.roadStations(), "没有探针就不能凭空造出「已有公路」站");
+        assertEquals(0, r.bannedStations());
+    }
+
+    @Test
     void 生产入口在地形为null时退化为仅结构来源() {
         // 地形拿不到时不能崩，也不能凭空造水面站
         GroundBanSources.Result r = GroundBanSources.collect(

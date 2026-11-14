@@ -96,7 +96,11 @@ pathlogic -> config                      90
 # 2026-11-14 批3：BuildFrame 的跨度键需要 SpanType，保证桥改隧道不复用旧掩码。
 # 2026-11-15 行数治理：220 -> 221。TunnelPlan 从 RoadTunnelBuilder 抽出成独立文件，
 #   新文件需自己 import core.model.RoadData（依赖方向未变，只是 import 语句多一条）。
-pathlogic -> core                        221
+# 2026-11-15 批2/批4：core 221->222、persistence 27->29。
+#   新增 pathlogic/profile/ExistingRoadProbe 补「已有公路」这条禁地面来源，
+#   需要 RoadData / RoadFootprint / RoadShardStorage（+1 core、+2 persistence）。
+#   方向正确：业务层(pathlogic) 依赖基础设施(persistence)，不是反过来。
+pathlogic -> core                        222
 pathlogic -> decoration                  23
 pathlogic -> generation                  84
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次
@@ -104,7 +108,7 @@ pathlogic -> generation                  84
 #   不再复用旧判定的 isCrossing（解除循环论证）。
 pathlogic -> pathfinding                 91
 # 2026-11-14 批3：RoadConstructionVolumePlanner 用 RoadShardStorage.computeFingerprint 接 BuildFrame。
-pathlogic -> persistence                 27
+pathlogic -> persistence                 29
 pathlogic -> planning                    68
 pathlogic -> postprocess                 20
 pathlogic -> runtime                     22

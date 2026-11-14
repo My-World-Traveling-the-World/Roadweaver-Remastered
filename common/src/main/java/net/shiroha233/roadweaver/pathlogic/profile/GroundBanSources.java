@@ -68,16 +68,30 @@ public final class GroundBanSources {
     }
 
     /**
+     * 已有公路探针：该位置是否被<b>别的</b>道路占用。
+     *
+     * <p>「别的」三个字是关键 —— 调用方必须已经排除当前路自身，
+     * 否则重规划时会把整条走廊判成「已有公路」。实现见
+     * {@link ExistingRoadProbe#forCorridor}。</p>
+     */
+    @FunctionalInterface
+    public interface RoadProbe {
+        boolean hasOtherRoadAt(int x, int z);
+    }
+
+    /**
      * 收集结果。
      *
      * @param banned                     每站「地面不可用」掩码
      * @param waterStations              由「水面」判据置位的站数
      * @param structureStations          由「保护区」判据置位的站数（与水面可能重叠）
+     * @param roadStations               由「已有公路」判据置位的站数（可能与上面重叠）
      * @param structureSnapshotAvailable 保护区快照是否可用；false 表示本来源本次未生效
      */
     public record Result(boolean[] banned,
                          int waterStations,
                          int structureStations,
+                         int roadStations,
                          boolean structureSnapshotAvailable) {
 
         /** 被置位的总站数（重叠只算一次）。 */
@@ -92,10 +106,11 @@ public final class GroundBanSources {
     }
 
     /**
-     * 纯逻辑核心：按两个探针构造禁地面掩码。**不依赖任何 Minecraft 运行时**。
+     * 纯逻辑核心：按三个探针构造禁地面掩码。**不依赖任何 Minecraft 运行时**。
      *
      * @param water        水面探针；{@code null} 表示本来源不可用
      * @param structure    结构探针；{@code null} 表示本来源不可用
+     * @param road         已有公路探针（必须已排除当前路自身）；{@code null} 表示不可用
      * @param snapshotOk   结构快照是否可用（仅用于结果标注，不影响掩码计算）
      * @param centers      每站中心坐标
      * @param n            站数
@@ -103,20 +118,22 @@ public final class GroundBanSources {
      */
     public static Result collect(WaterProbe water,
                                  StructureProbe structure,
+                                 RoadProbe road,
                                  boolean snapshotOk,
                                  List<BlockPos> centers,
                                  int n) {
         if (n <= 0) {
-            return new Result(new boolean[0], 0, 0, false);
+            return new Result(new boolean[0], 0, 0, 0, false);
         }
         boolean[] banned = new boolean[n];
         if (centers == null || centers.size() < n) {
             // 坐标不全就无法判定任何来源；返回空掩码并由调用方在日志里体现。
-            return new Result(banned, 0, 0, false);
+            return new Result(banned, 0, 0, 0, false);
         }
 
         int waterCount = 0;
         int structureCount = 0;
+        int roadCount = 0;
 
         for (int i = 0; i < n; i++) {
             BlockPos center = centers.get(i);
@@ -134,10 +151,26 @@ public final class GroundBanSources {
                 banned[i] = true;
                 structureCount++;
             }
+
+            // ③ 已有公路：别的路已经占了这一列 ⇒ 不能再铺一遍地面。
+            //    ★ 探针必须已排除当前路自身，否则重规划时会把整条走廊判成「已有公路」。
+            if (road != null && road.hasOtherRoadAt(center.getX(), center.getZ())) {
+                banned[i] = true;
+                roadCount++;
+            }
         }
 
-        return new Result(banned, waterCount, structureCount,
+        return new Result(banned, waterCount, structureCount, roadCount,
                 structure != null && snapshotOk);
+    }
+
+    /** 兼容重载：只给水面 + 保护区两个来源时用（第三来源不可用）。 */
+    public static Result collect(WaterProbe water,
+                                 StructureProbe structure,
+                                 boolean snapshotOk,
+                                 List<BlockPos> centers,
+                                 int n) {
+        return collect(water, structure, null, snapshotOk, centers, n);
     }
 
     /**
@@ -154,8 +187,22 @@ public final class GroundBanSources {
                                  List<BlockPos> centers,
                                  int n,
                                  int bridgeMinWaterDepth) {
+        return collect(terrain, null, centers, n, bridgeMinWaterDepth);
+    }
+
+    /**
+     * 生产入口（带已有公路来源）。
+     *
+     * @param road 已有公路探针，由 {@link ExistingRoadProbe#forCorridor} 构建
+     *             （它已负责排除当前路自身）；{@code null} 表示第三来源不可用
+     */
+    public static Result collect(PathTerrainField terrain,
+                                 RoadProbe road,
+                                 List<BlockPos> centers,
+                                 int n,
+                                 int bridgeMinWaterDepth) {
         if (n <= 0) {
-            return new Result(new boolean[0], 0, 0, false);
+            return new Result(new boolean[0], 0, 0, 0, false);
         }
         WaterProbe water = terrain == null
                 ? null
@@ -163,7 +210,7 @@ public final class GroundBanSources {
         // 半径 0：只问站点本身，施工带的水平余量不在这里重复计算。
         StructureProbe structure = pos -> StructureAvoidanceService.shouldAvoidPlanning(pos, 0);
         boolean snapshotOk = safeSnapshotPresent();
-        return collect(water, structure, snapshotOk, centers, n);
+        return collect(water, structure, road, snapshotOk, centers, n);
     }
 
     /** 探测快照是否存在；探测本身不允许影响生产，异常一律当不可用。 */

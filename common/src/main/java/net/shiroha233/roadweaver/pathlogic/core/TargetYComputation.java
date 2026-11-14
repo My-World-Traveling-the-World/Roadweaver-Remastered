@@ -78,6 +78,7 @@ import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
+import net.shiroha233.roadweaver.pathlogic.profile.ExistingRoadProbe;
 import net.shiroha233.roadweaver.pathlogic.profile.GroundBanSources;
 import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
@@ -587,8 +588,22 @@ public final class TargetYComputation {
         //   2026-11-15（独立复核）：原先桥隧臂用 GroundBanSources 的独立掩码、
         //   剖面臂仍用 isCrossing（旧判定产物）⇒ 两臂口径不同、数据不可比。
         //   现在统一由 GroundBanSources 提供，它才是唯一的禁地面来源。
+        //
+        //   第三条来源「已有公路」（2026-11-15 补齐）：探针由 ExistingRoadProbe 构建，
+        //   它会按端点 owner 键**排除当前路自身** —— 这一步是必需的，
+        //   因为重规划路径（rerouteAvoiding → regenerateRoadWithoutPersist →
+        //   computeTargetY）执行时当前路的旧几何已经在存储里，
+        //   不排除就会把整条走廊判成「已有公路」⇒ 全站禁地面。
+        //   owner 键的算法与 Road.java:115-116 完全一致，都是 pos2dKey(端点)。
+        GroundBanSources.RoadProbe existingRoad = null;
+        if (connection != null && connection.from() != null && connection.to() != null) {
+            long ownerA2d = net.shiroha233.roadweaver.planning.PlanningUtils.pos2dKey(connection.from());
+            long ownerB2d = net.shiroha233.roadweaver.planning.PlanningUtils.pos2dKey(connection.to());
+            existingRoad = ExistingRoadProbe.forCorridor(
+                    level, centers, ownerA2d, ownerB2d);
+        }
         GroundBanSources.Result groundBans = GroundBanSources.collect(
-                terrain, centers, n, Math.max(1, bridgeMinWaterDepth));
+                terrain, existingRoad, centers, n, Math.max(1, bridgeMinWaterDepth));
         if (legacySnapshot != null) {
             ProfileAbObserver.observeModes(legacySnapshot, terrainY, groundBans.banned(), tunnelMask,
                     Math.max(1, (cfg.maxSlopeStepPerTwoSegments() + 1) / 2),
