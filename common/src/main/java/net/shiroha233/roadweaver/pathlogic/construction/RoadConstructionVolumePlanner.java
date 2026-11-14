@@ -336,10 +336,28 @@ public final class RoadConstructionVolumePlanner {
         if (positions == null || positions.isEmpty()) return true;
         int[] heights = RoadHeightInterpolator.batchInterpolate(positions, index, centers, profile);
         int[] terrain = sampleTerrain(context, positions);
-        if (!masks.roadCrossing[index]) {
-            int representative = RoadConstructionSafety.representativeHeight(heights);
-            Arrays.fill(heights, representative);
-        }
+        // ★ 2026-11-15（体积/施工口径对齐）：对齐两件事。
+        //
+        //   ① 压平口径：改用「中心线最近列」压平，不再用中位数 `representativeHeight`。
+        //
+        //   施工侧 `SegmentPaver` 早就改成
+        //   `resolveRoadCrossSection(heights, terrain, nearestColumnIndex(positions, seg.middlePos()))`，
+        //   而 `resolveRoadCrossSection` 的 javadoc 已经写明原因：
+        //   中位数是「横截面各列投影到中心线的位置并不相同」时的中位数，
+        //   在斜坡、尤其对角线上，相邻站会轮流高一格 ⇒ 路面变成 0,1,0,1 阶梯，
+        //   而不是一条坡道。中心列才是计划坡度真正算出来的那一列。
+        //
+        //   体积规划若继续用中位数，就会出现「校验按中位数算高度、施工按中心列铺」
+        //   ⇒ 两边 minY/maxY 差 1~2 格，属于静默漏检。
+        //   这里与施工侧同调；`resolveRoadCrossSection` 在 centreIndex<0 时
+        //   会自动退回中位数，所以中心列取不到时行为与原来一致。
+        //
+        //   ② crossing 站也压平：施工侧 `SegmentPaver` 对所有非隧道站都调
+        //      `resolveRoadCrossSection`，**没有 roadCrossing 特例**。
+        //      这里原来用 `if (!masks.roadCrossing[index])` 把路口站整个跳过压平，
+        //      于是路口站的体积按各列插值高度算、施工却压平 ⇒ 差 1~2 格。
+        RoadConstructionSafety.resolveRoadCrossSection(heights, terrain,
+                RoadConstructionSafety.nearestColumnIndex(positions, segment.middlePos()));
         int clearHeight = Math.max(1, context.config().roadClearHeight());
         for (int columnIndex = 0; columnIndex < positions.size(); columnIndex++) {
             BlockPos column = positions.get(columnIndex);
@@ -575,7 +593,6 @@ public final class RoadConstructionVolumePlanner {
         private final boolean[] tunnelJunction;
         private final boolean[] networkReuse;
         private final boolean[] protectedGap;
-        private final boolean[] roadCrossing;
         private final int[] tunnelStart;
 
         private SpanMasks(int size) {
@@ -583,7 +600,6 @@ public final class RoadConstructionVolumePlanner {
             tunnelJunction = new boolean[size];
             networkReuse = new boolean[size];
             protectedGap = new boolean[size];
-            roadCrossing = new boolean[size];
             tunnelStart = new int[size];
             Arrays.fill(tunnelStart, -1);
         }
@@ -609,7 +625,12 @@ public final class RoadConstructionVolumePlanner {
                         case TUNNEL_JUNCTION -> masks.tunnelJunction[index] = true;
                         case NETWORK_REUSE -> masks.networkReuse[index] = true;
                         case PROTECTED_GAP -> masks.protectedGap[index] = true;
-                        case ROAD_CROSSING -> masks.roadCrossing[index] = true;
+                        case ROAD_CROSSING -> {
+                            // 2026-11-15：路口站不再需要体积侧特判。
+                            // 施工侧 SegmentPaver 对所有非隧道站都压平横截面，
+                            // 没有 roadCrossing 分支；这里跟着取消特判，
+                            // 记录型字段 roadCrossing 也随之删除（它已无读取者）。
+                        }
                         default -> {
                         }
                     }
