@@ -14,6 +14,7 @@
 | 重构的过程、每一次判断与误判 | [`REFACTOR.md`](../REFACTOR.md) |
 | 当前发布件、SHA-256、回退与真机验收清单 | [`RELEASES.md`](RELEASES.md) |
 | 怎么把新内核切成默认 | [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md) |
+| 桥隧回写怎么接（待拍板的设计稿） | [`DESIGN-SPAN-WRITEBACK.md`](DESIGN-SPAN-WRITEBACK.md) |
 | 哪些旧代码可以删、删到什么粒度 | [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md) |
 | 后处理 20 个文件分别是留还是删 | [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md) |
 | 死代码怎么审（以及为什么不能批量删） | [`DEAD-METHOD-AUDIT.md`](DEAD-METHOD-AUDIT.md) |
