@@ -1,4 +1,4 @@
-/* 文件职责： */
+/* 文件职责：世界生成期的结构避让入口：按活的区块占用数据判定，与规划期的 PlanningSnapshot 相对；含准备、标记与失效。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
 import it.unimi.dsi.fastutil.longs.LongSet;

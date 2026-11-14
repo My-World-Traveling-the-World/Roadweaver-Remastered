@@ -1,4 +1,4 @@
-/* 文件职责： */
+/* 文件职责：路径障碍判定：三种严格度的「这一格能不能过」（已验证建筑 / 规划障碍 / 村庄群），以及诊断用的碰撞盒与描述。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
