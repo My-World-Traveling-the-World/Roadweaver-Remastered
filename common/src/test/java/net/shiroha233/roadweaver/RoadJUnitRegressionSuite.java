@@ -163,6 +163,8 @@ public final class RoadJUnitRegressionSuite {
                         // P0-1 回归：单条道路读失败不许把索引永久改写
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.chunk.RoadChunkStoreReadFaultTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.RoadConstructionLedgerTest"),
                         // 批 5 量尺：perpendicularDistance / reinstateUntilDense 的契约 + 锯齿保真度实测
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PostprocessMeasuringStickTest"),

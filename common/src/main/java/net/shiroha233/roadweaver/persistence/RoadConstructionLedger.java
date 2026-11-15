@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /** Persists which road fingerprints have already been constructed in each full chunk. */
 public final class RoadConstructionLedger {
@@ -39,22 +40,23 @@ public final class RoadConstructionLedger {
 
     public static boolean isComplete(ServerLevel level, ChunkPos chunkPos, long roadFingerprint) {
         if (!isOverworld(level) || chunkPos == null) return false;
-        Set<Long> roads = state(level).completed.get(chunkPos.toLong());
-        return roads != null && roads.contains(roadFingerprint);
+        return state(level).isComplete(chunkPos, roadFingerprint);
     }
 
     public static void markComplete(ServerLevel level, ChunkPos chunkPos, long roadFingerprint) {
         if (!RoadLifecycle.allowsWrites() || !isOverworld(level) || chunkPos == null) return;
-        State state = state(level);
-        Set<Long> roads = state.completed.computeIfAbsent(
-                chunkPos.toLong(), ignored -> ConcurrentHashMap.newKeySet());
-        if (roads.add(roadFingerprint)) state.dirty.set(true);
+        state(level).markComplete(chunkPos, roadFingerprint);
     }
 
     public static void flush(ServerLevel level) {
         if (!isOverworld(level)) return;
         State state = STATES.get(level);
-        if (state == null || !state.dirty.compareAndSet(true, false)) return;
+        if (state != null) flush(state, () -> path(level));
+    }
+
+    // 保持路径按需解析：干净台账直接返回，写盘失败仍保留待写标记。
+    static void flush(State state, Supplier<Path> path) {
+        if (!state.dirty.compareAndSet(true, false)) return;
 
         List<Entry> entries = new ArrayList<>();
         for (Map.Entry<Long, Set<Long>> chunk : state.completed.entrySet()) {
@@ -74,10 +76,10 @@ public final class RoadConstructionLedger {
                     .append(entry.roadFingerprint()).append('\n');
         }
         try {
-            FileStorageIO.writeStringAtomic(path(level), output.toString());
+            FileStorageIO.writeStringAtomic(path.get(), output.toString());
         } catch (IOException failure) {
             state.dirty.set(true);
-            LOGGER.warn("RoadWeaver could not persist constructed chunk ledger {}.", path(level), failure);
+            LOGGER.warn("RoadWeaver could not persist constructed chunk ledger {}.", path.get(), failure);
         }
     }
 
@@ -92,12 +94,11 @@ public final class RoadConstructionLedger {
     }
 
     private static State state(ServerLevel level) {
-        return STATES.computeIfAbsent(level, RoadConstructionLedger::load);
+        return STATES.computeIfAbsent(level, world -> load(path(world)));
     }
 
-    private static State load(ServerLevel level) {
+    static State load(Path path) {
         State state = new State();
-        Path path = path(level);
         if (!Files.isRegularFile(path)) return state;
         try {
             List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
@@ -143,8 +144,20 @@ public final class RoadConstructionLedger {
     private record Entry(long chunkKey, long roadFingerprint) {
     }
 
-    private static final class State {
+    static final class State {
         private final ConcurrentHashMap<Long, Set<Long>> completed = new ConcurrentHashMap<>();
         private final AtomicBoolean dirty = new AtomicBoolean();
+
+        boolean isComplete(ChunkPos chunkPos, long roadFingerprint) {
+            Set<Long> roads = completed.get(chunkPos.toLong());
+            return roads != null && roads.contains(roadFingerprint);
+        }
+
+        void markComplete(ChunkPos chunkPos, long roadFingerprint) {
+            Set<Long> roads = completed.computeIfAbsent(
+                    chunkPos.toLong(), ignored -> ConcurrentHashMap.newKeySet());
+            // 重复完成不能触发重复写盘；只有新增条目才改变磁盘快照。
+            if (roads.add(roadFingerprint)) dirty.set(true);
+        }
     }
 }

@@ -130,15 +130,8 @@ public final class StructureInjector {
                 injectedCount, chunkPos.x, chunkPos.z);
         }
         
-        PendingStructureStorage.markAsInjected(level, chunkPos);
-        // 2026-11-15：标记是按区块的，所以上面被跳过/失败的条目也会一起被清掉、不再重试。
-        // 这里把「本次丢了几条」明确打出来 —— 否则真机上没人知道投递了多少、又丢了哪些。
-        if (droppedCount > 0) {
-            DROPPED_PENDING.addAndGet(droppedCount);
-            LOGGER.warn("RoadWeaver dropped {} pending structure(s) in chunk [{}, {}]"
-                            + " — marked as injected, will NOT be retried (injected={})",
-                    droppedCount, chunkPos.x, chunkPos.z, injectedCount);
-        }
+        finishInjection(() -> PendingStructureStorage.markAsInjected(level, chunkPos),
+                "structure", chunkPos, injectedCount, droppedCount);
     }
 
     private static void injectRoadsideVillages(ServerLevel level, ChunkAccess chunk) {
@@ -189,13 +182,18 @@ public final class StructureInjector {
             LOGGER.debug("Injected {} roadside villages into chunk [{}, {}]", injectedCount, chunkPos.x, chunkPos.z);
         }
 
-        PendingRoadsideVillageStorage.markAsInjected(level, chunkPos);
-        // 同上：标记按区块，跳过/失败的条目一并清掉、不再重试，这里把「丢了几条」打出来。
+        finishInjection(() -> PendingRoadsideVillageStorage.markAsInjected(level, chunkPos),
+                "roadside village", chunkPos, injectedCount, droppedCount);
+    }
+
+    // 只有区块标记成功后才算永久丢弃；两条注入路径共用结算顺序以免口径走散。
+    static void finishInjection(Runnable mark, String kind, ChunkPos chunkPos, int injectedCount, int droppedCount) {
+        mark.run();
         if (droppedCount > 0) {
             DROPPED_PENDING.addAndGet(droppedCount);
-            LOGGER.warn("RoadWeaver dropped {} pending roadside village(s) in chunk [{}, {}]"
+            LOGGER.warn("RoadWeaver dropped {} pending {}(s) in chunk [{}, {}]"
                             + " — marked as injected, will NOT be retried (injected={})",
-                    droppedCount, chunkPos.x, chunkPos.z, injectedCount);
+                    droppedCount, kind, chunkPos.x, chunkPos.z, injectedCount);
         }
     }
 }
