@@ -297,6 +297,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathfinding.sampling.opencl.GpuMemoryProbeTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadChunkPlanCompilerReuseOwnershipTest"),
+                        // 密度光栅裁边仍要保留路肩、跨路禁切填与重叠优先级。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.worldgen.road.RoadChunkDensityRasterTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.runtime.ThreadPoolCapacityDebounceTest"),
                         DiscoverySelectors.selectClass(

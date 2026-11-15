@@ -196,24 +196,15 @@ public final class RoadChunkPlanCompiler {
                 BlockPos b = placements.get(i + 1).middlePos();
                 int y0 = targetAt(targetY, i, a.getY());
                 int y1 = targetAt(targetY, i + 1, b.getY());
-                if (isDirectCrossing) {
-                    terrainStampExclusions.add(new RasterSegment(
-                            a.getX(), a.getZ(), y0,
-                            b.getX(), b.getZ(), y1,
-                            halfWidth));
-                    continue;
-                }
-                int minX = Math.min(a.getX(), b.getX()) - halfWidth - BANK_WIDTH;
-                int maxX = Math.max(a.getX(), b.getX()) + halfWidth + BANK_WIDTH;
-                int minZ = Math.min(a.getZ(), b.getZ()) - halfWidth - BANK_WIDTH;
-                int maxZ = Math.max(a.getZ(), b.getZ()) + halfWidth + BANK_WIDTH;
-                if (maxX < chunkMinX || minX > chunkMaxX || maxZ < chunkMinZ || minZ > chunkMaxZ) {
-                    continue;
-                }
-                rasterSegments.add(new RasterSegment(
-                        a.getX(), a.getZ(), y0,
-                        b.getX(), b.getZ(), y1,
-                        halfWidth));
+                // 禁切填与普通路段的影响半径相同。远离本区块的跨路段也不必创建光栅条目。
+                int radius = halfWidth + BANK_WIDTH;
+                if (Math.max(a.getX(), b.getX()) + radius < chunkMinX
+                        || Math.min(a.getX(), b.getX()) - radius > chunkMaxX
+                        || Math.max(a.getZ(), b.getZ()) + radius < chunkMinZ
+                        || Math.min(a.getZ(), b.getZ()) - radius > chunkMaxZ) continue;
+                var segment = new RasterSegment(a.getX(), a.getZ(), y0,
+                        b.getX(), b.getZ(), y1, halfWidth);
+                (isDirectCrossing ? terrainStampExclusions : rasterSegments).add(segment);
             }
         }
 
@@ -237,39 +228,50 @@ public final class RoadChunkPlanCompiler {
         Arrays.fill(carveTargetY, Integer.MIN_VALUE);
         float[] fillLateral = new float[COLUMN_COUNT];
         float[] carveLateral = new float[COLUMN_COUNT];
-        float[] bestFill = new float[COLUMN_COUNT];
-        float[] bestCarve = new float[COLUMN_COUNT];
-        int[] fillY = new int[COLUMN_COUNT];
-        int[] carveY = new int[COLUMN_COUNT];
-
+        // 跨路排除按列取并集；先标记，避免每个普通路段重复扫描全部跨路段。
         int minX = chunkPos.getMinBlockX();
         int minZ = chunkPos.getMinBlockZ();
-        for (int localZ = 0; localZ < 16; localZ++) {
-            for (int localX = 0; localX < 16; localX++) {
-                int index = localX | (localZ << 4);
-                int x = minX + localX;
-                int z = minZ + localZ;
-                if (isTerrainStampExcluded(x, z, exclusions)) continue;
-                for (RasterSegment segment : segments) {
-                    Projection projection = project(x, z, segment);
-                    double target = segment.y0 + projection.t() * (segment.y1 - segment.y0);
-                    int surfaceY = (int) Math.round(target);
-                    double distance = Math.sqrt(projection.distanceSq());
-
-                    double totalWidth = segment.halfWidth + BANK_WIDTH;
-                    if (distance <= totalWidth) {
-                        double inner = Math.max(0.0D, segment.halfWidth * 0.25D);
-                        float lateral = (float) smoothFalloff(distance, inner, totalWidth);
-                        lateral *= lateral;
-                        if (lateral > bestFill[index]) {
-                            bestFill[index] = lateral;
-                            fillY[index] = surfaceY;
-                        }
+        boolean[] excluded = exclusions.isEmpty() ? null : new boolean[COLUMN_COUNT];
+        for (RasterSegment segment : exclusions) {
+            int radius = segment.halfWidth + BANK_WIDTH;
+            double radiusSq = (double) radius * radius;
+            ColumnBounds bounds = columnBounds(segment, minX, minZ, radius);
+            for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
+                for (int x = bounds.minX; x <= bounds.maxX; x++) {
+                    int index = x | (z << 4);
+                    if (!excluded[index] && project(minX + x, minZ + z, segment).distanceSq() <= radiusSq) {
+                        excluded[index] = true;
                     }
+                }
+            }
+        }
 
-                    if (distance <= segment.halfWidth && 1.0F > bestCarve[index]) {
-                        bestCarve[index] = 1.0F;
-                        carveY[index] = surfaceY;
+        // 按原路段顺序更新各列，保留填方等权或多个挖方候选时「先到者胜出」的语义。
+        // 胶囊的投影不可能超出端点包围盒加半径，盒外无需计算投影。
+        for (RasterSegment segment : segments) {
+            int radius = segment.halfWidth + BANK_WIDTH;
+            double inner = Math.max(0.0D, segment.halfWidth * 0.25D);
+            ColumnBounds bounds = columnBounds(segment, minX, minZ, radius);
+            for (int z = bounds.minZ; z <= bounds.maxZ; z++) {
+                for (int x = bounds.minX; x <= bounds.maxX; x++) {
+                    int index = x | (z << 4);
+                    if (excluded != null && excluded[index]) continue;
+                    Projection projection = project(minX + x, minZ + z, segment);
+                    double distance = Math.sqrt(projection.distanceSq());
+                    if (distance > radius) continue;
+                    float lateral = (float) smoothFalloff(distance, inner, radius);
+                    lateral *= lateral;
+                    boolean replaceFill = lateral > fillLateral[index];
+                    boolean setCarve = distance <= segment.halfWidth && carveLateral[index] == 0.0F;
+                    if (!replaceFill && !setCarve) continue;
+                    int surfaceY = (int) Math.round(segment.y0 + projection.t() * (segment.y1 - segment.y0));
+                    if (replaceFill) {
+                        fillLateral[index] = lateral;
+                        fillTargetY[index] = surfaceY;
+                    }
+                    if (setCarve) {
+                        carveLateral[index] = 1.0F;
+                        carveTargetY[index] = surfaceY;
                     }
                 }
             }
@@ -286,31 +288,20 @@ public final class RoadChunkPlanCompiler {
             carveDepth[i] = -MAX_CARVE * (float) Math.pow(1.0D - clearT, 1.8D);
         }
 
-        for (int i = 0; i < COLUMN_COUNT; i++) {
-            if (bestFill[i] > 0.0F) {
-                fillTargetY[i] = fillY[i];
-                fillLateral[i] = bestFill[i];
-            }
-            if (bestCarve[i] > 0.0F) {
-                carveTargetY[i] = carveY[i];
-                carveLateral[i] = bestCarve[i];
-            }
-        }
+        // 数组均为本次编译独占且不再写入，直接移交给不可变的列数据。
         return new RoadDensityStamp(chunkPos, fillTargetY, carveTargetY,
-                fillLateral, carveLateral, fillDepth, carveDepth, occupied, true);
+                fillLateral, carveLateral, fillDepth, carveDepth, occupied, false);
     }
 
-    private static boolean isTerrainStampExcluded(int x,
-                                                   int z,
-                                                   List<RasterSegment> exclusions) {
-        if (exclusions == null || exclusions.isEmpty()) return false;
-        for (RasterSegment exclusion : exclusions) {
-            double protectedWidth = exclusion.halfWidth + BANK_WIDTH;
-            if (project(x, z, exclusion).distanceSq() <= protectedWidth * protectedWidth) {
-                return true;
-            }
-        }
-        return false;
+    private static ColumnBounds columnBounds(RasterSegment segment, int minX, int minZ, int radius) {
+        return new ColumnBounds(
+                Math.max(0, Math.min(segment.x0, segment.x1) - minX - radius),
+                Math.min(15, Math.max(segment.x0, segment.x1) - minX + radius),
+                Math.max(0, Math.min(segment.z0, segment.z1) - minZ - radius),
+                Math.min(15, Math.max(segment.z0, segment.z1) - minZ + radius));
+    }
+
+    private record ColumnBounds(int minX, int maxX, int minZ, int maxZ) {
     }
 
     private static void markOccupied(boolean[] occupied,
