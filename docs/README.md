@@ -31,6 +31,7 @@
 | **批 4/5/6/7 有独立新实现包吗** | [`BATCH4567-PACKAGE-AUDIT-20261115.md`](BATCH4567-PACKAGE-AUDIT-20261115.md) ← **没有，四个 newPkg 至今不存在；真实做法是就地重构** |
 | **新引擎到底接管了几个批** | [`BATCH4567-TAKEOVER-AUDIT-20261115.md`](BATCH4567-TAKEOVER-AUDIT-20261115.md) ← **只有批 1/2；批 3/4/5/6 新引擎都没接管，批 7 仍 REPORT-ONLY** |
 | **批 5/6 到底缺什么（含我自己的更正）** | [`BATCH56-CORRECTION-AND-PLAN-20261115.md`](BATCH56-CORRECTION-AND-PLAN-20261115.md) ← **批6 硬约束已接（我说错了）；批5 真问题是双平滑；方案 A/B/C 在第三节** |
+| **那些守卫真的在守吗** | [`GUARD-EFFECTIVENESS-AUDIT-20261115.md`](GUARD-EFFECTIVENESS-AUDIT-20261115.md) ← **10 个守卫会静默跳过（3 个是全部用例可跳）；已补元守卫堵住** |
 
 ---
 
