@@ -5,7 +5,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -24,6 +26,61 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @see ArrivalTimeField
  */
 class ArrivalTimeFieldTest {
+
+    @Test
+    void 非对齐目标只影响选格而不会平移回溯路径() {
+        // 非零负坐标原点暴露用绝对坐标取整的错误；正反方向各对拍同一个真实采样格。
+        var solver = new FastMarchingSolver(FinslerMetric.of(step8(-31, -29), ObstacleField.NONE));
+        var forward = solver.solve(-24, -20, 3, -10);
+        var reverse = solver.solve(3, -10, -24, -20);
+        assertSameTrace(forward.pathTo(1, -13), forward.pathTo(3, -10), -23, -21, 1, -13);
+        assertSameTrace(reverse.pathTo(-23, -21), reverse.pathTo(-24, -20), 1, -13, -23, -21);
+    }
+
+    @Test
+    void 对齐目标的回溯点序保持原样() {
+        // 水平路径没有同权方向的歧义，精确点序能抓到漏掉首格、末格或跳格。
+        var solver = new FastMarchingSolver(FinslerMetric.of(step8(0, 0), ObstacleField.NONE));
+        var path = solver.solve(8, 8, 32, 8).pathTo(32, 8);
+        assertEquals(4, path.size());
+        for (int i = 0; i < 4; i++) assertArrayEquals(new int[]{8 + 8 * i, 8}, path.get(i));
+    }
+
+    @Test
+    void 真实源点自由但吸附格被挡时不得传播() {
+        var terrain = step8(0, 0);
+        ObstacleField blocked = new ObstacleField() {
+            @Override public double potential(int x, int z) { return 0; }
+            @Override public boolean impassable(int x, int z) { return x == 8 && z == 8; }
+        };
+        var metric = FinslerMetric.of(terrain, blocked);
+        assertTrue(metric.isPassable(7, 7), "前提：只有吸附格被禁");
+        assertTrue(new FastMarchingSolver(metric).solve(0, 0).reachable(24, 16),
+                "正控：同一区域从合法源格能够传播到目标");
+        var field = new FastMarchingSolver(metric).solve(7, 7);
+        assertFalse(field.reachable(8, 8), "T=0 不能注进硬禁格");
+        assertFalse(field.reachable(24, 16), "禁止从硬禁格向外传播");
+    }
+
+    private static TerrainField step8(int minX, int minZ) {
+        return new TerrainField() {
+            @Override public int height(int x, int z) { return 64; }
+            @Override public int minX() { return minX; }
+            @Override public int maxX() { return minX + 64; }
+            @Override public int minZ() { return minZ; }
+            @Override public int maxZ() { return minZ + 64; }
+            @Override public int step() { return 8; }
+        };
+    }
+
+    private static void assertSameTrace(List<int[]> aligned, List<int[]> query,
+                                        int sx, int sz, int tx, int tz) {
+        assertTrue(aligned.size() >= 4, "两点相隔多个采样格，禁止空列对拍");
+        assertEquals(aligned.size(), query.size());
+        assertArrayEquals(new int[]{sx, sz}, query.getFirst());
+        assertArrayEquals(new int[]{tx, tz}, query.getLast());
+        for (int i = 0; i < query.size(); i++) assertArrayEquals(aligned.get(i), query.get(i));
+    }
 
     private static final double STEP = 8.0;      // 推导中的 h（采样步长）
 

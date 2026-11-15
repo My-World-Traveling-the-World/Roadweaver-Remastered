@@ -215,10 +215,6 @@ public final class FastMarchingSolver {
             return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
-        double[] t = new double[w * d];
-        Arrays.fill(t, UNREACHABLE);
-        boolean[] frozen = new boolean[w * d];
-
         // 预计算（与源点无关，多源共享；网格尺寸变了才重建）
         ensurePrecomputed(minX, minZ, w, d, step);
         double[] costX = cachedCostX;
@@ -232,6 +228,15 @@ public final class FastMarchingSolver {
         int sourceIx = Math.max(0, Math.min(w - 1, Math.round((sourceX - minX) / (float) step)));
         int sourceIz = Math.max(0, Math.min(d - 1, Math.round((sourceZ - minZ) / (float) step)));
         int sourceIndex = sourceIx + sourceIz * w;
+        // 真实端点合法不代表吸附格合法；硬禁格不能作为传播起点。
+        if (!passable[sourceIndex]) {
+            LOGGER.warn("RoadWeaver FMM: 源点 ({},{}) 吸附到硬不可通行格，返回不可达场", sourceX, sourceZ);
+            return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
+        }
+
+        double[] t = new double[w * d];
+        Arrays.fill(t, UNREACHABLE);
+        boolean[] frozen = new boolean[w * d];
         t[sourceIndex] = 0.0;
 
         PriorityQueue<Entry> queue = new PriorityQueue<>();

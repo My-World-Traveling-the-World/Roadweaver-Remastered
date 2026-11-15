@@ -3,6 +3,7 @@ package net.shiroha233.roadweaver.metric;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -11,7 +12,7 @@ import java.util.List;
  * <h2>它能回答什么</h2>
  * <ul>
  *   <li>{@link #at} —— 到某点的最小代价（＝测地距离）</li>
- *   <li>{@link #pathTo} —— 到某点的路径（沿 {@code -∇T} 回溯，方向连续）</li>
+ *   <li>{@link #pathTo} —— 到某点最近采样格的路径（沿 {@code -∇T} 回溯）</li>
  * </ul>
  *
  * <h2>一次求解，多个终点</h2>
@@ -19,9 +20,8 @@ import java.util.List;
  * 23 条连接花了 215 秒；这里同一个源点可以问任意多个终点。
  * 拓扑层（{@code topology}）因此可以直接用 N 次求解得到完整的两两距离矩阵。</p>
  *
- * <h2>方向为什么是连续的</h2>
- * <p>回溯时每步取「{@code T} 下降最快的邻居」，再用线性插值细化，
- * 所以得到的方向不受 8 邻域限制。这一点是「锯齿从根上消失」的来源。</p>
+ * <p>回溯的点都在网格上，曲线平滑和真实端点接线由上层负责。这样高度、障碍和下降方向
+ * 读到的是同一组坐标，不会因为查询点离网格有几格就平移整条线。</p>
  *
  * @see FastMarchingSolver
  */
@@ -105,59 +105,44 @@ public final class ArrivalTimeField {
      * 因此它们的 T 恒为 +∞，永远不会被选中。再加一次判定是冗余的 ——
      * 原审计条目这一半不成立（Claude 复核时已推翻）。</p>
      *
-     * <p>步数上限用 {@code width·depth + 16} 兜底（每步 T 严格下降，正常远小于此值），
+     * <p>步数上限用 {@code width·depth} 兜底（每步 T 严格下降，正常远小于此值），
      * 与 {@code BandPathfinder} 的 {@code maxSteps} 参数无关。</p>
      *
-     * @return 从源点到终点的点列（含两端）；不可达时返回空列表
+     * @return 从源格到目标格的方块坐标（含两格）；不可达或无法回到源格时返回空列表
      */
     public List<int[]> pathTo(int targetX, int targetZ) {
+        if (!contains(targetX, targetZ)) return List.of();
+        int index = indexOf(targetX, targetZ);
+        if (!Double.isFinite(times[index])) return List.of();
+
+        // 世界坐标只参与一次吸附；用网格索引走，禁行边和场值便不会检查不同的线。
         List<int[]> reversed = new ArrayList<>();
-        if (!reachable(targetX, targetZ)) return List.of();
-
-        int x = targetX;
-        int z = targetZ;
-        reversed.add(new int[]{x, z});   // 对外一律方块坐标
-
-        // 步数上限：防止数值异常导致死循环（每步 T 严格下降，正常远小于此值）
-        int guard = width * depth + 16;
-        while (at(x, z) > 1e-12 && guard-- > 0) {
-            // 2026-11-14 修复（审计 NEW-5）：邻居比选改成「下降率最大」。
-            //
-            // 原来比的是**原始 T 最小**，这系统性偏爱对角方向：
-            // 沿 φ 方向的邻居 ΔT = h·(cosφ + sinφ)，对角（45° 步长 √2·h）
-            // 拿到的 ΔT 恒为轴向的 (cosφ+sinφ) 倍 —— φ 越小越明显。
-            // φ=10° 时对角 ΔT=1.159h、轴向 0.985h ⇒ 对角 T 更小 ⇒ 被选中，
-            // 但它实际步长 1.414h，真实下降率只有 0.82 对 0.985 ——
-            // 于是下降最陡的方向被系统性跳过，最大偏差 √2−1 = 41.4%，
-            // 表现为路径带不必要的对角折线（「之字」的一个成因）。
-            // 正确判据是「单位弧长的下降量」(T_cur − T_nb)/dist 最大化。
-            double current = at(x, z);
-            int bestDir = bestDescentDirection(current, neighborTimes(x, z));
-            if (bestDir < 0) break;                  // 数值上是平台，停止
-            x = x + DX[bestDir] * step;
-            z = z + DZ[bestDir] * step;
+        double[] neighbors = new double[DX.length];
+        int ix = index % width, iz = index / width;
+        for (int guard = times.length; guard > 0; guard--) {
+            int x = minX + ix * step, z = minZ + iz * step;
             reversed.add(new int[]{x, z});
+            double current = times[ix + iz * width];
+            if (current == 0.0) {
+                Collections.reverse(reversed);
+                return reversed;
+            }
+            for (int dir = 0; dir < DX.length; dir++) {
+                int nx = ix + DX[dir], nz = iz + DZ[dir];
+                neighbors[dir] = Double.POSITIVE_INFINITY;
+                if (nx < 0 || nx >= width || nz < 0 || nz >= depth) continue;
+                double next = times[nx + nz * width];
+                if (next < current && !metric.blocksEdge(x, z, minX + nx * step, minZ + nz * step)) {
+                    neighbors[dir] = next;
+                }
+            }
+            int direction = bestDescentDirection(current, neighbors);
+            // 上层会把首格当源格接线，不能把只回溯到半途的路径冒充完整路线。
+            if (direction < 0) break;
+            ix += DX[direction];
+            iz += DZ[direction];
         }
-
-        // 反转为「源 -> 终点」
-        List<int[]> path = new ArrayList<>(reversed.size());
-        for (int i = reversed.size() - 1; i >= 0; i--) {
-            path.add(reversed.get(i));
-        }
-        return path;
-    }
-
-    /** 取 8 邻域的 T（不在场内的填 +∞）。 */
-    private double[] neighborTimes(int x, int z) {
-        double[] times = new double[8];
-        for (int dir = 0; dir < 8; dir++) {
-            int nx = x + DX[dir] * step;
-            int nz = z + DZ[dir] * step;
-            // 八邻域回溯也必须挡边，特别是 FMM 只推进四邻域、回溯却可对角时。
-            times[dir] = contains(nx, nz) && !metric.blocksEdge(x, z, nx, nz)
-                    ? at(nx, nz) : Double.POSITIVE_INFINITY;
-        }
-        return times;
+        return List.of();
     }
 
     /**

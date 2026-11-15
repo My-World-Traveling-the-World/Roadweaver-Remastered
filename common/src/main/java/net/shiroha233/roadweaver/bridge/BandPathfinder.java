@@ -286,27 +286,18 @@ public final class BandPathfinder implements Pathfinder {
         BandRouteSolver routeSolver = new BandRouteSolver(metric, ElasticBandSolver.defaults());
         RouteSolver.RouteSolution solution = routeSolver.solve(
                 new RoadNode("start", start.getX(), start.getZ()),
-                new RoadNode("end", end.getX(), end.getZ()));
+                new RoadNode("end", end.getX(), end.getZ()),
+                // 端点短边可能落在粗障碍格之间，用原地形和实际保护列复检。
+                (x, z) -> !terrain.contains(x, z) || probe.hard(x, terrain.height(x, z), z));
         if (!solution.reachable()) {
             return PathResult.failure();
         }
 
-        // ④ 端点必须精确落回起终点（场求解会按步长取整）
-        List<BlockPos> path = new ArrayList<>(solution.points().size() + 2);
+        // 接入真实端点的短边已随曲线验证；本层只恢复地形高度，不修改坐标。
+        List<BlockPos> path = new ArrayList<>(solution.points().size());
         for (int[] point : solution.points()) {
             path.add(new BlockPos(point[0], terrain.height(point[0], point[1]), point[1]));
         }
-        if (path.isEmpty()) return PathResult.failure();
-
-        int startY = terrain.contains(start.getX(), start.getZ())
-                ? terrain.height(start.getX(), start.getZ()) : start.getY();
-        int endY = terrain.contains(end.getX(), end.getZ())
-                ? terrain.height(end.getX(), end.getZ()) : end.getY();
-        path.set(0, new BlockPos(start.getX(), startY, start.getZ()));
-        path.set(path.size() - 1, new BlockPos(end.getX(), endY, end.getZ()));
-
-        // 恢复真实端点会短接吸附后的格点，必须最后再验证，不能从禁区截角。
-        if (hasBan && ban.intersectsPath(path)) return PathResult.failure();
         return PathResult.raw(path);
     }
 

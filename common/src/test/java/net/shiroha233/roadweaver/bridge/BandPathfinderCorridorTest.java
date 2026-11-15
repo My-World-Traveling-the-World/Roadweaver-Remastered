@@ -88,6 +88,36 @@ final class BandPathfinderCorridorTest {
                 "打开优惠后实际路径要进入共用走廊");
     }
 
+    @Test
+    void sameGridRouteKeepsBothEndpointsAndRejectsMissingConnectorColumn() {
+        BlockPos start = new BlockPos(-5, 64, -3), end = new BlockPos(-2, 64, -3);
+        BandPathfinder solver = new BandPathfinder();
+        // 同格的跨度是 3 格；走生产入口可抓到 set(0)/set(last) 覆盖同一站的退化。
+        PathResult open = solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config());
+        assertTrue(open.success(), "同一采样格不等于同一现实端点");
+        assertEquals(List.of(start, end), open.rawPath(), "两端都要留给后处理");
+
+        // x=-4 的缺口不在粗采样格上，只有真实世界坐标的短接线检查能看到。
+        PathResult blocked = solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32, true), config());
+        assertFalse(blocked.success(), "粗网格可达不能掩盖接线中间缺一列");
+    }
+
+    @Test
+    void sameGridRouteCannotShortCircuitHardCorridor() {
+        BlockPos start = new BlockPos(-2, 64, -2), end = new BlockPos(1, 64, 1);
+        var config = config();
+        var solver = new BandPathfinder();
+        assertTrue(solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config).success());
+        // (-1,0) 在公共角另一侧；两个端点都不在这一片禁行量化格内。
+        CorridorBan ban = ban(List.of(new BlockPos(-1, 64, 0)));
+        assertFalse(ban.blocks(start.getX(), start.getZ()));
+        assertFalse(ban.blocks(end.getX(), end.getZ()));
+        assertTrue(ban.intersectsSegment(start.getX(), start.getZ(), end.getX(), end.getZ()));
+        config.setCorridorBan(ban);
+        assertFalse(solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config).success(),
+                "同格连接也不能从禁行角钻过");
+    }
+
     private static CorridorBan ban(List<BlockPos> line) {
         List<RoadSegmentPlacement> stations = line.stream()
                 .map(pos -> new RoadSegmentPlacement(pos, List.of(pos))).toList();
@@ -106,14 +136,17 @@ final class BandPathfinderCorridorTest {
         return new BandPathfinder().findPath(START, END, 1, null, 1000, null, new FlatTerrain(zBound), config);
     }
 
-    private record FlatTerrain(int zBound) implements PathTerrainField {
+    private record FlatTerrain(int zBound, boolean missingColumn) implements PathTerrainField {
+        private FlatTerrain(int zBound) { this(zBound, false); }
         public int seaLevel() { return 63; }
         public int height(int x, int z) { return 64; }
         public int oceanFloor(int x, int z) { return 64; }
         public boolean isColumnWater(int x, int z) { return false; }
         public boolean isNearWater(int x, int z, int distance) { return false; }
         public Holder<Biome> biome(int x, int z) { return null; }
-        public boolean contains(int x, int z) { return x >= -80 && x <= 80 && Math.abs(z) <= zBound; }
+        public boolean contains(int x, int z) {
+            return x >= -80 && x <= 80 && Math.abs(z) <= zBound && !(missingColumn && x == -4 && z == -3);
+        }
         public int step() { return 8; }
     }
 }

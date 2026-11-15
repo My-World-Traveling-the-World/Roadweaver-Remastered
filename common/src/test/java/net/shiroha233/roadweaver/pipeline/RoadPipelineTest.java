@@ -3,6 +3,7 @@ package net.shiroha233.roadweaver.pipeline;
 
 import java.util.List;
 
+import net.shiroha233.roadweaver.band.BandResult.Point;
 import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.GridTerrainField;
@@ -128,22 +129,11 @@ class RoadPipelineTest {
      * 采样步长 &gt; 1 且节点坐标不在网格点上时，端点也必须精确对齐（审计 NEW-4）。
      *
      * <p>上面那个用例用 step=1 的网格地形、节点恰好落在格点上，所以即使不显式对齐
-     * 也能通过 —— 缺陷只在「步长 &gt; 1 + 坐标非网格对齐」时暴露：
-     * 回溯只能在采样格上落点（就近吸附），首尾天然偏离真实节点；
-     * 弹性带又用镜像虚点处理边界，会再推一下。生产路径是 step=8，正好命中这个组合。</p>
+     * 也能通过 —— 必须用离网格端点才能验证接线确实保留了现实端点。生产路径常用 step=8。</p>
      */
     @Test
     void 步长大于1且坐标非网格对齐时端点仍精确对齐() {
-        // step=8 的平地（0..64，网格点 0/8/16/.../64）
-        TerrainField step8 = new TerrainField() {
-            @Override public int height(int x, int z) { return 0; }
-            @Override public int minX() { return 0; }
-            @Override public int maxX() { return 64; }
-            @Override public int minZ() { return 0; }
-            @Override public int maxZ() { return 64; }
-            @Override public int step() { return 8; }
-        };
-        FinslerMetric metric = new FinslerMetric(step8, ObstacleField.NONE, 0.0, 0.0);
+        FinslerMetric metric = new FinslerMetric(flatStep8(), ObstacleField.NONE, 0.0, 0.0);
 
         // 三个节点全部不在 8 的倍数上
         List<RoadNode> nodes = List.of(
@@ -163,6 +153,49 @@ class RoadPipelineTest {
             assertEquals(to.x(), end.x(), "边 " + edge.from() + "->" + edge.to() + " 终点 x 必须对齐节点");
             assertEquals(to.z(), end.z(), "边 " + edge.from() + "->" + edge.to() + " 终点 z 必须对齐节点");
         }
+    }
+
+    @Test
+    void 完整路网不能把被挡的端点接线计作成路() {
+        List<RoadNode> nodes = List.of(new RoadNode("a", 8, 8), new RoadNode("b", 34, 19));
+        ObstacleField protectedColumn = new ObstacleField() {
+            @Override public double potential(int x, int z) { return 0.0; }
+            @Override public boolean impassable(int x, int z) { return x == 33 && z == 18; }
+        };
+        // 保护列既不在两端、也不在采样格；只有终点短边穿过它。
+        var metric = FinslerMetric.of(flatStep8(), protectedColumn);
+        var pipeline = new RoadPipeline(metric, null);
+        assertEquals(1, pipeline.planTopology(nodes).edgeCount(), "粗拓扑仍有且仅有这一条边");
+        var clean = new RoadPipeline(FinslerMetric.of(flatStep8(), ObstacleField.NONE), null).run(nodes);
+        assertEquals(1, clean.edgeCount(), "正控：无保护列时两个节点能连通");
+        assertEquals(new Point(32, 16),
+                clean.edges().getFirst().curve().reversed().get(1), "终点前必须保留实际采样格");
+
+        RoadNetworkPlan blocked = pipeline.run(nodes);
+        assertEquals(0, blocked.edgeCount(), "无合法端点短边就没有成路");
+        assertEquals(List.of(0, 1), blocked.isolatedNodes(), "报告应按成路后的边计孤点");
+    }
+
+    @Test
+    void 同一采样格的不同节点仍有两个真实端点() {
+        var metric = FinslerMetric.of(flatStep8(), ObstacleField.NONE);
+        var plan = new RoadPipeline(metric, null).run(
+                List.of(new RoadNode("a", 6, 8), new RoadNode("b", 8, 10)));
+        assertEquals(1, plan.edgeCount());
+        assertEquals(List.of(new Point(6, 8),
+                        new Point(8, 10)),
+                plan.edges().getFirst().curve(), "不能在单一吸附格上先后覆盖首尾点");
+    }
+
+    private static TerrainField flatStep8() {
+        return new TerrainField() {
+            @Override public int height(int x, int z) { return 0; }
+            @Override public int minX() { return 0; }
+            @Override public int maxX() { return 64; }
+            @Override public int minZ() { return 0; }
+            @Override public int maxZ() { return 64; }
+            @Override public int step() { return 8; }
+        };
     }
 
     @Test

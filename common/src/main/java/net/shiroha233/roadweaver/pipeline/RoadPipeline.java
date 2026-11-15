@@ -9,6 +9,7 @@ import net.shiroha233.roadweaver.band.ElasticBandSolver;
 import net.shiroha233.roadweaver.metric.ArrivalTimeField;
 import net.shiroha233.roadweaver.metric.FastMarchingSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
+import net.shiroha233.roadweaver.pipeline.ab.BandRouteSolver;
 import net.shiroha233.roadweaver.topology.GeodesicMatrix;
 import net.shiroha233.roadweaver.topology.MinimumSpanningTree;
 import net.shiroha233.roadweaver.topology.RoadNode;
@@ -71,6 +72,7 @@ public final class RoadPipeline {
         // ② 几何：按「源节点」分组，每个源只求解一次
         FastMarchingSolver solver = new FastMarchingSolver(metric);
         List<RoadNetworkPlan.RoadEdge> edges = new ArrayList<>(topology.edgeCount());
+        boolean[] connected = new boolean[nodes.size()];
 
         List<TopologyPlan.Edge> remaining = new ArrayList<>(topology.edges());
         remaining.sort((a, b) -> Integer.compare(a.from(), b.from()));
@@ -98,11 +100,20 @@ public final class RoadPipeline {
 
             while (index < remaining.size() && remaining.get(index).from() == source) {
                 TopologyPlan.Edge edge = remaining.get(index++);
-                edges.add(buildEdge(nodes, edge, field));
+                RoadNetworkPlan.RoadEdge road = buildEdge(nodes, edge, field);
+                // 粗拓扑只证明采样格连通；短接线被挡时不能把一条无曲线的边计入产物。
+                if (road.band().points().isEmpty()) continue;
+                edges.add(road);
+                connected[edge.from()] = true;
+                connected[edge.to()] = true;
             }
         }
 
-        return new RoadNetworkPlan(nodes, edges, topology.isolatedNodes());
+        List<Integer> isolated = new ArrayList<>();
+        for (int i = 0; i < connected.length; i++) {
+            if (!connected[i]) isolated.add(i);
+        }
+        return new RoadNetworkPlan(nodes, edges, isolated);
     }
 
     /**
@@ -137,56 +148,15 @@ public final class RoadPipeline {
         RoadNode from = nodes.get(edge.from());
         RoadNode to = nodes.get(edge.to());
 
-        // 场回溯得到准测地线（方向连续，无 45° 量化）
-        List<BandResult.Point> raw = field.pathTo(to.x(), to.z()).stream()
-                .map(p -> new BandResult.Point(p[0], p[1]))
-                .toList();
-
-        // 弹性带：曲率平滑 + 硬障碍投影（2026-11-14 修复，审计 B）
-        // metric 与 ObstaclePotential 的注释都写着「『绝不穿结构』由 band 层的硬投影负责」，
-        // 而原本这层完全不认识障碍 —— 契约是断的。这里把度量层的不可通行判据喂给它。
-        BandResult smoothed = bandSolver.smooth(raw, blockers());
-
-        // 2026-11-14 修复（审计 NEW-4）：弹性带的算子用镜像虚点（2·v[0] − v[1]）
-        // 处理边界，所以平滑后首尾会被推离真实端点；而 QualityGate 的端点校验
-        // 要求曲线两端严格等于节点坐标（否则接不上）。这里显式把首尾改回节点坐标 ——
-        // 与 BandPathfinder 同口径（它在平滑后也 set(0)/set(size-1)）。
-        List<BandResult.Point> aligned = alignEndpoints(smoothed.points(), from, to);
+        BandResult band = BandRouteSolver.trace(from, to, field, bandSolver, null);
 
         double straight = Math.hypot((double) to.x() - from.x(), (double) to.z() - from.z());
         return new RoadNetworkPlan.RoadEdge(edge.from(), edge.to(),
-                edge.distance(), straight, aligned, smoothed);
-    }
-
-    /**
-     * 把曲线首尾对齐到节点坐标（2026-11-14，审计 NEW-4）。
-     *
-     * <p>两端都对齐，而不是只对齐起点：回溯的<b>终点</b>理论上就是传入的 to，
-     * 但弹性带平滑会用镜像虚点处理边界，首尾都会被推开一点点。两处都改回来
-     * 才与 {@code BandPathfinder}（生产路径）同一口径。</p>
-     */
-    private static List<BandResult.Point> alignEndpoints(List<BandResult.Point> points,
-                                                         RoadNode from,
-                                                         RoadNode to) {
-        if (points.isEmpty()) return points;
-        List<BandResult.Point> out = new ArrayList<>(points);
-        out.set(0, new BandResult.Point(from.x(), from.z()));
-        out.set(out.size() - 1, new BandResult.Point(to.x(), to.z()));
-        return out;
+                edge.distance(), straight, band.points(), band);
     }
 
     /** 度量（供上层查配置）。 */
     public FinslerMetric metric() { return metric; }
-
-    /**
-     * 把度量层的硬障碍判据适配成 band 层的 {@code BlockedCheck} 端口。
-     *
-     * <p>band 层按分层规则不能依赖 metric 包，所以它自己定义端口、由这里适配 ——
-     * 与 metric 用 {@code ObstacleField} 当输入端口是同一个手法。</p>
-     */
-    private ElasticBandSolver.BlockedCheck blockers() {
-        return (x, z) -> !metric.isPassable(x, z);
-    }
 
     /** 弹性带求解器。 */
     public ElasticBandSolver bandSolver() { return bandSolver; }
