@@ -1,14 +1,21 @@
 /* 文件职责：在同一 JVM 中对拍并测量旧、新 FMM，避免把缓存热度当优化收益。 */
 package net.shiroha233.roadweaver.metric;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
+import net.shiroha233.roadweaver.topology.GeodesicMatrix;
+import net.shiroha233.roadweaver.topology.MinimumSpanningTree;
+import net.shiroha233.roadweaver.topology.RoadNode;
+import net.shiroha233.roadweaver.topology.TopologyPlan;
 
 public final class FmmProbe {
     private static final int SIDE = 289, STEP = 8, MAX = (SIDE - 1) * STEP;
     private static final int[] HEIGHTS = new int[SIDE * SIDE];
     private static volatile double sink;
+    private static volatile TopologyPlan forestSink;
 
     static {
         // 固定同一片起伏地形，避免随机数据或平地掩盖梯度与障碍势的成本。
@@ -60,6 +67,64 @@ public final class FmmProbe {
         System.out.printf("MATCH cells=%d routePoints=%d%n", SIDE * SIDE, before.size());
         compare(source, source + 32, 10, "near-target");
         compare(source, target, 1, "far-target");
+        compareTopology();
+    }
+
+    private static void compareTopology() {
+        List<RoadNode> nodes = new ArrayList<>();
+        for (int cz : new int[]{192, 1632}) {
+            for (int cx : new int[]{192, 1632}) {
+                for (int i = 0; i < 6; i++) {
+                    nodes.add(new RoadNode("v" + nodes.size(), cx + (i % 3) * 64, cz + (i / 3) * 80));
+                }
+            }
+        }
+        // 四簇各六点，300 格是测试用上限；四簇之间的边均不会进入 Kruskal。
+        MinimumSpanningTree.EdgeFilter allowed =
+                (i, j) -> Math.hypot(nodes.get(i).x() - nodes.get(j).x(), nodes.get(i).z() - nodes.get(j).z()) <= 300;
+        FinslerMetric metric = FinslerMetric.of(GRID, OBSTACLES);
+        var full = GeodesicMatrix.build(metric, nodes);
+        var filtered = GeodesicMatrix.build(metric, nodes, allowed);
+        int allowedEdges = 0;
+        for (int i = 0; i < nodes.size(); i++) {
+            for (int j = i + 1; j < nodes.size(); j++) {
+                if (!allowed.allows(i, j)) continue;
+                allowedEdges++;
+                if (Double.doubleToLongBits(full.distance(i, j)) != Double.doubleToLongBits(filtered.distance(i, j))) {
+                    throw new AssertionError("topology distance mismatch " + i + "->" + j);
+                }
+            }
+        }
+        var before = MinimumSpanningTree.solve(full, allowed);
+        var after = MinimumSpanningTree.solve(filtered);
+        if (before.edgeCount() != 20 || before.componentCount() != 4 || !before.equals(after)) {
+            throw new AssertionError("topology mismatch");
+        }
+        System.out.printf("FOREST MATCH nodes=%d allowedEdges=%d edges=%d components=%d%n",
+                nodes.size(), allowedEdges, after.edgeCount(), after.componentCount());
+        Supplier<TopologyPlan> oldRun = () -> MinimumSpanningTree.solve(GeodesicMatrix.build(metric, nodes), allowed);
+        Supplier<TopologyPlan> newRun = () -> MinimumSpanningTree.solve(GeodesicMatrix.build(metric, nodes, allowed));
+        for (int i = 0; i < 4; i++) {
+            timeTopology(oldRun);
+            timeTopology(newRun);
+        }
+        double[] oldMs = new double[7], newMs = new double[7];
+        for (int i = 0; i < oldMs.length; i++) {
+            if ((i & 1) == 0) {
+                oldMs[i] = timeTopology(oldRun);
+                newMs[i] = timeTopology(newRun);
+            } else {
+                newMs[i] = timeTopology(newRun);
+                oldMs[i] = timeTopology(oldRun);
+            }
+        }
+        printTiming("clustered-topology", oldMs, newMs);
+    }
+
+    private static double timeTopology(Supplier<TopologyPlan> run) {
+        long start = System.nanoTime();
+        forestSink = run.get();
+        return (System.nanoTime() - start) / 1_000_000.0;
     }
 
     private static void compare(int source, int target, int reps, String label) {
@@ -78,6 +143,10 @@ public final class FmmProbe {
                 oldMs[i] = run(false, source, target, reps);
             }
         }
+        printTiming(label, oldMs, newMs);
+    }
+
+    private static void printTiming(String label, double[] oldMs, double[] newMs) {
         Arrays.sort(oldMs);
         Arrays.sort(newMs);
         int mid = oldMs.length / 2;

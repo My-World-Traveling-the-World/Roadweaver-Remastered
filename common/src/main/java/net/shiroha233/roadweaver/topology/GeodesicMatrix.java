@@ -1,6 +1,8 @@
 /* 文件职责：对每个节点跑一次场求解，得到完整的测地距离矩阵（拓扑层的输入）。 */
 package net.shiroha233.roadweaver.topology;
 
+import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 
 import net.shiroha233.roadweaver.metric.ArrivalTimeField;
@@ -10,18 +12,11 @@ import net.shiroha233.roadweaver.metric.FinslerMetric;
 /**
  * 测地距离矩阵。
  *
- * <h2>这是相对旧实现最大的结构优势</h2>
- * <p>旧实现为每条连接<b>各自独立</b>跑 A*，真机实测 23 条连接花 <b>215 秒</b>，
- * 然后还要靠事后三套检测器（parallel corridor / braid / mergeRoads）去发现并行与交叉。</p>
+ * <p>每个有合法候选边的源运行一次 FMM；一张场可回答多个目标，无需逐边重搜。
+ * 可选的端点准入限制只缩减要等待的目标数，场仍可自由绕行。全量场的最坏复杂度为
+ * {@code O(N × n log n)}，其中 {@code N} 是端点数，{@code n} 是网格点数。矩阵仍为密集存储。</p>
  *
- * <p>这里对每个节点跑<b>一次</b>场求解（{@code O(n log n)}），就得到该节点到<b>所有</b>
- * 其他节点的距离 —— N 个节点共 N 次求解，得到完整的 N×N 矩阵。
- * 拓扑优化（MST）因此变成免费，而且<b>不需要事后检测并行</b>：
- * 树的边天然不相交。</p>
- *
- * <h2>复杂度</h2>
- * <p>{@code O(N × n log n)}，{@code n} 是网格点数。N=24、n≈30k（粗网格）时
- * 预计百毫秒级。旧实现的 215 秒主要花在重复探索同一张地形上。</p>
+ * <p>拓扑无环只约束抽象端点图；地形上的几条边仍可共享走廊或交叉，需要后续合并。</p>
  *
  * <h2>不可达</h2>
  * <p>被完全围死的节点到别人的距离是 {@link Double#POSITIVE_INFINITY}。
@@ -47,6 +42,12 @@ public final class GeodesicMatrix {
      * @param nodes  节点列表（至少 1 个）
      */
     public static GeodesicMatrix build(FinslerMetric metric, List<RoadNode> nodes) {
+        return build(metric, nodes, null);
+    }
+
+    /** 只等可能入选的终点冻结；候选限制不妨碍 FMM 经过其它格子绕行。 */
+    public static GeodesicMatrix build(FinslerMetric metric, List<RoadNode> nodes,
+                                       MinimumSpanningTree.EdgeFilter allowed) {
         if (metric == null) throw new IllegalArgumentException("metric 不能为 null");
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalArgumentException("节点列表不能为空");
@@ -55,6 +56,7 @@ public final class GeodesicMatrix {
         int n = nodes.size();
         double[][] d = new double[n][n];
         FastMarchingSolver solver = new FastMarchingSolver(metric);
+        BitSet[] candidates = allowed == null ? null : candidateTargets(n, allowed);
 
         // 2026-11-14（审计「目标早停」）：本矩阵只读**节点位置**上的 T，
         // 不需要把整张场铺完。预先收集全部节点坐标，每个源求解到
@@ -69,21 +71,35 @@ public final class GeodesicMatrix {
 
         for (int i = 0; i < n; i++) {
             RoadNode from = nodes.get(i);
-            if (!metric.terrain().contains(from.x(), from.z())) {
-                // 节点在可行区域外：整行不可达，但不抛异常 ——
-                // 让上层决定是「扩大区域」还是「报告该端点无法规划」。
-                java.util.Arrays.fill(d[i], Double.POSITIVE_INFINITY);
-                d[i][i] = 0.0;
+            double[] row = d[i];
+            Arrays.fill(row, Double.POSITIVE_INFINITY);
+            row[i] = 0.0;
+            // 无合法邻居的节点没有任何可用边，不必初始化场或扫整幅地图。
+            if (!metric.terrain().contains(from.x(), from.z())) continue;
+            BitSet selected = candidates == null ? null : candidates[i];
+            if (selected != null && selected.isEmpty()) continue;
+            if (selected == null || selected.cardinality() == n - 1) {
+                ArrivalTimeField field = solver.solveReachingAll(from.x(), from.z(), nodeXs, nodeZs);
+                for (int j = 0; j < n; j++) {
+                    if (i != j) row[j] = field.at(nodeXs[j], nodeZs[j]);
+                }
                 continue;
             }
-            ArrivalTimeField field = solver.solveReachingAll(from.x(), from.z(), nodeXs, nodeZs);
-            for (int j = 0; j < n; j++) {
-                d[i][j] = (i == j) ? 0.0 : field.at(nodes.get(j).x(), nodes.get(j).z());
+            // 仍须保留同一条候选边的双向代价：一阶格式的正反方向不逐位对称。
+            int[] xs = new int[selected.cardinality()], zs = new int[xs.length];
+            int k = 0;
+            for (int j = selected.nextSetBit(0); j >= 0; j = selected.nextSetBit(j + 1)) {
+                xs[k] = nodeXs[j];
+                zs[k++] = nodeZs[j];
+            }
+            ArrivalTimeField field = solver.solveReachingAll(from.x(), from.z(), xs, zs);
+            for (int j = selected.nextSetBit(0); j >= 0; j = selected.nextSetBit(j + 1)) {
+                row[j] = field.at(nodeXs[j], nodeZs[j]);
             }
         }
 
         // 对称化：理论上 d[i][j] == d[j][i]，但一阶格式的离散误差会让它们差一点点。
-        // 取较小值 —— 距离矩阵必须是度量，MST 依赖三角不等式。
+        // 取同一准入边的两个方向较小值，与原选树排序口径一致。
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
                 double min = Math.min(d[i][j], d[j][i]);
@@ -92,6 +108,20 @@ public final class GeodesicMatrix {
             }
         }
         return new GeodesicMatrix(nodes, d);
+    }
+
+    private static BitSet[] candidateTargets(int size, MinimumSpanningTree.EdgeFilter allowed) {
+        BitSet[] targets = new BitSet[size];
+        for (int i = 0; i < size; i++) targets[i] = new BitSet(size);
+        // 沿用 Kruskal 的 (较小下标, 较大下标) 契约，只调用一次准入条件。
+        for (int from = 0; from < size; from++) {
+            for (int to = from + 1; to < size; to++) {
+                if (!allowed.allows(from, to)) continue;
+                targets[from].set(to);
+                targets[to].set(from);
+            }
+        }
+        return targets;
     }
 
     /** 节点列表（不可变）。 */

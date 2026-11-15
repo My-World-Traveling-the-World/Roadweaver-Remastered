@@ -8,6 +8,8 @@ import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.GridTerrainField;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.TerrainField;
+import net.shiroha233.roadweaver.topology.GeodesicMatrix;
+import net.shiroha233.roadweaver.topology.MinimumSpanningTree;
 import net.shiroha233.roadweaver.topology.RoadNode;
 import net.shiroha233.roadweaver.topology.TopologyPlan;
 
@@ -47,6 +49,29 @@ class RoadPipelineTest {
         assertTrue(lenient.metrics().contains("components=2"));
     }
 
+
+    @Test
+    void 只算准入终点且保留旧表的边权与森林() {
+        // 两组点距离长，最后一点没有准入边；起伏使双向测地成本有实际区分。
+        var terrain = GridTerrainField.fromFunction(0, 0, 64, 64, (x, z) -> (x * z / 19) % 7);
+        var metric = FinslerMetric.of(terrain, ObstacleField.NONE);
+        List<RoadNode> nodes = List.of(new RoadNode("a", 1, 2), new RoadNode("b", 6, 7),
+                new RoadNode("c", 49, 51), new RoadNode("d", 57, 54), new RoadNode("e", 20, 45));
+        MinimumSpanningTree.EdgeFilter allowed = (a, b) -> (a == 0 && b == 1) || (a == 2 && b == 3);
+        GeodesicMatrix full = GeodesicMatrix.build(metric, nodes);
+        GeodesicMatrix sparse = GeodesicMatrix.build(metric, nodes, allowed);
+        assertTrue(Double.isFinite(full.distance(0, 2)), "正控：地形允许但拓扑约束会淘汰");
+        assertEquals(Double.POSITIVE_INFINITY, sparse.distance(0, 2));
+        assertEquals(Double.POSITIVE_INFINITY, sparse.distance(4, 0));
+        assertEquals(full.distance(0, 1), sparse.distance(0, 1));
+        assertEquals(full.distance(2, 3), sparse.distance(2, 3));
+        var baseline = MinimumSpanningTree.solve(full, allowed);
+        var selected = new RoadPipeline(metric, null).planTopology(nodes, allowed);
+        assertEquals(2, baseline.edges().size());
+        assertEquals(baseline.edges(), selected.edges());
+        assertEquals(List.of(4), selected.isolatedNodes());
+        assertEquals(3, selected.componentCount());
+    }
 
     /** 81×81 平地。 */
     private static GridTerrainField flat(int size) {

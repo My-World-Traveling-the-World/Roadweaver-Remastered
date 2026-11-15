@@ -5,7 +5,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$metric = 'common/src/main/java/net/shiroha233/roadweaver/metric'
+$src = 'common/src/main/java/net/shiroha233/roadweaver'
+$metric = "$src/metric"
 if (!$JavaHome) { throw 'Set JAVA_HOME to a JDK 21 installation.' }
 if (!$Slf4jJar) {
     $gradleCache = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $env:USERPROFILE '.gradle' }
@@ -25,17 +26,19 @@ try {
         [System.IO.File]::WriteAllText((Join-Path $scratch "Baseline$type.java"), $source, [System.Text.UTF8Encoding]::new($false))
     }
     $current = ($types + @('ObstacleField', 'TerrainField')) | ForEach-Object { Join-Path $repo "$metric/$_.java" }
+    $topology = @('RoadNode', 'GeodesicMatrix', 'MinimumSpanningTree', 'TopologyPlan') |
+        ForEach-Object { Join-Path $repo "$src/topology/$_.java" }
     $before = $types | ForEach-Object { Join-Path $scratch "Baseline$_.java" }
-    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $Slf4jJar -d $scratch @current @before (Join-Path $PSScriptRoot 'FmmProbe.java')
+    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $Slf4jJar -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
     & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$Slf4jJar" net.shiroha233.roadweaver.metric.FmmProbe
     if ($LASTEXITCODE -ne 0) { throw "probe failed: $LASTEXITCODE" }
 } finally {
     # 文件清单固定，逐个清理后只移除本次创建的空目录；不递归删除任意路径。
     foreach ($file in Get-ChildItem -LiteralPath $scratch -File) { Remove-Item -LiteralPath $file.FullName }
-    foreach ($dir in @('metric', 'roadweaver', 'shiroha233', 'net')) {
-        $paths = @{metric='net/shiroha233/roadweaver/metric'; roadweaver='net/shiroha233/roadweaver'; shiroha233='net/shiroha233'; net='net'}
-        $p = Join-Path $scratch $paths[$dir]
+    foreach ($dir in @('net/shiroha233/roadweaver/topology', 'net/shiroha233/roadweaver/metric',
+            'net/shiroha233/roadweaver', 'net/shiroha233', 'net')) {
+        $p = Join-Path $scratch $dir
         if (Test-Path -LiteralPath $p) {
             foreach ($file in Get-ChildItem -LiteralPath $p -File) { Remove-Item -LiteralPath $file.FullName }
             [System.IO.Directory]::Delete($p)

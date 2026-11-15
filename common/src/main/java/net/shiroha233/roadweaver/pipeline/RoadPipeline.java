@@ -118,7 +118,7 @@ public final class RoadPipeline {
      * {@link MinimumSpanningTree#solve}），只是不产曲线。</p>
      */
     public TopologyPlan planTopology(List<RoadNode> nodes) {
-        return planTopology(nodes, (a, b) -> true);
+        return planTopology(nodes, null);
     }
 
     // 上层知道端点的限制（含 Y）；内核仍只关心测地距离与候选下标。
@@ -126,8 +126,9 @@ public final class RoadPipeline {
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalArgumentException("节点列表不能为空");
         }
-        GeodesicMatrix matrix = GeodesicMatrix.build(metric, nodes);
-        return MinimumSpanningTree.solve(matrix, allowed);
+        // 让被长度上限淘汰的终点也退出传播早停条件；选树仍读相同的有效边权。
+        GeodesicMatrix matrix = GeodesicMatrix.build(metric, nodes, allowed);
+        return MinimumSpanningTree.solve(matrix);
     }
 
     private RoadNetworkPlan.RoadEdge buildEdge(List<RoadNode> nodes,
