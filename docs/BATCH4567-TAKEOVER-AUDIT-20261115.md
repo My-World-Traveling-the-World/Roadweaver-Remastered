@@ -43,8 +43,8 @@
 | **2** 桥隧判定 | `ModeDpSolver` | 回写已实施（`Road.applySpanWriteback`），但**默认关闭** | 🟡 **代码就绪，默认关** |
 | **3** 桥体施工 | 无（`pathlogic/construction` 只有铺装） | 桥隧建造仍跑旧包 4,887 行 | ❌ **未接管** |
 | **4** 路口合并 | **不存在** | 新求解包（metric/topology/band/pipeline）里**没有任何路口概念** | ❌ **未接管（也没有新引擎）** |
-| **5** 几何后处理 | 弹性带（应把后处理降级为「网络缝合」） | `PathPostProcessor.process(...)` **仍被 `PathMetricsOps:233` 调用**，仍做「简化 / 样条 / 松弛」 | ❌ **未降级** |
-| **6** 结构避让 | 弹性带 + `ObstacleField` 硬约束 | `ElasticBandSolver` **不认识** `TerrainField` / `ObstacleField`（只有注释提到） | ❌ **硬约束未接** |
+| **5** 几何后处理 | 弹性带（应把后处理降级为「网络缝合」） | ⚠️ **本行 2026-11-15 更正**：band **已接**（`BandPathfinder:279` → `BandRouteSolver:63`）；真问题是 `PathMetricsOps.buildSegments` 在 band **之后**又调 `PathPostProcessor.process` 跑 6 步 ⇒ **双平滑** | ❌ **未降级（原因改为双平滑）** |
+| **6** 结构避让 | 弹性带 + `ObstacleField` 硬约束 | ✅ **本行 2026-11-15 更正为「已接」**：`ElasticBandSolver` 有 `BlockedCheck` 端口（`:226`），`BandPathfinder:265` 建真实 `StridedObstacleField` → `:279` 建 `BandRouteSolver` → `BandRouteSolver:63` 传 `!metric.isPassable(x,z)` 给 `smooth(...)` | ✅ **硬约束已接且在活链路上** |
 | **7** 验证收尾 | `QualityGate` | `PipelinePlanner:183` 调了，但 `report.passed()` 只决定 INFO/WARN，**不拦** | ❌ **REPORT-ONLY** |
 
 ### 3.1 批 5 的具体证据
@@ -81,6 +81,18 @@
 | ① 符号保真（功能不丢） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | ② 新引擎接管（实现对换） | ✅ | 🟡默认关 | ❌ | ❌ | ❌ | ❌ | ❌ |
 | ③ 真机验收 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+> ## ★★ 2026-11-15 二次更正（本表批 5、批 6 两行已被推翻）
+> 本表初版把批 6 判成「硬约束未接」、批 5 判成「band 没接」。**这两条都错了**：
+> - **批 6 硬约束已接**：`BandPathfinder:265` 建真实 `StridedObstacleField` →
+>   `:279` 建 `BandRouteSolver` → `BandRouteSolver:63` 把 `!metric.isPassable(x,z)` 当
+>   `BlockedCheck` 传给 `ElasticBandSolver.smooth(...)`。**已在生产链上。**
+> - **批 5 band 已接**：真问题是 `PathMetricsOps.buildSegments` 在 band 之后
+>   又跑 `PathPostProcessor.process` 的 6 步 ⇒ **双平滑**，不是「band 没接」。
+>
+> 错因：引用了 2026-11-13 的旧记忆，且**把「band 不直接依赖 metric（分层设计理由）」的注释
+> 读成了「契约没人实现」**。完整更正与方案见
+> [`BATCH56-CORRECTION-AND-PLAN-20261115.md`](BATCH56-CORRECTION-AND-PLAN-20261115.md)。
 
 **⇒ 七批里没有一批是「三条全过」。**
 批 1 最接近（①② 都过，只差③），批 2 差②的默认开启 + ③。
