@@ -3,6 +3,7 @@ package net.shiroha233.roadweaver.pathlogic.grade;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -129,29 +130,61 @@ class CulvertGeometryTest {
                 "7 站超过站数上限（默认 6）");
     }
 
-    // ══════════ 3b：施工期上限必须读配置，且夹在规划期范围内 ══════════
+    // ══════════ 3b：兜底值 / 配置出厂默认 / 配置侧夹取 三者必须一致 ══════════
+    //
+    // ★ 2026-11-15 自查：这一段原来的两条用例是**假测试**。
+    //   原写法：assertTrue(maxSegments() == 6 || maxSegments() > 0, ...)
+    //   —— 逻辑上等价于 `> 0`，而 clamp 的下界恒为 1 ⇒ **永远不可能失败**。
+    //   负控实证：把 CulvertJudge 的上界从 16 改成 99，**测试照样全绿**，
+    //   因为单测里 ConfigService 不可用、走的是兜底 6，压根没测到夹取。
+    //   现在改成三条**会真的变红**的断言。
 
     @Test
-    void 施工期上限读配置且夹在规划期范围内() {
-        int segments = CulvertJudge.maxSegments();
-        assertTrue(segments >= 1 && segments <= 16,
-                "站数上限必须夹在 [1,16]（与 RoadAppearanceConfig.setCulvertMaxStations "
-                        + "和 LocalRouteSearch 完全一致），实际 " + segments);
-
-        int depth = CulvertJudge.maxWaterDepth();
-        assertTrue(depth >= 1 && depth <= 4,
-                "水深上限必须夹在 [1,4]（规划期 culvertMaxWaterDepth 的口径），实际 " + depth);
+    void 兜底值必须等于配置出厂默认() {
+        // 单测环境里 ConfigService 通常不可用 ⇒ CulvertJudge 走兜底常量。
+        // 兜底值与 RoadAppearanceConfig 的字段初始值必须一致，
+        // 否则「配置读不到」时会静默变成另一套口径（正是本缺陷的成因之一）。
+        net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig fresh =
+                new net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig();
+        assertEquals(fresh.culvertMaxStations(), CulvertJudge.DEFAULT_MAX_SEGMENTS,
+                "兜底站数必须等于 RoadAppearanceConfig 的出厂默认；"
+                        + "两边漂移会导致「配置读不到」时静默换口径");
+        assertEquals(fresh.culvertMaxWaterDepth(), CulvertJudge.DEFAULT_MAX_WATER_DEPTH,
+                "兜底水深必须等于 RoadAppearanceConfig 的出厂默认");
     }
 
     @Test
-    void 站数上限与配置默认值一致() {
-        // 单测环境里 ConfigService 通常不可用 ⇒ 走兜底常量。
-        // 兜底值必须等于 RoadAppearanceConfig 的出厂默认，否则
-        // 「配置读不到」时会静默变成另一套口径。
-        assertTrue(CulvertJudge.maxSegments() == 6 || CulvertJudge.maxSegments() > 0,
-                "站数上限应可读（兜底 6 / 或读到配置值）");
-        assertTrue(CulvertJudge.maxWaterDepth() == 2 || CulvertJudge.maxWaterDepth() > 0,
-                "水深上限应可读（兜底 2 / 或读到配置值）");
+    void 配置侧夹取范围必须写死为规划期口径() {
+        // 配置侧夹取是公开 setter，可以直接验。
+        // 这条会抓到「有人把 16 改成 64」这类改动（它正是本轮缺陷的原始形态：
+        // UI 声明 0..64，而下游只认到 16）。
+        net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig c =
+                new net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig();
+        c.setCulvertMaxStations(999);
+        assertEquals(16, c.culvertMaxStations(), "站数上界必须是 16（与 LocalRouteSearch 同口径）");
+        c.setCulvertMaxStations(-5);
+        assertEquals(1, c.culvertMaxStations(), "站数下界必须是 1");
+
+        c.setCulvertMaxWaterDepth(999);
+        assertEquals(4, c.culvertMaxWaterDepth(), "水深上界必须是 4（规划期 culvertMaxWaterDepth 口径）");
+        c.setCulvertMaxWaterDepth(-5);
+        assertEquals(1, c.culvertMaxWaterDepth(), "水深下界必须是 1");
+    }
+
+    @Test
+    void 施工期可读的站数上限必须落在规划期夹取范围内() {
+        // 这条是原先那条「夹在 [1,16]」的有效版本：它断言的是
+        // **施工期实际拿到的值**必须落在配置侧夹取区间内 —— 若有人改了
+        // CulvertJudge 的 clamp 上界（比如 16→99）而配置侧还是 16，
+        // 施工期就可能拿到 17+ 而配置永远给不出，两边脱节。
+        net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig c =
+                new net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig();
+        c.setCulvertMaxStations(999);
+        int configured = c.culvertMaxStations();          // = 16，配置侧能给到的最大值
+        int effective = CulvertJudge.maxSegments();       // 施工期实际用的
+        assertTrue(effective >= 1 && effective <= configured,
+                "施工期站数上限 " + effective + " 必须落在配置侧可达范围 [1," + configured + "] 内；"
+                        + "若这里红了，说明 CulvertJudge 的 clamp 与 RoadAppearanceConfig 脱节");
     }
 
     @Test
