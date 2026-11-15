@@ -1,7 +1,8 @@
 param(
     [string]$Baseline = '818b076',
     [string]$JavaHome = $env:JAVA_HOME,
-    [string]$Slf4jJar = ''
+    [string]$Slf4jJar = '',
+    [switch]$DirectionOnly
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -31,7 +32,9 @@ try {
     $before = $types | ForEach-Object { Join-Path $scratch "Baseline$_.java" }
     & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $Slf4jJar -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
-    & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$Slf4jJar" net.shiroha233.roadweaver.metric.FmmProbe
+    # 方向夹具只读现有 FMM 的结果，无需重复做耗时统计。
+    $probeArgs = @(if ($DirectionOnly) { 'direction' })
+    & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$Slf4jJar" net.shiroha233.roadweaver.metric.FmmProbe @probeArgs
     if ($LASTEXITCODE -ne 0) { throw "probe failed: $LASTEXITCODE" }
 } finally {
     # 文件清单固定，逐个清理后只移除本次创建的空目录；不递归删除任意路径。

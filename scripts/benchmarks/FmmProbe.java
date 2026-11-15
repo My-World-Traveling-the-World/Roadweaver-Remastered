@@ -52,6 +52,10 @@ public final class FmmProbe {
     };
 
     public static void main(String[] args) {
+        if (args.length == 1 && "direction".equals(args[0])) {
+            compareDirections();
+            return;
+        }
         int source = 192, target = 1728;
         // 逐位核对整场与回溯点，再计时，避免把少算或换线路当作性能提升。
         var baseline = new BaselineFastMarchingSolver(BaselineFinslerMetric.of(GRID, OBSTACLES)).solve(source, source);
@@ -73,6 +77,60 @@ public final class FmmProbe {
         compare(source, source + 32, 10, "near-target");
         compare(source, target, 1, "far-target");
         compareTopology();
+        compareDirections();
+    }
+
+    private static void compareDirections() {
+        int diagonal = 57; // 约 80.6 格，数据按弦长归一再比较旋转误差。
+        double gradient = 0.25;
+        double component = gradient / Math.sqrt(2.0);
+        direction("axis-uphill", gradient, 0, 80, 0, false);
+        direction("axis-contour", gradient, 0, 0, 80, false);
+        direction("rotated-uphill", component, component, diagonal, diagonal, false);
+        direction("rotated-contour", component, component, -diagonal, diagonal, false);
+        direction("axis-narrow-pass", gradient, 0, 0, 80, true);
+        direction("rotated-narrow-pass", component, component, -diagonal, diagonal, true);
+    }
+
+    private static void direction(String name, double gx, double gz, int tx, int tz, boolean narrow) {
+        TerrainField plane = new TerrainField() {
+            public int minX() { return -96; }
+            public int maxX() { return 96; }
+            public int minZ() { return -96; }
+            public int maxZ() { return 96; }
+            public int height(int x, int z) { return 64 + (int) Math.round(gx * x + gz * z); }
+            // 用解析梯度固定坡度，排除整数高度图的台阶噪声。
+            public double[] gradient(int x, int z) { return new double[]{gx, gz}; }
+        };
+        double chord = Math.hypot(tx, tz);
+        ObstacleField mask = new ObstacleField() {
+            public double potential(int x, int z) { return 0; }
+            public boolean impassable(int x, int z) {
+                return narrow && Math.abs((double) x * tz - (double) z * tx) / chord > 3;
+            }
+        };
+        var metric = FinslerMetric.of(plane, mask);
+        var field = new FastMarchingSolver(metric).solve(0, 0, tx, tz);
+        var path = field.pathTo(tx, tz);
+        if (path.size() < 2 || !Arrays.equals(path.getFirst(), new int[]{0, 0})
+                || !Arrays.equals(path.getLast(), new int[]{tx, tz}) || !field.reachable(tx, tz)) {
+            throw new AssertionError("missing directional trace " + name);
+        }
+        double pathCost = 0, maxGrade = 0, length = 0;
+        for (int i = 1; i < path.size(); i++) {
+            var a = path.get(i - 1);
+            var b = path.get(i);
+            if (mask.impassable(b[0], b[1])) throw new AssertionError("trace left corridor " + name);
+            int dx = b[0] - a[0], dz = b[1] - a[1];
+            double arc = Math.hypot(dx, dz);
+            length += arc;
+            pathCost += metric.cost(b[0], b[1], dx, dz) * arc;
+            maxGrade = Math.max(maxGrade, Math.abs(gx * dx + gz * dz) / arc);
+        }
+        // 场值与完整方向公式各报一次；只能比较离散误差，不把斜坡夹具当真机道路。
+        System.out.printf(Locale.ROOT, "direction %s fmmPerBlock=%.4f chordMetric=%.4f traceMetric=%.4f "
+                        + "detour=%.4f maxGrade=%.4f stations=%d%n", name, field.at(tx, tz) / chord,
+                metric.cost(0, 0, tx, tz), pathCost / chord, length / chord, maxGrade, path.size());
     }
 
     private static void compareEarlyFields() {
