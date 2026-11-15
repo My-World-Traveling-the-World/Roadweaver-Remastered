@@ -13,6 +13,7 @@ import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathfinding.terrain.SurfaceWaterClassifier;
 
 import java.util.*;
+import java.util.function.BiConsumer;
 
 import static net.shiroha233.roadweaver.pathfinding.impl.PathfindingHelper.isWaterLike;
 import static net.shiroha233.roadweaver.postprocess.SplineHelper.*;
@@ -64,6 +65,16 @@ public final class PathPostProcessor {
                                                      int bridgeMinWaterDepth,
                                                      CurveMode curveMode,
                                                      AccurateHeightSampler accurate) {
+        return processWithLandRelaxShadow(rawPath, width, level, cache, terrain, bridgeMinWaterDepth,
+                curveMode, accurate, null);
+    }
+
+    // 同一条输入、同一份桥掩码和端点高程成两份路面，才能只测陆地 relax 的贡献。
+    public static List<RoadSegmentPlacement> processWithLandRelaxShadow(
+            List<BlockPos> rawPath, int width, ServerLevel level, TerrainSamplingCache cache,
+            PathTerrainField terrain, int bridgeMinWaterDepth, CurveMode curveMode,
+            AccurateHeightSampler accurate,
+            BiConsumer<List<RoadSegmentPlacement>, List<RoadSegmentPlacement>> observer) {
         if (rawPath == null || rawPath.size() < 2) return new ArrayList<>();
 
         int[] rawTargetY = new int[rawPath.size()];
@@ -94,16 +105,35 @@ public final class PathPostProcessor {
         // （Catmull-Rom 穿过共线三点仍是那条直线），变的只是参数化均匀性 ——
         // 而这正是修复点。原本就是 8 格密的规则路一条判断都不触发，逐位不变。
         // 而 8 格密规则路的概率正是本方法要修的缺陷所在 —— 见下方 densifyControlPoints。
-        Densified densified = densifyControlPoints(controlPoints, bridgeMask, gridStep);
-        controlPoints = densified.points();
-        bridgeMask = densified.mask();
+        List<RoadSegmentPlacement> produced = rasterizeCurved(rawPath, rawTargetY, width, curveMode,
+                gridStep, bridgeMask, controlPoints);
+        logShape("curved", rawPath, produced, gridStep);
+        if (observer != null && rawPath.size() <= 1024 && produced.size() <= 2048) {
+            try {
+                // 松弛本来不动桥段；影子只绕过陆地松弛，桥拉直、样条、加密、落列全走共用链。
+                var withoutRelax = controlPoints.equals(straightened) ? produced
+                        : rasterizeCurved(rawPath, rawTargetY, width, curveMode, gridStep, bridgeMask, straightened);
+                // 观测者拿到只读快照；即便错误修改列也不能污染生产结果。
+                observer.accept(freezeProduct(produced), freezeProduct(withoutRelax));
+            } catch (RuntimeException failure) {
+                LOGGER.warn("RoadWeaver land-relax shadow failed (rawStations={})", rawPath.size(), failure);
+            }
+        }
+        return produced;
+    }
 
-        List<Vec2d> splinePoints = generateSplinePoints(controlPoints, bridgeMask, curveMode);
+    private static List<RoadSegmentPlacement> rasterizeCurved(List<BlockPos> rawPath, int[] rawTargetY,
+            int width, CurveMode mode, int gridStep, boolean[] bridgeMask, List<BlockPos> controlPoints) {
+        Densified densified = densifyControlPoints(controlPoints, bridgeMask, gridStep);
+        List<Vec2d> splinePoints = generateSplinePoints(densified.points(), densified.mask(), mode);
         List<Double> centerDists = new ArrayList<>();
         List<BlockPos> centers = extractCenters(splinePoints, rawPath, rawTargetY, centerDists);
-        List<RoadSegmentPlacement> produced = rasterizeSegments(splinePoints, centers, centerDists, width);
-        logShape("curved", rawPath, produced, gridStep);
-        return produced;
+        return rasterizeSegments(splinePoints, centers, centerDists, width);
+    }
+
+    private static List<RoadSegmentPlacement> freezeProduct(List<RoadSegmentPlacement> road) {
+        return road.stream().map(station -> new RoadSegmentPlacement(
+                station.middlePos(), List.copyOf(station.positions()))).toList();
     }
 
     /**

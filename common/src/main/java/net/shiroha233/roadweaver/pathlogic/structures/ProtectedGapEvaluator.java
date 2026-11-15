@@ -95,6 +95,19 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
  * 判据与阈值一字未改（含缩进）。</p>
  */
 public final class ProtectedGapEvaluator {
+    public static String describePreparedProtection(ServerLevel level, StructureConnection connection,
+                                                      List<RoadSegmentPlacement> segments) {
+        if (!ConfigService.get().structureAvoidanceEnabled()) return "disabled";
+        if (segments.size() < 2) return "no-product";
+        try {
+            // 沿用生产快照和判据；观察缺样时单列状态，不把未知保护区报成零缺口。
+            return "collision=" + intersectsPreparedRoute(level, connection, segments)
+                    + ",gaps=" + protectedGapSpans(level, connection, segments).size();
+        } catch (PlanningSnapshotUnavailableException unavailable) {
+            return "unavailable";
+        }
+    }
+
     public static boolean intersectsPreparedRoute(ServerLevel level,
                                                   StructureConnection connection,
                                                   List<RoadSegmentPlacement> segments) {

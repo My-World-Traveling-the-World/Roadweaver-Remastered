@@ -7,6 +7,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.ChunkPos;
@@ -74,6 +76,50 @@ class PostProcessedRoadProductTest {
         assertTrue(spans.isLanding(road.size() - 1));
         assertEquals(5.0, Math.abs(line.pointAt(0.5).z - line.pointAt(0).z), 1e-6);
         assertEquals(line.pointAt(0).z, line.pointAt(1).z, 1e-6);
+    }
+
+    @Test
+    void 只绕过陆地松弛的影子必须不同且生产路面逐列不变() {
+        // 缓弯保留转折又未到锐角冻结阈值，能区分执行松弛和跳过松弛两条支路。
+        var input = List.of(pos(0, 0), pos(8, 4), pos(16, 6), pos(24, 4), pos(32, 0));
+        var production = process(input, 5, new Terrain(false));
+        var calls = new AtomicInteger();
+        var returned = processShadow(input, new Terrain(false), (base, shadow) -> {
+            calls.incrementAndGet();
+            assertEquals(production, base);
+            assertContinuous(input, shadow);
+            assertNotEquals(base, shadow, "有弯的陆地必须真的绕过松弛");
+            assertThrows(UnsupportedOperationException.class, () -> base.getFirst().positions().clear());
+        });
+        assertEquals(1, calls.get());
+        assertEquals(production, returned);
+    }
+
+    @Test
+    void 影子沿用桥掩码且观测抛错仍交付完整桥头() {
+        var input = List.of(pos(0, 0), pos(32, 0), pos(64, 0), pos(96, 0), pos(128, 0));
+        var normalTerrain = new Terrain(true);
+        var production = process(input, 5, normalTerrain);
+        var shadowTerrain = new Terrain(true);
+        var calls = new AtomicInteger();
+        var returned = processShadow(input, shadowTerrain, (base, shadow) -> {
+            calls.incrementAndGet();
+            assertContinuous(input, shadow);
+            assertEquals(base, shadow, "纯桥线没有陆地松弛可跳过");
+            assertEquals(Set.of(-2, -1, 0, 1, 2), section(shadow, 64));
+            throw new IllegalStateException("模拟观测失败");
+        });
+        assertEquals(1, calls.get());
+        assertTrue(normalTerrain.depthReads > 0);
+        assertEquals(normalTerrain.depthReads, shadowTerrain.depthReads, "影子不再探一遍桥掩码");
+        assertEquals(production, returned);
+    }
+
+    private static List<RoadSegmentPlacement> processShadow(List<BlockPos> input, Terrain terrain,
+            BiConsumer<List<RoadSegmentPlacement>, List<RoadSegmentPlacement>> observer) {
+        var sampler = new AccurateHeightSampler(null, new FlatHeight(), AccurateSampleStore.noop());
+        return PathPostProcessor.processWithLandRelaxShadow(
+                input, 5, null, null, terrain, 1, CurveMode.CATMULL_ROM, sampler, observer);
     }
 
     private static List<RoadSegmentPlacement> process(List<BlockPos> input, int width, Terrain terrain) {

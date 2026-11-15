@@ -85,6 +85,9 @@ import static net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps.*;
  * 判据与阈值一字未改（含缩进）。</p>
  */
 public final class PathMetricsOps {
+    private static final boolean LAND_RELAX_SHADOW =
+            "on".equalsIgnoreCase(System.getProperty("roadweaver.landRelaxShadow"));
+
     public static int pathFingerprint(List<BlockPos> path) {
         return path == null ? 0 : path.hashCode();
     }
@@ -228,13 +231,15 @@ public final class PathMetricsOps {
         // 入参 path 是**弹性带平滑之后**的路径；下面 PathPostProcessor 会再平滑一遍。
         // 两处各打一份指标，才能回答「谁把路形改了多少」。
         // 开关：-Droadweaver.geometryAb=on
-        String geometryTag = geometryTag(connection);
+        boolean observeDrift = GeometryDriftObserver.enabled();
+        boolean observeRelax = LAND_RELAX_SHADOW && connection != null;
+        String geometryTag = observeDrift || observeRelax ? geometryTag(connection) : null;
         GeometryDriftObserver.Metrics bandMetrics = null;
-        if (GeometryDriftObserver.enabled()) {
+        if (observeDrift) {
             bandMetrics = GeometryDriftObserver.measure(path);
             GeometryDriftObserver.observe(geometryTag, "band", path);
         }
-        List<RoadSegmentPlacement> curved = PathPostProcessor.process(
+        List<RoadSegmentPlacement> curved = PathPostProcessor.processWithLandRelaxShadow(
                 path,
                 width,
                 level,
@@ -242,8 +247,9 @@ public final class PathMetricsOps {
                 terrain,
                 PathPostProcessor.configuredBridgeMinWaterDepth(),
                 net.shiroha233.roadweaver.postprocess.SplineHelper.CurveMode.CATMULL_ROM,
-                accurate);
-        if (GeometryDriftObserver.enabled()) {
+                accurate,
+                observeRelax ? (base, shadow) -> reportLandRelax(geometryTag, level, connection, base, shadow) : null);
+        if (observeDrift) {
             GeometryDriftObserver.Metrics postMetrics =
                     GeometryDriftObserver.measure(GeometryDriftObserver.centersOf(curved));
             GeometryDriftObserver.observe(geometryTag, "post",
@@ -257,6 +263,40 @@ public final class PathMetricsOps {
                 new GeometryProtection(segments -> intersectsPreparedRoute(level, connection, segments),
                         segments -> protectedGapSpans(level, connection, segments).size(),
                         PathMetricsOps::preferUnsmoothedOnProtectionGap));
+    }
+
+    private static void reportLandRelax(String tag, ServerLevel level, StructureConnection connection,
+                                        List<RoadSegmentPlacement> base, List<RoadSegmentPlacement> shadow) {
+        var baseCenters = GeometryDriftObserver.centersOf(base);
+        var shadowCenters = GeometryDriftObserver.centersOf(shadow);
+        Set<Long> before = occupiedColumns(base), after = occupiedColumns(shadow);
+        long added = after.stream().filter(p -> !before.contains(p)).count();
+        long removed = before.stream().filter(p -> !after.contains(p)).count();
+        // 比较真正铺装的唯一列与站距；站数相同也可能挤进保护区或漏一列。
+        LOGGER.info("[LAND-RELAX-SHADOW] tag={} changed={} base={} withRelaxProtection={} "
+                        + "shadow={} withoutRelaxProtection={} maxStep={}->{} columns={}->{} added={} removed={}",
+                tag, !base.equals(shadow), GeometryDriftObserver.measure(baseCenters),
+                describePreparedProtection(level, connection, base), GeometryDriftObserver.measure(shadowCenters),
+                describePreparedProtection(level, connection, shadow),
+                maxStep(baseCenters), maxStep(shadowCenters), before.size(), after.size(), added, removed);
+    }
+
+    private static Set<Long> occupiedColumns(List<RoadSegmentPlacement> road) {
+        Set<Long> columns = new HashSet<>();
+        for (var station : road) {
+            for (var pos : station.positions()) columns.add(BlockPos.asLong(pos.getX(), 0, pos.getZ()));
+        }
+        return columns;
+    }
+
+    private static int maxStep(List<BlockPos> centers) {
+        int max = 0;
+        for (int i = 1; i < centers.size(); i++) {
+            var a = centers.get(i - 1);
+            var b = centers.get(i);
+            max = Math.max(max, Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getZ() - b.getZ())));
+        }
+        return max;
     }
 
     // 保护判据在平滑之后执行，离线可用真实路面列验证哪种几何能被下发。
