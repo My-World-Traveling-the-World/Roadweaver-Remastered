@@ -110,6 +110,41 @@ assertTrue(n >= 0, "丢弃计数必须可读且非负，实际 " + n);
 
 ---
 
+## 三之二、★ 方案 A 已落地（2026-11-15，用户拍板「按你的方案直接做」）
+
+上面第二节说的那个洞**已经补上了**：
+
+`InitialRoutePersistOps` 在原有的
+「`RoadWeaver initial final network ready before persistence: inputRoads=… finalRoads=…`」
+那行**之后**，新增一行汇总：
+
+```
+RoadWeaver structure-avoidance counters: blindQuery={} fallbackBoxOnly={}
+    droppedPending={} fullPassBatch={} unresolvedEndpointOwner={}
+    (blindQuery>0 说明有避让查询发生在没有可用规划快照的线程上；
+     snapshot=absent 时结构来源整段未生效)
+```
+
+五个计数器一次打在同一行 ⇒ **排查时一个 grep 就能拿到「这一局规划阶段避让到底发生了什么」**。
+
+**改动范围（严格遵守「只加观测」）**：
+- 只加 `LOGGER.info`，**没有改任何判据、返回值或调用顺序**
+- 位置在 `InitialRoutePersistOps`（490 行，远低于千行上限）
+- `StructureVerificationObservabilityTest:95` 那条「`fullPassBatchCount()` 不许参与判据」的守卫
+  仍然成立（本次只是打印，没有比较）
+
+**它解决了什么**：在此之前真机上
+「避让完全正常（盲查 0）」与「避让一直失明（盲查 50 万）」**在日志里完全同形** ——
+这正是病根 C 在观测层的残留。现在至少能在规划结束那一行读到确切数字。
+
+**它没解决什么（如实标注）**：
+- 数字**是否合理**（多少算多）要真机基线，本轮无法判定
+- `snapshot=ok/absent` 本身仍不可信 —— 见
+  [`SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md`](SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md)
+  与批 2 的 B 方案（待真机）
+
+---
+
 ## 四、三个方案
 
 ### 方案 A：把 5 个计数器接进「一次性汇总日志」（推荐）

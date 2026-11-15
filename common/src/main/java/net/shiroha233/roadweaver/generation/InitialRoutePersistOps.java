@@ -160,6 +160,27 @@ public final class InitialRoutePersistOps {
                         + "refined={} mergeMs={} msPerRoad={}",
                 roads.size(), connected.size(), refinedRoadFingerprints.size(), mergeMs,
                 roads.isEmpty() ? mergeMs : mergeMs / roads.size());
+        // ── ★ 批 6「5 条可观测」的落地出口（2026-11-15）──────────────────
+        //
+        // 问题：这 5 个计数器一直存在、也在累加、也有单测，但**生产侧一个读者都没有**
+        // （全源码里各只出现 1 次 —— 就是它自己的 getter 定义）。
+        // 后果：真机上「避让完全正常（盲查 0）」与「避让一直失明（盲查 50 万）」
+        // 在日志里完全同形 —— 这是病根 C 在观测层的残留。
+        //
+        // 这里把它们**一次性打在同一行**，放在已经有 inputRoads/finalRoads 的那条汇总日志之后，
+        // 好处是排查时一个 grep 就能拿到「这一局规划阶段避让到底发生了什么」。
+        // 只加日志、不改任何判据或返回值。
+        LOGGER.info("RoadWeaver structure-avoidance counters: blindQuery={} fallbackBoxOnly={} "
+                        + "droppedPending={} fullPassBatch={} unresolvedEndpointOwner={}"
+                        + " (blindQuery>0 说明有避让查询发生在没有可用规划快照的线程上；"
+                        + "snapshot=absent 时结构来源整段未生效)",
+                net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceCache.blindQueryCount(),
+                net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceDiagnostics
+                        .fallbackBoxOnlyQueries(),
+                net.shiroha233.roadweaver.structures.precompute.StructureInjector.droppedPendingCount(),
+                net.shiroha233.roadweaver.search.StructureIndexService.fullPassBatchCount(),
+                net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver
+                        .unresolvedEndpointOwnerCount());
         // Re-baseline the progress plan after network merge: merging can
         // produce more final roads than the input batch, otherwise the
         // percentage overshoots 100 and jumps back down.
