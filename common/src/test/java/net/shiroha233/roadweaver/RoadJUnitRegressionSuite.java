@@ -214,6 +214,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PathPostProcessorCharacterizationTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.PostProcessedRoadProductTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfileCharacterizationTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.grade.GradeConstantSingleSourceTest"),
