@@ -200,6 +200,10 @@ return segmentCount > 0 && segmentCount <= CULVERT_MAX_SEGMENTS
 
 1. 读到盘点说「施工期判据 ≤2 站」；
 2. grep `CULVERT_MAX_SEGMENTS` → 只看到 `:97` 定义与 `:787`/`:810` 两处判断；
+   （**★ 2026-11-15 行号已过期**：抽取 `CulvertJudge` 后，常量定义在
+   `CulvertJudge.java` 的 `maxSegments()` 里，判定在 `CulvertJudge.maxSegments()` 与
+   `RoadConstructionSafety.isShallowCulvertCrossing`（`stations > CulvertJudge.maxSegments()`）；
+   **不要再按本文件里的 `:460`/`:97`/`:787`/`:810` 去找**，那些是抽取前的行号）；
 3. 看 `prepareCulvertDeck` 的调用 → 传 `(segmentIndex, segmentIndex)` → 得出「上限恒不生效」；
 4. **没有再搜 `isShallowCulvertCrossing` 的全部调用点**就下了结论。
 

@@ -88,10 +88,13 @@ public final class StructureAvoidanceService {
     static final int CONSTRUCTION_BELOW = 2;
     static final int CONSTRUCTION_ABOVE = 6;
     /**
-     * T-35: 过路村庄掩码的 Y 相交窗口下方容忍。村庄聚合盒的 minY 是最低建筑
-     * 底部,不是村庄地面;山坡村庄的空地比最低建筑低可达十余格。道路穿过这些
-     * 空地时施工带([y-2, y+6])与聚合盒不相交,掩码不点亮,道路整片穿过村庄。
-     * 放宽下方容忍使"修在村庄 XZ 内且未深埋"的站点全部成缺口。
+     * T-35: 过路村庄掩码的 Y 相交窗口下方容忍。
+     *
+     * <p><b>⚠️ 全仓零引用 —— 改这个数值不会有任何效果。</b>原 javadoc 写的是
+     * <b>设计意图</b>（山坡村庄空地比最低建筑低十余格 ⇒ 施工带与聚合盒不相交 ⇒
+     * 掩码不点亮 ⇒ 路整片穿村；原意是放宽下方容忍让这些站成缺口），**从未实现**。
+     * 保留是对旧版的忠实继承（旧版同样只声明不用，见 {@code docs/audit-20261113.md} §5）；
+     * 要做需加读取点 + 真机验证，属独立改动。</p>
      */
     static final int VILLAGE_GAP_BELOW_TOLERANCE = 16;
     static final int PLANNING_CORRIDOR_RADIUS = 192;
