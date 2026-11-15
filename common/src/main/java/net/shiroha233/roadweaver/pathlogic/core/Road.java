@@ -30,7 +30,8 @@ import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
+import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
+
 import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;

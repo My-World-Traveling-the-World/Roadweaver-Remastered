@@ -134,6 +134,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.profile.SpanWritebackTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.architecture.SourceLineEndingGuardTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.VolumeKindContractTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.construction.VolumePlannerVisitTest"),

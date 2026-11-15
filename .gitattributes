@@ -1,1 +1,13 @@
 * text=auto
+
+# ── 2026-11-15：Java 源码统一 LF ──────────────────────────────────────
+# 起因：Road.java / EndpointOwnerResolver.java / RouteRefinementOps.java 三个文件
+# 在索引里被标成 `-text`（git 判为非文本）⇒ 跳过 text=auto 规范化 ⇒ CRLF 连同
+# 323/12/1 个「孤立 CR」一起被原样提交。后果有三：
+#   ① git blame 被整文件冲掉（一次只改 31 行却 diff 出 1655 行）；
+#   ② 孤立 CR 让「按 \n 切行」的行数守卫少算一半（RouteRefinementOps 实测
+#      编辑器 701 行、守卫 379 行）⇒ 千行守卫可能被绕过；
+#   ③ 同一仓库出现 LF/CRLF/混合三种形态（改造前实测 267 / 352 / 9）。
+# 现在显式声明：Java 源码一律 LF，检出时也写 LF（eol=lf），杜绝复发。
+# 二进制资源（.png/.nbt）不在此列，保持现状即可。
+*.java            text eol=lf

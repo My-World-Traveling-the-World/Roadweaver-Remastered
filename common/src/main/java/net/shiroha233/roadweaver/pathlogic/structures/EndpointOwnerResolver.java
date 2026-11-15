@@ -89,18 +89,30 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
  * <p>本类是从 2790 行的 {@code StructureAvoidanceService} 里<b>纯搬迁</b>出来的，
  * 逻辑未改（含缩进）。为让两侧调用点零改动用了双向静态导入。</p>
  */
-public final class EndpointOwnerResolver {
-    /**
-     * 端点归属四段解析全失败的累计次数（2026-11-15 新增，纯取证）。
-     *
-     * <p>四段依次是：①精确 identity（XZ 匹配）②盒内唯一同 id ③同名族替换（ctov 之类改名村庄）
-     * ④附近已验证建筑推断。全失败时<b>一个 owner 键都不会加</b>，
-     * 意味着这个端点所在的结构不再享受豁免 —— 而它与「端点本来就在结构外面」完全同形。</p>
-     */
-    private static final java.util.concurrent.atomic.AtomicLong UNRESOLVED_ENDPOINT_OWNERS =
-            new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicBoolean UNRESOLVED_WARNED =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
+public final class EndpointOwnerResolver {
+
+    /**
+
+     * 端点归属四段解析全失败的累计次数（2026-11-15 新增，纯取证）。
+
+     *
+
+     * <p>四段依次是：①精确 identity（XZ 匹配）②盒内唯一同 id ③同名族替换（ctov 之类改名村庄）
+
+     * ④附近已验证建筑推断。全失败时<b>一个 owner 键都不会加</b>，
+
+     * 意味着这个端点所在的结构不再享受豁免 —— 而它与「端点本来就在结构外面」完全同形。</p>
+
+     */
+
+    private static final java.util.concurrent.atomic.AtomicLong UNRESOLVED_ENDPOINT_OWNERS =
+
+            new java.util.concurrent.atomic.AtomicLong();
+
+    private static final java.util.concurrent.atomic.AtomicBoolean UNRESOLVED_WARNED =
+
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
 
     static Set<StructureOwnerKey> endpointOwnersForRoad(ServerLevel level, RoadData road) {
         if (level == null || road == null || !road.hasOwnerPair()) return Set.of();
