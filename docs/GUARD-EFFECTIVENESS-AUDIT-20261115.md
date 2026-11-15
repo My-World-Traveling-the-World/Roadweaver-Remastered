@@ -109,6 +109,40 @@ Python 的 `str.replace` 在找不到锚点时**静默返回原串**，
 
 ---
 
+## 三之三、★ 补做：把「跳过了几条」打进构建输出（本轮）
+
+上一版说「元守卫解决了不可见，但没解决『跳过时构建仍报全绿』」。本轮补上后半：
+
+### 改了什么（`RoadJUnitRegressionSuite`）
+1. **注册一个跳过收集 listener**：`executionSkipped` 时按 `MethodSource` 记下
+   「哪个类的哪个方法 + 跳过原因」。
+2. **输出行加三项**：
+   改前 `RoadJUnitRegressionSuite: PASS tests=922`
+   改后 `RoadJUnitRegressionSuite: PASS tests=922 skipped=0 aborted=0 failed=0`
+3. **逐个打印跳过者**：`  [SKIPPED] MethodSource [...] ← 原因`
+4. **★ 守卫跳过即失败**：只要跳过者里有 `net.shiroha233.roadweaver.architecture.`
+   的用例，直接抛 `AssertionError("架构守卫被静默跳过（守卫必须永远真跑）")`。
+
+### 为什么单独对 `architecture` 下这条硬规则
+那 10 个守卫用 `Assumptions.assumeTrue(根 != null)`，跳过时 JUnit 记「通过」——
+于是「**守卫根本没跑**」与「**守卫跑过且通过**」在构建输出上**完全同形**。
+`GuardPreconditionTest` 已经断言「根必须能解析」，这里再加一道：
+即使将来出现**别的**跳过原因（守卫被 `@Disabled`、条件写错、被排除），也会立刻红。
+
+### 实测
+- **当前真值：`skipped=0`** ⇒ 54 个 architecture 用例（含 17 个守卫类）确实全跑
+- **负控**：给 `SourceFileSizeGuardTest.任何生产源文件都不得超过一千行` 加
+  `@Disabled("NEGCTL")` ⇒ 输出 `PASS tests=921 skipped=1 failed=0` +
+  `[SKIPPED] ...SourceFileSizeGuardTest ← NEGCTL` + **`BUILD FAILED`**（守卫跳过断言拦住）✅
+
+### ★ 负控又踩了一次同一个坑
+第一次负控报 `BUILD FAILED` 但原因是 **`Compilation failed`** ——
+我的批量替换脚本把方法名改坏了（`_negctl` / `_negctl_disabled` 两次替换折腾）。
+**这正是上一节刚记下的「负控脚本必须断言改动符合预期」的第二次复发。**
+第二次改成「只插一行 `@Disabled` 并断言它确实插入且只插一次」才有效。
+
+---
+
 ## 四、这份审计**没有**做什么
 
 - **没有**给 54 个用例逐个做负控（工作量太大，且很多需要改生产代码才能触发）。

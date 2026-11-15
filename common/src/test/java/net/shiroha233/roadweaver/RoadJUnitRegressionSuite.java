@@ -5,6 +5,11 @@ import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.platform.launcher.TestExecutionListener;
+import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
 
 /** Runs JUnit checks in the same Minecraft-aware runtime used by model regressions. */
@@ -345,14 +350,51 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
+        // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。
+        //   JUnit 里被跳过的测试算「通过」，而本套件原先只打印 PASS tests=N ——
+        //   architecture/ 下 10 个守卫一旦根解析失效就会集体静默跳过，构建仍然全绿。
+        //   这里把跳过者点名，并让「守卫跳过」直接判失败（见下面的断言）。
+        List<String> skipped = new ArrayList<>();
+        TestExecutionListener skipCollector = new TestExecutionListener() {
+            @Override
+            public void executionSkipped(TestIdentifier id, String reason) {
+                if (!id.isTest()) return;
+                String cls = id.getSource()
+                        .map(src -> src.toString())
+                        .orElse(id.getDisplayName());
+                skipped.add(cls + "   ← " + reason);
+            }
+        };
         Launcher launcher = LauncherFactory.create();
-        launcher.registerTestExecutionListeners(summary);
+        launcher.registerTestExecutionListeners(summary, skipCollector);
         launcher.execute(request);
         if (summary.getSummary().getTotalFailureCount() > 0) {
             summary.getSummary().printFailuresTo(new java.io.PrintWriter(System.err, true));
             throw new AssertionError("JUnit regressions failed: " + summary.getSummary().getTotalFailureCount());
         }
-        System.out.println("RoadJUnitRegressionSuite: PASS tests="
-                + summary.getSummary().getTestsSucceededCount());
+        long succeeded = summary.getSummary().getTestsSucceededCount();
+        long failed = summary.getSummary().getTestsFailedCount();
+        long aborted = summary.getSummary().getTestsAbortedCount();
+        System.out.println("RoadJUnitRegressionSuite: PASS tests=" + succeeded
+                + " skipped=" + skipped.size()
+                + " aborted=" + aborted
+                + " failed=" + failed);
+        for (String line : skipped) {
+            System.out.println("  [SKIPPED] " + line);
+        }
+        // ★ 守卫绝不允许静默跳过。
+        //   为什么单独对 architecture 下这条：那 10 个守卫用
+        //   `Assumptions.assumeTrue(根 != null)`，跳过时 JUnit 记「通过」，
+        //   于是「守卫根本没跑」和「守卫跑过且通过」在输出上完全同形。
+        //   GuardPreconditionTest 已经断言「根必须能解析」，这里再加一道：
+        //   即使将来出现别的跳过原因（守卫被 @Disabled、条件变了），也会立刻红。
+        List<String> skippedGuards = new ArrayList<>();
+        for (String line : skipped) {
+            if (line.contains(".architecture.")) skippedGuards.add(line);
+        }
+        if (!skippedGuards.isEmpty()) {
+            throw new AssertionError("架构守卫被静默跳过（守卫必须永远真跑）：\n  "
+                    + String.join("\n  ", skippedGuards));
+        }
     }
 }
