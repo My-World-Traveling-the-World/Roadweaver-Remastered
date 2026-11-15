@@ -23,7 +23,7 @@
 > `build/libs` 那个同名 jar 只有 4 个内嵌 jar、**缺 `META-INF/jars/roadweaver-api.jar`**，
 > 装进 mods 会报「不兼容的模组：需要 roadweaver_api」并把 6 个下游模组一起拒掉。
 > 判据：`Entries | Where FullName -match '\.jar$'` 必须 **5 个**且含 `roadweaver-api.jar`。
-> （本次第一版就装错了 `build/libs` 的 6,858,008 B 件，读到 `HANDOVER.md` 第 6.5 节才发现并改正 ——
+> （本次第一版就装错了 `build/libs` 的 6,858,008 B 件，核对部署产物清单后才发现并改正 ——
 > 当时台账里记的 SHA `785d84b3` 是**错件**的，已作废。）
 
 ### 本版相对 0.9.101 的改动（12 个提交）
@@ -55,7 +55,7 @@
 | `bac8c18` | DP 先行；成功即跳过整段旧 pass（本版当时：DP 不可行仍回旧 pass）|
 
 > 后续边界：`b7ef179` 起 DP 不可行也改走 `ProfileFallback`，但该提交**不在 0.9.102 内**。
-> 当前源码已领先本版 10 个提交；不能把本版台账当成当前源码的完整功能清单。
+> 本条是历史发布记录；现行行为见[开发现状](STATUS.md)，新产物检查见[验证手册](VALIDATION.md)。
 
 ### 待真机验证（本版必须验的清单）
 

@@ -2,7 +2,7 @@
 
 > **相关文档**：本文是**文件级**分类（20 个文件留还是删）。
 > 方法级删除边界见 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（当前 39 个受管方法里 33 个待旧链路下线后删除）；
-> 删除顺序与每步验收见 [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md)。
+> 历史切换方案见 [`S7-SWITCH-CHECKLIST.md`](archive/S7-SWITCH-CHECKLIST.md)，现行验证见[手册](VALIDATION.md)。
 
 > 本文件由 `PostprocessLedgerTest` 机器校验。**删文件必须同步删台账行**，
 > 否则测试直接红 —— 这样就不会出现「文件删了、文档还说它在」的漂移。

@@ -19,7 +19,7 @@ dependencies {
     //
     // ⚠ 这两个工程是**独立的**，道路仓库不收录长城的任何产物 ——
     //   所以这里引用邻居目录的构建输出，构建顺序是「先编长城 -> 再编道路」。
-    //   代价是道路离开长城编不了，这是已知且接受的事实（见 docs/STATUS-20261113.md）。
+    //   代价是道路离开长城编不了，这是已知且接受的事实（见 docs/VALIDATION.md）。
     //
     // 但「缺 jar」时的报错必须说人话：原来只会看到
     //   WallRoadAdapter.java:35: 错误: 程序包 local.plaincraft.greatwall.api 不存在

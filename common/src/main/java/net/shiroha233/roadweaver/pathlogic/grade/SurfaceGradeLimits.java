@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>为什么它是顶层类型（2026-11-14）</h2>
  * <p>它原本是 {@code RoadGradePlanner} 的嵌套 record。按
- * {@code docs/S7-SWITCH-CHECKLIST.md}「第 3 级前置 A」抽出，理由是：
+ * {@code docs/archive/S7-SWITCH-CHECKLIST.md}「第 3 级前置 A」抽出，理由是：
  * 这个快照被 <b>4 个文件</b>引用，其中 {@code TunnelFootprintSampler} 与
  * {@code UnknownEndpointHeightRegistry} <b>不在旧链路里</b> ——
  * 直接删 {@code RoadGradePlanner}（重制台账批 1）会砸掉两个与旧算法无关的调用方。</p>

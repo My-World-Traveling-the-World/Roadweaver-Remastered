@@ -49,7 +49,7 @@ import net.shiroha233.roadweaver.config.ConfigService;
  * 根本不会被调用 ⇒ <b>最终架桥，不是涵洞</b>（多建一座本不该建的桥 +
  * 规划期的甲板高度计算白做）。改成 6 后「规划判涵洞 ⇒ 施工就做涵洞」。</p>
  *
- * <p>详见 {@code docs/CULVERT-THRESHOLD-ANALYSIS-20261115.md}。</p>
+ * <p>详见 {@code docs/archive/CULVERT-THRESHOLD-ANALYSIS-20261115.md}。</p>
  */
 public final class CulvertJudge {
 

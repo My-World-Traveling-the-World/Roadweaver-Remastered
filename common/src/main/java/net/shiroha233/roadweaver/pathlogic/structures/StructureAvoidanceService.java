@@ -93,7 +93,7 @@ public final class StructureAvoidanceService {
      * <p><b>⚠️ 全仓零引用 —— 改这个数值不会有任何效果。</b>原 javadoc 写的是
      * <b>设计意图</b>（山坡村庄空地比最低建筑低十余格 ⇒ 施工带与聚合盒不相交 ⇒
      * 掩码不点亮 ⇒ 路整片穿村；原意是放宽下方容忍让这些站成缺口），**从未实现**。
-     * 保留是对旧版的忠实继承（旧版同样只声明不用，见 {@code docs/audit-20261113.md} §5）；
+     * 保留是对旧版的忠实继承（旧版同样只声明不用，见 {@code docs/archive/AUDIT-20261113.md} §5）；
      * 要做需加读取点 + 真机验证，属独立改动。</p>
      */
     static final int VILLAGE_GAP_BELOW_TOLERANCE = 16;

@@ -1,7 +1,7 @@
 # S5 方法级台账：3 个 REPLACE_BY_DP 文件的删除边界
 
-> **相关文档**：本文只说「删什么」。[`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md)
-> 说「**按什么顺序删、每步怎么验**」，其「第 3 级前置 A」还写明了
+> **相关文档**：本文只说「删什么」。[`S7-SWITCH-CHECKLIST.md`](archive/S7-SWITCH-CHECKLIST.md)
+> 记录当时的拆除顺序，其「第 3 级前置 A」还写明了
 > `SurfaceGradeLimits` 必须先抽出来才能删 `RoadGradePlanner`。
 > 文件级分类见 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)。
 

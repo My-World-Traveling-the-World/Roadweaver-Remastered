@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 施工期 {@code promoteRuntimeBridges} 判「不是浅涵洞」⇒ 提升为桥
  * ⇒ 走桥体建造分支 ⇒ {@code prepareCulvertDeck} 根本不执行 ⇒ <b>最终架桥</b>。</p>
  *
- * <p>2026-11-15 已把上限对齐到 <b>6</b>（详见 {@code docs/CULVERT-THRESHOLD-ANALYSIS-20261115.md}）。
+ * <p>2026-11-15 已把上限对齐到 <b>6</b>（详见 {@code docs/archive/CULVERT-THRESHOLD-ANALYSIS-20261115.md}）。
  * 这个测试钉住「1..6 站算涵洞、7 站不算」，也就是钉住「与规划期默认值一致」这件事。</p>
  *
  * <h2>★ 这个测试能守什么、不能守什么</h2>
