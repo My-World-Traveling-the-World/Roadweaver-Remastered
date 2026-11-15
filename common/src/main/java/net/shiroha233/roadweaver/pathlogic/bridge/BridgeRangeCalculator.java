@@ -52,21 +52,29 @@ public final class BridgeRangeCalculator {
     public static RangeResult compute(List<BlockPos> middlePositions,
                                       List<RoadSpan> spans,
                                       ModConfig cfg) {
+        return compute(Settings.from(cfg), middlePositions, spans);
+    }
+
+    /** 缓存键和计算共享同一份配置快照，避免压成会碰撞的标量或热改后读到另一套配置。 */
+    public record Settings(boolean enabled, int maxLengthBlocks, int mergeGap) {
+        public static Settings from(ModConfig cfg) {
+            if (cfg == null || !cfg.bridgeEnabled()) return new Settings(false, 0, 0);
+            return new Settings(true, cfg.bridgeUseBuoysInstead() ? 0 : Math.max(0, cfg.bridgeMaxLengthBlocks()),
+                    Math.max(0, cfg.bridgeMergeGap()));
+        }
+    }
+
+    public static RangeResult compute(Settings settings, List<BlockPos> middlePositions, List<RoadSpan> spans) {
         int n = middlePositions.size();
         boolean[] isBridge = new boolean[n];
         boolean[] skipSegments = new boolean[n];
         List<int[]> bridgeRanges = new ArrayList<>();
 
-        if (cfg == null) {
+        if (!settings.enabled()) {
             return new RangeResult(isBridge, List.of(), skipSegments);
         }
 
-        if (!cfg.bridgeEnabled()) {
-            return new RangeResult(isBridge, List.of(), skipSegments);
-        }
-
-        boolean useBuoysInstead = cfg.bridgeUseBuoysInstead();
-        int maxLenBlocks = useBuoysInstead ? 0 : Math.max(0, cfg.bridgeMaxLengthBlocks());
+        int maxLenBlocks = settings.maxLengthBlocks();
         
         if (spans != null) {
             Map<Long, Integer> indexMap = new HashMap<>();
@@ -87,7 +95,7 @@ public final class BridgeRangeCalculator {
             
             List<int[]> merged = new ArrayList<>();
             int[] cur = bridgeRanges.get(0);
-            int mergeGap = Math.max(0, cfg.bridgeMergeGap());
+            int mergeGap = settings.mergeGap();
             for (int idx = 1; idx < bridgeRanges.size(); idx++) {
                 int[] nxt = bridgeRanges.get(idx);
                 // A positive gap is land. Approach ramps handle that land;

@@ -1,6 +1,7 @@
 /* 文件职责：按路缓存「建造帧」（中心线 + 规划期桥范围）—— 把每区块的重算变成一次。 */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,6 @@ import net.minecraft.core.BlockPos;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
 
@@ -31,9 +31,8 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
  * <ul>
  *   <li>{@code BridgeRangeCalculator.compute(positions, spans, cfg)} 是<b>纯函数</b>：
  *       不读世界、不写参数、没有随机；</li>
- *   <li>缓存 key = 中心线内容指纹 + <b>跨度精确内容</b> + 桥配置标量。
- *       2026-11-14 修正：全局 {@code RoadFingerprint} 不含 spans，单独用它会让
- *       「同中心线、桥改隧道」命中旧桥掩码；现在跨度逐条进入 key。</li>
+ *   <li>缓存先按道路指纹、站序首尾、跨度和精确桥参数定位桶，再用正向站序验证命中。
+ *       存储使用无方向的指纹来定位道路；施工掩码里的索引则与站点顺序绑定。</li>
  *   <li>路数据是<b>不可变</b>的（{@code RoadData} 是 record 且紧凑构造器做了
  *       {@code List.copyOf}），不存在「同一条路被就地改写」。</li>
  * </ul>
@@ -58,61 +57,29 @@ public final class BuildFrame {
     /** 缓存上限：超过就整表清空。 */
     private static final int MAX_ENTRIES = 512;
 
-    /**
-     * 缓存键：中心线内容指纹 + 配置版本标量 + <b>跨度精确内容</b>。
-     *
-     * <p>第三部分在 2026-11-14 加入：同一条中心线可以在重规划后换桥/换隧道，
-     * 而全局道路指纹只看中心线；不纳入 spans 就会拿到旧桥掩码。</p>
-     *
-     * <h2>★ 为什么不能直接放 {@code ModConfig} 对象（2026-11-13 修正）</h2>
-     * <p>{@code ModConfig} 是普通 class，<b>没有覆写 {@code equals/hashCode}</b>。
-     * record 生成的 {@code equals} 会对这个字段走<b>引用比较</b>，于是：</p>
-     * <ul>
-     *   <li>配置对象被复制（热重载 / 拷贝构造）⇒ 同一份配置变成不同键 ⇒ <b>缓存永远命中不了</b>；</li>
-     *   <li>配置被就地修改 ⇒ 旧条目仍按<b>旧配置</b>命中 ⇒ <b>拿到过期结果</b>。</li>
-     * </ul>
-     * <p>所以只取真正参与计算的那几个字段压成一个标量。false miss 只是慢，
-     * false hit 才是错 —— 这个设计保证只会出现前者。</p>
-     */
-    private record Key(long fingerprint, long configVersion, List<SpanKey> spans) {
-    }
+    // 道路指纹只用于缩小查找范围。首尾把正反向分桶，命中时仍核对准确的有序站点。
+    private record Key(long fingerprint, BlockPos first, BlockPos last,
+                       BridgeRangeCalculator.Settings settings, List<RoadSpan> spans) {}
 
-    /** 跨度内容键：BlockPos.asLong 含 X/Y/Z，类型区分桥、隧道与其它跨度。 */
-    private record SpanKey(long start, long end, SpanType type) {
-    }
+    private static final class CachedFrame {
+        private final Frames frame;
+        private volatile WeakReference<List<RoadSegmentPlacement>> source;
 
-    /**
-     * 把跨度内容压进缓存键。
-     *
-     * <p>不能用全局 {@code RoadFingerprint} 代替这一段：它只哈希中心线，
-     * 同一中心线「桥改隧道」时指纹不变。这里保留精确值而不是再做一次哈希，
-     * 因此不会发生「两个不同跨度表因哈希碰撞而共用掩码」。</p>
-     */
-    private static List<SpanKey> spanKeys(List<RoadSpan> spans) {
-        if (spans == null || spans.isEmpty()) return List.of();
-        List<SpanKey> keys = new ArrayList<>(spans.size());
-        for (RoadSpan span : spans) {
-            if (span == null || span.start() == null || span.end() == null || span.type() == null) continue;
-            keys.add(new SpanKey(span.start().asLong(), span.end().asLong(), span.type()));
+        CachedFrame(Frames frame, List<RoadSegmentPlacement> source) {
+            this.frame = frame;
+            this.source = new WeakReference<>(source);
         }
-        return List.copyOf(keys);
-    }
 
-    /**
-     * 把影响 {@link BridgeRangeCalculator#compute} 结果的配置字段压成一个标量。
-     *
-     * <p>字段清单来自 {@code BridgeRangeCalculator} 的实际读取点：
-     * {@code bridgeEnabled} / {@code bridgeUseBuoysInstead} /
-     * {@code bridgeMaxLengthBlocks} / {@code bridgeMergeGap}。
-     * <b>那边新增字段时这里必须同步</b>，否则会出现「配置改了但缓存还命中」。</p>
-     */
-    private static long configVersion(ModConfig cfg) {
-        if (cfg == null) return 0L;
-        long v = cfg.bridgeEnabled() ? 1L : 0L;
-        v = v * 31L + (cfg.bridgeUseBuoysInstead() ? 1L : 0L);
-        v = v * 31L + Math.max(0, cfg.bridgeMaxLengthBlocks());
-        v = v * 31L + Math.max(0, cfg.bridgeMergeGap());
-        return v;
+        boolean matches(List<RoadSegmentPlacement> stations) {
+            // 同一不可变道路是热路径：直接命中，并且缓存不会因此保留全路的铺装列。
+            if (source.get() == stations) return true;
+            if (frame.middlePositions().size() != stations.size()) return false;
+            for (int i = 0; i < stations.size(); i++) {
+                if (!frame.middlePositions().get(i).equals(stations.get(i).middlePos())) return false;
+            }
+            source = new WeakReference<>(stations);
+            return true;
+        }
     }
 
     /**
@@ -154,7 +121,7 @@ public final class BuildFrame {
         }
     }
 
-    private static final Map<Key, Frames> CACHE = new ConcurrentHashMap<>();
+    private static final Map<Key, CachedFrame> CACHE = new ConcurrentHashMap<>();
 
     private BuildFrame() {
     }
@@ -167,16 +134,25 @@ public final class BuildFrame {
     public static Frames of(long fingerprint, List<RoadSegmentPlacement> segments,
                             List<RoadSpan> spans, ModConfig cfg) {
         if (CACHE.size() > MAX_ENTRIES) CACHE.clear();
-        Key key = new Key(fingerprint, configVersion(cfg), spanKeys(spans));
-        return CACHE.computeIfAbsent(key, k -> compute(segments, spans, cfg));
+        // RoadData 已用 List.copyOf 冻结列表；常见命中不会复制站位或重扫中心线。
+        List<RoadSegmentPlacement> stations = List.copyOf(segments);
+        List<RoadSpan> spanSnapshot = spans == null ? List.of() : List.copyOf(spans);
+        var settings = BridgeRangeCalculator.Settings.from(cfg);
+        Key key = new Key(fingerprint, stations.isEmpty() ? null : stations.getFirst().middlePos(),
+                stations.isEmpty() ? null : stations.getLast().middlePos(), settings, spanSnapshot);
+        CachedFrame cached = CACHE.get(key);
+        if (cached != null && cached.matches(stations)) return cached.frame;
+        return CACHE.compute(key, (k, entry) -> entry != null && entry.matches(stations) ? entry
+                : new CachedFrame(compute(stations, spanSnapshot, settings), stations)).frame;
     }
 
-    private static Frames compute(List<RoadSegmentPlacement> segments, List<RoadSpan> spans, ModConfig cfg) {
+    private static Frames compute(List<RoadSegmentPlacement> segments, List<RoadSpan> spans,
+                                  BridgeRangeCalculator.Settings settings) {
         List<BlockPos> middlePositions = new ArrayList<>(segments.size());
         for (RoadSegmentPlacement s : segments) {
             middlePositions.add(s.middlePos());
         }
-        BridgeRangeCalculator.RangeResult r = BridgeRangeCalculator.compute(middlePositions, spans, cfg);
+        BridgeRangeCalculator.RangeResult r = BridgeRangeCalculator.compute(settings, middlePositions, spans);
         return new Frames(List.copyOf(middlePositions), r.isBridge().clone(),
                 List.copyOf(r.mergedRanges()), r.skipSegments().clone());
     }

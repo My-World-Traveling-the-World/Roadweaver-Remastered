@@ -109,29 +109,47 @@ final class BuildFrameTest {
 
     @Test
     void 桥区间里的int数组也是深拷贝() {
-        // Frames.mergedRanges() 里的 int[] 与缓存共享，但 copyForUser() 必须深拷贝。
-        // 这条防的是「改了返回值里的区间，把缓存里的也改了」。
-        BuildFrame.Frames frames = BuildFrame.of(777L, stations(8),
-                List.of(new net.shiroha233.roadweaver.core.model.RoadSpan(
-                        new net.minecraft.core.BlockPos(2, 64, 0),
-                        new net.minecraft.core.BlockPos(5, 64, 0),
-                        net.shiroha233.roadweaver.core.model.SpanType.BRIDGE)),
-                null);
-        net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator.RangeResult first =
-                frames.copyForUser();
-        if (!first.mergedRanges().isEmpty()) {
-            first.mergedRanges().get(0)[0] = 999;
-        }
-        net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator.RangeResult second =
-                BuildFrame.of(777L, stations(8),
-                        List.of(new net.shiroha233.roadweaver.core.model.RoadSpan(
-                                new net.minecraft.core.BlockPos(2, 64, 0),
-                                new net.minecraft.core.BlockPos(5, 64, 0),
-                                net.shiroha233.roadweaver.core.model.SpanType.BRIDGE)),
-                        null).copyForUser();
-        for (int[] r : second.mergedRanges()) {
-            assertTrue(r[0] != 999, "case=int-array-not-shared");
-        }
+        // 打开桥配置并先断言区间非空，才能实际污染一份副本，避免空循环放过浅拷贝。
+        var cfg = new ModConfig();
+        var spans = List.of(span(2, 5, SpanType.BRIDGE));
+        var frames = BuildFrame.of(777L, stations(8), spans, cfg);
+        var first = frames.copyForUser();
+        assertEquals(1, first.mergedRanges().size());
+        first.mergedRanges().getFirst()[0] = 999;
+        var second = BuildFrame.of(777L, stations(8), spans, cfg).copyForUser();
+        assertEquals(1, second.mergedRanges().size());
+        assertEquals(2, second.mergedRanges().getFirst()[0]);
+    }
+
+    @Test
+    void 同旧标量的两套桥参数不能串掩码() {
+        // 两个值都合法；旧乘 31 键将 (100,32) 和 (101,1) 压成同一数。
+        ModConfig joined = new ModConfig();
+        joined.bridge().setMaxLengthBlocks(100);
+        joined.bridge().setMergeGap(32);
+        ModConfig separate = new ModConfig();
+        separate.bridge().setMaxLengthBlocks(101);
+        separate.bridge().setMergeGap(1);
+        var spans = List.of(span(0, 2, SpanType.BRIDGE), span(6, 8, SpanType.BRIDGE));
+        var road = stations(12);
+        assertEquals(1, BuildFrame.of(90L, road, spans, joined).copyForUser().mergedRanges().size());
+        var hot = BuildFrame.of(90L, road, spans, separate).copyForUser();
+        assertEquals(2, hot.mergedRanges().size());
+        assertFalse(hot.isBridge()[4], "中间的陆地不能继承已合并成桥的缓存");
+    }
+
+    @Test
+    void 无方向道路键的反向站序必须重映射桥下标() {
+        var road = stations(12);
+        var spans = List.of(span(0, 2, SpanType.BRIDGE));
+        var cfg = new ModConfig();
+        assertTrue(BuildFrame.of(91L, road, spans, cfg).copyForUser().isBridge()[0]);
+
+        // 模拟存储同一个无方向指纹，掩码应该随正反站序反转。
+        var reverse = BuildFrame.of(91L, road.reversed(), spans, cfg);
+        assertEquals(road.getLast().middlePos(), reverse.middlePositions().getFirst());
+        assertFalse(reverse.copyForUser().isBridge()[0]);
+        assertTrue(reverse.copyForUser().isBridge()[11]);
     }
 
     private static RoadSpan span(int from, int to, SpanType type) {
