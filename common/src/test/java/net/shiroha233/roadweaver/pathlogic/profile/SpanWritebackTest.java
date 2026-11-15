@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -141,6 +142,103 @@ class SpanWritebackTest {
 
         assertNull(ModeDpBridge.consumeStash(),
                 "开场 clearStash 之后必须取不到上一条路的解");
+    }
+
+    // ───────────── 组2a/2d：一次路内多次求解的语义 ─────────────
+
+    @Test
+    void 一次路内多次求解时以最后一次为准() {
+        System.setProperty(PROP, "on");
+        ModeDpBridge.resetForTest();
+
+        // 模拟 generateRoad 主路径里 computeTargetY 被调用多次（Road.java 实测 4 次）
+        List<BlockPos> cs = centers(20);
+        int[] first = flatTerrain(20);
+        int[] second = flatTerrain(20);
+        int[] third = flatTerrain(20);
+        ModeDpBridge.solveAndStash(first, null, null, null, cs);
+        ModeDpBridge.solveAndStash(second, null, null, null, cs);
+        ModeDpBridge.solveAndStash(third, null, null, null, cs);
+
+        ModeDpBridge.Stash stash = ModeDpBridge.consumeStash();
+        assertNotNull(stash, "三次求解后应能取到快照");
+        assertSame(third, stash.terrainY(),
+                "取的必须是**最后一次**求解的结果：前两次的快照应被后来者取代。"
+                        + "若这里拿到 first/second，说明 solveAndStash 没有做到「入口先清」");
+    }
+
+    @Test
+    void 主路径消费后repair再求解可以再消费一次() {
+        System.setProperty(PROP, "on");
+        ModeDpBridge.resetForTest();
+
+        List<BlockPos> cs = centers(20);
+        int[] mainTerrain = flatTerrain(20);
+
+        // ① 主路径：solveAndStash → consume（Road.java "main" 阶段）
+        ModeDpBridge.solveAndStash(mainTerrain, null, null, null, cs);
+        ModeDpBridge.Stash atMain = ModeDpBridge.consumeStash();
+        assertNotNull(atMain, "主路径应能取到快照");
+        assertSame(mainTerrain, atMain.terrainY());
+
+        // ② repair 分支：settleProfile 内部又跑 computeTargetY ⇒ 新地形新解
+        int[] repairedTerrain = flatTerrain(20);
+        ModeDpBridge.solveAndStash(repairedTerrain, null, null, null, cs);
+        ModeDpBridge.Stash afterRepair = ModeDpBridge.consumeStash();
+        assertNotNull(afterRepair,
+                "repair 分支后必须能**再消费一次** —— 否则 settleProfile 跑的那次求解白做，"
+                        + "而 extractPhysicalSpans 已经把主路径的写回丢掉了 ⇒ 开回写等于白做");
+        assertSame(repairedTerrain, afterRepair.terrainY(),
+                "第二次消费拿到的必须是**修复后地形**的解，不是主路径那份");
+
+        // ③ 之后没有新求解 ⇒ 取不到
+        assertNull(ModeDpBridge.consumeStash(), "没有新求解时不应再有快照");
+    }
+
+    @Test
+    void 开场clearStash能切断跨路串味() {
+        System.setProperty(PROP, "on");
+        ModeDpBridge.resetForTest();
+
+        List<BlockPos> cs = centers(20);
+        ModeDpBridge.solveAndStash(flatTerrain(20), null, null, null, cs);
+        // 上一条路异常退出、没消费 ⇒ 快照残留
+        ModeDpBridge.clearStash();          // 下一条路开场
+        assertNull(ModeDpBridge.consumeStash(),
+                "开场 clearStash 必须抹掉上一条路的残留，否则会跨路串味");
+    }
+
+    @Test
+    void 无解时必须清掉上一轮留下的快照() {
+        System.setProperty(PROP, "on");
+        ModeDpBridge.resetForTest();
+
+        // 第一轮：正常求解 ⇒ 留下快照
+        ModeDpBridge.solveAndStash(flatTerrain(20), null, null, null, centers(20));
+        assertTrue(ModeDpBridge.writebackStats().contains("solved=1"),
+                "第一轮应留下快照");
+
+        // 第二轮：空地形 ⇒ 求解入口直接返回（等价于「本次无解」）
+        ModeDpBridge.solveAndStash(new int[0], null, null, null, List.of());
+
+        assertNull(ModeDpBridge.consumeStash(),
+                "本次无解时**必须清掉上一轮的快照**。否则 computeTargetY 在一次 "
+                        + "generateRoad 里被多次调用时（主路径 4 次 + tryRiverRepair + settleProfile），"
+                        + "旧快照会一直挂到后面被取走 ⇒ 拿上一次地形（甚至 repair 之前）的解去合并本轮 spans");
+    }
+
+    @Test
+    void 快照按地形数组身份区分() {
+        System.setProperty(PROP, "on");
+        ModeDpBridge.resetForTest();
+
+        int[] terrainA = flatTerrain(20);
+        ModeDpBridge.solveAndStash(terrainA, null, null, null, centers(20));
+        ModeDpBridge.Stash stash = ModeDpBridge.consumeStash();
+        assertNotNull(stash);
+        assertSame(terrainA, stash.terrainY(),
+                "快照必须记住「用哪一份地形求的解」（按引用）。observe 靠它判断能否复用 —— "
+                        + "只比 stations 与 centers 不够：centers 相同但地形换了（repair 之后）会复用错解");
     }
 
     @Test

@@ -252,22 +252,7 @@ public final class Road {
             //      旧判定继续生效 —— 绝不能因为「DP 没算出来」就把桥删掉。
             //   ③ **默认关闭**：`-Droadweaver.spanWriteback=on` 才进来；
             //      关闭时本块零执行、零行为变化，可直接当回退开关用。
-            if (ModeDpBridge.writebackEnabled()) {
-                ModeDpBridge.Stash spanStash = ModeDpBridge.consumeStash();
-                if (spanStash != null) {
-                    List<RoadSpan> mergedSpans = ModeDpBridge.mergeByModes(
-                            spans, spanStash.solution().modes(), spanStash.centers(), spanStash.stations());
-                    ModeDpBridge.noteWritebackApplied();
-                    LOGGER.info("RoadWeaver [SPAN-WB] spans written back connection={}->{}"
-                                    + " before={} after={} {}",
-                            ownerA2d, ownerB2d, spans.size(), mergedSpans.size(),
-                            ModeDpBridge.writebackStats());
-                    spans = mergedSpans;
-                } else {
-                    LOGGER.info("RoadWeaver [SPAN-WB] no stashed solution, keeping legacy spans"
-                                    + " connection={}->{} {}", ownerA2d, ownerB2d, ModeDpBridge.writebackStats());
-                }
-            }
+            spans = applySpanWriteback(spans, ownerA2d, ownerB2d, "main");
             long planningRepairStartedAt = System.nanoTime();
             RoadData rd = new RoadData(width, type, materials, slabMaterials, segments, spans, targetY, ownerA2d, ownerB2d);
             RoadData constructionRepaired = RoadPathCalculator.repairFinalHeightConflict(
@@ -304,6 +289,14 @@ public final class Road {
                         genConfig, streams);
                 spans = settled.spans();
                 targetY = settled.targetY();
+                // ★ 2026-11-15：这一支会把上面写入的 DP 结果**丢掉** ——
+                //   `extractPhysicalSpans` 重建物理跨度时只保留 PROTECTED_GAP /
+                //   NETWORK_REUSE / JUNCTION_ANCHOR，DP 判出的 BRIDGE/TUNNEL 不在其中。
+                //   而 `settleProfile` 内部又跑了一次 `computeTargetY` ⇒ 快照已经被
+                //   更新成「修复后地形」的新解。所以这里**再消费一次并合并**：
+                //   用的是修复后的地形，比上面那次更贴合最终走廊。
+                //   若没有新解（DP 无解 / 回写关闭），本调用原样返回，不影响旧判定。
+                spans = applySpanWriteback(spans, ownerA2d, ownerB2d, "post-repair");
                 LOGGER.info("RoadWeaver accepted bounded construction-feasibility height repair connection={}->{}",
                         rawStart, rawEnd);
             }
@@ -713,6 +706,52 @@ public final class Road {
      * <p>原先有两处调用，参数完全相同（{@code segments, level, cache, terrain, streams,
      * routeBridgeMinWaterDepth()}）—— 收成一处，将来接 {@code RoadSpec} 时只改这里。</p>
      */
+    /**
+     * 把 DP 判出的桥隧合并进 spans —— <b>跨度回写的唯一入口</b>。
+     *
+     * <h2>为什么抽成一个方法</h2>
+     * <p>整条路上有<b>两个</b>必须回写的时机，而且它们必须共用同一套语义：</p>
+     * <ol>
+     *   <li>{@code generateRoad} 主路径：spans 首次定稿（{@code phase="main"}）；</li>
+     *   <li>{@code repairFinalHeightConflict} 改写了走廊之后（{@code phase="post-repair"}）——
+     *       那一支会用 {@code extractPhysicalSpans} 重建物理跨度，把上面写回的
+     *       BRIDGE/TUNNEL 丢掉；而 {@code settleProfile} 内部又跑了一次
+     *       {@code computeTargetY}，快照已被更新成「修复后地形」的新解。
+     *       所以必须在那里<b>再合并一次</b>，否则开启回写后 repair 一触发就等于白做。</li>
+     * </ol>
+     *
+     * <h2>三条不可动摇的语义</h2>
+     * <ul>
+     *   <li><b>回写关闭时零行为变化</b>：直接返回入参，不碰快照、不打日志。</li>
+     *   <li><b>没有解就保持原样</b>：{@code consumeStash()} 返回 null（DP 无解 /
+     *       本次没求解）⇒ 原样返回。绝不能因为「DP 没算出来」把旧桥删掉。</li>
+     *   <li><b>merge 不是 replace</b>：{@code mergeByModes} 只替换桥隧段，
+     *       {@code PROTECTED_GAP} / {@code NETWORK_REUSE} / {@code ROAD_CROSSING} /
+     *       {@code JUNCTION_ANCHOR} 全部保留。</li>
+     * </ul>
+     *
+     * @param current  当前 spans
+     * @param phase    日志用阶段名（{@code main} / {@code post-repair}）
+     * @return 合并后的 spans；任何「不该动手」的情形都返回 {@code current} 本身
+     */
+    private List<RoadSpan> applySpanWriteback(List<RoadSpan> current, long ownerA2d, long ownerB2d, String phase) {
+        if (!ModeDpBridge.writebackEnabled()) return current;
+        ModeDpBridge.Stash stash = ModeDpBridge.consumeStash();
+        if (stash == null) {
+            LOGGER.info("RoadWeaver [SPAN-WB] phase={} no stashed solution, keeping legacy spans"
+                            + " connection={}->{} {}",
+                    phase, ownerA2d, ownerB2d, ModeDpBridge.writebackStats());
+            return current;
+        }
+        List<RoadSpan> merged = ModeDpBridge.mergeByModes(
+                current, stash.solution().modes(), stash.centers(), stash.stations());
+        ModeDpBridge.noteWritebackApplied();
+        LOGGER.info("RoadWeaver [SPAN-WB] phase={} spans written back connection={}->{}"
+                        + " before={} after={} {}",
+                phase, ownerA2d, ownerB2d, current.size(), merged.size(), ModeDpBridge.writebackStats());
+        return merged;
+    }
+
     private List<RoadSpan> extractPhysicalSpans(List<RoadSegmentPlacement> segments, ServerLevel level,
                                                 TerrainSamplingCache cache, PathTerrainField terrain,
                                                 StreamsReflowingCompat.SamplingSession streams) {

@@ -168,9 +168,15 @@ public final class ModeDpBridge {
     }
 
     /** 一条路上「求解出来的桥隧模式」的快照。 */
+    /**
+     * 一条路上「求解出来的桥隧模式」的快照。
+     *
+     * @param terrainY 求本次解用的地形数组（<b>按引用保存，只用于身份比较</b>）
+     */
     public record Stash(ModeDpSolver.Solution solution,
                         List<BlockPos> centers,
-                        int stations) {
+                        int stations,
+                        int[] terrainY) {
     }
 
     private static final ThreadLocal<Stash> STASH = new ThreadLocal<>();
@@ -198,16 +204,35 @@ public final class ModeDpBridge {
                                      RoadGenerationConfig cfg,
                                      List<BlockPos> centers) {
         if (!writebackEnabled()) return;
+        // ★ 入口先清、成功才写 —— 这是「本次求解无效」与「本次没求解」的统一语义。
+        //
+        // 为什么必须在**所有**早退分支之前清：`computeTargetY` 在一次 generateRoad 里
+        // 会被调用多次（主路径 4 次 + tryRiverRepair + settleProfile）。若某一次
+        // 因为地形为空 / DP 无解 / 抛异常而没产出新解，却把上一轮的快照留着，
+        // 后面 `consumeStash` 就会把**上一次地形（甚至 repair 之前）的解**
+        // 当成这一次的解去合并 spans。
+        //
+        // 第一版就是在 `solved.isEmpty()` 里单独写了 `STASH.remove()`，
+        // 结果 `terrainY.length == 0` 的早退分支根本没走到 —— 被
+        // `无解时必须清掉上一轮留下的快照` 这个用例当场抓出来。
+        STASH.remove();
         if (terrainY == null || terrainY.length == 0 || centers == null) return;
         try {
             int n = terrainY.length;
             boolean[] groundBanned = bans == null ? new boolean[n] : bans.banned();
             var solved = ModeDpSolver.solve(terrainY, slopeStepPerStation(cfg), settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
-                // 无解 ⇒ 不留快照 ⇒ 消费端会走「保持旧判定」分支（并计入 missed）。
+                // 无解 ⇒ 必须**主动清掉旧快照**。
+                //
+                // 踩过的坑：第一版只写了 `return`，注释还说「不留快照」。但
+                // `computeTargetY` 在一次 generateRoad 里会被调用多次
+                // （Road.java 的主路径 4 次 + tryRiverRepair + settleProfile），
+                // 若前一次留了快照、这一次无解而只是 return，那么旧快照会一直
+                // 挂到后面被 `consumeStash` 取走 ⇒ **拿上一次地形（甚至是上一轮
+                // repair 之前）的解去合并本轮的 spans**。清掉才是「本次无解」。
                 return;
             }
-            STASH.set(new Stash(solved.get(), centers, n));
+            STASH.set(new Stash(solved.get(), centers, n, terrainY));
             STASH_SOLVED.incrementAndGet();
         } catch (Throwable t) {
             // 求解失败绝不能影响生产：咽掉并记一条，快照保持为空。
@@ -286,7 +311,9 @@ public final class ModeDpBridge {
             // ★ 2026-11-15：禁地面掩码由调用方统一算好传入（水面 + 保护区两条独立来源），
             //   不再复制 isCrossing。两臂共用同一份掩码 ⇒ 口径可比。
             boolean[] groundBanned = bans == null ? new boolean[n] : bans.banned();
-            int banned = bans.bannedStations();
+            // bans 为 null 时上面那行会造一个全 false 掩码，这里也必须跟着兜底 ——
+            // 否则 NPE 被外层 catch(Throwable) 吞掉，整条观测静默失效（只剩一条 warn）。
+            int banned = bans == null ? 0 : bans.bannedStations();
             // 旧判定的跨水站数：只作对照，用来量化「独立来源与旧判定差多少」。
             int legacyCrossing = 0;
             if (isCrossing != null) {
@@ -304,7 +331,8 @@ public final class ModeDpBridge {
             //   注意只在 n 与 centers 一致时才复用，避免错配。
             Stash shared = STASH.get();
             var solved = (shared != null && shared.solution() != null
-                    && shared.stations() == n && shared.centers() == centers)
+                    && shared.stations() == n && shared.centers() == centers
+                    && shared.terrainY() == terrainY)
                     ? java.util.Optional.of(shared.solution())
                     : ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
