@@ -153,6 +153,9 @@ public final class RoadJUnitRegressionSuite {
                         // 批 5 量尺：perpendicularDistance / reinstateUntilDense 的契约 + 锯齿保真度实测
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PostprocessMeasuringStickTest"),
+                        // 批 3 补覆盖：桥模板纵向映射 mapTemplateX（含一个已修历史缺陷的守卫）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeTemplateMappingTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.VolumeKindContractTest"),
                         DiscoverySelectors.selectClass(
