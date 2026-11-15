@@ -1,10 +1,10 @@
 # 开发现状
 
-源码基线 `b12307f`（2026-11-15），Windows / JDK 21 全量回归 `PASS tests=1023 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
+源码基线 `8505721`（2026-11-15），Windows / JDK 21 全量回归 `PASS tests=1030 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
 
 | 范围 | 默认生产行为 | 未完成或不能下结论 |
 |---|---|---|
-| 拓扑和选线 | 粗路网走 `PIPELINE`，单路走 `BAND`。Kruskal 前按长度过滤候选，质量日志看实际下发图。FMM 接回硬禁行与软共用走廊，冻结可用目标后可提前停。 | `PipelinePlanner` 粗拓扑仍用 `ObstacleField.NONE`；离网格端点的回溯坐标有已复现偏差。按可建性选网和坐标修复见[技术路线](ROADMAP.md)。 |
+| 拓扑和选线 | 粗路网走 `PIPELINE`，单路走 `BAND`。Kruskal 前按长度过滤候选，质量日志看实际下发图。FMM 接回硬禁行与软共用走廊，冻结可用目标后可提前停。回溯只走采样格，真实端点按带保护检查的短边接入。 | `PipelinePlanner` 粗拓扑仍用 `ObstacleField.NONE`；下一项是[按可建性选网的影子评分](ROADMAP.md)。端点短边阻断时没有多锚点搜索。 |
 | 1 · 纵断面 | `TargetYComputation` 默认 `ProfileDpSource`；不可行时走新版 `ProfileFallback`。隧道覆土是上界，与最大挖方冲突时以覆土为准。 | `RoadGradePlanner` 仍服务局部选线、修坡等；不能把默认主剖面迁移写成所有旧坡度计算均已移除。 |
 | 2 · 桥隧跨度 | 默认由 `PathSpanExtractor` 产出 spans。联合 DP 用 `GroundBanSources` 收集水、保护与既有路等证据，`modeDp` 默认只观测；`spanWriteback=on` 可选回写，默认关。 | `ProfileDpSource.crossing` / 桥面下界输入仍受旧 spans 影响；缺真机召回数据，保持现状。`PlanningSnapshot.EMPTY` 在 A/B 日志仍可能显示 `snapshot=ok`，不能据此断言已加载有效障碍；口径先维持可比。 |
 | 3 · 施工 | 桥优先用 `BridgeSegmentPlannerNew` 模板，程序化桥和隧道仍在链上。模板落块已有离线生产入口守卫。`BuildFrame` 桥掩码键区分站序和输入，跨度变化不会复用旧桥掩码。 | 桥掩码缓存与施工完工是两回事：同身份改目标 Y、跨度或足迹，旧完工判断还可能跳过重铺。 |
