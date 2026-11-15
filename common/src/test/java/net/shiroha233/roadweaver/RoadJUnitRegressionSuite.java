@@ -150,6 +150,8 @@ public final class RoadJUnitRegressionSuite {
                         // 批 4 补覆盖：842 行主入口 connectPlannedBatch 的早退契约（探边界）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionBatchEntryTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.JunctionOrchestrationTest"),
                         // 批 4 补覆盖：路口合并核心判据（单 junction 选择 / 代价口径 / 候选预筛）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.JunctionSelectionCoreTest"),
@@ -165,6 +167,8 @@ public final class RoadJUnitRegressionSuite {
                         // 批 3 补覆盖：桥模板纵向映射 mapTemplateX（含一个已修历史缺陷的守卫）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.bridge.BridgeTemplateMappingTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeTemplatePlacementTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.VolumeKindContractTest"),
                         DiscoverySelectors.selectClass(

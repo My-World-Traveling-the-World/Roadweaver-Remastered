@@ -302,9 +302,11 @@ public final class ExistingRoadJunctionService {
                     // 兜底是改道**之前**那条已经成功生成过的路，不是改道产物本身。
                     RoadData preReroute = braid.originalAt(result.index());
                     RoadData fallback = preReroute != null ? preReroute : secondary;
-                    LOGGER.warn("RoadWeaver discarded unsafe in-memory junction owners={} -> {} dataReason={} collision={} "
-                                    + "fallback={}",
+                    // 有些结构拒绝只有原因、没有碰撞坐标；记录两者才能分辨是哪一道守卫拒绝。
+                    LOGGER.warn("RoadWeaver discarded unsafe in-memory junction owners={} -> {} dataReason={} "
+                                    + "structureReason={} collision={} fallback={}",
                             fallback.ownerA2dKey(), fallback.ownerB2dKey(), dataValidation.reason(),
+                            structureValidation == null ? null : structureValidation.reason(),
                             structureValidation == null ? null : structureValidation.collision(),
                             preReroute != null ? "pre-reroute" : "rerouted");
                     best = fallback;
