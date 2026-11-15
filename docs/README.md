@@ -9,10 +9,11 @@
 | 你想知道 | 读这份 |
 |---|---|
 | **重构的总方向、现状、下一步** | [`重制总纲.md`](重制总纲.md) ← **唯一权威路线图**（方案 + 现状 + 5 缺陷 + 路线图）|
-| **明天接手要做什么** | [`HANDOVER.md`](HANDOVER.md) ← **只读这一页也能动起来** |
+| **当前进度、最近验证、下一轮做什么** | [`HANDOFF.md`](HANDOFF.md) ← 按轮次更新；[`HANDOVER.md`](HANDOVER.md) 是早期交接快照 |
 | 现在这个仓库能做什么、怎么用、还差什么 | [`STATUS-20261115.md`](STATUS-20261115.md) |
 | 重构的过程、每一次判断与误判 | [`REFACTOR.md`](../REFACTOR.md) |
 | 当前发布件、SHA-256、回退与真机验收清单 | [`RELEASES.md`](RELEASES.md) |
+| **区块编译性能前后对照** | [`Measure-ChunkRaster.ps1`](../scripts/benchmarks/Measure-ChunkRaster.ps1)；实测记录见 [`HANDOFF.md`](HANDOFF.md) |
 | 怎么把新内核切成默认 | [`S7-SWITCH-CHECKLIST.md`](S7-SWITCH-CHECKLIST.md) |
 | 桥隧回写怎么接（待拍板的设计稿） | [`DESIGN-SPAN-WRITEBACK.md`](DESIGN-SPAN-WRITEBACK.md) |
 | 旧仓库报的死码在新仓库还成不成立 | [`DEADCODE-AUDIT-20261115.md`](DEADCODE-AUDIT-20261115.md) |

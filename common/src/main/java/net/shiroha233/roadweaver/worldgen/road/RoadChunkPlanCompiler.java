@@ -228,7 +228,7 @@ public final class RoadChunkPlanCompiler {
         Arrays.fill(carveTargetY, Integer.MIN_VALUE);
         float[] fillLateral = new float[COLUMN_COUNT];
         float[] carveLateral = new float[COLUMN_COUNT];
-        // 跨路排除按列取并集；先标记，避免每个普通路段重复扫描全部跨路段。
+        // 先在跨路段实际触及的列上取禁切填并集，避免让区块每一列都扫描所有跨路段。
         int minX = chunkPos.getMinBlockX();
         int minZ = chunkPos.getMinBlockZ();
         boolean[] excluded = exclusions.isEmpty() ? null : new boolean[COLUMN_COUNT];
