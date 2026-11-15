@@ -156,6 +156,9 @@ public final class RoadJUnitRegressionSuite {
                         // 批 7 补覆盖：最终校验器的 5 个从未被测的失败分支
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidatorFailureModesTest"),
+                        // P0-1 回归：单条道路读失败不许把索引永久改写
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.chunk.RoadChunkStoreReadFaultTest"),
                         // 批 5 量尺：perpendicularDistance / reinstateUntilDense 的契约 + 锯齿保真度实测
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PostprocessMeasuringStickTest"),

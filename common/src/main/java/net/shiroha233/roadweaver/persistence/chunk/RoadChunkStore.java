@@ -316,12 +316,29 @@ public final class RoadChunkStore implements AutoCloseable {
             LOGGER.error("首次载入道路 ChunkPos 存储失败 —— 已进入**只读降级**，"
                     + "本次会话不会写入道路索引（避免用空快照覆盖真实索引）: {}", root, e);
             readOnlyDegraded = true;
-            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false);
+            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
         }
         snapshot.set(loadedSnapshot.snapshot());
         generation = loadedSnapshot.generation();
         loaded = true;
 
+        if (loadedSnapshot.readFailure() && !readOnlyDegraded) {
+            // ★ P0（2026-11-15 外部独立审计）：单条读失败也进只读降级。
+            //
+            // 旧实现的保护是**不对称**的：`readSnapshot()` 整体抛 IOException 时
+            // 会进只读降级（下面 catch 那一支，注释写得很好：「IO 失败不代表数据不存在」），
+            // 但**单条 NBT 读失败**只是在条目循环里 `continue`，被当成「这条没了」。
+            // 于是 `rewriteMetadata` 变真 ⇒ 用剔掉失败条目的部分快照改写 index.json
+            // ⇒ 那条路永久从索引消失（NBT 仍在磁盘上，只能人工恢复）。
+            // 实测：写两条合法道路、临时锁住一份 NBT ⇒ 首次打开索引变一条，解锁后仍一条。
+            //
+            // 这里不改读路径（查询继续用这份部分快照，不崩），只**拒绝一切写入**：
+            // 索引保持原样，等下一次能完整读出时自然恢复。
+            readOnlyDegraded = true;
+            LOGGER.error("道路 ChunkPos 存储的索引里有道路文件本次读取失败 —— 已进入**只读降级**，"
+                    + "本次会话不会改写索引（避免把读不到的道路永久从索引剔除；"
+                    + "其 .nbt 文件仍在 {} 下，可重试或人工恢复）", root);
+        }
         if (loadedSnapshot.rewriteMetadata() && !readOnlyDegraded) {
             long repairGeneration = generation == 0L ? 1L : generation;
             try {
@@ -384,22 +401,27 @@ public final class RoadChunkStore implements AutoCloseable {
 
     private LoadedSnapshot readSnapshot() throws IOException {
         Path indexPath = root.resolve(INDEX_FILE);
-        if (!Files.isRegularFile(indexPath)) return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false);
+        if (!Files.isRegularFile(indexPath)) return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
 
         IndexDocument document;
         try (Reader reader = Files.newBufferedReader(indexPath, StandardCharsets.UTF_8)) {
             document = GSON.fromJson(reader, IndexDocument.class);
         } catch (RuntimeException | IOException e) {
             FileStorageIO.quarantineCorrupt(indexPath, LOGGER, "道路聚合索引损坏，已隔离");
-            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false);
+            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
         }
         if (document == null || document.roads == null) {
             FileStorageIO.quarantineCorrupt(indexPath, LOGGER, "道路聚合索引缺少 roads，已隔离");
-            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false);
+            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
         }
 
         LinkedHashMap<Long, RoadSnapshot.Entry> entries = new LinkedHashMap<>();
         boolean skippedEntry = false;
+        // ★ 与 skippedEntry 分开：只有「这一刻读不到」才置真。
+        //   skippedEntry 里的其余 6 种都是「已知这条不可用」（索引项残缺、越界引用、
+        //   数据结构性无效、指纹退化、指纹不符…）—— 那些拿部分快照修元数据是安全的；
+        //   惟独 IO 读失败不能用部分快照去改写索引。
+        boolean readFailure = false;
         for (IndexEntry indexEntry : document.roads) {
             if (indexEntry == null || indexEntry.file == null) {
                 skippedEntry = true;
@@ -414,9 +436,15 @@ public final class RoadChunkStore implements AutoCloseable {
             RoadData road;
             try {
                 road = readRoadFile(roadPath);
-            } catch (IOException readFailure) {
+            } catch (IOException failure) {
+                // ★ P0（2026-11-15 外部独立审计）：这里**不能只**记 skippedEntry。
+                //   读失败 ≠ 数据不存在。标上 readFailure 让上层进只读降级，
+                //   否则稍后的「修元数据」会用剔掉这一条的部分快照覆盖 index.json，
+                //   那条路就永久从索引消失（而它的 .nbt 还好端端在磁盘上）。
                 skippedEntry = true;
-                LOGGER.warn("读取道路聚合文件失败，已跳过: {}", roadPath, readFailure);
+                readFailure = true;
+                LOGGER.warn("读取道路聚合文件失败（本条**不代表数据丢失**，本次载入将禁止改写索引）: {}",
+                        roadPath, failure);
                 continue;
             }
             if (road == null) {
@@ -454,7 +482,8 @@ public final class RoadChunkStore implements AutoCloseable {
         return new LoadedSnapshot(
                 loadedSnapshot,
                 loadedGeneration,
-                skippedEntry || !currentIndex || !currentRootSchema || !currentShards);
+                skippedEntry || !currentIndex || !currentRootSchema || !currentShards,
+                readFailure);
     }
 
     private boolean hasCurrentRootSchema() {
@@ -817,7 +846,21 @@ public final class RoadChunkStore implements AutoCloseable {
         return RoadDataValidator.isValidFinalRoad(road);
     }
 
-    private record LoadedSnapshot(RoadSnapshot snapshot, long generation, boolean rewriteMetadata) {}
+    /**
+     * 载入结果。
+     *
+     * <p>{@code readFailure} 是 2026-11-15 外部独立审计抓出的 P0 修复点：
+     * 单条道路 NBT 的 <b>IO 读失败</b>与「这条索引确实指向一个不存在的文件」是两件事 ——
+     * 前者只说明「这一刻读不到」，<b>不代表数据没了</b>（磁盘抖动 / 文件被占用 / 权限）。
+     * 旧实现把两者都算成 {@code skippedEntry}，于是拿「剔掉失败条目」的部分快照
+     * 去 {@code persistSnapshot} <b>改写 index.json</b> ⇒ 那份 NBT 永久从索引消失，
+     * 而文件本身还在磁盘上。</p>
+     *
+     * <p>所以这里必须把「读失败」单独带出来，让上层进入只读降级（拒绝写），
+     * 而不是把它混进「元数据需要修」那个标志里。</p>
+     */
+    private record LoadedSnapshot(RoadSnapshot snapshot, long generation,
+                                  boolean rewriteMetadata, boolean readFailure) {}
 
     private static final class SchemaDocument {
         String schema;

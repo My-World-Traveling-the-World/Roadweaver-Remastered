@@ -66,15 +66,49 @@ class ProfileFallbackTest {
     }
 
     @Test
-    void 隧道覆土下界必须生效() {
+    void 隧道站必须被压到地表以下至少覆土深度() {
         int[] terrain = flat(10, 64);
         boolean[] mustCover = new boolean[10];
         mustCover[5] = true;
 
         int[] h = ProfileFallback.terrainFollowing(terrain, 30, 30, 4, 6, null, mustCover, 3, null);
 
-        assertTrue(h[5] - terrain[5] >= 3,
-                "隧道站必须至少被覆土 3 格，实际 " + (h[5] - terrain[5]));
+        // ★ 2026-11-15 更正：本条原先断言 `h[5] - terrain[5] >= 3`，即要求路面**高于**地表 3 格
+        // —— 那是把缺陷固化成契约。覆土（cover）的物理含义是「隧道顶上方要有这么多土」，
+        // 所以隧道站必须**低于**地表至少 cover 格；抬到地表上方的是天桥不是隧道。
+        // 外部独立审计实测：地表 80 / 覆土 4 时 DP 给 76、回落给 84（反了）。
+        assertTrue(h[5] <= terrain[5] - 3,
+                "隧道站必须低于地表至少 3 格（覆土在上方），实际 h-terrain="
+                        + (h[5] - terrain[5]));
+    }
+
+    @Test
+    void 隧道覆土与最大挖方冲突时让步的是挖方() {
+        // 覆土是硬要求：即使 maxCut 很小，也必须挖到能覆土的深度（与 ProfileDpSource 同契约）
+        int[] terrain = flat(10, 64);
+        boolean[] mustCover = new boolean[10];
+        mustCover[5] = true;
+
+        int[] h = ProfileFallback.terrainFollowing(terrain, 2, 30, 4, 6, null, mustCover, 5, null);
+
+        assertTrue(h[5] <= 59,
+                "maxCut=2 但要求覆土 5 格 ⇒ 必须挖到 59 以下（让步的是挖方），实际 " + h[5]);
+    }
+
+    @Test
+    void 隧道站绝不允许被抬到地表以上() {
+        // 回归钉：「回落把覆土当上界」一旦被改回下界，这条必红
+        int[] terrain = flat(8, 80);
+        boolean[] mustCover = new boolean[8];
+        for (int i = 2; i <= 5; i++) mustCover[i] = true;
+
+        int[] h = ProfileFallback.terrainFollowing(terrain, 30, 30, 4, 6, null, mustCover, 4, null);
+
+        for (int i = 2; i <= 5; i++) {
+            assertTrue(h[i] < terrain[i],
+                    "第 " + i + " 站是隧道，绝不许高于或等于地表（实际 " + h[i]
+                            + " vs 地表 " + terrain[i] + "）—— 高于地表就是悬空天桥，不是隧道");
+        }
     }
 
     @Test

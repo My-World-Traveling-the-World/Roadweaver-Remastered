@@ -75,7 +75,19 @@ public final class ProfileFallback {
             int lower = terrainY[i] - cut;
             int upper = terrainY[i] + fill;
             if (mustCover != null && i < mustCover.length && mustCover[i]) {
-                lower = Math.max(lower, terrainY[i] + cover);   // 隧道：必须被覆土
+                // ★ 2026-11-15 修 P0：隧道覆土是**上界**，不是下界。
+                //
+                // 旧实现写的是 `lower = Math.max(lower, terrainY[i] + cover)` —— 符号反了，
+                // 等于把本该埋在地下的隧道抬到**地表上方** `cover` 格：地表 80 / 覆土 4 时
+                // DP 给出 76，回落却给出 84，形成一段悬在空中的「隧道」。
+                // 这个回落结果会被 TargetYComputation 的两个失败入口直接当成合法纵断面用。
+                //
+                // 正确契约与 {@code ProfileDpSource} 完全一致：覆土是硬要求，
+                // 所以 targetY 不许**高于**「地表 − 最小覆土」，且与最大挖方冲突时
+                // 让步的是挖方（宁可挖得更深，也不能让隧道顶离地表太近而挖穿成露天沟）。
+                int coverCap = terrainY[i] - cover;
+                upper = Math.min(upper, coverCap);
+                if (lower > upper) lower = upper;
             }
             if (deckFloor != null && i < deckFloor.length
                     && deckFloor[i] != Integer.MIN_VALUE) {
