@@ -620,6 +620,11 @@ public final class TargetYComputation {
         // 开关：-Droadweaver.modeDp=ab（默认）/ off。
         // 禁地面来源已改为「水面 + 保护区」两条独立物理事实（见 GroundBanSources），
         // isCrossing 只作对照 —— 这样 DP 判出的桥才不是「复述旧判定」。
+        // ── 跨度回写求解（批 2 收尾 / 用户在 2026-11-15 拍板方案 A）──────
+        // 与上面的观测**共用同一次求解**：先把解存进 ThreadLocal 快照，
+        // `Road.generateRoad` 在 spans 定稿后取用并合并。
+        // 回写开关默认关（`-Droadweaver.spanWriteback=on`），关掉时本调用直接返回。
+        ModeDpBridge.solveAndStash(terrainY, groundBans, gradeLimits, cfg, centers);
         ModeDpBridge.observe(terrainY, groundBans, isCrossing,
                 gradeLimits, cfg, centers, spans,
                 connection == null ? "?" : connection.from() + "->" + connection.to());

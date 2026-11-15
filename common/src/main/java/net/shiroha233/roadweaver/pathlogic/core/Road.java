@@ -30,7 +30,8 @@ import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
+import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
+import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
@@ -107,6 +108,9 @@ public final class Road {
     RoadData generateRoad(int maxSteps, boolean persistImmediately, int finalStructureAttempt) {
         if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
         long roadStartedAt = System.nanoTime();
+        // 跨度回写（批 2 方案 A）：开场清掉上一条路可能残留的解。
+        // 关闭时这是空操作；开启时保证「一条路最多消费一次、绝不跨路串味」。
+        ModeDpBridge.clearStash();
         // 逐路计时：本线程一条路一份，阶段代码写、finally 打一行。
         DetailedRoadGenerationStats.beginRouteTiming(connection.from() + "->" + connection.to());
         boolean completed = false;
@@ -236,6 +240,33 @@ public final class Road {
             // Everything from here to the final validation used to be untimed: it is where the conflict
             // repair, the continuity recompute and the volume checks live, and in the measured session the
             // stage timers summed to 135 s of a 142 s wall with no line explaining the remaining stretch.
+            // ── 跨度回写（批 2 收尾，用户 2026-11-15 拍板方案 A）──────────────
+            // 把 computeTargetY 内部那次联合 DP 判出的桥隧**合并**进 spans。
+            //
+            // 三个必须说清的点：
+            //   ① **merge 不是 replace**：`mergeByModes` 只替换桥隧段，`PROTECTED_GAP`
+            //      （穿建筑的路）与 `NETWORK_REUSE`（防双铺）以及 `ROAD_CROSSING`
+            //      （跨另一条路，走路口逻辑不是水上桥）全部原样保留。
+            //   ② **DP 无解时保持原样**：`consumeStash()` 返回 null ⇒ 什么都不做，
+            //      旧判定继续生效 —— 绝不能因为「DP 没算出来」就把桥删掉。
+            //   ③ **默认关闭**：`-Droadweaver.spanWriteback=on` 才进来；
+            //      关闭时本块零执行、零行为变化，可直接当回退开关用。
+            if (ModeDpBridge.writebackEnabled()) {
+                ModeDpBridge.Stash spanStash = ModeDpBridge.consumeStash();
+                if (spanStash != null) {
+                    List<RoadSpan> mergedSpans = ModeDpBridge.mergeByModes(
+                            spans, spanStash.solution().modes(), spanStash.centers(), spanStash.stations());
+                    ModeDpBridge.noteWritebackApplied();
+                    LOGGER.info("RoadWeaver [SPAN-WB] spans written back connection={}->{}"
+                                    + " before={} after={} {}",
+                            ownerA2d, ownerB2d, spans.size(), mergedSpans.size(),
+                            ModeDpBridge.writebackStats());
+                    spans = mergedSpans;
+                } else {
+                    LOGGER.info("RoadWeaver [SPAN-WB] no stashed solution, keeping legacy spans"
+                                    + " connection={}->{} {}", ownerA2d, ownerB2d, ModeDpBridge.writebackStats());
+                }
+            }
             long planningRepairStartedAt = System.nanoTime();
             RoadData rd = new RoadData(width, type, materials, slabMaterials, segments, spans, targetY, ownerA2d, ownerB2d);
             RoadData constructionRepaired = RoadPathCalculator.repairFinalHeightConflict(

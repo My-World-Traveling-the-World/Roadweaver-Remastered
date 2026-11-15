@@ -115,6 +115,147 @@ public final class ModeDpBridge {
     /** 测试用：清缓存，让下一次 {@link #mode()} 重新读 system property。 */
     public static void resetForTest() {
         CURRENT = null;
+        WRITEBACK_ON = null;
+        STASH.remove();
+        STASH_SOLVED.set(0);
+        STASH_CONSUMED.set(0);
+        STASH_MISSED.set(0);
+        WRITEBACK_APPLIED.set(0);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 跨度回写（方案 A：ThreadLocal 快照）
+    //
+    // 【为什么需要这一整块】
+    // `observe` 只能把 DP 判出的桥隧数打进日志，**不改任何决策** —— 旧判定仍然
+    // 主导 spans。批 2 要收尾就必须让 DP 的结果真的写回 spans，否则「ModeDpSolver
+    // 接管桥隧」永远只是观测。
+    //
+    // 【为什么用 ThreadLocal 而不是改方法签名】
+    // `computeTargetY` 有 6 个调用点、`SingleSourceOfTruthTest` 按触发文件数数它，
+    // 改签名牵动面大、回退成本高。ThreadLocal 快照的改动面只在三个文件：
+    // 本类（求解+存取）、`TargetYComputation`（求解入口）、`Road`（消费+合并）。
+    //
+    // 【三道保护（这是本方案能上生产的前提）】
+    //   ① 默认关闭：`-Droadweaver.spanWriteback=on` 才生效；关掉时本块所有方法
+    //      都是空操作，零开销、零行为变化。
+    //   ② 可观测：`stashSolved` / `stashConsumed` / `stashMissed` / `writebackApplied`
+    //      四个计数器 + `[SPAN-WB]` 日志，让「没拿到数据」不再静默 ——
+    //      这正是本仓库吃过的亏（`shouldAvoidPlanning` 静默失明，第 6 轮才补观测）。
+    //   ③ 生命周期双保险：`Road.generateRoad` 开场 {@link #clearStash()} 防残留，
+    //      取用时 {@link #consumeStash()} 即清 —— 一条路最多消费一次，
+    //      绝不会把上一条路的解用到下一条路上。
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** 回写开关。{@code on} 才生效，默认关闭。 */
+    private static final String PROPERTY_WRITEBACK = "roadweaver.spanWriteback";
+    private static volatile Boolean WRITEBACK_ON = null;
+
+    /**
+     * 回写是否开启（默认 <b>关</b>）。
+     *
+     * <p>刻意与 {@link #mode()} 独立：观测开关控制「打不打日志」，
+     * 回写开关控制「改不改生产 spans」。两者可以任意组合 ——
+     * 比如「观测关、回写开」是纯静默接管，「观测开、回写关」是纯观测。</p>
+     */
+    public static boolean writebackEnabled() {
+        Boolean cached = WRITEBACK_ON;
+        if (cached != null) return cached;
+        boolean on = "on".equalsIgnoreCase(System.getProperty(PROPERTY_WRITEBACK, ""))
+                || "true".equalsIgnoreCase(System.getProperty(PROPERTY_WRITEBACK, ""));
+        WRITEBACK_ON = on;
+        return on;
+    }
+
+    /** 一条路上「求解出来的桥隧模式」的快照。 */
+    public record Stash(ModeDpSolver.Solution solution,
+                        List<BlockPos> centers,
+                        int stations) {
+    }
+
+    private static final ThreadLocal<Stash> STASH = new ThreadLocal<>();
+    private static final java.util.concurrent.atomic.AtomicInteger STASH_SOLVED =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.atomic.AtomicInteger STASH_CONSUMED =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.atomic.AtomicInteger STASH_MISSED =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private static final java.util.concurrent.atomic.AtomicInteger WRITEBACK_APPLIED =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * 求解并把结果存进 ThreadLocal（<b>与观测开关无关</b>）。
+     *
+     * <p>回写关闭时直接返回，不做任何计算 —— 这是「默认关闭零开销」的实现点。</p>
+     *
+     * <p>与 {@link #observe} 的关系：两者共用同一次求解。{@code observe} 会先看
+     * 快照里有没有解，有就复用、没有才自己算 —— 所以「观测开 + 回写开」时
+     * <b>只求解一次</b>，不会翻倍开销。</p>
+     */
+    public static void solveAndStash(int[] terrainY,
+                                     GroundBanSources.Result bans,
+                                     SurfaceGradeLimits gradeLimits,
+                                     RoadGenerationConfig cfg,
+                                     List<BlockPos> centers) {
+        if (!writebackEnabled()) return;
+        if (terrainY == null || terrainY.length == 0 || centers == null) return;
+        try {
+            int n = terrainY.length;
+            boolean[] groundBanned = bans == null ? new boolean[n] : bans.banned();
+            var solved = ModeDpSolver.solve(terrainY, slopeStepPerStation(cfg), settingsFor(gradeLimits), groundBanned);
+            if (solved.isEmpty()) {
+                // 无解 ⇒ 不留快照 ⇒ 消费端会走「保持旧判定」分支（并计入 missed）。
+                return;
+            }
+            STASH.set(new Stash(solved.get(), centers, n));
+            STASH_SOLVED.incrementAndGet();
+        } catch (Throwable t) {
+            // 求解失败绝不能影响生产：咽掉并记一条，快照保持为空。
+            LOGGER.warn("[SPAN-WB] solve failed (不影响生产，按旧判定走): {}", t.toString());
+        }
+    }
+
+    /** 开场清理：防止上一条路的快照残留到这一条。 */
+    public static void clearStash() {
+        if (!writebackEnabled()) return;
+        STASH.remove();
+    }
+
+    /**
+     * 取用并清除快照。一条路最多成功消费一次。
+     *
+     * @return 快照；没有则 {@code null}（同时把 {@code stashMissed} 计一次）
+     */
+    public static Stash consumeStash() {
+        if (!writebackEnabled()) return null;
+        Stash s = STASH.get();
+        STASH.remove();
+        if (s == null) {
+            STASH_MISSED.incrementAndGet();
+            return null;
+        }
+        STASH_CONSUMED.incrementAndGet();
+        return s;
+    }
+
+    /** 记一次「回写真的应用了」。由消费端调用。 */
+    public static void noteWritebackApplied() {
+        WRITEBACK_APPLIED.incrementAndGet();
+    }
+
+    /** 把坡度口径折算成「每站最大高差」，与 {@link #observe} 内部同口径。 */
+    static int slopeStepPerStation(RoadGenerationConfig cfg) {
+        int perTwo = Math.max(1, cfg == null ? 2 : cfg.maxSlopeStepPerTwoSegments());
+        return Math.max(1, (perTwo + 1) / 2);
+    }
+
+    /** 回写健康度快照，供日志与测试读取。 */
+    public static String writebackStats() {
+        return "enabled=" + writebackEnabled()
+                + " solved=" + STASH_SOLVED.get()
+                + " consumed=" + STASH_CONSUMED.get()
+                + " missed=" + STASH_MISSED.get()
+                + " applied=" + WRITEBACK_APPLIED.get();
     }
 
     /**
@@ -156,9 +297,16 @@ public final class ModeDpBridge {
 
             int perTwo = Math.max(1, cfg == null ? 2 : cfg.maxSlopeStepPerTwoSegments());
             // 一阶上限与 DP 剖面求解同口径：把「每两站 N 格」折算成每站（向上取整）。
-            int maxStep = Math.max(1, (perTwo + 1) / 2);
+            int maxStep = slopeStepPerStation(cfg);
 
-            var solved = ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
+            // ★ 回写若已经解过（`solveAndStash`），这里直接复用 ——
+            //   「观测开 + 回写开」是最可能同时存在的组合，不能让它求解两遍。
+            //   注意只在 n 与 centers 一致时才复用，避免错配。
+            Stash shared = STASH.get();
+            var solved = (shared != null && shared.solution() != null
+                    && shared.stations() == n && shared.centers() == centers)
+                    ? java.util.Optional.of(shared.solution())
+                    : ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
                 LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
                                 + "(water={} structure={} road={} snapshot={}) legacyCrossing={} legacy={}",
