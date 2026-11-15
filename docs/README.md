@@ -28,6 +28,7 @@
 | **批 3 到底做到哪了** | [`BATCH3-LIVENESS-AUDIT-20261115.md`](BATCH3-LIVENESS-AUDIT-20261115.md) ← **14 职责全在活链路上，但「换实现」只做了一半：桥隧建造仍跑旧包 4,887 行** |
 | **UI 到底有多独立** | [`UI-COUPLING-AUDIT-20261115.md`](UI-COUPLING-AUDIT-20261115.md) ← **13 个 client 类 import 业务包，其中 5 处真越界（直连持久化 / worldgen 编译器）** |
 | **代码里还有多少「说了没做」的常量** | [`DEAD-CONSTANT-TRIAGE-20261115.md`](DEAD-CONSTANT-TRIAGE-20261115.md) ← **79 个零引用常量分诊：6 个注释声称有行为但从未实现，已加警示** |
+| **批 4/5/6/7 有独立新实现包吗** | [`BATCH4567-PACKAGE-AUDIT-20261115.md`](BATCH4567-PACKAGE-AUDIT-20261115.md) ← **没有，四个 newPkg 至今不存在；真实做法是就地重构** |
 
 ---
 

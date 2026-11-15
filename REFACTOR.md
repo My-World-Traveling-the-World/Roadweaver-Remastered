@@ -195,6 +195,20 @@ LEDGER|4|路口与合并|pathlogic/junction|roadnet|TODO|1877
 LEDGER|5|几何后处理|postprocess|geometry|TODO|5615
 LEDGER|6|结构避让|pathlogic/structures|avoidance|TODO|6291
 LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
+<!-- ★★ 2026-11-15 核对：**批 4/5/6/7 的 newPkg 四个包至今不存在**
+     （roadnet / geometry / avoidance / validate 全无）。
+     2026-11-13 那次大修只改正了批 1/2/3（改成真实存在的 pathlogic/profile
+     与 pathlogic/construction），这四行留到了今天。
+     之所以没被守卫抓到：LegacyLedgerTest 只对 IN_PROGRESS 与 DONE 断言
+     「newPkg 必须存在」，而这四批都是 TODO ⇒ 从未被检查。
+     **真实做法是就地重构**（ARCHITECTURE.md 顶部已定案：保留旧仓顶层包结构、
+     就地重构），所以「搬到新包」这件事本就没打算做 —— 四个旧包里类数增长
+     就是重构的体现（junction 4 类 / postprocess 13 类 / structures 23 类 /
+     validation 4 类）。
+     **不能把 newPkg 改成旧包路径**：那会让「包有文件 ⇒ 不许还是 TODO」误报
+     （旧包本来就有文件）。⇒ 已在 LegacyLedgerTest 加 PLANNED_BUT_NOT_BUILT
+     登记表 + 双向断言，把「虚构」变成显式且受约束。
+     详见 docs/BATCH4567-PACKAGE-AUDIT-20261115.md。 -->
 <!-- ★ 2026-11-14：批 1 转 DONE。完成依据（三条都能核）：
      ① 新实现 pathlogic/profile 有独立测试且全绿（ProfileDpSource / ProfileDpSolver /
         ModeDpSolver / ProfileFallback 共 40+ 个钉子，含 300 组暴力枚举对拍）；

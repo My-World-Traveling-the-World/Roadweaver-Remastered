@@ -169,6 +169,60 @@ final class LegacyLedgerTest {
         }
     }
 
+    /**
+     * 计划中但**从未落地**的新实现包（2026-11-15 核对，逐个实测确认不存在）。
+     *
+     * <h2>为什么要有这张表</h2>
+     * <p>2026-11-13 修过一次台账：原先 7 批的 {@code newPkg} 全指向不存在的顶层包，
+     * 导致「DONE ⇒ 包必须存在」「包有文件 ⇒ 不许还是 TODO」两条断言**全部空转**。
+     * 那次只改正了批 1/2/3（改成真实存在的 {@code pathlogic/profile} 与
+     * {@code pathlogic/construction}），**批 4/5/6/7 的 {@code roadnet} / {@code geometry} /
+     * {@code avoidance} / {@code validate} 一直留着，而这四个包至今不存在**。</p>
+     *
+     * <p>之所以没被发现：现有两条断言只查 {@code IN_PROGRESS} 与 {@code DONE}，
+     * 而批 4/5/6/7 都是 {@code TODO} ⇒ 它们的 {@code newPkg} 从未被检查。</p>
+     *
+     * <h2>为什么不直接把 newPkg 改成真实路径</h2>
+     * <p>因为<b>真实做法根本不是「搬到新包」</b>：{@code ARCHITECTURE.md} 顶部已定案
+     * 「保留旧仓的顶层包结构，<b>就地重构</b>」，批 4/5/6/7 的实现就长在旧包里
+     * （{@code pathlogic/junction} 4 类 / {@code postprocess} 13 类 /
+     * {@code pathlogic/structures} 23 类 / {@code pathlogic/validation} 4 类）。</p>
+     * <p>把 {@code newPkg} 写成旧包也不行：那会让「包有文件 ⇒ 不许还是 TODO」
+     * 立刻误报 —— 那些文件本来就在，不是「新实现已经长出来了」。</p>
+     * <p>⇒ 正确做法是<b>把「虚构」这件事显式登记</b>，并让守卫双向钉住：
+     * ①台账里指向不存在包的行必须登记在这张表里；
+     * ②登记过的包必须确实不存在（有人真建了包却忘更新台账时立刻红）。</p>
+     */
+    private static final java.util.Map<String, String> PLANNED_BUT_NOT_BUILT = java.util.Map.of(
+            "roadnet", "批 4：真实做法是 pathlogic/junction 就地重构",
+            "geometry", "批 5：真实做法是 postprocess 就地重构",
+            "avoidance", "批 6：真实做法是 pathlogic/structures 就地重构",
+            "validate", "批 7：真实做法是 pathlogic/validation 就地重构");
+
+    @Test
+    void 计划中的新包必须显式登记且确实不存在() throws IOException {
+        // ① 台账里所有指向不存在包的行，必须在这张表里登记（否则就是「没人知道它是虚构的」）
+        for (Row r : rows()) {
+            Path pkgDir = mainJava().resolve(r.newPkg.replace('/', java.io.File.separatorChar));
+            if (Files.isDirectory(pkgDir)) { continue; }
+            assertTrue(PLANNED_BUT_NOT_BUILT.containsKey(r.newPkg),
+                    "批 " + r.batch + "（" + r.domain + "）的 newPkg 指向一个**不存在的包**："
+                            + r.newPkg + "\n"
+                            + "要么它是计划中的包（请登记进 PLANNED_BUT_NOT_BUILT 并写明原因），"
+                            + "要么台账写错了。\n"
+                            + "★ 这正是 2026-11-13 那次台账空转的成因："
+                            + "不存在的新包让两条断言全部空转，做了一半的活在台账上看不出来");
+        }
+        // ② 登记过的包必须确实不存在（反向：有人建了包却忘了改台账 ⇒ 立刻红）
+        for (java.util.Map.Entry<String, String> e : PLANNED_BUT_NOT_BUILT.entrySet()) {
+            Path pkgDir = mainJava().resolve(e.getKey());
+            assertFalse(Files.isDirectory(pkgDir),
+                    "PLANNED_BUT_NOT_BUILT 里登记的包 " + e.getKey()
+                            + " 现在**已经存在**了（" + e.getValue() + "）。\n"
+                            + "请把它从这张表删掉，并把台账对该批的 newPkg 改成真实路径");
+        }
+    }
+
     @Test
     void nonEmptyStatusNeverContradictsReality() throws IOException {
         // IN_PROGRESS 允许新包还不存在（正在建），但 DONE 必须存在 —— 已在上面两条覆盖。
