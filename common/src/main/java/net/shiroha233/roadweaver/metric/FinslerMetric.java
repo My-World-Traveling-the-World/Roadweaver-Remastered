@@ -53,6 +53,20 @@ public final class FinslerMetric {
     private final ObstacleField obstacles;
     private final double gradeWeight;
     private final double obstacleWeight;
+    private final CostScale costScale;
+    private final EdgeBlock edgeBlock;
+
+    /** 位置代价倍率：给桥位共用这类软偏好留端口，度量层无需认识配置或世界。 */
+    @FunctionalInterface
+    public interface CostScale {
+        double at(int x, int z);
+    }
+
+    /** 绝对禁止通过的边：粗网格的两端可能合法，边本身仍可能穿过窄禁区。 */
+    @FunctionalInterface
+    public interface EdgeBlock {
+        boolean blocks(int x0, int z0, int x1, int z1);
+    }
 
     /**
      * @param terrain        地形场
@@ -62,11 +76,18 @@ public final class FinslerMetric {
      */
     public FinslerMetric(TerrainField terrain, ObstacleField obstacles,
                          double gradeWeight, double obstacleWeight) {
+        this(terrain, obstacles, gradeWeight, obstacleWeight, null, null);
+    }
+
+    public FinslerMetric(TerrainField terrain, ObstacleField obstacles,
+                         double gradeWeight, double obstacleWeight, CostScale costScale, EdgeBlock edgeBlock) {
         if (terrain == null) throw new IllegalArgumentException("terrain 不能为 null");
         this.terrain = terrain;
         this.obstacles = obstacles == null ? ObstacleField.NONE : obstacles;
         this.gradeWeight = Math.max(0.0, gradeWeight);
         this.obstacleWeight = Math.max(0.0, obstacleWeight);
+        this.costScale = costScale;
+        this.edgeBlock = edgeBlock;
     }
 
     /** 用出厂权重构造。 */
@@ -81,7 +102,7 @@ public final class FinslerMetric {
     /**
      * 各向异性代价：沿方向 {@code (dirX, dirZ)} 走单位长度的相对代价。
      *
-     * @return 代价（&ge; 1）；方向为零向量时返回 1
+     * @return 正代价（启用优惠时允许小于 1）；方向为零向量时返回 1
      */
     public double cost(int x, int z, double dirX, double dirZ) {
         double len = Math.hypot(dirX, dirZ);
@@ -90,9 +111,24 @@ public final class FinslerMetric {
         double uz = dirZ / len;
         double[] g = terrain.gradient(x, z);
         double along = g[0] * ux + g[1] * uz;      // 沿方向的坡度
-        return 1.0
-                + gradeWeight * along * along
-                + obstacleWeight * Math.max(0.0, obstacles.potential(x, z));
+        return (1.0 + gradeWeight * along * along + obstacleCost(x, z)) * scaleAt(x, z);
+    }
+
+    /** FMM 同时需要两轴，不重复读取坡度、障碍势与优惠走廊。 */
+    void writeAxialCosts(int x, int z, int step, int index, double[] costX, double[] costZ) {
+        double[] g = terrain.gradient(x, z);
+        double obstacle = obstacleCost(x, z), scale = scaleAt(x, z);
+        // 保留旧计算顺序：先算单位代价，再乘格距；避免改变平局和回溯选线。
+        costX[index] = Math.max(1e-9, step * ((1.0 + gradeWeight * g[0] * g[0] + obstacle) * scale));
+        costZ[index] = Math.max(1e-9, step * ((1.0 + gradeWeight * g[1] * g[1] + obstacle) * scale));
+    }
+
+    private double obstacleCost(int x, int z) {
+        return obstacleWeight * Math.max(0.0, obstacles.potential(x, z));
+    }
+
+    private double scaleAt(int x, int z) {
+        return costScale == null ? 1.0 : costScale.at(x, z);
     }
 
     /**
@@ -110,9 +146,7 @@ public final class FinslerMetric {
     public double isotropicCost(int x, int z) {
         double[] g = terrain.gradient(x, z);
         double slope2 = g[0] * g[0] + g[1] * g[1];
-        return 1.0
-                + gradeWeight * slope2
-                + obstacleWeight * Math.max(0.0, obstacles.potential(x, z));
+        return (1.0 + gradeWeight * slope2 + obstacleCost(x, z)) * scaleAt(x, z);
     }
 
     /**
@@ -123,6 +157,15 @@ public final class FinslerMetric {
      */
     public boolean isPassable(int x, int z) {
         return !obstacles.impassable(x, z);
+    }
+
+    /** 没配置禁行走廊时不需要预计算边掩码。 */
+    public boolean hasEdgeBlock() {
+        return edgeBlock != null;
+    }
+
+    public boolean blocksEdge(int x0, int z0, int x1, int z1) {
+        return edgeBlock != null && edgeBlock.blocks(x0, z0, x1, z1);
     }
 
     /** 坡罚权重。 */

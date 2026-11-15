@@ -62,16 +62,27 @@ public final class BandRouteSolver implements RouteSolver {
         // FinslerMetric / ObstaclePotential 的注释）。这里把不可通行判据喂进去。
         BandResult smoothed = bandSolver.smooth(raw, (x, z) -> !metric.isPassable(x, z));
 
-        int n = smoothed.points().size();
+        // 平滑投影是点判据，可能把两个自由点连过窄禁区。仅舍弃这次平滑，保留同一 FMM 的合法线。
+        List<BandResult.Point> points = smoothed.points();
+        if (metric.hasEdgeBlock() && crossesBlockedEdge(points)) points = raw;
+        int n = points.size();
         int[] xs = new int[n];
         int[] zs = new int[n];
         for (int i = 0; i < n; i++) {
-            xs[i] = smoothed.points().get(i).x();
-            zs[i] = smoothed.points().get(i).z();
+            xs[i] = points.get(i).x();
+            zs[i] = points.get(i).z();
         }
         RouteMetrics metrics = RouteMetrics.from(xs, zs);
-        return new RouteSolution(smoothed.points().stream()
+        return new RouteSolution(points.stream()
                 .map(p -> new int[]{p.x(), p.z()})
                 .toList(), metrics, true);
+    }
+
+    private boolean crossesBlockedEdge(List<BandResult.Point> points) {
+        for (int i = 1; i < points.size(); i++) {
+            BandResult.Point a = points.get(i - 1), b = points.get(i);
+            if (metric.blocksEdge(a.x(), a.z(), b.x(), b.z())) return true;
+        }
+        return false;
     }
 }

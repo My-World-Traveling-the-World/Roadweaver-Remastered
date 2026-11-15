@@ -1,4 +1,4 @@
-/* 文件职责：给一次寻路提供“禁行走廊”——A* 邻接扩展时的硬禁区集合。 */
+/* 文件职责：给一次寻路提供量化硬禁区，禁止路点和跨格连线穿越。 */
 package net.shiroha233.roadweaver.pathfinding.impl;
 
 import net.minecraft.core.BlockPos;
@@ -188,8 +188,56 @@ public final class CorridorBan {
 
     /** True when the quantized cell containing {@code (x, z)} is banned. */
     public boolean blocks(int x, int z) {
-        if (cells.length == 0) return false;
-        return Arrays.binarySearch(cells, pack(x >> PathfindingConstants.CORRIDOR_QUANT_SHIFT, z >> PathfindingConstants.CORRIDOR_QUANT_SHIFT)) >= 0;
+        return blocksCell(x >> PathfindingConstants.CORRIDOR_QUANT_SHIFT,
+                z >> PathfindingConstants.CORRIDOR_QUANT_SHIFT);
+    }
+
+    /** 穿过的量化格都必须检查；两端合法也会夹着一段只有 4 格宽的禁区。 */
+    public boolean intersectsSegment(int x0, int z0, int x1, int z1) {
+        if (isEmpty()) return false;
+        int shift = PathfindingConstants.CORRIDOR_QUANT_SHIFT;
+        int width = PathfindingConstants.CORRIDOR_QUANT;
+        int x = x0 >> shift, z = z0 >> shift;
+        int endX = x1 >> shift, endZ = z1 >> shift;
+        int sx = Integer.compare(x1, x0), sz = Integer.compare(z1, z0);
+        long dx = Math.abs((long) x1 - x0), dz = Math.abs((long) z1 - z0);
+        // 从方块中心出发，使用双倍距离表示半格；乘相反轴的步长比较过界时刻。
+        long nextX = sx > 0 ? 2L * (((long) x + 1) * width - x0) - 1
+                : 2L * (x0 - (long) x * width) + 1;
+        long nextZ = sz > 0 ? 2L * (((long) z + 1) * width - z0) - 1
+                : 2L * (z0 - (long) z * width) + 1;
+        while (true) {
+            if (blocksCell(x, z)) return true;
+            if (x == endX && z == endZ) return false;
+            int order = x == endX ? 1 : z == endZ ? -1 : Long.compare(nextX * dz, nextZ * dx);
+            // 共角时也检查两侧，避免对角从两个硬禁格的角之间切过去。
+            if (order == 0 && (blocksCell(x + sx, z) || blocksCell(x, z + sz))) return true;
+            if (order <= 0) {
+                x += sx;
+                nextX += 2L * width;
+            }
+            if (order >= 0) {
+                z += sz;
+                nextZ += 2L * width;
+            }
+        }
+    }
+
+    /** 候选重搜和几何平滑必须符合与粗搜相同的硬禁令。 */
+    public boolean intersectsPath(List<BlockPos> path) {
+        if (isEmpty() || path == null || path.isEmpty()) return false;
+        BlockPos prev = path.getFirst();
+        if (blocks(prev.getX(), prev.getZ())) return true;
+        for (int i = 1; i < path.size(); i++) {
+            BlockPos next = path.get(i);
+            if (intersectsSegment(prev.getX(), prev.getZ(), next.getX(), next.getZ())) return true;
+            prev = next;
+        }
+        return false;
+    }
+
+    private boolean blocksCell(int x, int z) {
+        return cells.length != 0 && Arrays.binarySearch(cells, pack(x, z)) >= 0;
     }
 
     /** 禁用的量化格数，仅用于日志与测试断言。 */

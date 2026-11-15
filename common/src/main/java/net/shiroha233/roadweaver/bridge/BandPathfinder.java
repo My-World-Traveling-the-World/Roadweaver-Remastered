@@ -142,6 +142,11 @@ public final class BandPathfinder implements Pathfinder {
 
         int step = Math.max(1, config.effectiveAStarStep());
         int padding = BOUNDS_PADDING;
+        // 改道的 ThreadLocal 与快照显式字段都要兼容；空令不启动边检查或优惠查询。
+        var ban = config.corridorBan();
+        var attract = config.corridorAttract();
+        boolean hasBan = ban != null && !ban.isEmpty();
+        boolean hasAttract = attract != null && !attract.isEmpty();
 
         int minX = Math.min(start.getX(), end.getX()) - padding;
         int maxX = Math.max(start.getX(), end.getX()) + padding;
@@ -195,7 +200,8 @@ public final class BandPathfinder implements Pathfinder {
                 int y = heights[index];
                 BlockPos pos = new BlockPos(x, y, z);
                 boolean hard = blocksPlanningObstacle(pos, clearance);
-                blocked[index] = hard;
+                // 改道禁行与建筑硬转软无关；只将建筑放进软势，避免把禁行带再膨胀一层。
+                blocked[index] = hard || (hasBan && ban.blocks(x, z));
                 penalized[index] = hard || shouldAvoidPlanning(pos, clearance);
             }
         }
@@ -265,7 +271,8 @@ public final class BandPathfinder implements Pathfinder {
         FinslerMetric metric = new FinslerMetric(
                 terrainField, obstacles,
                 FinslerMetric.DEFAULT_GRADE_WEIGHT,
-                FinslerMetric.DEFAULT_OBSTACLE_WEIGHT);
+                FinslerMetric.DEFAULT_OBSTACLE_WEIGHT,
+                hasAttract ? attract::factorAt : null, hasBan ? ban::intersectsSegment : null);
 
         // 委托给 BandRouteSolver —— 它是「单条路线」的唯一实现。
         //
@@ -298,6 +305,8 @@ public final class BandPathfinder implements Pathfinder {
         path.set(0, new BlockPos(start.getX(), startY, start.getZ()));
         path.set(path.size() - 1, new BlockPos(end.getX(), endY, end.getZ()));
 
+        // 恢复真实端点会短接吸附后的格点，必须最后再验证，不能从禁区截角。
+        if (hasBan && ban.intersectsPath(path)) return PathResult.failure();
         return PathResult.raw(path);
     }
 

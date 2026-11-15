@@ -153,7 +153,9 @@ public final class ArrivalTimeField {
         for (int dir = 0; dir < 8; dir++) {
             int nx = x + DX[dir] * step;
             int nz = z + DZ[dir] * step;
-            times[dir] = contains(nx, nz) ? at(nx, nz) : Double.POSITIVE_INFINITY;
+            // 八邻域回溯也必须挡边，特别是 FMM 只推进四邻域、回溯却可对角时。
+            times[dir] = contains(nx, nz) && !metric.blocksEdge(x, z, nx, nz)
+                    ? at(nx, nz) : Double.POSITIVE_INFINITY;
         }
         return times;
     }

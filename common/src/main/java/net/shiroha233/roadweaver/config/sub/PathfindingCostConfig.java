@@ -326,14 +326,9 @@ public final class PathfindingCostConfig implements SubConfig {
         // 吸引力在到达寻路器之前被悄悄丢掉，因为 Request 的紧凑构造器会再 snapshot 一次）。
         copy.corridorAttractRadius = this.corridorAttractRadius;
         copy.corridorAttractFactor = this.corridorAttractFactor;
-        copy.corridorAttract = this.corridorAttract != null
-                ? this.corridorAttract
-                : net.shiroha233.roadweaver.pathfinding.impl.CorridorAttract.current();
-        // 禁令的取值点就在这里：本次请求显式设过就用显式的，否则取当前线程挂的
-        // 那条（D2 改道重算的整体作用域）。两次寻路之间互不影响，也不必改任何签名。
-        copy.corridorBan = this.corridorBan != null
-                ? this.corridorBan
-                : net.shiroha233.roadweaver.pathfinding.impl.CorridorBan.current();
+        copy.corridorAttract = corridorAttract();
+        // 派发到其它线程前捕获作用域；工作线程只读已随快照传递的禁行走廊。
+        copy.corridorBan = corridorBan();
         return copy;
     }
 
@@ -460,7 +455,10 @@ public final class PathfindingCostConfig implements SubConfig {
      *
      * <p>瞬态字段：不进 JSON、不参与 sanitize、只在一次改道重算的生命周期里存在。</p>
      */
-    public net.shiroha233.roadweaver.pathfinding.impl.CorridorBan corridorBan() { return corridorBan; }
+    public net.shiroha233.roadweaver.pathfinding.impl.CorridorBan corridorBan() {
+        // 显式禁令优先；未取快照的直接重搜也要遵守当前线程的禁令。
+        return corridorBan != null ? corridorBan : net.shiroha233.roadweaver.pathfinding.impl.CorridorBan.current();
+    }
 
     public void setCorridorBan(net.shiroha233.roadweaver.pathfinding.impl.CorridorBan v) {
         this.corridorBan = v;
@@ -481,7 +479,9 @@ public final class PathfindingCostConfig implements SubConfig {
      * <p>瞬态字段：不进 JSON、不参与 sanitize、只在一次批内规划的生命周期里存在。</p>
      */
     public net.shiroha233.roadweaver.pathfinding.impl.CorridorAttract corridorAttract() {
-        return corridorAttract;
+        // 与禁行走廊同用显式优先，避免适配器切换后丢失批内折扣。
+        return corridorAttract != null
+                ? corridorAttract : net.shiroha233.roadweaver.pathfinding.impl.CorridorAttract.current();
     }
 
     public void setCorridorAttract(net.shiroha233.roadweaver.pathfinding.impl.CorridorAttract v) {

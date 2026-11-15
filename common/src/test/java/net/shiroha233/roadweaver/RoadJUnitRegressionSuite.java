@@ -193,6 +193,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.bridge.StridedTerrainFieldTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.BandPathfinderEdgeSamplingTest"),
+                        // 直接跑生产 BAND，防止适配器再次忘记读取走廊约束。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.bridge.BandPathfinderCorridorTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.AbObservingPathfinderTest"),
                         DiscoverySelectors.selectClass(

@@ -283,6 +283,13 @@ public final class ParallelOverlapResolver {
                     validation == null ? null : validation.reason());
             return null;
         }
+        // 后处理也能挪横向路心；只发布仍然避开禁区的最终改道。
+        if (ban.intersectsPath(candidate.roadSegmentList().stream()
+                .map(RoadSegmentPlacement::middlePos).toList())) {
+            LOGGER.info("RoadWeaver braid reroute rejected: final corridor intersects ban {}->{}",
+                    connection.from(), connection.to());
+            return null;
+        }
         RoadBraidDetector.Report afterReroute = RoadBraidDetector.compare(primary, candidate, minDot, maxDistance);
         if (afterReroute.braided()) {
             // 0.9.028：这一支原本静默 —— 是「改道了但还是并排」这一档。

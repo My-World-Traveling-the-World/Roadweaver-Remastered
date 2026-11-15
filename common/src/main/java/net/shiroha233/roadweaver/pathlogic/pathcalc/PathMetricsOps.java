@@ -477,9 +477,8 @@ public final class PathMetricsOps {
         PathfindingCostConfig pathCfg = cfg.pathfinding().snapshot();
         pathCfg.setAStarMaxSteps(maxSteps);
         pathCfg.sanitize();
-        // 禁令必须在 sanitize 之后挂上：sanitize 只动数值旋钮，但把挂载点统一
-        // 放在这里，将来若有人给 sanitize 加「重置瞬态」也不会静默丢掉禁令。
-        pathCfg.setCorridorBan(corridorBan);
+        // 仅用显式禁令覆盖快照；普通重载传 null，不能清掉作用域已捕获的改道禁令。
+        if (corridorBan != null) pathCfg.setCorridorBan(corridorBan);
         int dGrid = pathCfg.effectiveAStarStep();
         DirectRouteConnections routeConnections = directRouteConnections(startIn, endIn, dGrid);
         StructureConnection planningConnection = routeConnections.planningConnection();

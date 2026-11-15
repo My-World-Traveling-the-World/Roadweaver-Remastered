@@ -142,11 +142,12 @@ public final class Road {
         TerrainSamplingCache cache = new TerrainSamplingCache();
         PathTerrainField terrain = null;
         long plannedLookupStartedAt = System.nanoTime();
-        Optional<List<BlockPos>> planned = PlannedPathCache.find(
-                level,
-                connection,
-                TerrainSamplingSessions.forLevel(level).effectiveMode(),
-                genConfig.pathfinding());
+        // 改道必须重搜：原路线的缓存键没有运行期禁令，重用它会直接跳过新约束。
+        var corridorBan = genConfig.pathfinding().corridorBan();
+        Optional<List<BlockPos>> planned = corridorBan != null && !corridorBan.isEmpty()
+                ? Optional.empty()
+                : PlannedPathCache.find(level, connection,
+                        TerrainSamplingSessions.forLevel(level).effectiveMode(), genConfig.pathfinding());
         DetailedRoadGenerationStats.recordPlannedPathLookup(System.nanoTime() - plannedLookupStartedAt);
         try {
             PathCalculationResult pathResult;

@@ -56,6 +56,7 @@ public final class FastMarchingSolver {
     private double[] cachedCostX;
     private double[] cachedCostZ;
     private boolean[] cachedPassable;
+    private byte[] cachedEdgeBlocks;
 
     public FastMarchingSolver(FinslerMetric metric) {
         if (metric == null) throw new IllegalArgumentException("metric 不能为 null");
@@ -150,15 +151,37 @@ public final class FastMarchingSolver {
                 int bx = minX + ix * step;
                 int bz = minZ + iz * step;
                 passable[index] = metric.isPassable(bx, bz);
-                // 硬不可通行的格子不进队列，代价填 1 占位（不会被用来推进）
-                costX[index] = Math.max(1e-9, step * metric.cost(bx, bz, 1.0, 0.0));
-                costZ[index] = Math.max(1e-9, step * metric.cost(bx, bz, 0.0, 1.0));
+                // 硬禁格从不入队，无需再读坡度、障碍势或代价优惠。
+                if (passable[index]) metric.writeAxialCosts(bx, bz, step, index, costX, costZ);
             }
         }
         cachedCostX = costX;
         cachedCostZ = costZ;
         cachedPassable = passable;
+        cachedEdgeBlocks = metric.hasEdgeBlock()
+                ? precomputeBlockedEdges(minX, minZ, w, d, step, passable) : null;
         cachedSize = size;
+    }
+
+    private byte[] precomputeBlockedEdges(int minX, int minZ, int w, int d, int step, boolean[] passable) {
+        byte[] edges = new byte[w * d];
+        for (int iz = 0; iz < d; iz++) {
+            for (int ix = 0; ix < w; ix++) {
+                int i = ix + iz * w;
+                if (!passable[i]) continue;
+                int x = minX + ix * step, z = minZ + iz * step;
+                // 只读每条无向边一次；推进和逆向取邻居使用同一份结果。
+                if (ix + 1 < w && passable[i + 1] && metric.blocksEdge(x, z, x + step, z)) {
+                    edges[i] |= 1;
+                    edges[i + 1] |= 2;
+                }
+                if (iz + 1 < d && passable[i + w] && metric.blocksEdge(x, z, x, z + step)) {
+                    edges[i] |= 4;
+                    edges[i + w] |= 8;
+                }
+            }
+        }
+        return edges;
     }
 
     private ArrivalTimeField solveInternal(int sourceX, int sourceZ,
@@ -201,6 +224,7 @@ public final class FastMarchingSolver {
         double[] costX = cachedCostX;
         double[] costZ = cachedCostZ;
         boolean[] passable = cachedPassable;
+        byte[] edgeBlocks = cachedEdgeBlocks;
 
         // 2026-11-14 修复（审计 NEW-2）：源点下标原来用向下取整 `(x - minX) / step`，
         // 与障碍场/地形场的 Math.round（就近吸附）口径冲突 —— step=8 时错位最多 7 格，
@@ -228,7 +252,9 @@ public final class FastMarchingSolver {
             int ix = entry.index % w;
             int iz = entry.index / w;
 
+            int blockedFrom = edgeBlocks == null ? 0 : edgeBlocks[entry.index];
             for (int dir = 0; dir < 4; dir++) {
+                if ((blockedFrom & (1 << dir)) != 0) continue;
                 int nix = ix + DX[dir];
                 int niz = iz + DZ[dir];
                 if (nix < 0 || nix >= w || niz < 0 || niz >= d) continue;
@@ -269,7 +295,8 @@ public final class FastMarchingSolver {
                 // 平地（∇h=0、无障碍）严格退化为原各向同性解。
                 double hx = costX[nIndex];
                 double hz = costZ[nIndex];
-                double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz);
+                int blockedAt = edgeBlocks == null ? 0 : edgeBlocks[nIndex];
+                double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz, blockedAt);
                 if (candidate < t[nIndex]) {
                     t[nIndex] = candidate;
                     queue.add(new Entry(candidate, nIndex));
@@ -292,13 +319,14 @@ public final class FastMarchingSolver {
      * 平地且 hx=hz 时严格退化为各向同性解。</p>
      */
     private static double solveEikonalAnisotropic(double[] t, int w, int d,
-                                                  int ix, int iz, double hx, double hz) {
+                                                  int ix, int iz, double hx, double hz, int blocked) {
+        // 即使当前格是从另一方向到达，也不能从隔着禁行边的邻格偷取更小的到达时间。
         double a = Math.min(
-                ix > 0 ? t[ix - 1 + iz * w] : UNREACHABLE,
-                ix < w - 1 ? t[ix + 1 + iz * w] : UNREACHABLE);
+                ix > 0 && (blocked & 2) == 0 ? t[ix - 1 + iz * w] : UNREACHABLE,
+                ix < w - 1 && (blocked & 1) == 0 ? t[ix + 1 + iz * w] : UNREACHABLE);
         double b = Math.min(
-                iz > 0 ? t[ix + (iz - 1) * w] : UNREACHABLE,
-                iz < d - 1 ? t[ix + (iz + 1) * w] : UNREACHABLE);
+                iz > 0 && (blocked & 8) == 0 ? t[ix + (iz - 1) * w] : UNREACHABLE,
+                iz < d - 1 && (blocked & 4) == 0 ? t[ix + (iz + 1) * w] : UNREACHABLE);
 
         if (a == UNREACHABLE && b == UNREACHABLE) return UNREACHABLE;
         if (a == UNREACHABLE) return b + hz;

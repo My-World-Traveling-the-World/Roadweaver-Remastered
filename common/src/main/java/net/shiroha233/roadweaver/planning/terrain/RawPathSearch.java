@@ -65,8 +65,9 @@ final class RawPathSearch {
             PathResult result = searchWithHardBuildingObstacles(
                     pathfinder, start, end, level, config, cache, terrain);
             if (!result.success() || !result.hasRawPath()) return null;
-            List<BlockPos> route = MountainSwitchbackPlanner.replaceIfSafer(
-                    result.rawPath(), start, end, terrain, config, true);
+            List<BlockPos> route = keepAllowedReplacement(config, result.rawPath(),
+                    MountainSwitchbackPlanner.replaceIfSafer(
+                            result.rawPath(), start, end, terrain, config, true));
             List<BlockPos> modeRoute = applyCoarseTerrainModes(route, terrain, config, globalBridgeMinDepth());
             Map<RoadTerrainType, Integer> terrainCounts;
             StreamsReflowingCompat.SamplingSession streams =
@@ -126,7 +127,8 @@ final class RawPathSearch {
                     transitionProblem || structureProblem, tunnelFirst, mountain)) {
                 List<BlockPos> heightAware = CoarseHeightAwarePlanner.find(
                         start, end, terrain, config, planning.heightAwareStateLimit());
-                if (heightAware != null && heightAware.size() >= 2) {
+                if (heightAware != null && heightAware.size() >= 2
+                        && allowedByCorridor(config, heightAware)) {
                     heightAware = applyCoarseTerrainModes(heightAware, terrain, config, routeBridgeMinDepth);
                     // A straight corridor whose cut/fill (or single span rise)
                     // exceeds the build thresholds must be replaced by a longer
@@ -167,8 +169,9 @@ final class RawPathSearch {
                             start, end, level, config.aStarMaxSteps(), cache, hintedTerrain, config);
                 }
                 if (hintedResult.success() && hintedResult.hasRawPath()) {
-                    List<BlockPos> rerouted = MountainSwitchbackPlanner.replaceIfSafer(
-                            hintedResult.rawPath(), start, end, hintedTerrain, config);
+                    List<BlockPos> rerouted = keepAllowedReplacement(config, hintedResult.rawPath(),
+                            MountainSwitchbackPlanner.replaceIfSafer(
+                                    hintedResult.rawPath(), start, end, hintedTerrain, config));
                     if (rerouted != null && rerouted.size() >= 2) {
                         LOGGER.info("RoadWeaver coarse tunnel-aware reroute accepted: originalNodes={} reroutedNodes={} step={}",
                                 route.size(), rerouted.size(), step);
@@ -178,6 +181,17 @@ final class RawPathSearch {
             }
             return modeRoute;
         }
+    }
+
+    /** 山路换线不是重新授权；越线候选不能替掉已经遵守禁令的 BAND 主线。 */
+    static List<BlockPos> keepAllowedReplacement(PathfindingCostConfig config,
+                                                 List<BlockPos> allowed, List<BlockPos> candidate) {
+        return candidate == allowed || allowedByCorridor(config, candidate) ? candidate : allowed;
+    }
+
+    private static boolean allowedByCorridor(PathfindingCostConfig config, List<BlockPos> candidate) {
+        var ban = config.corridorBan();
+        return ban == null || ban.isEmpty() || !ban.intersectsPath(candidate);
     }
 
     /** Depth from the global mode alone (before any route-level AUTO tendency). */
