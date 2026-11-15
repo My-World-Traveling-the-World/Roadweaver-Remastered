@@ -38,6 +38,7 @@
 | **批 4 到底卡在哪** | [`BATCH4-JUNCTION-STATUS-20261115.md`](BATCH4-JUNCTION-STATUS-20261115.md) ← **不是没新引擎，是 1,228 行 / 65% 无测试（两个生产主入口零覆盖）** |
 | **批 6 到底卡在哪** | [`BATCH6-AVOIDANCE-STATUS-20261115.md`](BATCH6-AVOIDANCE-STATUS-20261115.md) ← **拆分与外置都真做完了；「5 条可观测」生产零读者 ⇒ 真机上看不到** |
 | **批 2 的循环论证到底解了没** | [`BATCH2-GROUNDBAN-VERIFY-20261115.md`](BATCH2-GROUNDBAN-VERIFY-20261115.md) ← **groundBanned 那条已解除（三路验证）；剖面 crossing 那条仍在；两处 javadoc 陈旧** |
+| **七批到底验证了多少** | [`BEHAVIOR-COVERAGE-ALL-BATCHES-20261115.md`](BEHAVIOR-COVERAGE-ALL-BATCHES-20261115.md) ← **批2 66.7%，其余五批 15.8~31.2%；「完成」必须同时给符号数与行为数** |
 
 ---
 
