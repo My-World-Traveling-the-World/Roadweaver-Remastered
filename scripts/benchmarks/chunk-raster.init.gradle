@@ -1,0 +1,18 @@
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.project(':common')
+    def scratch = new File(System.getenv('ROADWEAVER_RASTER_SCRATCH'))
+    // 当前、旧版共享同一套 Minecraft 依赖，在单个 JVM 里对拍与计时。
+    def cc = p.tasks.register('compileRasterProbe', JavaCompile) {
+        dependsOn p.tasks.named('testClasses')
+        source = p.fileTree(scratch) { include '*.java' }
+        classpath = p.sourceSets.test.runtimeClasspath
+        destinationDirectory = new File(scratch, 'classes')
+        options.encoding = 'UTF-8'
+    }
+    p.tasks.register('rasterProbe', JavaExec) {
+        dependsOn cc
+        classpath = p.files(cc.flatMap { it.destinationDirectory }) + p.sourceSets.test.runtimeClasspath
+        jvmArgs '-Xms512m', '-Xmx512m'
+        mainClass = 'net.shiroha233.roadweaver.worldgen.road.RasterProbe'
+    }
+}
