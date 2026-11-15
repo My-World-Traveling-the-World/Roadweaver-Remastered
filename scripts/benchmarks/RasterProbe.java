@@ -25,15 +25,17 @@ public final class RasterProbe {
         var random = new Random(20261115);
         int nonEmpty = 0;
         for (int i = 0; i < 96; i++) {
-            var input = fixture(i, random, i % 3, 36 + random.nextInt(65));
+            var input = i % 4 == 3 ? parallel(i, 36 + random.nextInt(65))
+                    : fixture(i, random, i % 3, 36 + random.nextInt(65));
             var actual = compile(input, false);
             compare(compile(input, true), actual);
             if (!actual.densityStamp().isEmpty()) nonEmpty++;
         }
         check(nonEmpty > 48); // 防止所有用例因夹具错误全返回空计划。
         System.out.printf("RASTER_EQUIVALENCE cases=96 nonEmpty=%d columns=24576 densityY=-32..192%n", nonEmpty);
-        run("ordinary_64_stations", fixture(1, new Random(20261115), 0, 64));
-        run("crossing_256_stations", fixture(1, new Random(20261115), 2, 256));
+        run("ordinary_64_stations", fixture(1, new Random(20261115), 0, 64), 1600);
+        run("crossing_256_stations", fixture(1, new Random(20261115), 2, 256), 1600);
+        run("parallel_640_stations", parallel(1, 640), 320);
     }
 
     static Input fixture(int n, Random r, int crossings, int size) {
@@ -46,6 +48,16 @@ public final class RasterProbe {
             roads.add(road(n + 70 + i * 30, 3 + i * 4, size, minX, minZ, i * 10 - 3, true, true, n));
         }
         return new Input(chunk, roads, n % 2 == 0, n % 17);
+    }
+
+    private static Input parallel(int n, int size) {
+        var chunk = new ChunkPos(-9 + n % 19, -7 + n % 15);
+        int x = chunk.getMinBlockX(), z = chunk.getMinBlockZ();
+        // 两条路长短匹配但不是整条精确重合，能验证归属竞争和分桶断点。
+        return new Input(chunk, List.of(
+                road(100, 5, size, x, z, 7, true, false, 1),
+                road(200, 4, size, x + 4, z, n % 10 + 5, n % 2 == 1, false, 1)),
+                false, 6);
     }
 
     static RoadData road(long id, int width, int n, int x, int z, int shift, boolean curve, boolean cross, int variant) {
@@ -113,9 +125,8 @@ public final class RasterProbe {
         return (System.nanoTime() - start) / 1000.0 / samples;
     }
 
-    static void run(String label, Input fixture) {
+    static void run(String label, Input fixture, int samples) {
         // 交换两版的执行次序并多批取中位数，减小同机预热和顺序偏差。
-        int samples = 1600;
         for (int i = 0; i < 5; i++) {
             time(fixture, true, samples);
             time(fixture, false, samples);

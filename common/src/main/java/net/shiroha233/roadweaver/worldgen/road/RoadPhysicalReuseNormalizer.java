@@ -1,6 +1,8 @@
 /* 文件职责：把互相覆盖的道路归一化成「物理归属唯一」——重复段只留一条路的方块。 */
 package net.shiroha233.roadweaver.worldgen.road;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -62,6 +64,9 @@ final class RoadPhysicalReuseNormalizer {
     private static final int PHYSICAL_REUSE_CORRIDOR_MIN_RUN = 8;
     /** 让出方与保留方的目标高度最大差；超过说明是上下层不同的路，不能互相覆盖。 */
     private static final int PHYSICAL_REUSE_MAX_HEIGHT_DELTA = 1;
+    /** 保留原匹配上界；桶宽取同样大小，每站只需查至多 3×3 个桶。 */
+    private static final int MAX_OWNER_DISTANCE = 64;
+    private static final int OWNER_CELL_SHIFT = 6;
     /** 沿主路前进时索引最多跳几步；跳太多说明匹配到的是另一段。 */
     private static final int PHYSICAL_REUSE_MAX_PRIMARY_INDEX_STEP = 8;
 
@@ -213,11 +218,10 @@ final class RoadPhysicalReuseNormalizer {
         // owned by an earlier road and may be used as the canonical owner.
         // A secondary NETWORK_REUSE span is already non-owning and must not be
         // claimed again by another later route.
-        boolean[] primaryBlocked = physicalReuseBlocked(primary, false);
+        var owners = indexPrimaryStations(primary);
+        if (owners.buckets.isEmpty()) return;
         boolean[] secondaryBlocked = physicalReuseBlocked(secondary, !matchReuseStations);
-        List<RoadSegmentPlacement> pri = primary.roadSegmentList();
         List<RoadSegmentPlacement> sec = secondary.roadSegmentList();
-        SpanKind[] primaryKinds = spanKinds(primary);
         SpanKind[] secondaryKinds = spanKinds(secondary, !matchReuseStations);
         int[] matches = new int[sec.size()];
         boolean[] corridorMatches = new boolean[sec.size()];
@@ -226,45 +230,9 @@ final class RoadPhysicalReuseNormalizer {
             if (secondaryBlocked[i]) continue;
             RoadSegmentPlacement candidate = sec.get(i);
             if (candidate == null || candidate.middlePos() == null) continue;
-            int best = -1;
-            int bestDistance = Integer.MAX_VALUE;
-            boolean bestCorridorMatch = false;
-            for (int j = 0; j < pri.size(); j++) {
-                if (primaryBlocked[j]) continue;
-                RoadSegmentPlacement owner = pri.get(j);
-                if (owner == null || owner.middlePos() == null) continue;
-                int distance = Math.max(Math.abs(candidate.middlePos().getX() - owner.middlePos().getX()),
-                        Math.abs(candidate.middlePos().getZ() - owner.middlePos().getZ()));
-                boolean sameTunnel = primaryKinds[j] == SpanKind.TUNNEL
-                        && secondaryKinds[i] == SpanKind.TUNNEL;
-                if (distance > 64 || !physicalSpanKindCompatible(primaryKinds[j], secondaryKinds[i])
-                        || !physicalDirectionCompatible(sec, i, pri, j)) continue;
-                // Tunnel entrances can be vertically offset while still being
-                // the same directional passage. Once the two tunnel routes
-                // are near each other and point the same way, reuse the
-                // existing tunnel instead of excavating a second upper/lower
-                // tunnel. Surface roads retain the strict footprint/grade
-                // checks below.
-                boolean exactFootprint = footprintsIntersect(owner, candidate);
-                if (!sameTunnel && ((!exactFootprint
-                        && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)
-                        || Math.abs(RoadChunkPlanCompiler.targetAt(secondary.targetY(), i,
-                        candidate.middlePos().getY()) - RoadChunkPlanCompiler.targetAt(primary.targetY(), j,
-                        owner.middlePos().getY())) > PHYSICAL_REUSE_MAX_HEIGHT_DELTA)) continue;
-                // Two tunnels that only happen to be within 64 blocks in the
-                // same direction are separate excavations. Reusing the primary
-                // there would suppress the secondary's tunnel without the
-                // primary actually building this chunk, leaving a gap. Only
-                // treat them as the same passage when the footprints overlap.
-                if (sameTunnel && !exactFootprint) continue;
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    best = j;
-                    bestCorridorMatch = !sameTunnel && !exactFootprint;
-                }
-            }
-            matches[i] = best;
-            corridorMatches[i] = best >= 0 && bestCorridorMatch;
+            ReuseMatch match = closestReuseOwner(owners, secondary, i, secondaryKinds[i], candidate);
+            matches[i] = match.index;
+            corridorMatches[i] = match.corridor;
         }
 
         int runStart = -1;
@@ -291,6 +259,79 @@ final class RoadPhysicalReuseNormalizer {
         }
     }
 
+    private static OwnerStationIndex indexPrimaryStations(RoadData road) {
+        List<RoadSegmentPlacement> stations = road.roadSegmentList();
+        boolean[] blocked = physicalReuseBlocked(road, false);
+        var buckets = new Long2ObjectOpenHashMap<IntArrayList>();
+        for (int i = 0; i < stations.size(); i++) {
+            RoadSegmentPlacement station = stations.get(i);
+            if (blocked[i] || station == null || station.middlePos() == null) continue;
+            BlockPos center = station.middlePos();
+            buckets.computeIfAbsent(ownerCellKey(center.getX() >> OWNER_CELL_SHIFT,
+                    center.getZ() >> OWNER_CELL_SHIFT), key -> new IntArrayList()).add(i);
+        }
+        return new OwnerStationIndex(road, stations, spanKinds(road), buckets);
+    }
+
+    private static ReuseMatch closestReuseOwner(OwnerStationIndex primary, RoadData secondary,
+                                                int i, SpanKind secondaryKind,
+                                                RoadSegmentPlacement candidate) {
+        BlockPos center = candidate.middlePos();
+        int x = center.getX();
+        int z = center.getZ();
+        // 对负坐标也向下取整；先用 long 算窗口两端，避免偏移在边界回绕。
+        int minX = (int) (((long) x - MAX_OWNER_DISTANCE) >> OWNER_CELL_SHIFT);
+        int maxX = (int) (((long) x + MAX_OWNER_DISTANCE) >> OWNER_CELL_SHIFT);
+        int minZ = (int) (((long) z - MAX_OWNER_DISTANCE) >> OWNER_CELL_SHIFT);
+        int maxZ = (int) (((long) z + MAX_OWNER_DISTANCE) >> OWNER_CELL_SHIFT);
+        int best = -1;
+        long bestDistance = MAX_OWNER_DISTANCE + 1;
+        boolean bestCorridor = false;
+        int targetY = RoadChunkPlanCompiler.targetAt(secondary.targetY(), i, center.getY());
+        for (int bz = minZ; bz <= maxZ; bz++) {
+            for (int bx = minX; bx <= maxX; bx++) {
+                IntArrayList bucket = primary.buckets.get(ownerCellKey(bx, bz));
+                if (bucket == null) continue;
+                for (int k = 0; k < bucket.size(); k++) {
+                    int j = bucket.getInt(k);
+                    RoadSegmentPlacement owner = primary.stations.get(j);
+                    BlockPos ownerCenter = owner.middlePos();
+                    long distance = Math.max(Math.abs((long) x - ownerCenter.getX()),
+                            Math.abs((long) z - ownerCenter.getZ()));
+                    // 桶的遍历顺序不同于原全扫；等距时显式保留主路站序最早者。
+                    if (distance > MAX_OWNER_DISTANCE || distance > bestDistance
+                            || (distance == bestDistance && j >= best)) continue;
+                    SpanKind primaryKind = primary.kinds[j];
+                    if (!physicalSpanKindCompatible(primaryKind, secondaryKind)
+                            || !physicalDirectionCompatible(secondary.roadSegmentList(), i, primary.stations, j)) continue;
+                    boolean sameTunnel = primaryKind == SpanKind.TUNNEL && secondaryKind == SpanKind.TUNNEL;
+                    boolean exactFootprint = footprintsIntersect(owner, candidate);
+                    // 方向相同但足迹不相交的隧道不是同一条；地面路另需满足高差和中心距离。
+                    if (sameTunnel ? !exactFootprint
+                            : ((!exactFootprint && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)
+                            || Math.abs(targetY - RoadChunkPlanCompiler.targetAt(primary.road.targetY(), j,
+                            ownerCenter.getY())) > PHYSICAL_REUSE_MAX_HEIGHT_DELTA)) continue;
+                    best = j;
+                    bestDistance = distance;
+                    bestCorridor = !sameTunnel && !exactFootprint;
+                }
+            }
+        }
+        return best < 0 ? ReuseMatch.NONE : new ReuseMatch(best, bestCorridor);
+    }
+
+    private static long ownerCellKey(int x, int z) {
+        return ((long) x << 32) | (z & 0xffffffffL);
+    }
+
+    private record OwnerStationIndex(RoadData road, List<RoadSegmentPlacement> stations,
+                                     SpanKind[] kinds, Long2ObjectOpenHashMap<IntArrayList> buckets) {
+    }
+
+    private record ReuseMatch(int index, boolean corridor) {
+        private static final ReuseMatch NONE = new ReuseMatch(-1, false);
+    }
+
     static boolean physicalDirectionCompatible(List<RoadSegmentPlacement> first, int firstIndex,
                                                         List<RoadSegmentPlacement> second, int secondIndex) {
         double[] a = localDirection(first, firstIndex);
@@ -311,7 +352,8 @@ final class RoadPhysicalReuseNormalizer {
 
     static boolean[] physicalReuseBlocked(RoadData road, boolean blockNetworkReuse) {
         boolean[] blocked = new boolean[road.roadSegmentList().size()];
-        if (road.spans() == null) return blocked;
+        // 无跨度的普通道路无需为查不到的端点建索引。
+        if (road.spans() == null || road.spans().isEmpty()) return blocked;
         Map<Long, Integer> indices = new HashMap<>();
         for (int i = 0; i < road.roadSegmentList().size(); i++) {
             RoadSegmentPlacement segment = road.roadSegmentList().get(i);
@@ -370,7 +412,9 @@ final class RoadPhysicalReuseNormalizer {
 
     static void markSpanKind(SpanKind[] kinds, RoadData road,
                                      SpanType type, SpanKind kind) {
-        if (road == null || road.spans() == null || kinds.length == 0) return;
+        // 只索引确实出现的跨度类型，避免一条长路为不存在的类型反复装箱。
+        if (road == null || road.spans() == null || kinds.length == 0
+                || road.spans().stream().noneMatch(span -> span != null && span.type() == type)) return;
         Map<Long, Integer> indices = new HashMap<>();
         for (int i = 0; i < road.roadSegmentList().size(); i++) {
             RoadSegmentPlacement segment = road.roadSegmentList().get(i);

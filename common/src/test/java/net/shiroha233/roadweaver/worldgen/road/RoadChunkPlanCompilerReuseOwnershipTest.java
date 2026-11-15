@@ -143,6 +143,55 @@ final class RoadChunkPlanCompilerReuseOwnershipTest {
     }
 
     @Test
+    void ownerSearchIncludesTheSixtyFourBlockBoundaryAcrossNegativeBuckets() {
+        RoadData secondary = line(-28, 64, 0, 201L, 202L, null);
+        RoadData onLimit = ownerWithExtendedFootprint(-64);
+        RoadData outOfRange = ownerWithExtendedFootprint(-65);
+        var covered = new boolean[secondary.roadSegmentList().size()];
+        var uncovered = new boolean[covered.length];
+        // 让足迹相交以单独检验中心距离上限；若只查相邻半径 5，这条正例就会漏掉。
+        RoadPhysicalReuseNormalizer.markPhysicalReuse(onLimit, secondary, covered);
+        RoadPhysicalReuseNormalizer.markPhysicalReuse(outOfRange, secondary, uncovered);
+        for (int i = 0; i < covered.length; i++) {
+            assertTrue(covered[i], "64 格边界仍可复用，站 " + i);
+            assertFalse(uncovered[i], "65 格即使足迹相交也不能复用，站 " + i);
+        }
+    }
+
+    @Test
+    void equalDistanceAcrossBucketsUsesTheEarlierOwnerIndex() {
+        List<RoadSegmentPlacement> primary = new ArrayList<>();
+        List<RoadSegmentPlacement> secondary = new ArrayList<>();
+        // 先走正 Z 桶，再反向折回负 Z；副路交替「只近上层」与「两边等距」。
+        // 若等距改选先查到的负 Z 桶，主路索引会反复跳过连续性上限，整段就无法复用。
+        for (int x = 0; x <= 48; x += 2) primary.add(station(x, 1, 0));
+        for (int x = 48; x >= 0; x -= 2) primary.add(station(x, -1, 0));
+        for (int i = 0; i < 14; i++) secondary.add(station(i * 2, i % 2, i % 2));
+
+        var reused = new boolean[secondary.size()];
+        RoadPhysicalReuseNormalizer.markPhysicalReuse(stationsOf(203, primary), stationsOf(205, secondary), reused);
+        for (int i = 0; i < reused.length; i++) {
+            assertTrue(reused[i], "等距时必须保留站序更早的主路候选，站 " + i);
+        }
+    }
+
+    private static RoadData ownerWithExtendedFootprint(int z) {
+        List<RoadSegmentPlacement> stations = new ArrayList<>();
+        for (int i = 0; i < 32; i++) stations.add(station(-28 + i * 2, z, 0));
+        return stationsOf(207, stations);
+    }
+
+    private static RoadSegmentPlacement station(int x, int z, int footprintZ) {
+        BlockPos center = new BlockPos(x, 64, z);
+        return new RoadSegmentPlacement(center, List.of(new BlockPos(x, 64, footprintZ)));
+    }
+
+    private static RoadData stationsOf(long id, List<RoadSegmentPlacement> stations) {
+        return new RoadData(4, 1, List.of(), List.of(), stations, List.of(),
+                stations.stream().map(station -> station.middlePos().getY()).toList(), id, id + 1);
+    }
+
+    @Test
     void reclaimingASurrenderKeepsTheRoadsOtherSpans() {
         RoadData base = line(0, 64, 0, 11L, 12L, null);
         List<RoadSpan> spans = new ArrayList<>();

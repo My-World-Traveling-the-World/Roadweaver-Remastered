@@ -20,14 +20,18 @@ try {
     [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
     $commit = git rev-parse --verify "${Baseline}^{commit}"
     if ($LASTEXITCODE -ne 0) { throw "Cannot find baseline commit: $Baseline" }
-    $path = 'common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadChunkPlanCompiler.java'
-    $src = (git show "${commit}:${path}") -join "`n"
-    if ($LASTEXITCODE -ne 0) { throw "Cannot read compiler from baseline: $commit" }
-    if ([regex]::Matches($src, '\bRoadChunkPlanCompiler\b').Count -ne 2) {
-        throw 'Baseline compiler name anchors changed.'
+    $Package = 'common/src/main/java/net/shiroha233/roadweaver/worldgen/road'
+    $ClassNames = @('RoadChunkPlanCompiler', 'RoadPhysicalReuseNormalizer')
+    foreach ($ClassName in $ClassNames) {
+        $src = (git show "${commit}:${Package}/${ClassName}.java") -join "`n"
+        if ($LASTEXITCODE -ne 0) { throw "Cannot read ${ClassName} from baseline: $commit" }
+        if ([regex]::Matches($src, "\b${ClassName}\b").Count -lt 2) {
+            throw "Baseline compiler name anchors changed: $ClassName"
+        }
+        # 旧编译器和旧归属判定相互引用，必须成对改名，避免对照组混用当前实现。
+        foreach ($Name in $ClassNames) { $src = $src.Replace($Name, "Baseline$Name") }
+        [IO.File]::WriteAllText((Join-Path $scratch "Baseline$ClassName.java"), $src)
     }
-    [IO.File]::WriteAllText((Join-Path $scratch 'BaselineRoadChunkPlanCompiler.java'),
-        $src.Replace('RoadChunkPlanCompiler', 'BaselineRoadChunkPlanCompiler'))
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'RasterProbe.java') -Destination $scratch
     $env:JAVA_HOME = $Jdk
     $env:ROADWEAVER_RASTER_SCRATCH = $scratch
