@@ -42,7 +42,37 @@ public final class StructureAvoidanceCache {
      * @return {@code true} 表示本线程处于规划快照作用域内，查询结果可信
      */
     public static boolean planningSnapshotPresent() {
+        // TODO(批 2 B 方案，待真机数据)：这里目前仍用 `!= null`，因此 EMPTY 会被判成
+        //   「有快照」—— 与下面 isUsableSnapshot 的口径**不一致**。
+        //   改成 isUsableSnapshot(...) 会让 structureSnapshotAvailable 从 true 变 false，
+        //   进而把 ModeDpBridge 的 AB 日志从 snapshot=ok 改成 snapshot=absent（**变正确**），
+        //   但那会改变批 2 既往 AB 结论的解读口径，需要真机数据配合，故本轮只记录不切。
         return ACTIVE_PLANNING_SNAPSHOT.get() != null;
+    }
+
+    /**
+     * 快照是否<b>真的可用</b>（2026-11-15 新增，修「静默降级只修了 null、没修 EMPTY」）。
+     *
+     * <h2>为什么 {@code != null} 不够</h2>
+     * <p>{@code PlanningSnapshot.EMPTY} 是<b>非 null</b> 的空快照，它同样「什么都不挡」。
+     * 而 {@code activatePlanningSnapshot} 在拿不到该路线的快照时，
+     * 兜底写进去的正是 {@code PlanningSnapshot.EMPTY}：
+     * <pre>
+     *   selected = PLANNING_SNAPSHOTS.getOrDefault(routeKey, PlanningSnapshot.EMPTY);
+     * </pre>
+     * ⇒ 只看 {@code != null} 时，「路线快照没准备好」与「附近真没建筑」
+     * 在观测上<b>完全同形</b>，正是病根 C 的原话。</p>
+     *
+     * <h2>本轮改动范围（A 方案：只加观测）</h2>
+     * <p>本方法先把 {@code shouldAvoidPlanning} 的两个重载的「无证据」判据
+     * 从 {@code null} 放宽到「null 或 EMPTY」，<b>返回值不变</b>（仍然是 fail-open 的 false），
+     * 唯一变化是这种情况现在会记进 {@code blindQueryCount}。</p>
+     *
+     * @param snapshot 当前线程的规划快照，可为 null
+     * @return 非 null 且不是 {@code PlanningSnapshot.EMPTY}
+     */
+    static boolean isUsableSnapshot(PlanningSnapshot snapshot) {
+        return snapshot != null && snapshot != PlanningSnapshot.EMPTY;
     }
 
     // ── 结构避让查询 + 静默降级观测（2026-11-15 从 Service 搬来，见下）──
@@ -76,7 +106,10 @@ public final class StructureAvoidanceCache {
      */
     public static boolean shouldAvoidPlanning(BlockPos pos, int horizontalClearance) {
         PlanningSnapshot snapshot = ACTIVE_PLANNING_SNAPSHOT.get();
-        if (snapshot == null) {
+        // 2026-11-15（A 方案）：判据从 `== null` 放宽到「null 或 EMPTY」。
+        // 返回值不变（仍是 fail-open 的 false），但 EMPTY 这种情况现在也会记盲查 ——
+        // 否则「路线快照没准备好」与「附近真没建筑」在计数上完全同形。
+        if (!isUsableSnapshot(snapshot)) {
             noteBlindQuery();
             return false;
         }
@@ -86,7 +119,7 @@ public final class StructureAvoidanceCache {
     /** 结构避让查询（无额外边距）。语义与观测同上面的重载。 */
     public static boolean shouldAvoidPlanning(BlockPos pos) {
         PlanningSnapshot snapshot = ACTIVE_PLANNING_SNAPSHOT.get();
-        if (snapshot == null) {
+        if (!isUsableSnapshot(snapshot)) {
             noteBlindQuery();
             return false;
         }

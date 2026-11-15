@@ -160,15 +160,48 @@ class CulvertGeometryTest {
         // UI 声明 0..64，而下游只认到 16）。
         net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig c =
                 new net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig();
-        c.setCulvertMaxStations(999);
-        assertEquals(16, c.culvertMaxStations(), "站数上界必须是 16（与 LocalRouteSearch 同口径）");
-        c.setCulvertMaxStations(-5);
-        assertEquals(1, c.culvertMaxStations(), "站数下界必须是 1");
+        c.setCulvertMaxStations(9999);
+        assertEquals(CulvertJudge.SEGMENTS_MAX, c.culvertMaxStations(),
+                "配置侧站数上界必须等于施工期用的 SEGMENTS_MAX（同口径的唯一真值）");
+        c.setCulvertMaxStations(-9999);
+        assertEquals(CulvertJudge.SEGMENTS_MIN, c.culvertMaxStations(),
+                "配置侧站数下界必须等于施工期用的 SEGMENTS_MIN");
 
-        c.setCulvertMaxWaterDepth(999);
-        assertEquals(4, c.culvertMaxWaterDepth(), "水深上界必须是 4（规划期 culvertMaxWaterDepth 口径）");
-        c.setCulvertMaxWaterDepth(-5);
-        assertEquals(1, c.culvertMaxWaterDepth(), "水深下界必须是 1");
+        c.setCulvertMaxWaterDepth(9999);
+        assertEquals(CulvertJudge.DEPTH_MAX, c.culvertMaxWaterDepth(),
+                "配置侧水深上界必须等于施工期用的 DEPTH_MAX");
+        c.setCulvertMaxWaterDepth(-9999);
+        assertEquals(CulvertJudge.DEPTH_MIN, c.culvertMaxWaterDepth(),
+                "配置侧水深下界必须等于施工期用的 DEPTH_MIN");
+    }
+
+    @Test
+    void 施工期界值必须与配置侧夹取区间完全一致() {
+        // ★ 2026-11-15：这条是「把界值提成具名常量」的目的 ——
+        //   在此之前 CulvertJudge 的 clamp 用字面量 1/4 与 1/16，
+        //   而 RoadAppearanceConfig 的 setter 里另有硬编码的 1/4 与 1/16。
+        //   两处独立写死 ⇒ 谁单改一处就脱节（历史缺陷「UI 声明 0..64、下游只认 16」
+        //   正是同一个形状）。现在两边共用 CulvertJudge 的常量，
+        //   并用公开 setter 反证「配置侧确实用的是同一组界值」。
+        net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig c =
+                new net.shiroha233.roadweaver.config.sub.RoadAppearanceConfig();
+
+        // 上界：把配置推到远超常量的值，setter 必须夹到同一个常量
+        c.setCulvertMaxStations(CulvertJudge.SEGMENTS_MAX * 100);
+        assertEquals(CulvertJudge.SEGMENTS_MAX, c.culvertMaxStations(),
+                "配置侧站数上界与 CulvertJudge.SEGMENTS_MAX 脱节了 —— "
+                        + "这会让「规划判涵洞、施工架桥」那个缺陷以新形态复活");
+        c.setCulvertMaxWaterDepth(CulvertJudge.DEPTH_MAX * 100);
+        assertEquals(CulvertJudge.DEPTH_MAX, c.culvertMaxWaterDepth(),
+                "配置侧水深上界与 CulvertJudge.DEPTH_MAX 脱节了");
+
+        // 下界同理
+        c.setCulvertMaxStations(0);
+        assertEquals(CulvertJudge.SEGMENTS_MIN, c.culvertMaxStations(),
+                "配置侧站数下界与 CulvertJudge.SEGMENTS_MIN 脱节了");
+        c.setCulvertMaxWaterDepth(0);
+        assertEquals(CulvertJudge.DEPTH_MIN, c.culvertMaxWaterDepth(),
+                "配置侧水深下界与 CulvertJudge.DEPTH_MIN 脱节了");
     }
 
     @Test

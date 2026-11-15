@@ -31,13 +31,15 @@ import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
  * 这与 {@code ElasticBandSolver.BlockedCheck}、{@code BandPathfinder.EdgeProbe}
  * 是同一套「端口 + 适配」写法 —— 纯逻辑可测，适配点只有一处。</p>
  *
- * <h2>刻意没接的来源（如实标注，不是遗漏）</h2>
- * <ul>
- *   <li><b>已有公路</b>：现有 {@code RoadPositionQuery.isOnRoad} 的实际语义是
- *       「防止树木长在路上」，而且被 {@code roadAppearance.preventTreesOnRoad}
- *       配置门控 —— 用它当「地面不可用」会在玩家关掉树木抑制时静默失效，
- *       语义也不匹配。正确接入需要走路网复用/合并那一层，属批 4 的范围。</li>
- * </ul>
+ * <h2>三条来源都接了（2026-11-15 更正：此前这里写「已有公路没接」，已过时）</h2>
+ * <p><b>水面</b> / <b>保护区</b> / <b>已有公路</b> 三条全部已接入。</p>
+ * <p>「已有公路」这条曾经的顾虑是：{@code RoadPositionQuery.isOnRoad} 的实际语义是
+ * 「防止树木长在路上」，且被 {@code roadAppearance.preventTreesOnRoad} 配置门控 ——
+ * 直接拿它当「地面不可用」会在玩家关掉树木抑制时静默失效、语义也不匹配。
+ * <b>解法不是放弃这条来源，而是换实现</b>：改由
+ * {@link ExistingRoadProbe#forCorridor} 按走廊 owner 键构造独立的 {@link RoadProbe}
+ * （含自排除，防「整条走廊把当前路自己判成已有公路」）。
+ * 生产调用点见 {@code TargetYComputation} 里对 {@code GroundBanSources.collect(...)} 的调用。</p>
  *
  * <h2>保护区快照可能不可用</h2>
  * <p>{@code shouldAvoidPlanning} 读的是 ThreadLocal 快照，缺失时静默返回 false ——

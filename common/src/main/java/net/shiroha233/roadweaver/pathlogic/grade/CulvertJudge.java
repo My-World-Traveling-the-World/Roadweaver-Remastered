@@ -63,6 +63,21 @@ public final class CulvertJudge {
     static final int DEFAULT_MAX_SEGMENTS = 6;
 
     /**
+     * 水深上限的夹取区间 —— <b>与 {@code RoadAppearanceConfig.setCulvertMaxWaterDepth} 同口径</b>。
+     *
+     * <p>2026-11-15：原来这两组界值是 {@code clamp(..., 1, 4)} 里的**字面量**，
+     * 于是「施工期夹到 4」和「配置侧夹到 4」是两份独立写死的数字，
+     * 谁改一处就会与另一处漂移（历史上 UI 声明 0..64、下游只认到 16 就是这么来的）。
+     * 提成具名常量后，测试可以断言「施工期可读值必须落在配置侧可达范围内」。</p>
+     */
+    static final int DEPTH_MIN = 1;
+    static final int DEPTH_MAX = 4;
+
+    /** 站数上限的夹取区间 —— 与 {@code RoadAppearanceConfig.setCulvertMaxStations} 同口径。 */
+    static final int SEGMENTS_MIN = 1;
+    static final int SEGMENTS_MAX = 16;
+
+    /**
      * 涵洞几何允许的最大水深 —— <b>读配置 {@code culvertMaxWaterDepth}</b>。
      *
      * <h2>★ 2026-11-15 从硬编码改为读配置</h2>
@@ -75,7 +90,7 @@ public final class CulvertJudge {
      */
     public static int maxWaterDepth() {
         try {
-            return clamp(ConfigService.get().roadAppearance().culvertMaxWaterDepth(), 1, 4);
+            return clamp(ConfigService.get().roadAppearance().culvertMaxWaterDepth(), DEPTH_MIN, DEPTH_MAX);
         } catch (Throwable ignored) {
             return DEFAULT_MAX_WATER_DEPTH;
         }
@@ -90,7 +105,7 @@ public final class CulvertJudge {
      */
     public static int maxSegments() {
         try {
-            return clamp(ConfigService.get().roadAppearance().culvertMaxStations(), 1, 16);
+            return clamp(ConfigService.get().roadAppearance().culvertMaxStations(), SEGMENTS_MIN, SEGMENTS_MAX);
         } catch (Throwable ignored) {
             return DEFAULT_MAX_SEGMENTS;
         }

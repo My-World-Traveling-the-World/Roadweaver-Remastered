@@ -136,7 +136,10 @@ public final class ObstacleJudge {
     public static boolean blocksVillageCluster(BlockPos pos, int horizontalClearance) {
         if (pos == null) return false;
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        if (snapshot == null) return false;
+        // 2026-11-15：判据从 `== null` 放宽到「null 或 EMPTY」（A 方案）。
+        // 返回值不变 —— EMPTY 快照的 blocksCluster 本来就恒 false ——
+        // 但省掉一次无意义的空快照查询，也让「没有可用快照」这个意图在代码里显式。
+        if (!StructureAvoidanceCache.isUsableSnapshot(snapshot)) return false;
         return snapshot.blocksCluster(pos.getX(), pos.getZ(),
                 pos.getY() - CONSTRUCTION_BELOW, pos.getY() + CONSTRUCTION_ABOVE,
                 Math.max(0, horizontalClearance));
@@ -195,19 +198,28 @@ public final class ObstacleJudge {
     /** Returns the protected piece rejecting a planning sample without changing planning behavior. */
     public static String describePlanningCollision(BlockPos pos) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        return snapshot == null ? "no-active-snapshot" : snapshot.describeCollision(pos);
+        // 2026-11-15（A 方案）：EMPTY 也归入「没有可用快照」。
+        // 观测层修正 —— 在此之前 EMPTY 会走到 describeCollision 并返回「没撞」，
+        // 与「没有可用快照」同形，正是病根 C 的那句「把没生效误读成没贡献」。
+        return StructureAvoidanceCache.isUsableSnapshot(snapshot)
+                ? snapshot.describeCollision(pos)
+                : "no-active-snapshot";
     }
 
     /** Describes the first protected sample across a planning edge. */
     public static String describePlanningCollision(BlockPos from, BlockPos to) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        return snapshot == null ? "no-active-snapshot" : snapshot.describeCollision(from, to);
+        return StructureAvoidanceCache.isUsableSnapshot(snapshot)
+                ? snapshot.describeCollision(from, to)
+                : "no-active-snapshot";
     }
 
     /** Returns the protected structure box at a planning conflict, if any. */
     public static BoundingBox planningCollisionBox(BlockPos pos, int horizontalClearance) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
-        if (snapshot == null || pos == null) return null;
+        // 2026-11-15（A 方案）：EMPTY 直接返回 null —— 与改前等价（空快照本来就找不到碰撞盒），
+        // 但省掉两次空查询，并让「没有可用快照」在代码里显式。
+        if (!StructureAvoidanceCache.isUsableSnapshot(snapshot) || pos == null) return null;
         int minY = pos.getY() - CONSTRUCTION_BELOW;
         int maxY = pos.getY() + CONSTRUCTION_ABOVE;
         int radius = Math.max(0, horizontalClearance);

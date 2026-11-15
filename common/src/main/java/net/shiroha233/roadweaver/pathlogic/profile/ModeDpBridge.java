@@ -64,10 +64,12 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>已知的输入简化（第一版有意为之，会低估桥隧需求）</h2>
  * <ul>
- *   <li>{@code groundBanned} 现由 {@link GroundBanSources} 从「水面 + 保护区」两条
- *       独立物理事实构造（见上面那一节）。<b>「已有公路」仍未接</b> ——
- *       现有 API 语义是防树且受配置门控，属批 4 范围。日志会分别打
- *       {@code water=} / {@code structure=} / {@code snapshot=}，判断各来源贡献。</li>
+ *   <li>{@code groundBanned} 现由 {@link GroundBanSources} 从「水面 + 保护区 + 已有公路」
+ *       三条独立物理事实构造（见上面那一节）。<b>三条都已接入</b>
+ *       （2026-11-15 更正：此处原先写「已有公路仍未接」，已过时 ——
+ *       它由 {@link ExistingRoadProbe#forCorridor} 以走廊 owner 键构造，含自排除）。
+ *       日志会分别打 {@code water=} / {@code structure=} / {@code road=} / {@code snapshot=}，
+ *       判断各来源贡献。</li>
  *   <li>桥高 / 隧深 / 单价用 {@link ModeDpSolver.Settings#defaults()}，
  *       没有从玩家配置翻译 —— 单价是产品决策，等召回率达标后再统一。</li>
  * </ul>
