@@ -82,6 +82,33 @@ JUnit 里**被 assume 跳过的测试算「通过」**。而构建输出只有�
 
 ---
 
+## 三之二、★ 补做：给 3 个「全部可跳过」的守卫各做负控（结论：**都是真守卫**）
+
+上一版这份文档说「没核这 3 个守卫的判据是否有效」。本轮补做，**4 个负控全部成功变红**：
+
+| # | 负控做法 | 结果 |
+|---|---|---|
+| 1 | `PathFeature.java` 里插入被禁串 `BridgeRangeCalculator.compute(` | ✅ `SingleSourceOfTruthTest.施工热路径不许直接重算全路` 红 |
+| 2 | 从 `zh_cn.json` 删掉 `gui.roadweaver.map.dock.manual_connect` 键 | ✅ `UiFeatureGuardTest.所有UI文案在中英文里都要有` 红 |
+| 3 | 往受管文件 `GradeOptimizer.java` 加一个未登记方法 `negctlUnregisteredMethod` | ✅ `S5MethodMapTest.台账必须覆盖受管文件的每个方法` 红 |
+| 4 | 给 `PathFeature.java` 加一行含 `computeTargetY(` 的注释（基线上限 1，当前正好 1）| ✅ `SingleSourceOfTruthTest.重算热点只许减少不许新增` 红 |
+
+⇒ **这 3 个「全部可跳过」的守卫，判据本身是有效的**；它们的问题**只是**
+「前置条件失效时会静默跳过」，而这个洞已由 `GuardPreconditionTest` 堵上。
+
+### ★ 负控本身踩的坑（重要）
+第一次做负控 #1 时结果报 `BUILD SUCCESS`，我一度以为抓到了假守卫 ——
+**真相是我的负控脚本自己失效**：锚点写成了 `public final class PathFeature`，
+而真实声明是 `public class PathFeature extends Feature<PathFeatureConfig> {`，
+Python 的 `str.replace` 在找不到锚点时**静默返回原串**，
+于是「改坏了」这件事根本没发生，测试自然是绿的。
+
+⇒ **铁律：负控脚本必须断言「目标确实被改坏了」**（`assert anchor in src` /
+`assert 'NEGCTL' in src`），否则你验证的是「没改的代码仍然通过」，
+那什么也证明不了。本轮 4 个负控全部加了这种断言后才可信。
+
+---
+
 ## 四、这份审计**没有**做什么
 
 - **没有**给 54 个用例逐个做负控（工作量太大，且很多需要改生产代码才能触发）。
