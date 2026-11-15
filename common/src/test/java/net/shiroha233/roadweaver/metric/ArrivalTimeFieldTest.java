@@ -2,6 +2,9 @@
 package net.shiroha233.roadweaver.metric;
 
 import java.util.List;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +29,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @see ArrivalTimeField
  */
 class ArrivalTimeFieldTest {
+
+    @Test
+    void 原始数组堆与旧队列逐项同序包括同权和扩容() {
+        record Entry(double time, int index) {}
+        var legacy = new PriorityQueue<Entry>(Comparator.comparingDouble(Entry::time));
+        var frontier = new FastMarchingSolver.Frontier();
+        var random = new Random(323761);
+        // 同权密集，交错重复格号和出入队。只比较排序后的权重会漏掉早停差异。
+        for (int i = 0; i < 5000; i++) {
+            double time = random.nextInt(32);
+            int index = i % 313;
+            legacy.add(new Entry(time, index));
+            frontier.offer(time, index);
+            if (i % 3 == 0) assertEquals(legacy.remove().index(), frontier.poll(), "交错出队 " + i);
+        }
+        while (!legacy.isEmpty()) assertEquals(legacy.remove().index(), frontier.poll());
+        assertTrue(frontier.isEmpty());
+    }
+
+    @Test
+    void 多源复用不能让前一个早停留下的队列进入下一次() {
+        var metric = FinslerMetric.of(step8(-32, -32), ObstacleField.NONE);
+        var reused = new FastMarchingSolver(metric);
+        assertTrue(reused.solve(-24, -24, -16, -24).reachable(-16, -24));
+        // 首次早停的西邻点还在堆中；第二次把它设成远处终点，漏清理会提前结束。
+        var expected = new FastMarchingSolver(metric).solve(24, 24, -32, -24);
+        var actual = reused.solve(24, 24, -32, -24);
+        assertTrue(expected.reachable(-32, -24));
+        assertTrue(actual.reachable(-32, -24), "不能把遗留的终点条目当作已到达");
+        for (int z = -32; z <= 32; z += 8) {
+            for (int x = -32; x <= 32; x += 8) assertEquals(expected.at(x, z), actual.at(x, z));
+        }
+    }
 
     @Test
     void 非对齐目标只影响选格而不会平移回溯路径() {

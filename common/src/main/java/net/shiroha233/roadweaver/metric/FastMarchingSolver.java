@@ -2,7 +2,6 @@
 package net.shiroha233.roadweaver.metric;
 
 import java.util.Arrays;
-import java.util.PriorityQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,11 +36,14 @@ import org.slf4j.LoggerFactory;
 public final class FastMarchingSolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final boolean TRACE = "on".equalsIgnoreCase(System.getProperty("roadweaver.fmmTimings"));
 
     /** 不可达。 */
     static final double UNREACHABLE = Double.POSITIVE_INFINITY;
 
     private final FinslerMetric metric;
+    // 同一求解器的多源传播是串行的，和慢度数组一样复用存储，避免每个入队项新建对象。
+    private final Frontier queue = new Frontier();
 
     // ── 与源点无关的预计算（2026-11-14，审计「FMM 预计算代价数组」）──────────
     //
@@ -215,8 +217,10 @@ public final class FastMarchingSolver {
             return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
+        long began = TRACE ? System.nanoTime() : 0;
         // 预计算（与源点无关，多源共享；网格尺寸变了才重建）
         ensurePrecomputed(minX, minZ, w, d, step);
+        long prepared = TRACE ? System.nanoTime() : 0;
         double[] costX = cachedCostX;
         double[] costZ = cachedCostZ;
         boolean[] passable = cachedPassable;
@@ -239,25 +243,27 @@ public final class FastMarchingSolver {
         boolean[] frozen = new boolean[w * d];
         t[sourceIndex] = 0.0;
 
-        PriorityQueue<Entry> queue = new PriorityQueue<>();
-        queue.add(new Entry(0.0, sourceIndex));
+        queue.clear();
+        queue.offer(0.0, sourceIndex);
 
         int remainingStops = stopCount;
+        int frozenCount = 0, offers = 1, peak = 1;
 
         while (!queue.isEmpty()) {
-            Entry entry = queue.poll();
-            if (frozen[entry.index]) continue;          // 过期条目
-            frozen[entry.index] = true;
+            int index = queue.poll();
+            if (frozen[index]) continue;          // 过期条目
+            frozen[index] = true;
+            if (TRACE) frozenCount++;
 
             // 目标早停：目标格冻结即为最终值，且回溯只会访问更小的 T（都已冻结）。
-            if (stopMask != null && stopMask[entry.index]) {
+            if (stopMask != null && stopMask[index]) {
                 if (--remainingStops <= 0) break;
             }
 
-            int ix = entry.index % w;
-            int iz = entry.index / w;
+            int ix = index % w;
+            int iz = index / w;
 
-            int blockedFrom = edgeBlocks == null ? 0 : edgeBlocks[entry.index];
+            int blockedFrom = edgeBlocks == null ? 0 : edgeBlocks[index];
             for (int dir = 0; dir < 4; dir++) {
                 if ((blockedFrom & (1 << dir)) != 0) continue;
                 int nix = ix + DX[dir];
@@ -304,11 +310,23 @@ public final class FastMarchingSolver {
                 double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz, blockedAt);
                 if (candidate < t[nIndex]) {
                     t[nIndex] = candidate;
-                    queue.add(new Entry(candidate, nIndex));
+                    queue.offer(candidate, nIndex);
+                    if (TRACE) {
+                        offers++;
+                        peak = Math.max(peak, queue.size);
+                    }
                 }
             }
         }
 
+        if (TRACE) {
+            // 求解耗时在写日志之前截取；多目标和单目标要分组看，不能把工作量变化当提速。
+            long totalMicros = (System.nanoTime() - began) / 1000;
+            LOGGER.info("[FMM-TIMING] source={}:{} grid={}x{} step={} stops={} remaining={} "
+                            + "frozen={} offers={} queuePeak={} prepareUs={} totalUs={}",
+                    sourceX, sourceZ, w, d, step, stopMask == null ? "all" : stopCount, remainingStops,
+                    frozenCount, offers, peak, (prepared - began) / 1000, totalMicros);
+        }
         return new ArrivalTimeField(t, minX, minZ, w, d, step, metric);
     }
 
@@ -353,19 +371,58 @@ public final class FastMarchingSolver {
         return Math.min(a + hx, b + hz);
     }
 
-    /** 优先队列条目，按到达时间升序。 */
-    private static final class Entry implements Comparable<Entry> {
-        final double time;
-        final int index;
+    // 两个原始数组保存 (到达时间, 格下标)，沿用旧堆的过期条目与相同权重的出队顺序。
+    static final class Frontier {
+        private double[] times = new double[16];
+        private int[] indices = new int[16];
+        private int size;
 
-        Entry(double time, int index) {
-            this.time = time;
-            this.index = index;
+        void clear() { size = 0; }
+        boolean isEmpty() { return size == 0; }
+
+        void offer(double time, int index) {
+            int hole = size;
+            if (hole == times.length) {
+                int capacity = hole + (hole >> 1);
+                times = Arrays.copyOf(times, capacity);
+                indices = Arrays.copyOf(indices, capacity);
+            }
+            size++;
+            while (hole > 0) {
+                int parent = (hole - 1) >>> 1;
+                // 同权不上浮，与原来 PriorityQueue 的可比较项口径相同。
+                if (Double.compare(time, times[parent]) >= 0) break;
+                move(parent, hole);
+                hole = parent;
+            }
+            times[hole] = time;
+            indices[hole] = index;
         }
 
-        @Override
-        public int compareTo(Entry other) {
-            return Double.compare(this.time, other.time);
+        int poll() {
+            int result = indices[0];
+            int last = --size;
+            if (last == 0) return result;
+            double time = times[last];
+            int index = indices[last];
+            int hole = 0;
+            while (hole < (size >>> 1)) {
+                int child = (hole << 1) + 1;
+                int right = child + 1;
+                // 同权时保留左子，末元素同权则不再下沉；早停时哪一格被冻结取决于此。
+                if (right < size && Double.compare(times[right], times[child]) < 0) child = right;
+                if (Double.compare(time, times[child]) <= 0) break;
+                move(child, hole);
+                hole = child;
+            }
+            times[hole] = time;
+            indices[hole] = index;
+            return result;
+        }
+
+        private void move(int from, int to) {
+            times[to] = times[from];
+            indices[to] = indices[from];
         }
     }
 }

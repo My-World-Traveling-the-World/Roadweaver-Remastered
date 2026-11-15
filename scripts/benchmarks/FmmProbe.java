@@ -1,6 +1,8 @@
 /* 文件职责：在同一 JVM 中对拍并测量旧、新 FMM，避免把缓存热度当优化收益。 */
 package net.shiroha233.roadweaver.metric;
 
+import com.sun.management.ThreadMXBean;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -16,6 +18,8 @@ public final class FmmProbe {
     private static final int[] HEIGHTS = new int[SIDE * SIDE];
     private static volatile double sink;
     private static volatile TopologyPlan forestSink;
+    private static final ThreadMXBean THREADS = ManagementFactory.getPlatformMXBean(ThreadMXBean.class);
+    private static final long THREAD = Thread.currentThread().threadId();
 
     static {
         // 固定同一片起伏地形，避免随机数据或平地掩盖梯度与障碍势的成本。
@@ -65,9 +69,29 @@ public final class FmmProbe {
             if (!Arrays.equals(before.get(i), after.get(i))) throw new AssertionError("path at " + i);
         }
         System.out.printf("MATCH cells=%d routePoints=%d%n", SIDE * SIDE, before.size());
+        compareEarlyFields();
         compare(source, source + 32, 10, "near-target");
         compare(source, target, 1, "far-target");
         compareTopology();
+    }
+
+    private static void compareEarlyFields() {
+        var old = new BaselineFastMarchingSolver(BaselineFinslerMetric.of(GRID, OBSTACLES));
+        var current = new FastMarchingSolver(FinslerMetric.of(GRID, OBSTACLES));
+        // 早停保留临时值，改变同权出队顺序会打开或关闭少数格；重复源同时检验堆复用。
+        for (int source : new int[]{192, 1536, 128}) {
+            int target = source + 128;
+            var before = old.solve(source, source, target, target);
+            var after = current.solve(source, source, target, target);
+            for (int z = 0; z <= MAX; z += STEP) {
+                for (int x = 0; x <= MAX; x += STEP) {
+                    if (Double.doubleToLongBits(before.at(x, z)) != Double.doubleToLongBits(after.at(x, z))) {
+                        throw new AssertionError("early arrival mismatch source=" + source + " x=" + x + " z=" + z);
+                    }
+                }
+            }
+        }
+        System.out.printf("EARLY MATCH sources=3 cellsEach=%d%n", SIDE * SIDE);
     }
 
     private static void compareTopology() {
@@ -132,30 +156,49 @@ public final class FmmProbe {
             run(false, source, target, reps);
             run(true, source, target, reps);
         }
-        double[] oldMs = new double[11], newMs = new double[11];
+        double[] oldMs = new double[21], newMs = new double[21];
+        long[] oldAlloc = new long[oldMs.length], newAlloc = new long[newMs.length];
         for (int i = 0; i < oldMs.length; i++) {
             // 交替顺序，减少温度、JIT 和 GC 定向影响某一组的机会。
             if ((i & 1) == 0) {
-                oldMs[i] = run(false, source, target, reps);
-                newMs[i] = run(true, source, target, reps);
+                collect(run(false, source, target, reps), oldMs, oldAlloc, i);
+                collect(run(true, source, target, reps), newMs, newAlloc, i);
             } else {
-                newMs[i] = run(true, source, target, reps);
-                oldMs[i] = run(false, source, target, reps);
+                collect(run(true, source, target, reps), newMs, newAlloc, i);
+                collect(run(false, source, target, reps), oldMs, oldAlloc, i);
             }
         }
         printTiming(label, oldMs, newMs);
+        if (oldAlloc[0] >= 0 && newAlloc[0] >= 0) {
+            Arrays.sort(oldAlloc);
+            Arrays.sort(newAlloc);
+            System.out.printf("%s allocation p50 baseline=%d B current=%d B%n",
+                    label, oldAlloc[oldAlloc.length / 2], newAlloc[newAlloc.length / 2]);
+        }
     }
 
     private static void printTiming(String label, double[] oldMs, double[] newMs) {
         Arrays.sort(oldMs);
         Arrays.sort(newMs);
         int mid = oldMs.length / 2;
-        System.out.printf(Locale.ROOT, "%s baseline=%.3f ms [%.3f..%.3f] current=%.3f ms [%.3f..%.3f]%n",
-                label, oldMs[mid], oldMs[0], oldMs[oldMs.length - 1],
-                newMs[mid], newMs[0], newMs[newMs.length - 1]);
+        int p95 = (int) Math.ceil(oldMs.length * .95) - 1;
+        System.out.printf(Locale.ROOT, "%s baseline p50=%.3f ms p95=%.3f ms current p50=%.3f ms p95=%.3f ms%n",
+                label, oldMs[mid], oldMs[p95], newMs[mid], newMs[p95]);
     }
 
-    private static double run(boolean current, int source, int target, int reps) {
+    private record Sample(double ms, long allocated) {}
+
+    private static void collect(Sample sample, double[] times, long[] allocations, int index) {
+        times[index] = sample.ms();
+        allocations[index] = sample.allocated();
+    }
+
+    private static long threadBytes() {
+        return THREADS == null ? -1 : THREADS.getThreadAllocatedBytes(THREAD);
+    }
+
+    private static Sample run(boolean current, int source, int target, int reps) {
+        long before = threadBytes();
         long start = System.nanoTime();
         for (int i = 0; i < reps; i++) {
             // 每条生产单线都新建求解器；重用实例会绕过本次要衡量的预计算。
@@ -163,7 +206,10 @@ public final class FmmProbe {
                     ? new FastMarchingSolver(FinslerMetric.of(GRID, OBSTACLES)).solve(source, source, target, target).at(target, target)
                     : new BaselineFastMarchingSolver(BaselineFinslerMetric.of(GRID, OBSTACLES)).solve(source, source, target, target).at(target, target);
         }
-        return (System.nanoTime() - start) / (1_000_000.0 * reps);
+        double ms = (System.nanoTime() - start) / (1_000_000.0 * reps);
+        long after = threadBytes();
+        // 这里量当前线程实际分配，不用 GC 次数猜测对象数；JVM 不支持时不输出分配数据。
+        return new Sample(ms, before < 0 || after < 0 ? -1 : (after - before) / reps);
     }
 }
 
