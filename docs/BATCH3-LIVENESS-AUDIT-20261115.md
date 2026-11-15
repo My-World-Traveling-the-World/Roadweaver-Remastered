@@ -114,12 +114,35 @@ LoadedChunkRoadBackfill:159
    现在桥的「范围 / 甲板高 / 模板选择 / 墩位」分散在
    `BridgeRangeCalculator`（裁决）、`BridgeSegmentPlannerNew`（模板）、
    `BridgeSegmentPlanner` + `BridgeBuilder`（程序化）、
-   `RoadConstructionVolumePlanner`（估算）**四处**，
-   每处各有一套 Y 口径 —— 这正是旧版「先算再修」的病根在新代码里的复现。
+   `RoadConstructionVolumePlanner`（估算）**四处**。
+
+   > **★ 2026-11-15 更正（我这段原来写错了，把历史结论当成了现状）**：
+   > 原文接着写「每处各有一套 Y 口径 —— 这正是旧版『先算再修』病根在新代码里的复现」。
+   > **实测核对后这句不成立**，甲板 Y **早已统一到 profile Y**：
+   >
+   > | 路径 | 代码 | 最终甲板 Y |
+   > |---|---|---|
+   > | 程序化兜底 | `BridgeSegmentPlanner:80` `segDeckY = baseYForThis + 1` → `BridgeBuilder:85` `deckBlockY = deckSurfaceY - 1` | = `baseYForThis` ✅ |
+   > | 内置模板 | `BridgeTemplateStructureRegistry` 用 `heightOffset + 2`，与 `PathFeature` 传的 `baseYForThis`（未 +1）配套 | = profile Y ✅ |
+   > | 体积估算 | `RoadConstructionVolumePlanner` `deckBlockY = profile[index]` | = profile Y ✅ |
+   >
+   > 那次统一就是历史上修掉的「曲线 +2 / 直线 +0 差两格、且都跟路面差一格」问题。
+   > 我上一轮看到 `RoadConstructionVolumePlanner` 里**两段互相矛盾的注释**
+   > （一段说「甲板比 profile 高一格」、一段说「甲板就在 profile 上」）就下了「各有一套口径」
+   > 的判断 —— **那是那段旧注释的残骸误导了我**，实际代码是同源的。
+   >
+   > **已做的事**：把那两段矛盾注释合并成一段权威说明 +
+   > 新增 `BridgeDeckYConsistencyTest`（5 个用例，负控删掉 `+ 1` 立刻红）。
+   >
+   > **所以第 1 步的真实内容变了**：不是「统一四处的 Y 口径」（已统一），
+   > 而是「把这四处的位置信息收敛到一个结构体里，让『谁算的甲板高』只有一个答案」，
+   > 属**结构性整理**而非修 bug —— 优先级因此下降。
 2. **把两个 Planner 合成一个**：模板与程序化应当是同一策略的两种实现分支，
    而不是「先试模板、失败再回落」的两条独立代码路径。
-3. **搬进 `pathlogic/construction` 并删旧包**，同时把 `BridgeBuilder` 里
-   与施工量估算重叠的部分合并（现在两边都在算甲板 Y）。
+3. **搬进 `pathlogic/construction` 并删旧包**。
+   注：原文写「同时把 `BridgeBuilder` 里与施工量估算重叠的部分合并（现在两边都在算甲板 Y）」
+   —— 「重叠」是真的（两边都要知道甲板 Y），但**算出来的值一致**（见第 1 条更正），
+   所以这不是 bug 而是「同一个事实被两个模块各自知道」，属**耦合适度问题**，不是错误。
 4. **真机验收**：桥形态、墩位、材料、浮标位置都要看。
 
 **风险提示**：这一步会动世界生成结果，**必须真机**。

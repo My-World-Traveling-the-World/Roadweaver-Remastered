@@ -460,13 +460,27 @@ public final class RoadConstructionVolumePlanner {
 
         List<BlockPos> nextPositions = line == null ? segment.positions() : line.mapRoadPositions(segment.positions());
         if (nextPositions == null || nextPositions.isEmpty()) return true;
-        // The deck block sits one above the profile Y (BridgeBuilder: deckSurfaceY = profile + 2, then
-        // deckBlockY = deckSurfaceY - 1). This fallback used profile - 1, so the volume the validator checked
-        // was two blocks low: the top two blocks of the real deck were never validated and two blocks of
-        // empty air below it were.
-        // The builder puts the deck block on the profile Y (BridgeBuilder: deckSurfaceY - 1 with
-        // deckSurfaceY = profile + 1), so the volume has to start there too or every bridge volume is
-        // validated one block high.
+        // ── 甲板 Y 的唯一口径：**profile Y**（2026-11-15 复核确认，三条路径已同源）──
+        //
+        // 这里原本叠着两段**互相矛盾**的历史注释：前一段说「甲板比 profile 高一格
+        // （profile + 2 再 -1）」，后一段说「甲板就在 profile 上」。两段都留在代码里，
+        // 读的人根本不知道该信哪个。复核后确认**后一段才对**，前一段是更早一次修复
+        // 留下的残骸。已合并成本段。
+        //
+        // 三条建造路径的实测值（全部落到 profile Y）：
+        //   ① 程序化兜底：BridgeSegmentPlanner 传 segDeckY = baseYForThis + 1
+        //      → BridgeBuilder 里 deckBlockY = deckSurfaceY - 1 = baseYForThis ✅
+        //   ② 内置模板：BridgeTemplateStructureRegistry 用 heightOffset + 2 映射，
+        //      与 PathFeature 传的 baseYForThis（未 +1）配套，模板甲板也落在 profile Y ✅
+        //   ③ 本类的体积估算：deckBlockY = profile[index] ✅
+        //
+        // ★ 历史（别再改回去）：更早时曲线路径 +2、直线路径 +0 ⇒ 同一条路上两座桥差两格、
+        //   而且不管哪种都跟路面差一格 ⇒ 每座桥起止都有台阶。那次的修法就是
+        //   「全部对齐到 profile Y」，也就是路面铺装所落的层 —— 桥甲板与路面同层，
+        //   接缝自然闭合。
+        //
+        // 验证方式：`BridgeSegmentPlanner:80` 的 +1 与 `BridgeBuilder:85` 的 -1 必须成对存在。
+        // 若有人只改其中一处，甲板就会偏离 profile Y 一格，本类与验证器的体积口径随之全错。
         int deckBlockY = profile[index];
         int clearHeight = Math.max(1, context.config().roadClearHeight());
         for (BlockPos position : nextPositions) {
