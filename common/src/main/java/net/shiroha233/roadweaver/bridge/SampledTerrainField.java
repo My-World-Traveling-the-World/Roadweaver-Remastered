@@ -131,6 +131,12 @@ public final class SampledTerrainField {
                                                    int minX, int minZ,
                                                    int blockWidth, int blockDepth,
                                                    int step) {
+        return sampleSurface(sampler, minX, minZ, blockWidth, blockDepth, step).terrain();
+    }
+
+    // 影子回溯只读这次采样已有的高度差，避免为了日志再采一块地形或加载区块。
+    public static SurfaceGrid sampleSurface(AccurateHeightSampler sampler, int minX, int minZ,
+                                            int blockWidth, int blockDepth, int step) {
         if (sampler == null) throw new IllegalArgumentException("sampler 不能为 null");
         if (blockWidth <= 0 || blockDepth <= 0) {
             throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
@@ -145,6 +151,33 @@ public final class SampledTerrainField {
 
         // motionBlocking 是「行走面」：含障碍物、不含树叶。
         // worldSurface 会把树冠算进去，道路会莫名抬高；oceanFloor 只在过水判定用。
-        return new GridTerrainField(minX, minZ, columns, rows, safeStep, grid.motionBlocking());
+        return new SurfaceGrid(new GridTerrainField(minX, minZ, columns, rows, safeStep,
+                grid.motionBlocking()), grid);
+    }
+
+    public static final class SurfaceGrid {
+        private final TerrainField terrain;
+        private final AccurateHeightGrid heights;
+
+        SurfaceGrid(TerrainField terrain, AccurateHeightGrid heights) {
+            this.terrain = terrain;
+            this.heights = heights;
+        }
+
+        public TerrainField terrain() {
+            return terrain;
+        }
+
+        public int waterProxy(int x, int z) {
+            var request = heights.request();
+            int dx = x - request.minX(), dz = z - request.minZ();
+            int step = request.step();
+            // 高度图能提供湿列的代理证据，但高度相等不等于确认干列（这里没有群系和流体）。
+            if (dx < 0 || dz < 0 || dx % step != 0 || dz % step != 0
+                    || dx / step >= request.width() || dz / step >= request.height()) return -1;
+            int i = dx / step + dz / step * request.width();
+            int gap = heights.worldSurface()[i] - heights.oceanFloor()[i];
+            return gap > 0 ? gap : -1;
+        }
     }
 }

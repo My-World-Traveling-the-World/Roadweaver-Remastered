@@ -2,7 +2,16 @@
 package net.shiroha233.roadweaver.pipeline;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.PriorityQueue;
+import java.util.TreeMap;
+import java.util.function.BiConsumer;
+import java.util.function.IntBinaryOperator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import net.shiroha233.roadweaver.band.BandResult;
 import net.shiroha233.roadweaver.band.ElasticBandSolver;
@@ -44,6 +53,13 @@ import net.shiroha233.roadweaver.topology.TopologyPlan;
  * @see QualityGate
  */
 public final class RoadPipeline {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver");
+    // 影子只读少量边；把格数乘最坏求解次数，避免选项在大区域额外跑满整张图。
+    private static final int SHADOW_EDGES = 12;
+    private static final int SHADOW_ALTERNATIVES = 4;
+    private static final int SHADOW_NODES = 256;
+    private static final int SHADOW_CELL_BUDGET = 600_000;
 
     private final FinslerMetric metric;
     private final ElasticBandSolver bandSolver;
@@ -134,12 +150,108 @@ public final class RoadPipeline {
 
     // 上层知道端点的限制（含 Y）；内核仍只关心测地距离与候选下标。
     public TopologyPlan planTopology(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed) {
+        return planTopology(nodes, allowed, null, null);
+    }
+
+    public TopologyPlan planTopologyWithShadow(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed,
+                                               IntBinaryOperator waterProxy) {
+        return planTopology(nodes, allowed,
+                (x, z) -> new BuildabilityShadow.Column(metric.terrain().height(x, z),
+                        waterProxy.applyAsInt(x, z), BuildabilityShadow.Protection.UNKNOWN),
+                (report, nanos) -> LOGGER.info("RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
+                                + "water=heightmap-gap protection=unprepared shadowMs={} {} coordinates={}",
+                        nodes.size(), nodes.getFirst().x(), nodes.getFirst().z(), metric.terrain().step(),
+                        nanos / 1_000_000, report, report.edges().stream().map(e -> {
+                            var a = nodes.get(e.choice().from());
+                            var b = nodes.get(e.choice().to());
+                            return a.x() + ":" + a.z() + "->" + b.x() + ":" + b.z();
+                        }).toList()));
+    }
+
+    TopologyPlan planTopology(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed,
+                              BuildabilityShadow.Probe probe,
+                              BiConsumer<BuildabilityShadow.Report, Long> observer) {
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalArgumentException("节点列表不能为空");
         }
         // 让被长度上限淘汰的终点也退出传播早停条件；选树仍读相同的有效边权。
         GeodesicMatrix matrix = GeodesicMatrix.build(metric, nodes, allowed);
-        return MinimumSpanningTree.solve(matrix);
+        TopologyPlan selected = MinimumSpanningTree.solve(matrix);
+        if (observer != null) {
+            try {
+                long started = System.nanoTime();
+                var report = shadow(matrix, selected, probe);
+                observer.accept(report, System.nanoTime() - started);
+            } catch (RuntimeException failure) {
+                // 实验失败不能触发生产规划器回退到直线 MST。
+                LOGGER.warn("RoadWeaver buildability shadow failed (nodes={})", nodes.size(), failure);
+            }
+        }
+        return selected;
+    }
+
+    private BuildabilityShadow.Report shadow(GeodesicMatrix matrix, TopologyPlan topology,
+                                             BuildabilityShadow.Probe probe) {
+        long cells = (long) metric.terrain().columns() * metric.terrain().rows();
+        int budget = (int) Math.min(SHADOW_EDGES, SHADOW_CELL_BUDGET / cells);
+        var selected = topology.edges();
+        if (selected.isEmpty()) return BuildabilityShadow.Report.skipped("no-selected-edges", 0);
+        if (budget < 2 || matrix.size() > SHADOW_NODES) {
+            return BuildabilityShadow.Report.skipped("budget", selected.size());
+        }
+
+        int alternateLimit = Math.min(SHADOW_ALTERNATIVES, budget / 2);
+        Comparator<BuildabilityShadow.Choice> nearest = Comparator
+                .comparingDouble(BuildabilityShadow.Choice::geodesic)
+                .thenComparingInt(BuildabilityShadow.Choice::from)
+                .thenComparingInt(BuildabilityShadow.Choice::to);
+        var candidates = new PriorityQueue<>(alternateLimit, nearest.reversed());
+        var selectedKeys = new HashSet<Long>();
+        for (var edge : selected) selectedKeys.add(shadowKey(edge.from(), edge.to()));
+        for (int a = 0; a < matrix.size(); a++) {
+            for (int b = a + 1; b < matrix.size(); b++) {
+                double distance = matrix.distance(a, b);
+                if (!Double.isFinite(distance) || selectedKeys.contains(shadowKey(a, b))) continue;
+                // 复用矩阵且只保留最短的少量候补，不复制密集的边表。
+                if (candidates.size() == alternateLimit && distance >= candidates.peek().geodesic()) continue;
+                candidates.add(new BuildabilityShadow.Choice(a, b, distance, false));
+                if (candidates.size() > alternateLimit) candidates.remove();
+            }
+        }
+        var choices = new ArrayList<BuildabilityShadow.Choice>(budget);
+        int selectedCount = Math.min(selected.size(), budget - candidates.size());
+        for (int i = 0; i < selectedCount; i++) {
+            // 抽样覆盖已选边的距离分布，别只看最容易建的近邻。
+            var edge = selected.get(selectedCount == 1 ? 0 : i * (selected.size() - 1) / (selectedCount - 1));
+            choices.add(new BuildabilityShadow.Choice(edge.from(), edge.to(), edge.distance(), true));
+        }
+        candidates.stream().sorted(nearest).forEach(choices::add);
+
+        var bySource = new TreeMap<Integer, List<BuildabilityShadow.Choice>>();
+        for (var choice : choices) bySource.computeIfAbsent(choice.from(), ignored -> new ArrayList<>()).add(choice);
+        var evidence = new ArrayList<BuildabilityShadow.Evidence>(choices.size());
+        var solver = new FastMarchingSolver(metric);
+        var nodes = topology.nodes();
+        for (var entry : bySource.entrySet()) {
+            var source = nodes.get(entry.getKey());
+            var targets = entry.getValue();
+            int[] xs = new int[targets.size()], zs = new int[targets.size()];
+            for (int i = 0; i < targets.size(); i++) {
+                var target = nodes.get(targets.get(i).to());
+                xs[i] = target.x();
+                zs[i] = target.z();
+            }
+            // 仅回溯粗格，不重复跑后段弹性带、结构探测或实际施工。
+            var field = solver.solveReachingAll(source.x(), source.z(), xs, zs);
+            for (int i = 0; i < targets.size(); i++) {
+                evidence.add(BuildabilityShadow.measure(targets.get(i), field.pathTo(xs[i], zs[i]), probe));
+            }
+        }
+        return BuildabilityShadow.Report.summarize(selected.size(), bySource.size(), evidence);
+    }
+
+    private static long shadowKey(int a, int b) {
+        return ((long) Math.min(a, b) << 32) | Math.max(a, b);
     }
 
     private RoadNetworkPlan.RoadEdge buildEdge(List<RoadNode> nodes,

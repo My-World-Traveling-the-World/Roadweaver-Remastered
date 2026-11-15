@@ -70,6 +70,8 @@ public final class PipelinePlanner implements NetworkPlanner {
 
     /** 拓扑决策的采样步长（格）。8 与旧 A* 的 {@code effectiveAStarStep()} 同量级。 */
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver");
+    private static final boolean BUILDABILITY_SHADOW =
+            "on".equalsIgnoreCase(System.getProperty("roadweaver.buildabilityShadow"));
 
     public static final int DEFAULT_STEP = 8;
 
@@ -140,9 +142,15 @@ public final class PipelinePlanner implements NetworkPlanner {
 
         // ③ 地形场（带步长）+ 度量（无避让，理由见类注释）
         TerrainField terrain;
+        SampledTerrainField.SurfaceGrid shadowSurface;
         try {
-            terrain = SampledTerrainField.fromAccurateSampler(
-                    AccurateHeightSampler.create(level), minX, minZ, width, depth, step);
+            var sampler = AccurateHeightSampler.create(level);
+            // 只有试评时才保留两张额外高度图，不增加第二次采样或结构查找。
+            shadowSurface = BUILDABILITY_SHADOW
+                    ? SampledTerrainField.sampleSurface(sampler, minX, minZ, width, depth, step) : null;
+            terrain = shadowSurface == null
+                    ? SampledTerrainField.fromAccurateSampler(sampler, minX, minZ, width, depth, step)
+                    : shadowSurface.terrain();
         } catch (RuntimeException samplingFailure) {
             // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败。
             // 2026-11-14 修复（审计 F）：原来这个异常被完全吞掉、零日志 ——
@@ -165,9 +173,15 @@ public final class PipelinePlanner implements NetworkPlanner {
         TopologyPlan topology;
         try {
             // 原有上限按原始端点三维距离；把同一判据提前给 Kruskal，免得删树边后断网。
-            topology = new RoadPipeline(metric, null).planTopology(nodes,
-                    (from, to) -> withinMaxEdge(representatives.get(from), representatives.get(to),
-                            maxEdgeLenBlocks));
+            var pipeline = new RoadPipeline(metric, null);
+            if (shadowSurface == null) {
+                topology = pipeline.planTopology(nodes, (from, to) ->
+                        withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks));
+            } else {
+                topology = pipeline.planTopologyWithShadow(nodes, (from, to) ->
+                        withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks),
+                        shadowSurface::waterProxy);
+            }
         } catch (RuntimeException pipelineFailure) {
             // 2026-11-14 修复（审计 F）：同样原来是静默吞掉。
             LOGGER.warn("RoadWeaver pipeline planner: 测地拓扑求解失败，退回直线距离 MST"

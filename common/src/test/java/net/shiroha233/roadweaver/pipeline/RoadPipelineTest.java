@@ -2,6 +2,8 @@
 package net.shiroha233.roadweaver.pipeline;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.shiroha233.roadweaver.band.BandResult.Point;
 import net.shiroha233.roadweaver.band.ElasticBandSolver;
@@ -32,6 +34,92 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @see QualityGate
  */
 class RoadPipelineTest {
+    @Test
+    void 影子必须实际抽样且不改下发的边和顺序() {
+        var pipeline = new RoadPipeline(FinslerMetric.of(flat(61), ObstacleField.NONE), null);
+        var nodes = squareCorners();
+        MinimumSpanningTree.EdgeFilter allowed = (a, b) -> a != 0 || b != 2;
+        var baseline = pipeline.planTopology(nodes, allowed);
+        var reports = new ArrayList<BuildabilityShadow.Report>();
+        var result = pipeline.planTopology(nodes, allowed, (x, z) ->
+                new BuildabilityShadow.Column(0, -1, BuildabilityShadow.Protection.UNKNOWN),
+                (report, nanos) -> reports.add(report));
+        assertEquals(baseline, result);
+        assertEquals(1, reports.size());
+        var report = reports.getFirst();
+        assertEquals(3, report.edges().stream().filter(e -> e.choice().selected()).count());
+        assertEquals(2, report.edges().stream().filter(e -> !e.choice().selected()).count());
+        assertTrue(report.edges().stream().noneMatch(e -> e.choice().from() == 0 && e.choice().to() == 2));
+        assertEquals(5, report.gradeOnlyOrder().size());
+        assertTrue(report.completeOrder().isEmpty(), "不许把未采保护或水证据记成零");
+
+        var reads = new AtomicInteger();
+        assertEquals(baseline, pipeline.planTopology(nodes, allowed, (x, z) -> {
+            reads.incrementAndGet();
+            throw new IllegalStateException("模拟观测读失败");
+        }, (unexpected, nanos) -> { throw new AssertionError("采样失败不能报告完成"); }));
+        assertEquals(1, reads.get(), "负控必须真的进入观测读");
+    }
+
+    @Test
+    void 影子限制候补边和重算场并在大图跳过() {
+        var pipeline = new RoadPipeline(FinslerMetric.of(flat(61), ObstacleField.NONE), null);
+        var nodes = new ArrayList<RoadNode>();
+        for (int i = 0; i < 20; i++) nodes.add(new RoadNode("s" + i, 5 + i % 5 * 10, 5 + i / 5 * 10));
+        var reports = new ArrayList<BuildabilityShadow.Report>();
+        BuildabilityShadow.Probe probe = (x, z) -> new BuildabilityShadow.Column(
+                0, 0, BuildabilityShadow.Protection.CLEAR);
+        pipeline.planTopology(nodes, null, probe, (report, nanos) -> reports.add(report));
+        var report = reports.getFirst();
+        assertEquals(19, report.selectedTotal());
+        assertEquals(12, report.edges().size());
+        assertEquals(4, report.edges().stream().filter(e -> !e.choice().selected()).count());
+        assertEquals(report.edges().stream().map(e -> e.choice().from()).distinct().count(), report.solves());
+
+        // 附近端点很快即可完成原始拓扑，但图太大仍不许进入第二轮。
+        var large = new RoadPipeline(FinslerMetric.of(flat(550), ObstacleField.NONE), null);
+        var pair = List.of(new RoadNode("a", 0, 0), new RoadNode("b", 2, 0));
+        assertEquals(1, large.planTopology(pair, null, (x, z) -> {
+            throw new AssertionError("预算不足应跳过影子读取");
+        }, (skip, nanos) -> reports.add(skip)).edgeCount());
+        assertEquals("budget", reports.getLast().state());
+        assertEquals(0, reports.getLast().solves());
+    }
+
+    @Test
+    void 施工证据可区分较近却难修的路线() {
+        var near = new BuildabilityShadow.Choice(0, 1, 2, true);
+        var dry = new BuildabilityShadow.Choice(0, 2, 6, false);
+        BuildabilityShadow.Probe probe = (x, z) -> new BuildabilityShadow.Column(
+                x == 1 && z == 0 ? 5 : 0, x == 2 && z == 0 ? 3 : 0,
+                x == 1 && z == 0 ? BuildabilityShadow.Protection.HIT : BuildabilityShadow.Protection.CLEAR);
+        var a = BuildabilityShadow.measure(near, List.of(new int[]{0, 0}, new int[]{1, 0}, new int[]{2, 0}), probe);
+        var b = BuildabilityShadow.measure(dry, List.of(new int[]{0, 0}, new int[]{0, 3}, new int[]{0, 6}), probe);
+        var noTrace = BuildabilityShadow.measure(dry, List.of(new int[]{0, 0}), probe);
+        var report = BuildabilityShadow.Report.summarize(1, 1, List.of(a, b, noTrace));
+        assertEquals(List.of(dry, near), report.completeOrder());
+        assertEquals(1, a.protectedColumns());
+        assertEquals(3, a.maxWaterDepth());
+        assertEquals(5, a.gradeDeviation());
+        assertEquals(BuildabilityShadow.Status.NO_TRACE, noTrace.status());
+    }
+
+    @Test
+    void 两条路线共用湿格但缺样不会连成一个涉水段() {
+        var wet = List.of(new int[]{-1, 0}, new int[]{0, 0}, new int[]{1, 0}, new int[]{2, 0});
+        var bent = List.of(new int[]{0, 1}, new int[]{0, 0}, new int[]{1, 0}, new int[]{2, 1});
+        BuildabilityShadow.Probe probe = (x, z) -> new BuildabilityShadow.Column(0, z != 0 ? 0 :
+                x == 0 ? -1 : 2, BuildabilityShadow.Protection.CLEAR);
+        var a = BuildabilityShadow.measure(new BuildabilityShadow.Choice(0, 1, 3, true), wet, probe);
+        var b = BuildabilityShadow.measure(new BuildabilityShadow.Choice(2, 3, 4, true), bent, probe);
+        var report = BuildabilityShadow.Report.summarize(2, 2, List.of(a, b));
+        assertEquals(1, report.sharedWetCells());
+        assertEquals(1, a.unknownWater());
+        assertEquals(1.0, a.wetRunBlocks(), "不允许把缺水证据的中间格补成湿地");
+        assertEquals(BuildabilityShadow.Status.INCOMPLETE, a.status());
+        assertTrue(report.completeOrder().isEmpty());
+    }
+
     @Test
     void 两个无孤点的分量仍应被严格拓扑报告指出() {
         // 两个双节点分量没有孤点，也没有大的绕行比，只有分量检查能抓到断网。
