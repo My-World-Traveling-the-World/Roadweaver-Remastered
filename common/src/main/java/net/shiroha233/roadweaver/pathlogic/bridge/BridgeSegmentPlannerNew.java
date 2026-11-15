@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -55,6 +56,69 @@ public final class BridgeSegmentPlannerNew {
         return LANDING_MOUTHS_FILLED.get();
     }
 
+    // 规划和施工共用模板与水线读口，才能离线复现桥口映射而不复制几何。
+    interface PlanningAccess {
+        BridgeTemplate template(int seed);
+        boolean isOpenWater(BlockPos pos);
+    }
+
+    interface PlacementAccess extends PlanningAccess {
+        String dimensionId();
+        boolean isProtected(BlockPos pos, RoadData road);
+        void clearHeadroom(RoadSegmentPlacement segment, int deckY, RoadData road);
+        int minBuildHeight();
+        BlockState getBlockState(BlockPos pos);
+        boolean isFullBlock(BlockState state, BlockPos pos);
+        BlockState updateFromNeighbourShapes(BlockState state, BlockPos pos);
+        void setBlock(BlockPos pos, BlockState state);
+    }
+
+    private record WorldPlacementAccess(WorldGenLevel world) implements PlacementAccess {
+        public BridgeTemplate template(int seed) {
+            return BridgeTemplateStructureRegistry.chooseOriginal(world.getLevel(), seed);
+        }
+
+        public boolean isOpenWater(BlockPos pos) {
+            return isOpenWaterColumn(world, pos);
+        }
+
+        public String dimensionId() {
+            return world.getLevel().dimension().location().toString();
+        }
+
+        public boolean isProtected(BlockPos pos, RoadData road) {
+            return RoadConstructionSafety.isProtectedExactConstructionBlock(world, pos, road);
+        }
+
+        public void clearHeadroom(RoadSegmentPlacement segment, int deckY, RoadData road) {
+            var config = ConfigService.get();
+            if (config.roadAppearance().forcedClearProtected()) {
+                net.shiroha233.roadweaver.decoration.system.AboveColumnClearer
+                        .clearTemplateBridgeHeadroom(world, segment, deckY, road, config);
+            }
+        }
+
+        public int minBuildHeight() {
+            return world.getMinBuildHeight();
+        }
+
+        public BlockState getBlockState(BlockPos pos) {
+            return world.getBlockState(pos);
+        }
+
+        public boolean isFullBlock(BlockState state, BlockPos pos) {
+            return state.isCollisionShapeFullBlock(world, pos);
+        }
+
+        public BlockState updateFromNeighbourShapes(BlockState state, BlockPos pos) {
+            return Block.updateFromNeighbourShapes(state, world, pos);
+        }
+
+        public void setBlock(BlockPos pos, BlockState state) {
+            world.setBlock(pos, state, 3);
+        }
+    }
+
     private BridgeSegmentPlannerNew() {
     }
 
@@ -68,12 +132,26 @@ public final class BridgeSegmentPlannerNew {
             BlockPos previous,
             int deckY,
             boolean landingStation) {
+        return processSegment(new WorldPlacementAccess(world), currentChunk, road, line,
+                segment, middle, previous, deckY, landingStation);
+    }
+
+    static boolean processSegment(
+            PlacementAccess access,
+            ChunkPos currentChunk,
+            RoadData road,
+            Line line,
+            RoadSegmentPlacement segment,
+            BlockPos middle,
+            BlockPos previous,
+            int deckY,
+            boolean landingStation) {
         double bridgeLength = line.getTotalLength();
-        var bridge = BridgeTemplateStructureRegistry.chooseOriginal(world.getLevel(), stableBridgeSeed(line));
+        BridgeTemplate bridge = access.template(stableBridgeSeed(line));
         if (bridge == null) {
             return false;
         }
-        String logKey = world.getLevel().dimension().location() + "|" + Math.round(bridgeLength)
+        String logKey = access.dimensionId() + "|" + Math.round(bridgeLength)
                 + "|" + bridge.getId();
         if (LOGGED_BRIDGES.add(logKey)) {
             LOGGER.info("RoadWeaver original bridge template={} lengthBlocks={} deckY={}",
@@ -93,14 +171,14 @@ public final class BridgeSegmentPlannerNew {
             }
             // Per-voxel wall veto: the bridge stops at the wall instead of overwriting it.
             if (isWallOwned(pos)) return false;
-            if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, pos, road)) {
+            if (access.isProtected(pos, road)) {
                 blocked[0] = true;
                 return false;
             }
             placements.add(new TemplatePlacement(pos, state));
             return true;
         };
-        boolean clampToBody = isOpenWaterColumn(world, middle);
+        boolean clampToBody = access.isOpenWater(middle);
         TemplateVisit visit = visitTemplateBlocks(
                 bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collect);
 
@@ -141,23 +219,18 @@ public final class BridgeSegmentPlannerNew {
         // 只清 [桥面+1, 桥面+1+净空)，向下不动，所以不会挖成峡谷；清在贴之前，且跳过本段模板
         // 自己要占的格子，避免削掉本段的栏杆/桥面。受保护方块由 roadAppearance.forcedClearProtected
         // 决定是否强清（关掉即完全回到 0.9.004 行为）。
-        net.shiroha233.roadweaver.config.ModConfig bridgeCfg =
-                net.shiroha233.roadweaver.config.ConfigService.get();
-        if (bridgeCfg.roadAppearance().forcedClearProtected()) {
-            net.shiroha233.roadweaver.decoration.system.AboveColumnClearer
-                    .clearTemplateBridgeHeadroom(world, segment, deckY, road, bridgeCfg);
-        }
+        access.clearHeadroom(segment, deckY, road);
 
         for (TemplatePlacement placement : placements) {
             if (isWallOwned(placement.pos())) continue;
-            world.setBlock(placement.pos(), placement.state(), 3);
-            BlockState updatedState = Block.updateFromNeighbourShapes(
-                    world.getBlockState(placement.pos()), world, placement.pos());
-            world.setBlock(placement.pos(), updatedState, 3);
+            access.setBlock(placement.pos(), placement.state());
+            BlockState updatedState = access.updateFromNeighbourShapes(
+                    access.getBlockState(placement.pos()), placement.pos());
+            access.setBlock(placement.pos(), updatedState);
         }
 
-        placeTemplateCenterLight(world, currentChunk, road, line, deckY, placements);
-        placeTemplatePiers(world, currentChunk, road, line, deckY);
+        placeTemplateCenterLight(access, road, line, deckY, placements);
+        placeTemplatePiers(access, currentChunk, road, line, deckY);
 
         // A bridge block elsewhere in this chunk does not prove that the
         // current station reaches the bridge. Let the normal bridge fallback
@@ -193,7 +266,7 @@ public final class BridgeSegmentPlannerNew {
      * fills a support column from just under the deck down to the first solid block, honouring the configured
      * pier interval, the pier height cap, chunk ownership and protected blocks.
      */
-    private static void placeTemplatePiers(WorldGenLevel world, ChunkPos currentChunk, RoadData road,
+    private static void placeTemplatePiers(PlacementAccess access, ChunkPos currentChunk, RoadData road,
                                            Line line, int deckY) {
         int interval = Math.max(2, ConfigService.get().bridge().pierInterval());
         int cap = ConfigService.get().bridge().pierMaxHeight();
@@ -207,14 +280,14 @@ public final class BridgeSegmentPlannerNew {
             boolean placed = false;
             for (int depth = 1; depth <= cap; depth++) {
                 int y = deckY - 1 - depth;
-                if (y <= world.getMinBuildHeight()) break;
+                if (y <= access.minBuildHeight()) break;
                 BlockPos pos = new BlockPos(x, y, z);
                 if (!ownsTarget(currentChunk, pos)) break;
-                BlockState existing = world.getBlockState(pos);
+                BlockState existing = access.getBlockState(pos);
                 if (existing.blocksMotion()) break;
-                if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, pos, road)) break;
+                if (access.isProtected(pos, road)) break;
                 if (isWallOwned(pos)) break;
-                world.setBlock(pos, support, 3);
+                access.setBlock(pos, support);
                 placed = true;
             }
             if (placed) {
@@ -234,8 +307,7 @@ public final class BridgeSegmentPlannerNew {
      * so every chunk place only its own share of the lanterns.
      */
     private static void placeTemplateCenterLight(
-            WorldGenLevel world,
-            ChunkPos currentChunk,
+            PlacementAccess access,
             RoadData road,
             Line line,
             int deckY,
@@ -247,23 +319,23 @@ public final class BridgeSegmentPlannerNew {
         for (double spanDistance = 0.0D; spanDistance <= length; spanDistance += interval) {
             BlockPos lightPos = deckCenterColumn(line, spanDistance / length, deckY, placements);
             if (lightPos == null) continue;
-            if (RoadConstructionSafety.isProtectedExactConstructionBlock(world, lightPos, road)) continue;
+            if (access.isProtected(lightPos, road)) continue;
             if (isWallOwned(lightPos)) continue;
-            BlockState existing = world.getBlockState(lightPos);
+            BlockState existing = access.getBlockState(lightPos);
             if (existing.isAir() || !existing.getFluidState().isEmpty()) continue;
             if (existing.is(Blocks.SEA_LANTERN)) continue;
             // O-14（0.9.027）：「海晶灯抢栏杆」。
             // 这一格是**桥面中心列**上的模板体素，可能是桥板（整格实心），也可能是栏杆/栅栏/墙。
             // 原来只判「非空气且非流体」就把整块换成海晶灯 —— 撞上栏杆时等于把栏杆挖掉一段。
             // 栏杆类方块的碰撞体不是整格，用碰撞体是否填满整格来区分：只允许替换桥板。
-            if (!existing.isCollisionShapeFullBlock(world, lightPos)) continue;
+            if (!access.isFullBlock(existing, lightPos)) continue;
             // 斜向桥:海晶灯沿桥中心线每 interval 格放一个,但斜向投影到世界
             // XZ 时相邻灯会紧挨(斜对角相邻)。放灯前查周围 3x3 是否已有海晶
             // 灯,有则跳过,避免斜向桥桥面出现紧挨/重叠的灯。海晶灯数量极少,
             // 每灯多查 8 格 getBlockState,O(1) 成本可忽略,且仅在 worldgen
             // 后台线程执行。
-            if (hasNearbySeaLantern(world, lightPos)) continue;
-            world.setBlock(lightPos, Blocks.SEA_LANTERN.defaultBlockState(), 3);
+            if (hasNearbySeaLantern(access, lightPos)) continue;
+            access.setBlock(lightPos, Blocks.SEA_LANTERN.defaultBlockState());
         }
     }
 
@@ -272,11 +344,11 @@ public final class BridgeSegmentPlannerNew {
      * 灯。桥面海晶灯只会是本模组放置(替换 deck 中心方块),周围若已有海晶灯
      * 即视为本模组已放,跳过当前灯以避免斜向紧挨。
      */
-    private static boolean hasNearbySeaLantern(WorldGenLevel world, BlockPos center) {
+    private static boolean hasNearbySeaLantern(PlacementAccess access, BlockPos center) {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if (dx == 0 && dz == 0) continue;
-                if (world.getBlockState(center.offset(dx, 0, dz)).is(Blocks.SEA_LANTERN)) {
+                if (access.getBlockState(center.offset(dx, 0, dz)).is(Blocks.SEA_LANTERN)) {
                     return true;
                 }
             }
@@ -326,7 +398,7 @@ public final class BridgeSegmentPlannerNew {
 
     /** Exact non-air template voxels used by save-time structure validation. */
     public static List<BlockPos> plannedBlocks(
-            net.minecraft.server.level.ServerLevel level,
+            ServerLevel level,
             Line line,
             RoadSegmentPlacement segment,
             BlockPos middle,
@@ -338,18 +410,29 @@ public final class BridgeSegmentPlannerNew {
 
     /** Full template geometry plus whether the middle point's chunk will suppress procedural fallback. */
     public static PlannedBridge plannedBridge(
-            net.minecraft.server.level.ServerLevel level,
+            ServerLevel level,
             Line line,
             RoadSegmentPlacement segment,
             BlockPos middle,
             BlockPos previous,
             int deckY,
             boolean landingStation) {
-        if (level == null || line == null || segment == null || middle == null || previous == null) {
+        return plannedBridgeWithAccess(level == null ? null : new WorldPlacementAccess(level),
+                line, segment, middle, previous, deckY, landingStation);
+    }
+
+    static PlannedBridge plannedBridgeWithAccess(
+            PlanningAccess access,
+            Line line,
+            RoadSegmentPlacement segment,
+            BlockPos middle,
+            BlockPos previous,
+            int deckY,
+            boolean landingStation) {
+        if (access == null || line == null || segment == null || middle == null || previous == null) {
             return PlannedBridge.none();
         }
-        double bridgeLength = line.getTotalLength();
-        var bridge = BridgeTemplateStructureRegistry.chooseOriginal(level, stableBridgeSeed(line));
+        BridgeTemplate bridge = access.template(stableBridgeSeed(line));
         if (bridge == null) return PlannedBridge.none();
         int minX = Math.min(previous.getX(), middle.getX()) - 10;
         int maxX = Math.max(previous.getX(), middle.getX()) + 10;
@@ -360,7 +443,7 @@ public final class BridgeSegmentPlannerNew {
             blocks.add(pos);
             return true;
         };
-        boolean clampToBody = isOpenWaterColumn(level, middle);
+        boolean clampToBody = access.isOpenWater(middle);
         TemplateVisit visit = visitTemplateBlocks(
                 bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collectAll);
         // 0.9.033：与 processSegment 保持**逐条一致**的重试，否则存档期校验算出的

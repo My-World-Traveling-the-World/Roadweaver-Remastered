@@ -72,6 +72,73 @@ public final class ExistingRoadJunctionService {
         return JUNCTION_REFINE_TIMEOUT_MS;
     }
 
+    // 单路和批量共用矩形查询口；选主、提交顺序和捐赠路处理仍由本类决定。
+    interface RoadQuery {
+        List<RoadData> query(int minX, int minZ, int maxX, int maxZ);
+    }
+
+    interface RuntimeAccess extends RoadQuery {
+        RoadData refineTunnels(RoadData road);
+        void replaceDonor(long fingerprint, RoadData donor);
+    }
+
+    interface BatchAccess extends RoadQuery {
+        BatchRefinement openRefinement();
+        BraidPrecheck resolveOverlaps(List<RoadData> current, List<RoadData> persisted, boolean[] skip);
+    }
+
+    interface BatchRefinement extends AutoCloseable {
+        CompletableFuture<MergeResult> refine(MergeWork item);
+        FinalRoadStructureValidator.ValidationResult validate(RoadData road);
+        @Override
+        void close();
+    }
+
+    private record WorldBatchAccess(ServerLevel level) implements BatchAccess {
+        public List<RoadData> query(int minX, int minZ, int maxX, int maxZ) {
+            return RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ);
+        }
+
+        public BatchRefinement openRefinement() {
+            // 缓存和水系会话仍只在批量入口创建；精修子任务继续使用自己的缓存。
+            TerrainSamplingCache cache = new TerrainSamplingCache();
+            StreamsReflowingCompat.SamplingSession streams = StreamsReflowingCompat.openSession(level);
+            return new BatchRefinement() {
+                public CompletableFuture<MergeResult> refine(MergeWork item) {
+                    return CompletableFuture.supplyAsync(
+                            () -> refineMergedCandidate(level, item),
+                            ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS));
+                }
+
+                public FinalRoadStructureValidator.ValidationResult validate(RoadData road) {
+                    return FinalRoadStructureValidator.validate(level, road, cache, streams);
+                }
+
+                public void close() {
+                    cache.clear();
+                }
+            };
+        }
+
+        public BraidPrecheck resolveOverlaps(List<RoadData> current, List<RoadData> persisted, boolean[] skip) {
+            return resolveParallelOverlaps(level, current, persisted, skip);
+        }
+    }
+
+    private record WorldRuntimeAccess(ServerLevel level, TerrainSamplingCache cache) implements RuntimeAccess {
+        public List<RoadData> query(int minX, int minZ, int maxX, int maxZ) {
+            return RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ);
+        }
+
+        public RoadData refineTunnels(RoadData road) {
+            return PathSpanExtractor.refineRoadTunnels(road, level, cache);
+        }
+
+        public void replaceDonor(long fingerprint, RoadData donor) {
+            RoadShardStorage.replaceRoad(level, fingerprint, donor);
+        }
+    }
+
     private ExistingRoadJunctionService() {
     }
 
@@ -108,10 +175,14 @@ public final class ExistingRoadJunctionService {
     }
 
     public static MergeBatchResult connectPlannedBatchDetailed(ServerLevel level, List<RoadData> roads) {
+        return connectPlannedBatchWithAccess(level == null ? null : new WorldBatchAccess(level), roads);
+    }
+
+    static MergeBatchResult connectPlannedBatchWithAccess(BatchAccess access, List<RoadData> roads) {
         if (roads == null || roads.isEmpty()) {
             return new MergeBatchResult(roads == null ? List.of() : List.copyOf(roads), Set.of());
         }
-        if (roads.size() < 2 && level == null) {
+        if (roads.size() < 2 && access == null) {
             return new MergeBatchResult(List.copyOf(roads), Set.of());
         }
         List<RoadData> current = new ArrayList<>();
@@ -120,10 +191,8 @@ public final class ExistingRoadJunctionService {
                 current.add(road);
             }
         }
-        List<RoadData> persisted = level == null ? List.of() : loadNearbyPersisted(level, current);
-        TerrainSamplingCache refinementCache = level == null ? null : new TerrainSamplingCache();
-        StreamsReflowingCompat.SamplingSession streams = level == null
-                ? null : StreamsReflowingCompat.openSession(level);
+        List<RoadData> persisted = access == null ? List.of() : loadNearbyPersisted(access, current);
+        BatchRefinement refinement = access == null ? null : access.openRefinement();
         InitialGenerationProgressTracker.setConstructionChunkPlan(
                 Math.max(1, current.size()), "merging_final_network");
         Set<Long> refinedRoadFingerprints = new HashSet<>();
@@ -149,7 +218,7 @@ public final class ExistingRoadJunctionService {
                 RoadData best = selection.road();
                 current.set(secondaryIndex, best);
                 owners.add(best);
-                if (best != secondary && refinementCache != null) {
+                if (best != secondary && refinement != null) {
                     work.add(new MergeWork(secondaryIndex, secondary, selection));
                 }
             }
@@ -178,7 +247,7 @@ public final class ExistingRoadJunctionService {
                     braidSkipAbsorbed++;
                 }
             }
-            BraidPrecheck braid = resolveParallelOverlaps(level, current, persisted, mergedIndices);
+            BraidPrecheck braid = access == null ? BraidPrecheck.none() : access.resolveOverlaps(current, persisted, mergedIndices);
 
             // Expensive tunnel/profile/interface work is independent once the
             // donor selection snapshot is fixed. Run it on the post-process
@@ -186,9 +255,7 @@ public final class ExistingRoadJunctionService {
             long refineStartedAt = System.nanoTime();
             List<CompletableFuture<MergeResult>> futures = new ArrayList<>(work.size());
             for (MergeWork item : work) {
-                futures.add(CompletableFuture.supplyAsync(
-                        () -> refineMergedCandidate(level, item),
-                        ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS)));
+                futures.add(refinement.refine(item));
             }
             List<MergeResult> results = new ArrayList<>(futures.size());
             for (int i = 0; i < futures.size(); i++) {
@@ -224,11 +291,10 @@ public final class ExistingRoadJunctionService {
             for (MergeResult result : results) {
                 RoadData best = result.candidate();
                 RoadData secondary = result.secondary();
-                TerrainSamplingCache validationCache = refinementCache;
                 best = RoadDataValidator.repairFinalHeightSteps(best);
                 RoadDataValidator.ValidationResult dataValidation = RoadDataValidator.validateFinalRoad(best);
                 FinalRoadStructureValidator.ValidationResult structureValidation = dataValidation.valid()
-                        ? FinalRoadStructureValidator.validate(level, best, validationCache, streams)
+                        ? refinement.validate(best)
                         : null;
                 if (!dataValidation.valid() || structureValidation == null || !structureValidation.safe()) {
                     // 修 B-2（0.9.019）：这里原本一律退到 secondary，而 secondary 是
@@ -277,7 +343,7 @@ public final class ExistingRoadJunctionService {
                     bridgeShare.candidates(), bridgeShare.absorbed(),
                     bridgeShare.skippedNoTransition(), bridgeShare.skippedInvalid());
         } finally {
-            if (refinementCache != null) refinementCache.clear();
+            if (refinement != null) refinement.close();
         }
         return new MergeBatchResult(List.copyOf(current), refinedRoadFingerprints);
     }
@@ -348,19 +414,22 @@ public final class ExistingRoadJunctionService {
     public static RoadData connectToExistingNetwork(ServerLevel level,
                                                      RoadData road,
                                                      TerrainSamplingCache cache) {
-        if (level == null || road == null || road.roadSegmentList() == null
+        return connectToExistingNetworkWithAccess(level == null ? null : new WorldRuntimeAccess(level, cache), road);
+    }
+
+    static RoadData connectToExistingNetworkWithAccess(RuntimeAccess access, RoadData road) {
+        if (access == null || road == null || road.roadSegmentList() == null
                 || road.roadSegmentList().size() < 5) return road;
-        JunctionSelection selection = selectSingleNetworkJunction(loadNearbyPersisted(level, List.of(road)), road);
+        JunctionSelection selection = selectSingleNetworkJunction(loadNearbyPersisted(access, List.of(road)), road);
         RoadData best = selection.road();
         if (best == road) return road;
         best = RoadSnapService.enforceNetworkReuseConstructionOwnership(
                 RoadSnapService.deduplicateExactSpans(
-                        PathSpanExtractor.refineRoadTunnels(best, level, cache)), selection.donor());
+                        access.refineTunnels(best)), selection.donor());
         if (selection.donor() != null) {
             RoadData loweredDonor = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(selection.donor(), best);
             if (loweredDonor != selection.donor()) {
-                RoadShardStorage.replaceRoad(level,
-                        RoadShardStorage.computeFingerprint(selection.donor()), loweredDonor);
+                access.replaceDonor(RoadShardStorage.computeFingerprint(selection.donor()), loweredDonor);
             }
         }
         return best;
@@ -414,7 +483,7 @@ public final class ExistingRoadJunctionService {
         return new JunctionSelection(best, donor);
     }
 
-    static List<RoadData> loadNearbyPersisted(ServerLevel level, List<RoadData> roads) {
+    private static List<RoadData> loadNearbyPersisted(RoadQuery query, List<RoadData> roads) {
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
         for (RoadData road : roads) {
@@ -430,8 +499,7 @@ public final class ExistingRoadJunctionService {
         }
         if (minX == Integer.MAX_VALUE) return List.of();
         int margin = 32;
-        return RoadShardStorage.queryRect(level,
-                minX - margin, minZ - margin, maxX + margin, maxZ + margin);
+        return query.query(minX - margin, minZ - margin, maxX + margin, maxZ + margin);
     }
 
     static boolean plausibleDonor(RoadData primary, RoadData secondary,
