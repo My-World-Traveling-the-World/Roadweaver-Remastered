@@ -49,6 +49,9 @@ public record TopologyPlan(List<RoadNode> nodes,
     /** 边数（＝节点数 − 连通分量数，无环保证）。 */
     public int edgeCount() { return edges.size(); }
 
+    /** Kruskal 输出无环森林；每加入一条边就少一个分量，孤点也计在内。 */
+    public int componentCount() { return nodes.size() - edgeCount(); }
+
     /** 是否完全连通（无孤立节点且只有一棵树）。 */
     public boolean fullyConnected() {
         return isolatedNodes.isEmpty() && edges.size() == nodes.size() - 1;
@@ -58,6 +61,7 @@ public record TopologyPlan(List<RoadNode> nodes,
     public String describe() {
         return "nodes=" + nodes.size()
                 + " edges=" + edges.size()
+                + " components=" + componentCount()
                 + " isolated=" + isolatedNodes.size()
                 + " totalDistance=" + String.format(java.util.Locale.ROOT, "%.1f", totalDistance);
     }

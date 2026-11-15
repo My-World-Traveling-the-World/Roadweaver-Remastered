@@ -95,6 +95,7 @@ public final class QualityGate {
 
         metrics.add("nodes=" + nodes.size());
         metrics.add("edges=" + topology.edgeCount());
+        metrics.add("components=" + topology.componentCount());
         metrics.add("isolated=" + topology.isolatedNodes().size());
 
         double sumGeodesic = 0.0;
@@ -112,6 +113,10 @@ public final class QualityGate {
         if (!limits.allowIsolatedNodes() && !topology.isolatedNodes().isEmpty()) {
             failures.add("有 " + topology.isolatedNodes().size()
                     + " 个孤立节点（下标 " + topology.isolatedNodes() + "）—— 这些端点连不上");
+        }
+        // 孤点数为零仍可能是两个各自连通的分量。严格模式必须能识别这种断网。
+        if (!limits.allowIsolatedNodes() && topology.componentCount() > 1) {
+            failures.add("路网分成 " + topology.componentCount() + " 个连通分量");
         }
 
         // ② 绕行比

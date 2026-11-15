@@ -141,6 +141,22 @@ class MinimumSpanningTreeTest {
         }
     }
 
+    @Test
+    void 超限捷径不可挤掉可连接第三点的合法边() {
+        // 测地计价可能优先选择距离上限不允许的边；合成权重独立于准入判定。
+        List<RoadNode> nodes = List.of(new RoadNode("a", 0, 0),
+                new RoadNode("b", 4, 0), new RoadNode("c", 8, 0));
+        double[][] distances = {{0, 4, 5}, {4, 0, 9}, {5, 9, 0}};
+        var unbounded = MinimumSpanningTree.solve(nodes, (a, b) -> distances[a][b], (a, b) -> true);
+        assertEquals(List.of(new TopologyPlan.Edge(0, 1, 4), new TopologyPlan.Edge(0, 2, 5)), unbounded.edges());
+
+        var bounded = MinimumSpanningTree.solve(nodes, (a, b) -> distances[a][b],
+                (a, b) -> Math.abs(nodes.get(a).x() - nodes.get(b).x()) <= 4);
+        assertEquals(List.of(new TopologyPlan.Edge(0, 1, 4), new TopologyPlan.Edge(1, 2, 9)), bounded.edges());
+        assertTrue(bounded.fullyConnected());
+        assertEquals(1, bounded.componentCount());
+    }
+
     // ── 性质 5：距离矩阵自身 ───────────────────────────────────
 
     @Test

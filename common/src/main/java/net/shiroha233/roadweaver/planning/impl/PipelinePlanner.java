@@ -164,7 +164,10 @@ public final class PipelinePlanner implements NetworkPlanner {
         // 只是不再白算第二轮的几何，规划时间约减半。
         TopologyPlan topology;
         try {
-            topology = new RoadPipeline(metric, null).planTopology(nodes);
+            // 原有上限按原始端点三维距离；把同一判据提前给 Kruskal，免得删树边后断网。
+            topology = new RoadPipeline(metric, null).planTopology(nodes,
+                    (from, to) -> withinMaxEdge(representatives.get(from), representatives.get(to),
+                            maxEdgeLenBlocks));
         } catch (RuntimeException pipelineFailure) {
             // 2026-11-14 修复（审计 F）：同样原来是静默吞掉。
             LOGGER.warn("RoadWeaver pipeline planner: 测地拓扑求解失败，退回直线距离 MST"
@@ -189,10 +192,7 @@ public final class PipelinePlanner implements NetworkPlanner {
                     report.describe());
         }
 
-        // ⑥ 拓扑 → StructureConnection（长度上限沿用配置口径）
-        long maxD2 = maxEdgeLenBlocks > 0
-                ? (long) maxEdgeLenBlocks * (long) maxEdgeLenBlocks
-                : Long.MAX_VALUE;
+        // ⑥ 原样下发已评估的森林；此处不再按长度删边。
         // 与 RoadPipeline.run 的第二轮同序（按 from 升序），保证下游拿到的连接顺序不变。
         List<TopologyPlan.Edge> ordered = new ArrayList<>(topology.edges());
         ordered.sort((a, b) -> Integer.compare(a.from(), b.from()));
@@ -204,12 +204,13 @@ public final class PipelinePlanner implements NetworkPlanner {
             }
             BlockPos from = representatives.get(edge.from());
             BlockPos to = representatives.get(edge.to());
-            if (maxEdgeLenBlocks > 0 && from.distSqr(to) > maxD2) {
-                continue;                                  // 超长边与其它规划器同口径丢弃
-            }
             out.add(new StructureConnection(from, to, ConnectionStatus.PLANNED));
         }
         return out;
+    }
+
+    static boolean withinMaxEdge(BlockPos from, BlockPos to, int maxEdgeLenBlocks) {
+        return maxEdgeLenBlocks <= 0 || from.distSqr(to) <= (long) maxEdgeLenBlocks * maxEdgeLenBlocks;
     }
 
     private static long xzKey(int x, int z) {
@@ -228,14 +229,12 @@ public final class PipelinePlanner implements NetworkPlanner {
         ArrayList<BlockPos> unique = new ArrayList<>();
         HashSet<Long> seen = new HashSet<>();
         for (BlockPos p : points) {
-            BlockPos q = new BlockPos(p.getX(), 0, p.getZ());
-            long key = xzKey(q.getX(), q.getZ());
-            if (seen.add(key)) unique.add(q);
+            if (p == null) continue;
+            long key = xzKey(p.getX(), p.getZ());
+            if (seen.add(key)) unique.add(p);
         }
         int n = unique.size();
         if (n < 2) return List.of();
-
-        long maxD2 = maxEdgeLenBlocks > 0 ? (long) maxEdgeLenBlocks * (long) maxEdgeLenBlocks : Long.MAX_VALUE;
 
         record Edge(int a, int b, long d2) {}
 
@@ -249,7 +248,8 @@ public final class PipelinePlanner implements NetworkPlanner {
                 long dx = ix - pj.getX();
                 long dz = iz - pj.getZ();
                 long d2 = dx * dx + dz * dz;
-                if (d2 > maxD2) continue;
+                // 回退仍按平面距离计价，但是否准入与正常规划使用同一端点长度上限。
+                if (!withinMaxEdge(pi, pj, maxEdgeLenBlocks)) continue;
                 edges.add(new Edge(i, j, d2));
             }
         }
@@ -274,8 +274,10 @@ public final class PipelinePlanner implements NetworkPlanner {
             long key = (((long) ia) << 32) ^ (long) ib;
             if (!edgeKeys.add(key)) continue;
 
-            BlockPos pa = unique.get(e.a());
-            BlockPos pb = unique.get(e.b());
+            BlockPos a = unique.get(e.a());
+            BlockPos b = unique.get(e.b());
+            BlockPos pa = new BlockPos(a.getX(), 0, a.getZ());
+            BlockPos pb = new BlockPos(b.getX(), 0, b.getZ());
             result.add(new StructureConnection(pa, pb));
         }
 

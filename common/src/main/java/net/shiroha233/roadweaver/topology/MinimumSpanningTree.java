@@ -40,11 +40,31 @@ public final class MinimumSpanningTree {
      * @return 拓扑方案（边 + 孤立节点）
      */
     public static TopologyPlan solve(GeodesicMatrix matrix) {
-        int n = matrix.size();
+        return solve(matrix, (a, b) -> true);
+    }
+
+    @FunctionalInterface
+    public interface EdgeFilter {
+        boolean allows(int from, int to);
+    }
+
+    public static TopologyPlan solve(GeodesicMatrix matrix, EdgeFilter allowed) {
+        return solve(matrix.nodes(), matrix::distance, allowed);
+    }
+
+    @FunctionalInterface
+    interface EdgeDistance {
+        double distance(int from, int to);
+    }
+
+    static TopologyPlan solve(List<RoadNode> nodes, EdgeDistance distances, EdgeFilter allowed) {
+        int n = nodes.size();
         List<TopologyPlan.Edge> candidates = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                double d = matrix.distance(i, j);
+                // 禁边必须在候选集入口裁掉；先选树后删会错失合法的替代边。
+                if (!allowed.allows(i, j)) continue;
+                double d = distances.distance(i, j);
                 if (Double.isFinite(d)) {
                     candidates.add(new TopologyPlan.Edge(i, j, d));
                 }
@@ -56,19 +76,23 @@ public final class MinimumSpanningTree {
         List<TopologyPlan.Edge> chosen = new ArrayList<>();
         double total = 0.0;
 
+        boolean[] incident = new boolean[n];
         for (TopologyPlan.Edge edge : candidates) {
             if (uf.union(edge.from(), edge.to())) {
                 chosen.add(edge);
                 total += edge.distance();
+                incident[edge.from()] = true;
+                incident[edge.to()] = true;
             }
         }
 
+        // 按实际选出的边计算孤点，不能把被长度上限裁掉的邻居当作已连接。
         List<Integer> isolated = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            if (!matrix.hasAnyConnection(i)) isolated.add(i);
+            if (!incident[i]) isolated.add(i);
         }
 
-        return new TopologyPlan(matrix.nodes(), chosen, total, isolated);
+        return new TopologyPlan(nodes, chosen, total, isolated);
     }
 
     /** 并查集（路径压缩 + 按秩合并）。 */

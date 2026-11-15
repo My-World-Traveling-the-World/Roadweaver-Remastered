@@ -29,6 +29,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @see QualityGate
  */
 class RoadPipelineTest {
+    @Test
+    void 两个无孤点的分量仍应被严格拓扑报告指出() {
+        // 两个双节点分量没有孤点，也没有大的绕行比，只有分量检查能抓到断网。
+        List<RoadNode> nodes = List.of(new RoadNode("a", 0, 0), new RoadNode("b", 4, 0),
+                new RoadNode("c", 40, 0), new RoadNode("d", 44, 0));
+        TopologyPlan forest = new TopologyPlan(nodes,
+                List.of(new TopologyPlan.Edge(0, 1, 4), new TopologyPlan.Edge(2, 3, 4)), 8, List.of());
+        var strict = QualityGate.evaluateTopology(forest, nodes, QualityGate.Thresholds.defaults());
+        assertFalse(strict.passed());
+        assertTrue(strict.metrics().contains("components=2"));
+        assertTrue(strict.metrics().contains("isolated=0"));
+        assertTrue(strict.failures().stream().anyMatch(reason -> reason.contains("2 个连通分量")));
+        // 生产仍只报告，不用未标定的新阈值阻止交付整个森林。
+        var lenient = QualityGate.evaluateTopology(forest, nodes, QualityGate.Thresholds.lenient());
+        assertTrue(lenient.passed());
+        assertTrue(lenient.metrics().contains("components=2"));
+    }
+
 
     /** 81×81 平地。 */
     private static GridTerrainField flat(int size) {
