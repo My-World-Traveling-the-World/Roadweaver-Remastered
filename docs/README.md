@@ -34,6 +34,7 @@
 | **那些守卫真的在守吗** | [`GUARD-EFFECTIVENESS-AUDIT-20261115.md`](GUARD-EFFECTIVENESS-AUDIT-20261115.md) ← **10 个守卫会静默跳过（3 个是全部用例可跳）；已补元守卫堵住** |
 | **静默降级修全了吗** | [`SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md`](SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md) ← **只修了 null，EMPTY 仍静默；同一混淆扩散 7 处** |
 | **我写过的假测试** | [`MY-OWN-FAKE-TESTS-20261115.md`](MY-OWN-FAKE-TESTS-20261115.md) ← **两条恒真断言，负控实证「改坏也不红」；已重写为 3 条会真红的** |
+| **空集合让测试空转** | [`VACUOUS-LOOP-TESTS-20261115.md`](VACUOUS-LOOP-TESTS-20261115.md) ← **第五类假测试：改坏了反而更绿；73→19→2 逐层收窄** |
 
 ---
 

@@ -90,6 +90,12 @@ class TunnelRunLengthCapTest {
             values[i] = 0;
         }
         int[] runs = TunnelEnvelopeCriterion.runs(values, 2);
+        // ★ 2026-11-15 补：下面那个循环在 runs 为空时一次都不执行 ⇒ 测试会**真空转绿**。
+        //   负控实证：把 plateau(600, 20) 改成 plateau(600, 0)（突起度归零 ⇒ runs 为空），
+        //   本条仍然 PASS。所以必须先钉住「这里确实产生了 run」。
+        assertTrue(runs.length > 0,
+                "构造前提：突起度 20 的 600 站平台上必须至少产生一个 run，"
+                        + "否则下面的循环空转，测试什么也没验证");
         for (int i = 0; i < runs.length; i += 2) {
             assertTrue(runs[i + 1] < 300 || runs[i] > 319,
                     "任何 run 都不得跨过 300..319 的低突起度谷");

@@ -132,6 +132,10 @@ class VolumePlannerVisitTest {
     void 不再产出路肩体积() {
         int groundY = 64;
         List<ColumnVolume> volumes = collect(straightRoad(3, groundY), flatContext(groundY));
+        // ★ 2026-11-15 补：下面那个循环在 volumes 为空时一次都不执行 ⇒ 测试会**真空转绿**。
+        //   同文件的「高度范围包住目标高度」有 sawRoad 兜底，唯独这条没有。
+        assertFalse(volumes.isEmpty(),
+                "构造前提：平坦直路上必须至少产出一个体积，否则下面的断言空转");
 
         for (ColumnVolume v : volumes) {
             assertFalse("SHOULDER".equals(v.kind().name()),
