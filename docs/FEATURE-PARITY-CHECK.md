@@ -1,14 +1,50 @@
-# 旧版能力对照
+# RoadWeaver 旧版与重制版功能对照
 
-旧版基线：同级 `roadweaver` 的 `refactor/structure-20261112@2c6547a`。重制版最近对照以 `818b076` 为起点，包含 `3a4327a` 修复。这里分清生产接线、行为回归和真机验收，不以「找到同名符号」判断能力保留。
+对照基线：同级只读旧仓库 `roadweaver@2c6547a`，重制版 `88e7343`。冻结版的[八域明细](functional-inventory/README.md)用于列场景，从两边的工厂、入口和实际调用复核，不把同名类、配置键或测试数量当作功能。
 
-| 场景 | 证据与结论 |
-|---|---|
-| 禁行走廊、共用过河点 | 旧 `PotentialFieldPathfinder` 在扩展时禁入或给予代价优惠。新版曾产出这些走廊但 `BAND` 未消费，`3a4327a` 已接回 FMM。窄禁带、单格绕行和优惠吸引均有离线走生产入口的回归。 |
-| 群系偏好 | 旧 `PotentialFieldPathfinder` 消费 `biomeCostFor`；重制版仍有配置、分类和指纹但选线不消费。若恢复，应测量附加成本的影响；单点群系结构预筛已经证伪。 |
-| 特大树预留 | 旧版选线查 `HugeTreeReservation.isReserved`；重制版的选线未接回，API 和施工保护仍在。应先测实际命中率。 |
-| 普通路、桥隧与复用 | 两版 `PathFeature` 均进入模板桥、路面坡度处理、隧道施工和 `NETWORK_REUSE`。已加载区块可由 `LoadedChunkRoadBackfill` 补建；仅铺路面和洞身只清净空的分支仍在。接线相同不代表同一世界施工结果等价。 |
-| 地图底图 | 两版 `RoadMapScreen` 均调用 Xaero 底图。旧 `MapTerrainSamplingService` 仅有类内引用；没有证据显示移除它使可用底图丢失。 |
-| 存档兼容 | 两版 `RoadData.CODEC` 初始化文本一致；道路索引 schema 2、施工台账 schema 3、世界生成指纹 schema 1 一致。没有拿实际玩家存档重开验证。 |
+按下面定义的 **30 个场景组**，重制版 **24 组保留生产入口，2 组换了实现，2 组部分保留，2 组旧算法选择已退役**。同一组包含多条入口时只计一次；“保留”指在适用维度、配置和依赖条件下能走到相应生产逻辑，不等于同一种子结果一致，也不代表真机完成率。
 
-旧版的八域盘点见[冻结基线](functional-inventory/README.md)。历史符号对照详表可用 `git show 55184e4:docs/FEATURE-PARITY-CHECK.md` 查阅。后续每发现一项退化，保留旧入口、新入口、可复现的最小场景及是否实地验证；优先看[技术路线](ROADMAP.md)中对重制版更有收益的工作。
+| # | 旧版功能 | 重制版状态与可复核入口 |
+|---|---|---|
+| 1 | 开局生成、区域扩张、空闲自动规划 | **保留。** `MinecraftServerMixin → InitialGenManager` 仍控制开局；`ServerPlanningHooks → IdleRoadGenerationService` 驱动后台扩张。 |
+| 2 | KNN、Delaunay、RNG、MST、SnapBranch、AlphaModel 可选 | **选择退役。** 旧 `NetworkPlannerFactory` 按枚举创建 6 种实现。新版工厂只给 `PipelinePlanner`，以测地距离选网、进 Kruskal 前过滤超长边。旧枚举仍可解析，不会恢复旧路网风格。 |
+| 3 | 基础 A*、双向 A*、GradientDescent、PotentialField 可选 | **选择退役。** 旧 `PathfinderFactory` 创建 4 种实现；新版 `createClassic` 和 BAND 都返回 `BandPathfinder`，AB 同型时只跑一次。保留旧值是为了读旧配置。 |
+| 4 | 硬避让、共享跨越走廊，绕过狭窄障碍 | **保留。** 旧势场走 `PathfindingHelper`；新版 `BandPathfinder` 给 FMM 硬掩码、边级禁行及共享走廊代价。窄禁带、单格绕行和共享走廊有离线生产入口守卫；粗拓扑的 `ObstacleField.NONE` 仍不同于单路线。 |
+| 5 | 水域/非水可调成本、陆地细分群系偏好 | **部分保留。** 旧 `PotentialFieldPathfinder:330,370` 读群系成本，但其 `PathTerrainField:65` 生产实现只返回 WATER/OTHER；森林等细分偏好两版均无生产分类。新版 BAND 不消费旧群系权重，旧版可调的水/非水成本未迁移；过水判定和桥隧仍在。 |
+| 6 | 选线时避让巨树预留，并防止施工破坏 | **部分保留。** 旧 4 个寻路器查 `HugeTreeReservation.isReserved`（如 `PotentialFieldPathfinder:137`）。重制版 `ApiBackendImpl:87–99` 保留预留/查询/释放，`RoadConstructionSafety:531–619` 仍查，`BandPathfinder` 不消费该预留。 |
+| 7 | 粗高度瓦片与缓存、精确采样、盘山折返 | **保留。** 新版仍有 `CoarseTerrainTileSampler` 和 `AccurateHeightSampler`，生产 `RawPathSearch:69,173` 仍调用 `MountainSwitchbackPlanner.replaceIfSafer`。 |
+| 8 | 过路村庄包围盒裁切、端点村庄落地、保护缺口 | **保留。** 旧 `StructureAvoidanceService` 职责拆到现行 `EndpointOwnerResolver`、`ProtectedGapEvaluator` 等；施工 `PathFeature` 消费保护跨度。 |
+| 9 | 结构预测/验证、快照准备及精确占用 | **保留。** `StructureVerificationService`、`PreparedStartResolver` 和 `StructureAvoidanceService` 仍为生产链供数。群系单点筛不是替代原版多点验证的实现。 |
+| 10 | 路口接入、批量合并、并排改道、共用桥段和主路 | **保留。** `ExistingRoadJunctionService.connectPlannedBatchDetailed` 仍编排，`ParallelOverlapResolver` 和区块编译复用落列；批量选主与占地所有权有离线回归。 |
+| 11 | 路边结构、村落预计算与按区块注入 | **保留。** `ServerLevelStructureMixin → StructureInjector.injectPendingStructures` 仍接线；新版补齐未知 ID 丢弃计数。 |
+| 12 | 河湖桥、干峡谷跨度、浅涵洞、运行时桥提升 | **保留。** `PathSpanExtractor` 仍供默认跨度；`Road → CulvertPlanner.cross`，`PathFeature → promoteRuntimeBridges` 两条链仍在。 |
+| 13 | 山体、海底隧道的跨度判定 | **保留。** 默认仍走 `PathSpanExtractor`。新版联合桥隧 DP 的结果可选回写（`spanWriteback=on`），默认观察，不能算已接管；`crossing` 仍由旧跨度供给。 |
+| 14 | 模板桥、程序化桥、长桥正弦弯、浮标 | **保留。** `PathFeature:425–529` 保留浮标并优先尝试 `BridgeSegmentPlannerNew`，模板不适用走程序化分支；`BridgeSegment` 保留长桥 ±5 格。模板落块有离线负控。 |
+| 15 | 隧道洞口、洞身清理、观景穹顶 | **保留。** `PathFeature → RoadTunnelBuilder`；后者调用 `ScenicDomeBuilder` 并按洞口和洞身规则施工。 |
+| 16 | 纵向剖面、最大坡度、覆土和桥面下界 | **换实现。** 旧 `Road.computeTargetY` 多步修形，新主路径由 `TargetYComputation → ProfileDpSource`；不可行时由新版 `ProfileFallback` 保覆土上界，不退回旧版。最终坡度与桥头仍需同种子真机比较。 |
+| 17 | 几何平滑、站点密化、桥头及宽度栅格 | **保留。** `PathMetricsOps → PathPostProcessor.process` 仍走默认生产路径，整路丢弃有负控；保留弹性带后的陆地松弛，影子结果不施工。 |
+| 18 | 精确局部坡度、结构和河湖冲突修复 | **保留。** 旧 `AccurateGradeRepairPlanner` 集中修复，新版 `PathMetricsOps`、`PathFinalizeOps`、`StructureRepair` 分工，旧类名消失的部分也能从精确净空入口找到。 |
+| 19 | 人工/自然路面、半砖、路基，保护列只铺或跳过 | **保留。** `PathFeature → SegmentPaver`、`RoadConstructionSafety`、`RoadBlockPlacer`；路肩仍有意关闭。自然路的群系材料和寻路群系成本是两件事。 |
+| 20 | 路灯、路标、结构装饰 | **保留。** `PathFeature → DecorationPlanner → DecorationExecutor` 有路灯、提灯和距离牌；路旁结构走第 11 项的预计算/注入。 |
+| 21 | 玩家附近回填、无人预生成区补建、重开恢复 | **换实现。** 旧版 `DeferredInitialRoadConstructionService.tick` 最多施工 8 块，却会扫完整个待施工集合。重制版用 `ServerPlanningHooks` 注册加载唤醒，`DeferredChunkQueue` 限额补扫，仍只对当前可取的区块施工；`recover` 仍从路档和台账重建。 |
+| 22 | OpenCL 粗高度采样、设备探测、CPU 降级 | **保留。** `CoarseHeightBatchSamplers → OpenCLCoarseHeightBatchSampler.tryCreate`；不可用时仍有 CPU。此轮未跑物理 GPU。 |
+| 23 | CPU 精确采样 | **保留。** 两边 `AccurateHeightBackends.create` 都选 CPU；停用已知会失败的精采 OpenCL 是既有规则。 |
+| 24 | H 键路网地图、状态与进度、Xaero 底图 | **保留。** `ClientInit → RoadMapScreen`，含路线、结构、采样进度及 Xaero 渲染。旧地形采样及瓦片渲染死链不计作被删能力。 |
+| 25 | 地图搜索、手动连接、删除、传送、访问权限 | **保留。** `MapNetworkFabric.registerServerReceivers` 仍注册对应请求并做权限检查；两版 `/roadweaver mapaccess info|mode|allow|deny` 都由 Fabric 注册。 |
+| 26 | 手绘道路、桥、隧道；预加载施工、草稿自动存和重开恢复 | **保留。** `ClientInit → RouteEditorSession / RouteBuildService`，`RouteChunkPreloader` 保留主动预加载例外；`RouteStorage` 仍写 `routes.json` version 1，三类线段有 Codec 回归。 |
+| 27 | 世界创建/游戏内配置、材料预设与预设编辑 | **保留。** `CreateWorldScreenMixin`、`ConfigScreenFactory`、`MaterialPresetEditorScreen` 和 `PresetService` 都在现行入口；旧算法旋钮不生效的情况另计第 2/3/5 项。 |
+| 28 | RoadData、空间索引、施工台账和世界指纹 | **保留。** `RoadData.CODEC` 初始化一致，索引 / 施工台账 / 世界生成指纹 schema 分别为 2 / 3 / 1；重制版读故障拒绝写入部分索引。现行台账仍不因同键内容变化而自动重铺。 |
+| 29 | 结构端点、对外预留、就绪订阅及负载 API | **保留。** `api`/ `api-fabric` 的 25 个 Java 路径一致，忽略行尾的源码差异仅新增文件职责注释；`RoadWeaver` 仍安装后端。未在真实外部模组组合下运行。 |
+| 30 | Chunky、Streams、长城、巡航等跨模组协调与 Mixin | **保留。** `RoadPlanningReadinessIndex`、`StreamsReflowingCompat`、`GreatWallPrewarmCompat`、`LoadSignalBridge` 仍接线，Fabric Mixin 清单一致；现行整合包运行结果待验。 |
+
+## 三个容易判错的地方
+
+- **旧版不是按森林、沼泽等细分类型选线。** 对旧版整个 `common/src/main`、`fabric/src/main` 查 `biomeCategory(`，只有默认方法和势场调用。旧版确实读取 WATER/OTHER（默认成本 36/0，权重 2）；新版保留字段和规划指纹，但没有把这组权重送入 BAND。留作兼容的键不该触发额外采样或被描述为活跃选项。
+- **巨树保护没有整个丢失。** 退化点在选路，现有施工会保护预留列。应把已存在的预留投影到单路硬约束，在空索引时跳过；用夹具证明中心线、道路宽度和网格间跨边都不能绕过预留。施工端仍复核，避免求解后世界状态改变。
+- **删除地图类不等于丢底图。** 对旧版删掉的 12 个地图/传输 Java 路径反查生产引用，唯一跨出该组的引用来自两个 PNG writer；这两个 writer 的入口又只在已脱离生产入口的地形采样/回填类里。旧、新 `RoadMapScreen` 均绘制 Xaero，均接采样进度。这个结论不覆盖渲染视觉差异。
+
+## 优先用新版算法补齐的部分
+
+1. **巨树预留的路由保护。** 先测“有预留与没有预留”“跨区块与跨边”“有路肩宽度与只检查中心”及预留释放，不引入旧 A* 或逐格读取世界。
+2. **水路权衡。** 用现有高度/水体信息评估绕岸、短桥及共享渡口的成本；先在固定水体和候选拓扑上对拍。优先保留可通行和桥隧召回，避免额外的逐列群系查询，也不做已判无效的结构群系预筛。
+3. **完整产物和尾延迟。** 对照同种子首次生成、复制旧档重开、Chunky 无玩家。分别核对警示、遗漏道路、必要桥隧、保护碰撞和最大施工等待；采样、选路、编译、落块分开计时。重制版有较多离线守卫，但不能由此推断真机加载更快或全部产物等价。
