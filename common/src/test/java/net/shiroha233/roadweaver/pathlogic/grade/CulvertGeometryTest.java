@@ -42,7 +42,7 @@ class CulvertGeometryTest {
     @Test
     void 一到六站都算涵洞几何() {
         for (int segments = 1; segments <= 6; segments++) {
-            assertTrue(RoadConstructionSafety.isCulvertGeometry(segments, OK_DEPTH, OK_OVERHEAD),
+            assertTrue(CulvertJudge.isCulvertGeometry(segments, OK_DEPTH, OK_OVERHEAD),
                     segments + " 站、水深 " + OK_DEPTH + "、净空 " + OK_OVERHEAD
                             + " 必须算涵洞。规划期 culvertMaxStations 默认 6 就是按这个范围设计的 —— "
                             + "若这里返回 false，promoteRuntimeBridges 会把这些段提升成桥");
@@ -51,27 +51,95 @@ class CulvertGeometryTest {
 
     @Test
     void 七站不算涵洞几何() {
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(7, OK_DEPTH, OK_OVERHEAD),
+        assertFalse(CulvertJudge.isCulvertGeometry(7, OK_DEPTH, OK_OVERHEAD),
                 "7 站超出 culvertMaxStations 的默认上限 6，应当交给桥/填方处理");
     }
 
     @Test
     void 站数为零或负数不算() {
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(0, OK_DEPTH, OK_OVERHEAD));
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(-1, OK_DEPTH, OK_OVERHEAD));
+        assertFalse(CulvertJudge.isCulvertGeometry(0, OK_DEPTH, OK_OVERHEAD));
+        assertFalse(CulvertJudge.isCulvertGeometry(-1, OK_DEPTH, OK_OVERHEAD));
+    }
+
+    // ══════════ isCulvertRun：整段最坏值判定（2026-11-15 修的真缺陷）══════════
+
+    @Test
+    void 整段都浅才算涵洞() {
+        // 6 站，每站水深 1、净空 2 —— 全部合格
+        int[] depth = {1, 1, 1, 2, 1, 1};
+        int[] overhead = {2, 2, 3, 2, 2, 1};
+        assertTrue(CulvertJudge.isCulvertRun(6, depth, overhead),
+                "6 站全部水深≤2、净空≤6，应当算涵洞");
+    }
+
+    @Test
+    void 首站浅但中段深的水道不能算涵洞() {
+        // ★ 这就是原实现的缺陷形状：只在首站采样会判「可做涵洞」，
+        //   实际第 3 站水深 5 已经超过上限 2。
+        int[] depth = {1, 1, 5, 1, 1};     // 第 2 站（下标 2）深 5
+        int[] overhead = {2, 2, 2, 2, 2};
+        assertFalse(CulvertJudge.isCulvertRun(5, depth, overhead),
+                "只要有一站水深超过上限，整段就不能算涵洞 —— 否则 promoteRuntimeBridges "
+                        + "不提升为桥，而 prepareCulvertDeck 逐站复检时会在深的那站直接返回，"
+                        + "那段路就压在深水上，既不架桥也不抬甲板");
+    }
+
+    @Test
+    void 首站净空合格但末站超限的水道不能算涵洞() {
+        int[] depth = {1, 1, 1, 1};
+        int[] overhead = {2, 2, 2, 9};     // 末站净空 9 > 上限 6
+        assertFalse(CulvertJudge.isCulvertRun(4, depth, overhead),
+                "净空同样要取整段最大值：任一站超限就不能做涵洞");
+    }
+
+    @Test
+    void 任一站完全没水也不能算涵洞() {
+        int[] depth = {1, 0, 1};           // 中间站水深 0
+        int[] overhead = {2, 2, 2};
+        assertFalse(CulvertJudge.isCulvertRun(3, depth, overhead),
+                "水深 0 表示该站不是水，整段不是连续水道 ⇒ 不算涵洞");
+    }
+
+    @Test
+    void 全是边界值仍算涵洞() {
+        int[] depth = {2, 2, 2};           // 正好等于上限
+        int[] overhead = {6, 6, 6};        // 正好等于上限
+        assertTrue(CulvertJudge.isCulvertRun(3, depth, overhead),
+                "两项都恰好在上限上，应当算（判据是 <= 不是 <）");
+    }
+
+    @Test
+    void 输入不合法时保守判否() {
+        assertFalse(CulvertJudge.isCulvertRun(0, new int[0], new int[0]), "0 站不算");
+        assertFalse(CulvertJudge.isCulvertRun(3, null, new int[3]), "null 水深不算");
+        assertFalse(CulvertJudge.isCulvertRun(3, new int[3], null), "null 净空不算");
+        assertFalse(CulvertJudge.isCulvertRun(5, new int[3], new int[5]),
+                "数组长度不够 stationCount 时必须判否，不能越界也不能当成 0 处理");
+        assertFalse(CulvertJudge.isCulvertRun(5, new int[5], new int[3]),
+                "净空数组长度不够同理");
+    }
+
+    @Test
+    void 站数超过上限时直接判否() {
+        int[] depth = new int[7];
+        int[] overhead = new int[7];
+        java.util.Arrays.fill(depth, 1);
+        java.util.Arrays.fill(overhead, 2);
+        assertFalse(CulvertJudge.isCulvertRun(7, depth, overhead),
+                "7 站超过 CULVERT_MAX_SEGMENTS=6");
     }
 
     @Test
     void 水深与净空仍各自把关() {
         // 这三条不是本缺陷的一部分，但它们是同一个判据的另两项，
         // 把上限改成 6 时不能顺带把它们放松。
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(3, 3, OK_OVERHEAD),
+        assertFalse(CulvertJudge.isCulvertGeometry(3, 3, OK_OVERHEAD),
                 "水深 3 超过施工期上限 2 ⇒ 不算涵洞（这一条是已知的「配置可配 1..4 但这里硬编码 2」隐患）");
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(3, 0, OK_OVERHEAD),
+        assertFalse(CulvertJudge.isCulvertGeometry(3, 0, OK_OVERHEAD),
                 "没有水（水深 0）⇒ 不算涵洞");
-        assertFalse(RoadConstructionSafety.isCulvertGeometry(3, OK_DEPTH, 7),
+        assertFalse(CulvertJudge.isCulvertGeometry(3, OK_DEPTH, 7),
                 "净空 7 超过上限 6 ⇒ 不算涵洞（规划期没有这条判据，是已知的第二处不一致）");
-        assertTrue(RoadConstructionSafety.isCulvertGeometry(6, OK_DEPTH, OK_OVERHEAD),
+        assertTrue(CulvertJudge.isCulvertGeometry(6, OK_DEPTH, OK_OVERHEAD),
                 "边界：6 站 + 水深 2 + 净空 6，三项都在上限上，必须算");
     }
 }

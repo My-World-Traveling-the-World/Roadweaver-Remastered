@@ -91,46 +91,7 @@ public final class RoadConstructionSafety {
      */
     private static final int MAX_CROSS_SECTION_FILL_DEPTH = 5;
     private static final int MAX_SHOULDER_DEPTH = 5;
-    private static final int WATERCOURSE_HALF_WIDTH = 3;
     private static final int RUNTIME_BRIDGE_CHUNK_RADIUS = 5;
-    private static final int CULVERT_MAX_WATER_DEPTH = 2;
-    /**
-     * 涵洞段允许的最大站数。
-     *
-     * <p><b>2026-11-15：从 2 改成 6，对齐规划期的 {@code culvertMaxStations}（默认 6）。</b></p>
-     *
-     * <h2>改之前是什么问题</h2>
-     * <p>这个判据有<b>两个调用点</b>，参数完全不同：</p>
-     * <ol>
-     *   <li>{@code prepareCulvertDeck} 传单站 {@code (segmentIndex, segmentIndex)}
-     *       ⇒ {@code end-start+1 = 1}，上限恒不生效；</li>
-     *   <li><b>{@code promoteRuntimeBridges} 传完整站段 {@code (start, end)}</b>
-     *       ⇒ 这里才真正起作用。</li>
-     * </ol>
-     * <p>于是 3..6 站的窄浅水会出现：<b>规划期</b> {@code CulvertPlanner} 按
-     * {@code culvertMaxStations=6} 判成涵洞、把甲板写进 {@code targetY}；
-     * <b>施工期</b> {@code promoteRuntimeBridges} 按本常量（2）判「不是浅涵洞」
-     * ⇒ {@code isBridge[i]=true} ⇒ 走桥体建造分支 ⇒ {@code prepareCulvertDeck}
-     * 根本不会被调用 ⇒ <b>最终架桥，不是涵洞</b>。
-     * 多建一座本不该建的桥（材料浪费 + 规划期的甲板高度计算白做）。</p>
-     *
-     * <h2>为什么是 6 而不是别的</h2>
-     * <p>{@code culvertMaxStations} 的出厂默认就是 6（{@code RoadAppearanceConfig}，夹 1..16），
-     * 说明旧版本来就打算支持到 6 站涵洞；施工期这个 2 更像早期只考虑单/双站时的遗留。
-     * 改成 6 让「规划判涵洞 ⇒ 施工就做涵洞」，不减少任何能力。</p>
-     *
-     * <h2>还没对齐的两条（有意保留，别以为漏了）</h2>
-     * <ul>
-     *   <li><b>水深</b>：规划期 {@code culvertMaxWaterDepth} 可配 1..4，这里仍是硬编码 2
-     *       ⇒ 用户配成 3/4 时又会出现「规划涵洞、施工架桥」。
-     *       要修得让这里读配置，属独立改动。</li>
-     *   <li><b>净空</b>：规划期<b>根本没有</b>这条判据，这里 {@code CULVERT_MAX_OVERHEAD=6}
-     *       是单向收紧。正确的修法是<b>给规划期补上</b>，不是放宽这里。</li>
-     * </ul>
-     * <p>详见 {@code docs/CULVERT-THRESHOLD-ANALYSIS-20261115.md}。</p>
-     */
-    private static final int CULVERT_MAX_SEGMENTS = 6;
-    private static final int CULVERT_MAX_OVERHEAD = 6;
     private static final int MAX_WATER_SCAN_DEPTH = 128;
     private static final int MAX_WATER_ROOF_THICKNESS = 8;
     private static final ConcurrentHashMap<RuntimeBridgeKey, List<RuntimeRange>> RUNTIME_BRIDGES =
@@ -684,7 +645,7 @@ public final class RoadConstructionSafety {
         if (before != null && after != null) {
             int nx = -Integer.compare(after.getZ(), before.getZ());
             int nz = Integer.compare(after.getX(), before.getX());
-            for (int offset = 1; offset <= WATERCOURSE_HALF_WIDTH; offset++) {
+            for (int offset = 1; offset <= CulvertJudge.WATERCOURSE_HALF_WIDTH; offset++) {
                 highestWater = Math.max(highestWater,
                         waterSurfaceY(world, center.offset(nx * offset, 0, nz * offset)));
                 highestWater = Math.max(highestWater,
@@ -810,42 +771,86 @@ public final class RoadConstructionSafety {
         int nx = -dz;
         int nz = dx;
         boolean left = false, right = false;
-        for (int offset = 1; offset <= WATERCOURSE_HALF_WIDTH; offset++) {
+        for (int offset = 1; offset <= CulvertJudge.WATERCOURSE_HALF_WIDTH; offset++) {
             left |= hasWaterSurface(world, center.offset(nx * offset, 0, nz * offset));
             right |= hasWaterSurface(world, center.offset(-nx * offset, 0, -nz * offset));
         }
         return left && right;
     }
 
+    /**
+     * 一整段窄浅水是否够格做涵洞（<b>逐站采样，取整段最坏值</b>）。
+     *
+     * <h2>★ 2026-11-15 修：原实现只在首站采样，整段其余站全没看</h2>
+     * <p>原代码只取 {@code centers.get(start)} 做横截面采样，然后拿「首站的
+     * 水深与净空」去判「整段 3..6 站」。当时上限是 2，最多漏 1 站，影响有限；
+     * 但 2026-11-15 把上限从 2 提到 6 之后，<b>最多会漏 5 站</b> ——
+     * 等于修好了一个不一致，同时把另一个缺陷放大了 5 倍。</p>
+     *
+     * <p>真实后果（首站浅、中后段深的水道）：这里判成「浅涵洞」⇒
+     * {@code promoteRuntimeBridges} 不提升为桥 ⇒ 走
+     * {@code PathFeature} 的铺路分支 ⇒ 到 {@code prepareCulvertDeck} 逐站复检时
+     * 深的那几站直接返回 ⇒ <b>既不架桥也不抬甲板</b>，那段路就压在深水上。</p>
+     *
+     * <p>现在改为对 {@code start..end} 每一站都采样横截面，取<b>水深最大值</b>与
+     * <b>净空最大值</b>（两个判据都是「不得超过」，所以取最大才是保守方向），
+     * 交给纯函数 {@link CulvertJudge#isCulvertRun} 判定。</p>
+     *
+     * <p><b>成本</b>：原来 1 站 ×(1+2×3)=7 次世界读取，现在最多 6 站 ×7=42 次。
+     * 只在施工期每段水道算一次，相对 {@code promoteRuntimeBridges} 的其它开销可忽略。</p>
+     */
     private static boolean isShallowCulvertCrossing(WorldGenLevel world, List<BlockPos> centers, int start, int end) {
         if (world == null || centers == null || start < 0 || end < start || end >= centers.size()) return false;
-        if (end - start + 1 > CULVERT_MAX_SEGMENTS || !hasWatercourseAcrossRoad(world, centers, start)) return false;
-        BlockPos center = centers.get(start);
-        if (center == null) return false;
-        int deepest = waterDepth(world, center);
-        int largestOverhead = waterOverhead(world, center);
-        BlockPos before = centers.get(Math.max(0, start - 1));
-        BlockPos after = centers.get(Math.min(centers.size() - 1, start + 1));
-        if (before != null && after != null) {
-            int nx = -Integer.compare(after.getZ(), before.getZ());
-            int nz = Integer.compare(after.getX(), before.getX());
-            for (int offset = 1; offset <= WATERCOURSE_HALF_WIDTH; offset++) {
-                deepest = Math.max(deepest, waterDepth(world, center.offset(nx * offset, 0, nz * offset)));
-                deepest = Math.max(deepest, waterDepth(world, center.offset(-nx * offset, 0, -nz * offset)));
-                largestOverhead = Math.max(largestOverhead,
-                        waterOverhead(world, center.offset(nx * offset, 0, nz * offset)));
-                largestOverhead = Math.max(largestOverhead,
-                        waterOverhead(world, center.offset(-nx * offset, 0, -nz * offset)));
-            }
+        int stations = end - start + 1;
+        if (stations > CulvertJudge.CULVERT_MAX_SEGMENTS) return false;
+        // 「水道横穿路面」是位置属性，取起点判一次即可（整段的水面已在
+        // promoteRuntimeBridges 里用 hasWatercourseAcrossRoad 逐站延伸确认过）。
+        if (!hasWatercourseAcrossRoad(world, centers, start)) return false;
+
+        int[] depthPerStation = new int[stations];
+        int[] overheadPerStation = new int[stations];
+        for (int k = 0; k < stations; k++) {
+            int index = start + k;
+            BlockPos center = centers.get(index);
+            if (center == null) return false;
+            CrossSection section = sampleCrossSection(world, centers, index, center);
+            depthPerStation[k] = section.depth();
+            overheadPerStation[k] = section.overhead();
         }
-        return isCulvertGeometry(end - start + 1, deepest, largestOverhead);
+        return CulvertJudge.isCulvertRun(stations, depthPerStation, overheadPerStation);
     }
 
-    static boolean isCulvertGeometry(int segmentCount, int waterDepth, int overhead) {
-        return segmentCount > 0 && segmentCount <= CULVERT_MAX_SEGMENTS
-                && waterDepth > 0 && waterDepth <= CULVERT_MAX_WATER_DEPTH
-                && overhead >= 0 && overhead <= CULVERT_MAX_OVERHEAD;
+    /** 单站横截面采样结果：该站车道宽度范围内的最大水深与最大净空。 */
+    private record CrossSection(int depth, int overhead) {
     }
+
+    /**
+     * 采样一站的横截面：沿「垂直于路线」的方向左右各取 {@link CulvertJudge#WATERCOURSE_HALF_WIDTH} 格。
+     *
+     * <p>垂直方向由前后站的位移差求得：{@code nx = -(after.z - before.z)}、
+     * {@code nz = (after.x - before.x)}。这是旧实现就有的写法，保持不变。</p>
+     */
+    private static CrossSection sampleCrossSection(WorldGenLevel world, List<BlockPos> centers,
+                                                   int index, BlockPos center) {
+        int deepest = waterDepth(world, center);
+        int largestOverhead = waterOverhead(world, center);
+        BlockPos before = centers.get(Math.max(0, index - 1));
+        BlockPos after = centers.get(Math.min(centers.size() - 1, index + 1));
+        if (before == null || after == null) return new CrossSection(deepest, largestOverhead);
+        int nx = -Integer.compare(after.getZ(), before.getZ());
+        int nz = Integer.compare(after.getX(), before.getX());
+        if (nx == 0 && nz == 0) return new CrossSection(deepest, largestOverhead);
+        for (int offset = 1; offset <= CulvertJudge.WATERCOURSE_HALF_WIDTH; offset++) {
+            for (int sign = -1; sign <= 1; sign += 2) {
+                BlockPos probe = center.offset(nx * offset * sign, 0, nz * offset * sign);
+                deepest = Math.max(deepest, waterDepth(world, probe));
+                largestOverhead = Math.max(largestOverhead, waterOverhead(world, probe));
+            }
+        }
+        return new CrossSection(deepest, largestOverhead);
+    }
+
+
 
     private static boolean hasWatercourseNearby(WorldGenLevel world, BlockPos pos) {
         return pos != null && hasSurfaceWaterNearby(pos.getX(), pos.getZ(),
@@ -893,7 +898,7 @@ public final class RoadConstructionSafety {
                 if (isWaterState(state)) {
                     int depth = 0;
                     for (int waterY = y; waterY >= world.getMinBuildHeight()
-                            && depth <= CULVERT_MAX_WATER_DEPTH + 1; waterY--) {
+                            && depth <= CulvertJudge.CULVERT_MAX_WATER_DEPTH + 1; waterY--) {
                         if (!isWaterState(world.getBlockState(new BlockPos(pos.getX(), waterY, pos.getZ())))) break;
                         depth++;
                     }
