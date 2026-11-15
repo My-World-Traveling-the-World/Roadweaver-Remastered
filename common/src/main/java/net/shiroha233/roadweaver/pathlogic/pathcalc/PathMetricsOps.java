@@ -54,6 +54,10 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import static net.shiroha233.roadweaver.pathfinding.impl.PathfindingHelper.snapToGrid;
 import net.shiroha233.roadweaver.postprocess.SplineHelper;
 
@@ -246,28 +250,43 @@ public final class PathMetricsOps {
                     GeometryDriftObserver.centersOf(curved));
             GeometryDriftObserver.report(geometryTag, bandMetrics, postMetrics);
         }
+        return chooseGeometry(curved, () -> PathPostProcessor.processUnrelaxedLinear(
+                        path, width, level, cache, terrain,
+                        PathPostProcessor.configuredBridgeMinWaterDepth(), accurate),
+                connection,
+                new GeometryProtection(segments -> intersectsPreparedRoute(level, connection, segments),
+                        segments -> protectedGapSpans(level, connection, segments).size(),
+                        PathMetricsOps::preferUnsmoothedOnProtectionGap));
+    }
+
+    // 保护判据在平滑之后执行，离线可用真实路面列验证哪种几何能被下发。
+    record GeometryProtection(Predicate<List<RoadSegmentPlacement>> intersects,
+                              ToIntFunction<List<RoadSegmentPlacement>> gapCount,
+                              BooleanSupplier preferUnsmoothed) {}
+
+    static List<RoadSegmentPlacement> chooseGeometry(
+            List<RoadSegmentPlacement> curved, Supplier<List<RoadSegmentPlacement>> unrelaxed,
+            StructureConnection connection, GeometryProtection protection) {
         if (curved == null || curved.size() < 2) {
             curved = null;
             LAST_SEGMENT_FAILURE.set("curved_null");
         }
         if (curved != null && (connection == null
-                || !intersectsPreparedRoute(level, connection, curved))) {
+                || !protection.intersects().test(curved))) {
             return curved;
         }
         if (curved != null && connection != null
-                && !protectedGapSpans(level, connection, curved).isEmpty()) {
+                && protection.gapCount().applyAsInt(curved) > 0) {
             // 0.8.316：平滑（Catmull-Rom）会把已经绕开建筑的折线推进建筑里——真机
             // "retained route with internal building protection gap" 全部出现在平滑路径上。
             // 旧代码在这里直接保留带缺口的平滑路径，连"不做平滑的直线版本"都没算过。
             // 这里补算一次未平滑版本：只要它的保护缺口更少就换用它（缺口 = 路面被建筑
             // 打断，比路稍显生硬严重得多），从源头减少交给局部修复的缺口数。
-            int curvedGaps = protectedGapSpans(level, connection, curved).size();
-            if (preferUnsmoothedOnProtectionGap()) {
-                List<RoadSegmentPlacement> unsmoothed = PathPostProcessor.processUnrelaxedLinear(
-                        path, width, level, cache, terrain,
-                        PathPostProcessor.configuredBridgeMinWaterDepth(), accurate);
+            int curvedGaps = protection.gapCount().applyAsInt(curved);
+            if (protection.preferUnsmoothed().getAsBoolean()) {
+                List<RoadSegmentPlacement> unsmoothed = unrelaxed.get();
                 if (unsmoothed != null && unsmoothed.size() >= 3) {
-                    int unsmoothedGaps = protectedGapSpans(level, connection, unsmoothed).size();
+                    int unsmoothedGaps = protection.gapCount().applyAsInt(unsmoothed);
                     if (unsmoothedGaps < curvedGaps) {
                         // 0.8.324：未平滑版是原始 A* 走廊，可能明显更长、更折。真机
                         // 20260909 16.15 存档 (288,-256)->(880,208)：缺口 5->0，但站点
@@ -293,19 +312,18 @@ public final class PathMetricsOps {
             return curved;
         }
 
-        List<RoadSegmentPlacement> linear = PathPostProcessor.processUnrelaxedLinear(
-                path, width, level, cache, terrain, PathPostProcessor.configuredBridgeMinWaterDepth(), accurate);
+        List<RoadSegmentPlacement> linear = unrelaxed.get();
         if (linear == null || linear.size() < 2) {
             LAST_SEGMENT_FAILURE.set("linear_null");
         }
         if (linear != null && linear.size() >= 2
-                && !intersectsPreparedRoute(level, connection, linear)) {
+                && !protection.intersects().test(linear)) {
             LOGGER.info("RoadWeaver retained unsmoothed route to preserve a structure connection={}->{}",
                     connection.from(), connection.to());
             return linear;
         }
         if (linear != null && linear.size() >= 3 && connection != null
-                && !protectedGapSpans(level, connection, linear).isEmpty()) {
+                && protection.gapCount().applyAsInt(linear) > 0) {
             LOGGER.warn("RoadWeaver retained linear route with internal building protection gap connection={}->{}",
                     connection.from(), connection.to());
             return linear;
