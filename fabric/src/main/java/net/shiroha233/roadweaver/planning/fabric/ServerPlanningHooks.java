@@ -1,6 +1,7 @@
 /* 文件职责：注册 Fabric 服务端生命周期与 Tick 钩子。 */
 package net.shiroha233.roadweaver.planning.fabric;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
@@ -43,6 +44,10 @@ public final class ServerPlanningHooks {
     private static boolean chunkyCacheReleased;
 
     public static void register() {
+        // 玩家和预生成均可唤醒待施工区块；实际施工仍交给服务端 Tick 的预算。
+        ServerChunkEvents.CHUNK_LOAD.register((level, chunk) ->
+                DeferredInitialRoadConstructionService.onChunkLoaded(level, chunk.getPos().toLong()));
+
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             RoadLifecycle.beginStarting();
             StreamsReflowingCompat.clearPrewarmState();

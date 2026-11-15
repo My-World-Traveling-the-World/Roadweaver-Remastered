@@ -1,46 +1,28 @@
 /* 文件职责：开局道路的延迟施工：等条件满足再铺，避免和预热抢线程。 */
 package net.shiroha233.roadweaver.generation;
 
-import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.shiroha233.roadweaver.generation.LoadedChunkRoadBackfill;
 import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
 import net.shiroha233.roadweaver.persistence.chunk.RoadFootprint;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
-import net.shiroha233.roadweaver.runtime.RuntimeLoadPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Applies roads planned during world entry once the relevant chunks are loaded.
- *
- * <h2>Never requests a chunk, never blocks the server</h2>
- * The queue drains through {@link #tick(ServerLevel)}: it only ever looks at
- * chunks that are already in memory, takes a small bounded sample, and gives up
- * the rest of the tick. Unloaded chunks simply stay pending.
- *
- * <p>★ 2026-10-15: before this, {@code pending} was <b>write-only</b> — nothing
- * read it, so "deferred construction" silently meant "never". The only other
- * path that could place a planned road into an existing chunk walks a square of
- * radius {@link #PLAYER_RADIUS_CHUNKS} around each online player, which a
- * pregenerated region never has. The result was a save whose map showed blue
- * planned lines and whose world had no road under them.</p>
- */
+/** 给已加载区块补施工；预生成区可以没有玩家，因此不能只靠玩家附近的回填。 */
 public final class DeferredInitialRoadConstructionService {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    private static final int PLAYER_RADIUS_CHUNKS = 8;
-    private static final int MAX_CHUNKS_PER_TICK = 8;
+    // 默认不计时，避免把诊断日志 I/O 混入常态主线程耗时。
+    private static final boolean TIMINGS = "on".equalsIgnoreCase(
+            System.getProperty("roadweaver.deferredChunkTimings", "off"));
     /**
-     * 两次采样之间至少间隔的 tick 数。单次采样最多 {@link #MAX_CHUNKS_PER_TICK}
+     * 两次采样之间至少间隔的 tick 数。单次施工最多 {@link DeferredChunkQueue#BUILD_LIMIT}
      * 个区块，所以 10 tick(=0.5 秒)一次 ≈ 16 区块/秒 —— 足够在预生成期间追上
      * 进度，又不会把主线程铺满。
      */
@@ -65,27 +47,24 @@ public final class DeferredInitialRoadConstructionService {
     public static void enqueue(ServerLevel level, Collection<Long> chunkKeys) {
         if (!isOverworld(level) || chunkKeys == null || chunkKeys.isEmpty()) return;
         State state = STATES.computeIfAbsent(level, ignored -> new State());
-        state.pending.addAll(chunkKeys);
+        // 逐键入队，不让大批规划持锁到整张路网入队完。
+        for (long key : chunkKeys) state.pending.add(key);
         state.total = Math.max(state.total, state.completed + state.pending.size());
         LOGGER.info("RoadWeaver deferred initial construction queued: chunks={}", state.pending.size());
     }
 
-    /**
-     * Rebuilds the in-memory queue after a server restart. Road plans and the
-     * construction ledger are persistent, but the old queue intentionally was
-     * not. Only incomplete chunks are recovered; player proximity is still
-     * enforced by tick().
-     */
+    /** 内存队列不会写入存档，重开时由已存道路和施工台账补回未完工键。 */
     public static void recover(ServerLevel level) {
         if (!isOverworld(level)) return;
         State state = STATES.computeIfAbsent(level, ignored -> new State());
         int recovered = 0;
         for (var road : RoadShardStorage.loadAll(level)) {
             if (road == null) continue;
+            // 同一条路跨多个区块，身份与检查的区块无关，不必重复计算。
+            long fingerprint = RoadShardStorage.computeFingerprint(road);
             for (long key : RoadFootprint.from(road).chunkKeys()) {
                 ChunkPos chunk = new ChunkPos(key);
-                if (!RoadConstructionLedger.isComplete(level, chunk,
-                        RoadShardStorage.computeFingerprint(road))
+                if (!RoadConstructionLedger.isComplete(level, chunk, fingerprint)
                         && state.pending.add(key)) {
                     recovered++;
                 }
@@ -97,31 +76,13 @@ public final class DeferredInitialRoadConstructionService {
         }
     }
 
-    /**
-     * ★ 2026-10-15：{@link State#pending} 的**唯一消费者** —— 延迟施工排水口。
-     *
-     * <h2>为什么必须有</h2>
-     * 本类此前的 {@code pending} 只写不读：{@link #enqueue} 与 {@link #recover}
-     * 往里塞，没有任何代码取出来。于是「延后施工」实际等于「永不施工」——开局
-     * 规划落盘时区块往往还没生成（世界生成路径编译出空计划、什么都不铺），而唯一
-     * 能补铺的 {@code LoadedChunkRoadBackfill.placeLoadedPlayerChunks} 只在**玩家
-     * 周围 {@value #PLAYER_RADIUS_CHUNKS} 区块**内找候选，预生成器（Chunky）推进
-     * 的区域没有玩家，永远不会被枚举。用户看到的现象就是「地图上有蓝线，世界里
-     * 没有路」。
-     *
-     * <h2>三条硬约束</h2>
-     * <ul>
-     *   <li><b>绝不请求区块</b>：只处理 {@code getChunkNow != null} 的已加载区块，
-     *       未加载的留在 pending 等以后；</li>
-     *   <li><b>绝不阻塞</b>：单次采样最多 {@value #MAX_CHUNKS_PER_TICK} 个区块，
-     *       且每 {@value #DRAIN_INTERVAL_TICKS} tick 才采一次；</li>
-     *   <li><b>幂等</b>：施工台账按（区块, 道路指纹）判定，重复铺过的区块廉价跳过
-     *       并直接从 pending 移除；同一区块连续 {@value #MAX_DRAIN_ATTEMPTS} 次
-     *       采不出结果就放弃（防止队列被一组铺不动的区块永久卡住）。</li>
-     * </ul>
-     *
-     * @return 本次真正铺出道路的区块数（0 表示被节流、无活可干或没有已加载区块）
-     */
+    /** 加载事件只提示已待施工的键，避免在事件栈里读台账或落块。 */
+    public static void onChunkLoaded(ServerLevel level, long chunkKey) {
+        State state = STATES.get(level);
+        if (state != null) state.pending.hint(chunkKey);
+    }
+
+    /** 当前已加载才尝试施工，未加载留在队列；返回本轮真正铺出道路的区块数。 */
     public static int tick(ServerLevel level) {
         if (!isOverworld(level) || !level.getServer().isSameThread()) return 0;
         State state = STATES.get(level);
@@ -130,21 +91,27 @@ public final class DeferredInitialRoadConstructionService {
             state.cooldownTicks--;
             return 0;
         }
-        Set<Long> sample = new LinkedHashSet<>();
-        int settled = 0;
-        for (Long key : state.pending) {
-            if (key == null) continue;
-            ChunkPos chunk = new ChunkPos(key);
-            if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) continue;
+        long startedAt = TIMINGS ? System.nanoTime() : 0;
+        var selection = state.pending.select(key -> {
+            // 事件与施工之间可能卸载；只有当前可取的区块才查台账或施工。
+            if (level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) == null) {
+                return DeferredChunkQueue.Probe.WAITING;
+            }
             if (isMarkedNoConstructionRequired(level, key) || isComplete(level, key)) {
                 if (state.pending.remove(key)) {
-                    settled++;
                     state.attempts.remove(key);
+                    return DeferredChunkQueue.Probe.SETTLED;
                 }
-                continue;
+                return DeferredChunkQueue.Probe.WAITING;
             }
-            sample.add(key);
-            if (sample.size() >= MAX_CHUNKS_PER_TICK) break;
+            return DeferredChunkQueue.Probe.BUILDABLE;
+        });
+        var sample = selection.build();
+        int settled = selection.settled();
+        if (TIMINGS) {
+            LOGGER.info("[DEFERRED-CHUNK-TIMING] pending={} hintSteps={} sweepSteps={} buildable={} settled={} selectUs={}",
+                    state.pending.size(), selection.hintSteps(), selection.sweepSteps(), sample.size(), settled,
+                    (System.nanoTime() - startedAt) / 1_000L);
         }
         state.completed += settled;
         if (sample.isEmpty()) {
@@ -155,8 +122,7 @@ public final class DeferredInitialRoadConstructionService {
         int placed = LoadedChunkRoadBackfill.placeLoadedChunksExact(level, sample);
         int settledNow = 0;
         int abandoned = 0;
-        for (Long key : sample) {
-            if (key == null) continue;
+        for (long key : sample) {
             if (isMarkedNoConstructionRequired(level, key)
                     || isComplete(level, key)) {
                 if (state.pending.remove(key)) {
@@ -170,6 +136,9 @@ public final class DeferredInitialRoadConstructionService {
                 state.pending.remove(key);
                 state.attempts.remove(key);
                 abandoned++;
+            } else {
+                // 未结案的已加载区块继续尽早重试，但仍与新提示共享额度。
+                state.pending.hint(key);
             }
         }
         state.completed += settledNow;
@@ -217,7 +186,11 @@ public final class DeferredInitialRoadConstructionService {
         for (Long key : chunkKeys) {
             if (key == null) continue;
             if (marked.add(key)) newlyMarked++;
-            if (state != null) state.pending.remove(key);
+            if (state != null) {
+                state.pending.remove(key);
+                // 后续道路可能解标并重入队，不继承旧计划已用掉的重试次数。
+                state.attempts.remove(key);
+            }
         }
         if (newlyMarked > 0) {
             LOGGER.info("RoadWeaver marked {} chunk(s) no-construction-required (empty compiled plan; terminal).",
@@ -292,7 +265,7 @@ public final class DeferredInitialRoadConstructionService {
     }
 
     private static final class State {
-        private final Set<Long> pending = ConcurrentHashMap.newKeySet();
+        private final DeferredChunkQueue pending = new DeferredChunkQueue();
         /** 采样节流（见 {@link #DRAIN_INTERVAL_TICKS}）。 */
         private int cooldownTicks;
         /** 已采样但还没结案的区块 → 次数（见 {@link #MAX_DRAIN_ATTEMPTS}）。 */

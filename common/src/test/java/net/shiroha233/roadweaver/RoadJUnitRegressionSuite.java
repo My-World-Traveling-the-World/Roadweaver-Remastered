@@ -242,6 +242,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.tuning.TerrainArchetypeTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.generation.RoutePrecisionRetryPolicyTest"),
+                        // 加载唤醒和轮询上限必须和生产选队共用同一套离线守卫。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.generation.DeferredChunkQueueTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTrackerTest"),
                         DiscoverySelectors.selectClass(

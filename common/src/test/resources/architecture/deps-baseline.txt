@@ -52,11 +52,11 @@ generation -> config                             30
 generation -> core                               48
 generation -> map                                10
 generation -> pathfinding                        17
-generation -> pathlogic                          74
+generation -> pathlogic                          73
 generation -> persistence                        49
 generation -> planning                           85
 generation -> postprocess                        3
-generation -> runtime                            18
+generation -> runtime                            17
 generation -> structures                         15
 generation -> worldgen                           2
 map -> client                             1
