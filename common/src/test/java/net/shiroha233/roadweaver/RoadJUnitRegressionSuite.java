@@ -144,6 +144,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathlogic.construction.BridgeDeckYConsistencyTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.GuardPreconditionTest"),
+                        // 批 4 补覆盖：并行走廊预筛与连接还原的纯判定面（386 行原本零覆盖）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.ParallelOverlapResolverTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.validation.VolumeKindContractTest"),
                         DiscoverySelectors.selectClass(
