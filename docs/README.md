@@ -35,6 +35,7 @@
 | **静默降级修全了吗** | [`SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md`](SILENT-DEGRADE-EMPTY-SNAPSHOT-20261115.md) ← **只修了 null，EMPTY 仍静默；同一混淆扩散 7 处** |
 | **我写过的假测试** | [`MY-OWN-FAKE-TESTS-20261115.md`](MY-OWN-FAKE-TESTS-20261115.md) ← **两条恒真断言，负控实证「改坏也不红」；已重写为 3 条会真红的** |
 | **空集合让测试空转** | [`VACUOUS-LOOP-TESTS-20261115.md`](VACUOUS-LOOP-TESTS-20261115.md) ← **第五类假测试：改坏了反而更绿；73→19→2 逐层收窄** |
+| **批 4 到底卡在哪** | [`BATCH4-JUNCTION-STATUS-20261115.md`](BATCH4-JUNCTION-STATUS-20261115.md) ← **不是没新引擎，是 1,228 行 / 65% 无测试（两个生产主入口零覆盖）** |
 
 ---
 
