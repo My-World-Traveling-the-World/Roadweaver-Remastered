@@ -24,6 +24,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * 结构注入器
@@ -71,17 +75,8 @@ public final class StructureInjector {
         StructureManager structureManager = level.structureManager();
         StructureTemplateManager templateManager = level.getStructureManager();
         
-        int injectedCount = 0;
-        int droppedCount = 0;
-        
-        for (PendingRoadsideStructure pendingStructure : pending) {
-            try {
-                Structure structure = structureRegistry.get(pendingStructure.structureId());
-                if (structure == null) {
-                    LOGGER.warn("Structure {} not found in registry, skipping", pendingStructure.structureId());
-                    continue;
-                }
-                
+        injectBatch(pending, item -> structureRegistry.get(item.structureId()),
+            (pendingStructure, structure) -> {
                 SimpleTemplatePiece piece;
                 if (structure instanceof RoadsideStructure roadsideStructure) {
                     piece = new SimpleTemplatePiece(
@@ -103,8 +98,7 @@ public final class StructureInjector {
                     );
                 } else {
                     LOGGER.warn("Structure {} is not a supported type, skipping", pendingStructure.structureId());
-                    droppedCount++;
-                    continue;
+                    return false;
                 }
                 
                 StructureStart start = new StructureStart(
@@ -116,22 +110,10 @@ public final class StructureInjector {
                 
                 SectionPos sectionPos = SectionPos.of(chunkPos, 0);
                 structureManager.setStartForStructure(sectionPos, structure, start, chunk);
-                injectedCount++;
-                
-            } catch (Exception e) {
-                droppedCount++;
-                LOGGER.error("Failed to inject structure {} at {}", 
-                    pendingStructure.structureId(), pendingStructure.anchor(), e);
-            }
-        }
-        
-        if (injectedCount > 0) {
-            LOGGER.debug("Injected {} roadside structures into chunk [{}, {}]", 
-                injectedCount, chunkPos.x, chunkPos.z);
-        }
-        
-        finishInjection(() -> PendingStructureStorage.markAsInjected(level, chunkPos),
-                "structure", chunkPos, injectedCount, droppedCount);
+                return true;
+            }, item -> LOGGER.warn("Structure {} not found in registry, skipping", item.structureId()),
+            (item, error) -> LOGGER.error("Failed to inject structure {} at {}", item.structureId(), item.anchor(), error),
+            () -> PendingStructureStorage.markAsInjected(level, chunkPos), "structure", chunkPos);
     }
 
     private static void injectRoadsideVillages(ServerLevel level, ChunkAccess chunk) {
@@ -145,23 +127,17 @@ public final class StructureInjector {
         StructureManager structureManager = level.structureManager();
         StructureTemplateManager templateManager = level.getStructureManager();
         SectionPos sectionPos = SectionPos.of(chunkPos, 0);
-        int injectedCount = 0;
-        int droppedCount = 0;
-
-        for (PendingRoadsideVillage village : villages) {
-            try {
-                Structure structure = structureRegistry.get(village.structureId());
+        injectBatch(villages, item -> structureRegistry.get(item.structureId()),
+            (village, structure) -> {
                 if (!(structure instanceof RoadsideVillageStructure)) {
                     LOGGER.warn("Roadside village structure {} is not available", village.structureId());
-                    droppedCount++;
-                    continue;
+                    return false;
                 }
 
                 List<PoolElementStructurePiece> pieces = RoadsideVillageJigsawPlanner.createPieces(level, village, templateManager);
                 if (pieces.isEmpty()) {
                     LOGGER.debug("Roadside village {} produced no pieces", village.placementId());
-                    droppedCount++;
-                    continue;
+                    return false;
                 }
 
                 StructureStart start = new StructureStart(
@@ -171,19 +147,35 @@ public final class StructureInjector {
                     new PiecesContainer(new ArrayList<>(pieces))
                 );
                 structureManager.setStartForStructure(sectionPos, structure, start, chunk);
-                injectedCount++;
+                return true;
+            }, item -> LOGGER.warn("Roadside village structure {} is not available", item.structureId()),
+            (item, error) -> LOGGER.error("Failed to inject roadside village {}", item.placementId(), error),
+            () -> PendingRoadsideVillageStorage.markAsInjected(level, chunkPos), "roadside village", chunkPos);
+    }
+
+    static <T, S> void injectBatch(List<T> pending, Function<T, S> lookup, BiPredicate<T, S> inject,
+                                  Consumer<T> missing, BiConsumer<T, Exception> failure,
+                                  Runnable mark, String kind, ChunkPos chunkPos) {
+        if (pending.isEmpty()) return;
+        int injectedCount = 0;
+        for (T item : pending) {
+            try {
+                S structure = lookup.apply(item);
+                if (structure == null) {
+                    missing.accept(item);
+                } else if (inject.test(item, structure)) {
+                    injectedCount++;
+                }
             } catch (Exception e) {
-                droppedCount++;
-                LOGGER.error("Failed to inject roadside village {}", village.placementId(), e);
+                failure.accept(item, e);
             }
         }
 
         if (injectedCount > 0) {
-            LOGGER.debug("Injected {} roadside villages into chunk [{}, {}]", injectedCount, chunkPos.x, chunkPos.z);
+            LOGGER.debug("Injected {} {}(s) into chunk [{}, {}]", injectedCount, kind, chunkPos.x, chunkPos.z);
         }
-
-        finishInjection(() -> PendingRoadsideVillageStorage.markAsInjected(level, chunkPos),
-                "roadside village", chunkPos, injectedCount, droppedCount);
+        // 标记会清掉整批；用应处理减成功覆盖所有拒绝，包括找不到注册 ID 的分支。
+        finishInjection(mark, kind, chunkPos, injectedCount, pending.size() - injectedCount);
     }
 
     // 只有区块标记成功后才算永久丢弃；两条注入路径共用结算顺序以免口径走散。
