@@ -1,5 +1,7 @@
 package net.shiroha233.roadweaver.bridge;
 
+import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservationTest;
+
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -116,6 +118,43 @@ final class BandPathfinderCorridorTest {
         config.setCorridorBan(ban);
         assertFalse(solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config).success(),
                 "同格连接也不能从禁行角钻过");
+    }
+
+    @Test
+    void treeColumnBetweenGridPointsClosesOnlyPassage() {
+        var start = new BlockPos(-64, 64, 0);
+        var end = new BlockPos(64, 64, 0);
+        var terrain = new FlatTerrain(0);
+        var config = config();
+        assertTrue(new BandPathfinder().findPath(start, end, 1, null, 1000, null, terrain, config).success());
+        // 不扩大夹具，令两侧粗格都可达；必须由边检查拒绝，不能靠点掩码碰巧变红。
+        var mask = HugeTreeReservationTest.mask(-128, -64, 128, 64, 0, new BlockPos(-5, 64, 0));
+        assertFalse(mask.blocks(-8, 0));
+        assertFalse(mask.blocks(0, 0));
+        var solver = new BandPathfinder((level, x0, z0, x1, z1, radius) -> mask);
+        assertFalse(solver.findPath(start, end, 1, null, 1000, null, terrain, config).success());
+    }
+
+    @Test
+    void roadWidthAndSmoothingClearTheLiveReservationFootprint() {
+        var config = config();
+        var tree = new BlockPos(0, 64, 6);
+        var terrain = new FlatTerrain(32);
+        assertTrue(new BandPathfinder().findPath(START, END, 15, null, 1000, null, terrain, config)
+                .rawPath().stream().allMatch(p -> p.getZ() == 0));
+        var solver = new BandPathfinder((level, x0, z0, x1, z1, radius) ->
+                HugeTreeReservationTest.mask(x0, z0, x1, z1, radius, tree));
+        var result = solver.findPath(START, END, 15, null, 1000, null, terrain, config);
+        assertTrue(result.success(), "一列预留有绕路，不能直接拒绝");
+        assertEquals(START, result.rawPath().getFirst());
+        assertEquals(END, result.rawPath().getLast());
+        assertTrue(result.rawPath().stream().anyMatch(p -> p.getZ() < 0));
+        var expected = HugeTreeReservationTest.mask(-128, -64, 128, 64, 8, tree);
+        for (int i = 1; i < result.rawPath().size(); i++) {
+            var a = result.rawPath().get(i - 1);
+            var b = result.rawPath().get(i);
+            assertFalse(expected.intersects(a.getX(), a.getZ(), b.getX(), b.getZ()));
+        }
     }
 
     private static CorridorBan ban(List<BlockPos> line) {

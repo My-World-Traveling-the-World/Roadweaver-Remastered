@@ -20,7 +20,7 @@ import net.shiroha233.roadweaver.pathfinding.PathResult;
 import net.shiroha233.roadweaver.pathfinding.Pathfinder;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
-import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
+import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
 
 import net.shiroha233.roadweaver.pipeline.ab.BandRouteSolver;
 import net.shiroha233.roadweaver.pipeline.ab.RouteSolver;
@@ -43,7 +43,7 @@ import net.shiroha233.roadweaver.topology.RoadNode;
  *   <li><b>步长取 {@code effectiveAStarStep()}。</b>这不是新引入的妥协 ——
  *       旧 A* 本来就是 8 格粗网格。区别只在于：以前步长既是搜索粒度又是几何粒度，
  *       现在它<b>只是搜索粒度</b>，几何由弹性带在方块坐标系里做。</li>
- *   <li><b>避让判据照旧走 {@code StructureAvoidanceService}。</b>
+ *   <li><b>建筑避让判据照旧走 {@code StructureAvoidanceService}。</b>
  *       调用方（旧链）已经在 {@code activatePlanningSnapshot} 作用域内，
  *       本类直接复用那个 ThreadLocal 快照 —— <b>判据一字不改</b>。</li>
  * </ol>
@@ -59,6 +59,22 @@ import net.shiroha233.roadweaver.topology.RoadNode;
  * @see net.shiroha233.roadweaver.pipeline.ab.SolverMode
  */
 public final class BandPathfinder implements Pathfinder {
+
+    // 只注入预留来源，测试与生产共享所有掩码、FMM 和弹性带逻辑。
+    @FunctionalInterface
+    interface TreeMaskSource {
+        HugeTreeReservation.PlanningMask snapshot(ServerLevel level, int minX, int minZ, int maxX, int maxZ, int radius);
+    }
+
+    private final TreeMaskSource treeMasks;
+
+    public BandPathfinder() {
+        this(HugeTreeReservation::planningMask);
+    }
+
+    BandPathfinder(TreeMaskSource treeMasks) {
+        this.treeMasks = treeMasks;
+    }
 
     /** 包围盒在起终点外侧额外留的余量（格）—— 给绕行留空间。 */
     private static final int BOUNDS_PADDING = 64;
@@ -157,6 +173,11 @@ public final class BandPathfinder implements Pathfinder {
         int blockDepth = maxZ - minZ + 1;
         int columns = (blockWidth - 1) / step + 1;
         int rows = (blockDepth - 1) / step + 1;
+        int clearance = planningRoadRadius();
+        // findRawPath 传 1；实际道路半径取施工配置，显式传入更宽时也不能漏掉路缘。
+        var trees = treeMasks.snapshot(level, minX, minZ, maxX, maxZ,
+                Math.max(clearance, (int) Math.ceil(width / 2.0)));
+        boolean hasTrees = !trees.isEmpty();
 
         // ① 采地形（越界列用 0，并被下面标成不可通行）
         int[] heights = new int[columns * rows];
@@ -190,7 +211,6 @@ public final class BandPathfinder implements Pathfinder {
         // 降级重搜等于在完全无障碍的地图上找路（直接穿村穿楼）。
         // 现在 PENALTY 下降级重搜仍能感知建筑：不硬禁，但软势非零、尽量绕开。
         boolean[] penalized = new boolean[columns * rows];
-        int clearance = planningRoadRadius();
         for (int iz = 0; iz < rows; iz++) {
             for (int ix = 0; ix < columns; ix++) {
                 int index = ix + iz * columns;
@@ -201,7 +221,8 @@ public final class BandPathfinder implements Pathfinder {
                 BlockPos pos = new BlockPos(x, y, z);
                 boolean hard = blocksPlanningObstacle(pos, clearance);
                 // 改道禁行与建筑硬转软无关；只将建筑放进软势，避免把禁行带再膨胀一层。
-                blocked[index] = hard || (hasBan && ban.blocks(x, z));
+                // 巨树是硬禁列，不受建筑 PENALTY 模式的降级影响。
+                blocked[index] = hard || (hasBan && ban.blocks(x, z)) || (hasTrees && trees.blocks(x, z));
                 penalized[index] = hard || shouldAvoidPlanning(pos, clearance);
             }
         }
@@ -268,11 +289,16 @@ public final class BandPathfinder implements Pathfinder {
                 minX, minZ, columns, rows, step, blocked, penalized, outOfTerrain);
 
         // ③ 新内核：度量 → 场求解 → 回溯 → 曲率平滑
+        // 树列可能恰好在两个粗格之间；让 FMM、回溯和弹性带共用精确跨边约束。
+        FinslerMetric.EdgeBlock edgeBlock = hasTrees
+                ? (hasBan ? (x0, z0, x1, z1) -> ban.intersectsSegment(x0, z0, x1, z1)
+                        || trees.intersects(x0, z0, x1, z1) : trees::intersects)
+                : (hasBan ? ban::intersectsSegment : null);
         FinslerMetric metric = new FinslerMetric(
                 terrainField, obstacles,
                 FinslerMetric.DEFAULT_GRADE_WEIGHT,
                 FinslerMetric.DEFAULT_OBSTACLE_WEIGHT,
-                hasAttract ? attract::factorAt : null, hasBan ? ban::intersectsSegment : null);
+                hasAttract ? attract::factorAt : null, edgeBlock);
 
         // 委托给 BandRouteSolver —— 它是「单条路线」的唯一实现。
         //
