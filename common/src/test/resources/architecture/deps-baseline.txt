@@ -186,6 +186,5 @@ worldgen -> config                       1
 worldgen -> core                         10
 worldgen -> persistence                  4
 
-map -> pathfinding                         18
-map -> search                              1
-map -> util                                1
+# 2026-11-15：删掉 18 个 [A] 死代码类后，map -> pathfinding / map -> search /
+# map -> util 这三条边自然消失（撑起它们的是 map/tile 下的几个死类），已移除。

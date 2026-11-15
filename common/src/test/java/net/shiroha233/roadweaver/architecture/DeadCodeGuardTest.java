@@ -42,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code InitialRoadConstructionService}、{@code Records}、
  * {@code RiverReadinessBroadcast}、{@code TwoStagePathfindingManager}。
  * 它们是真死代码，但旧口径永远看不见。</p>
+ * <p><b>2026-11-15 后续</b>：这 4 个已全部物理删除（用户拍板「删全部 18 个」）。
+ * 保留这段历史是为了记住「javadoc 能让死代码永生」这个教训 ——
+ * 现在的口径已经不受它影响了。</p>
  * <p>修法：{@link #stripComments(String)} 剥掉块注释与行注释后再统计。</p>
  *
  * <h3>问题二：把公开 API 门面判成「可以删」</h3>
@@ -207,6 +210,9 @@ public final class DeadCodeGuardTest {
      * 但 {@code fabric.mod.json} 里<b>没有注册</b>，永不被加载）靠这个混进了
      * 「禁止删」组。现在它会因为找不到 {@code RoadWeaver}？不 —— 因为它没有
      * {@code DataGenerator} 主类，直接判为非平台实现，落回 {@code [A]}。</p>
+     * <p><b>2026-11-15 后续</b>：{@code RoadWeaverDataGenerator} 与它配套的
+     * {@code ModWorldGenerator} 已物理删除 —— 整条 datagen 链从来没接线
+     * （{@code fabric.mod.json} 里连 {@code fabric-datagen} entrypoint 都没有）。</p>
      */
     private static boolean isPlatformImpl(String typeName, Set<String> expectPlatformClasses) {
         if (!typeName.endsWith("Impl")) return false;

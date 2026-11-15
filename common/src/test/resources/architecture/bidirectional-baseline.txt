@@ -43,5 +43,7 @@ persistence      <-> structures         3 / 4
 persistence      <-> worldgen           4 / 4
 planning         <-> runtime            18 / 5
 
-map                      <-> pathfinding             
-map                      <-> search                  
+
+# 2026-11-15：删掉 18 个 [A] 死代码类后，「map <-> pathfinding」与
+# 「map <-> search」这两对循环依赖自然消失（撑起它们的是 map/tile 下的几个死类），
+# 已从本基线移除 —— 这是 ratchet 允许的方向（只许减少）。

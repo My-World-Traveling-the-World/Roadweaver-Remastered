@@ -194,10 +194,12 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             // DeferredInitialRoadConstructionService.NO_CONSTRUCTION_REQUIRED(纯
             // 内存态)。因为「是否还需要施工」的三处判定全部只读 ledger:
             //   ① DeferredInitialRoadConstructionService.recover()  —— 重启后重入队
-            //   ② InitialRoadConstructionService.verifyConstruction() —— 开局校验会抛异常
-            //   ③ LoadedChunkRoadBackfill.isConstructionComplete()   —— 每 60 秒回填
-            // 写进 ledger 后三处自动跳过,且重启不再复活;若只写内存态,①会复活死循环、
-            // ②会让开局直接抛 IllegalStateException(比修复前更糟)。
+            //   ② LoadedChunkRoadBackfill.isConstructionComplete()   —— 每 60 秒回填
+            // 写进 ledger 后两处自动跳过,且重启不再复活;若只写内存态,①会复活死循环。
+            //
+            // （原列表还有第 ② 项 InitialRoadConstructionService.verifyConstruction()，
+            //   那个类 2026-11-15 已作为死代码物理删除 —— 它从来没被接线，所以
+            //   「开局校验会抛异常」这条风险现在不存在。① 的死循环风险仍然成立。）
             boolean abandoned = false;
             if (!incompleteRoads.isEmpty() && completedRoads.isEmpty()
                     && !refusals.isEmpty() && !gapRepairApplied) {

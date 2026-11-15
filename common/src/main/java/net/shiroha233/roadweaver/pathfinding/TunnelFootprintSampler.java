@@ -114,7 +114,7 @@ public final class TunnelFootprintSampler {
         for (RoadSegmentPlacement segment : segments) {
             if (segment == null) continue;
             // 0.9.063：中心站列**必须**被采到 —— 突起度判据吃的是中心站的地形高度，
-            // 而 footprint 不保证包含中心列（见 TwoStagePathfindingManager / RoadSnapService）。
+            // 而 footprint 不保证包含中心列（见 RoadSnapService 的 footprint 构造）。
             // 漏采会退回 center.getY()（那是**规划路面**高度），突起度就会恒为 0。
             if (segment.middlePos() != null) positions.add(segment.middlePos());
             if (segment.positions() == null) continue;
