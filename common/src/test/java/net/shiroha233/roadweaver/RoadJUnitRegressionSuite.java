@@ -150,6 +150,9 @@ public final class RoadJUnitRegressionSuite {
                         // 批 4 补覆盖：842 行主入口 connectPlannedBatch 的早退契约（探边界）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionBatchEntryTest"),
+                        // 批 4 补覆盖：路口合并核心判据（单 junction 选择 / 代价口径 / 候选预筛）
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.JunctionSelectionCoreTest"),
                         // 批 5 量尺：perpendicularDistance / reinstateUntilDense 的契约 + 锯齿保真度实测
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PostprocessMeasuringStickTest"),
