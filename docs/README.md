@@ -36,6 +36,7 @@
 | **我写过的假测试** | [`MY-OWN-FAKE-TESTS-20261115.md`](MY-OWN-FAKE-TESTS-20261115.md) ← **两条恒真断言，负控实证「改坏也不红」；已重写为 3 条会真红的** |
 | **空集合让测试空转** | [`VACUOUS-LOOP-TESTS-20261115.md`](VACUOUS-LOOP-TESTS-20261115.md) ← **第五类假测试：改坏了反而更绿；73→19→2 逐层收窄** |
 | **批 4 到底卡在哪** | [`BATCH4-JUNCTION-STATUS-20261115.md`](BATCH4-JUNCTION-STATUS-20261115.md) ← **不是没新引擎，是 1,228 行 / 65% 无测试（两个生产主入口零覆盖）** |
+| **批 6 到底卡在哪** | [`BATCH6-AVOIDANCE-STATUS-20261115.md`](BATCH6-AVOIDANCE-STATUS-20261115.md) ← **拆分与外置都真做完了；「5 条可观测」生产零读者 ⇒ 真机上看不到** |
 
 ---
 
