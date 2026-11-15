@@ -293,6 +293,14 @@ public final class RoadConstants {
      */
     public static final int DEFAULT_CROSSING_CLUSTER_RADIUS = 24;
 
+    /**
+     * 数据库锁超时（毫秒）。
+     *
+     * <p>⚠️ 2026-11-15 核对：**全仓零引用**，**既没有锁、也没有超时判断**。
+     * 本仓库的持久化走 RoadChunkStore / index.json 事务，全仓没有 tryLock / FileLock 调用；
+     * 这个常量是早期设计的遗留。保留是因为它是 public 的 ——
+     * 可能有外部 mod 引用，删掉会让下游编译失败。</p>
+     */
     public static final int DB_LOCK_TIMEOUT_MS = 10_000;
 
     public static final int BLOCK_UPDATE_FLAG = 3;

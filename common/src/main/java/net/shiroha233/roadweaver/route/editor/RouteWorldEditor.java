@@ -50,7 +50,15 @@ public final class RouteWorldEditor {
     /** 方向键挪点的步长（格）。按住 Shift 加速。 */
     private static final float MOVE_STEP = 1.0F;
 
-    /** 每 tick 最多执行几次按键动作（防止连按过快）。 */
+    /**
+     * 每 tick 最多执行几次按键动作（防止连按过快）。
+     *
+     * <p>⚠️ 2026-11-15 核对：**全仓零引用**，这条保护**实际不存在**。
+     * 声明在这里，但 `tick(Minecraft)` 里没有任何「计数达上限就丢弃」的逻辑。
+     * 保留是因为它记录了原始设计意图；<b>不要以为连按已经被限流</b>。
+     * 真要加需要先定「按什么计数」（物理按键次数 / 生效动作次数）并真机验证手感。</p>
+     */
+    @SuppressWarnings("unused")
     private static final int MAX_ACTIONS_PER_TICK = 4;
 
     // 选中状态**只存在会话里**（审计 P3-4）。本类不再自己维护一份，

@@ -46,8 +46,15 @@ import org.joml.Matrix4f;
  */
 public final class RoutePreviewRenderer {
 
-    /** 虚线：实线段长度与间隔（世界单位）。 */
+    /**
+     * 虚线：实线段长度与间隔（世界单位）。
+     *
+     * <p>⚠️ 2026-11-15 核对：**全仓零引用**，这两个常量没有被任何绘制代码读取 ⇒
+     * <b>预览线实际是实线，不是虚线</b>。原意是按 DASH/GAP 切段绘制，未实现。</p>
+     */
+    @SuppressWarnings("unused")
     private static final float DASH = 1.6F;
+    @SuppressWarnings("unused")
     private static final float GAP = 1.1F;
 
     /** 路面横线的半宽（格）。取 2 ≈ 5 格宽的路，与默认配置接近。 */

@@ -70,7 +70,15 @@ public final class AccurateGradeRepairPlanner {
      */
     static final ThreadLocal<Boolean> LAST_SEARCH_BUDGET_EXHAUSTED = new ThreadLocal<>();
     static final int LOCAL_WINDOW_BLOCKS = 12;
-    /** Height anomalies are repaired in one explicit local 50-block window. */
+    /**
+     * Height anomalies are repaired in one explicit local 50-block window.
+     *
+     * <p>⚠️ 2026-11-15 核对：**全仓零引用**，这是**被取代的重复常量**。
+     * 实际生效的是 HEIGHT_ANOMALY_DETOUR_BLOCKS（同为 50），
+     * 见 :431 的注释与 :433 的「50 → heightAnomalyDetourMaxBlocks 逐级重试」。
+     * 两个 50 并存会让人以为它们是两个不同的窗口。</p>
+     */
+    @SuppressWarnings("unused")
     static final int HEIGHT_REPAIR_CONTEXT_BLOCKS = 50;
     static final int SEARCH_MARGIN_BLOCKS = 80;
     static final int STRUCTURE_CONTEXT_BLOCKS = 96;
