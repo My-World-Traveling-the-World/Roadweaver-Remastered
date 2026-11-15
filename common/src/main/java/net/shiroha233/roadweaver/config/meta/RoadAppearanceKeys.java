@@ -136,7 +136,15 @@ public final class RoadAppearanceKeys {
                     "浅水且窄时用涵洞跨越，而不是架桥",
                     ""),
 
-            ConfigKey.integer("culvertMaxStations", 6, 0, 64,
+            // ★ 2026-11-15：范围 0..64 → **1..16**。
+            //   原来声明 0..64，但下游三处各自更窄：
+            //     · RoadAppearanceConfig.setCulvertMaxStations 实夹 1..16
+            //     · LocalRouteSearch 规划期夹 0..16
+            //     · 施工期 CulvertJudge 原来硬编码 6
+            //   用户在 UI 上拖到 30 时，实际生效的是 16 ⇒ 声明与实现不符。
+            //   现在统一到 1..16（规划期实际能生效的范围）。
+            //   注意：0 不再可选；要关掉涵洞请用 culvertEnabled。
+            ConfigKey.integer("culvertMaxStations", 6, 1, 16,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "涵洞最大站数", "Culvert max stations",
                     "超过这个站数的水体改走窄水桥或绕行",

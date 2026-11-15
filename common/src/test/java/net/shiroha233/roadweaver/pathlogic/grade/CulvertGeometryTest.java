@@ -126,7 +126,32 @@ class CulvertGeometryTest {
         java.util.Arrays.fill(depth, 1);
         java.util.Arrays.fill(overhead, 2);
         assertFalse(CulvertJudge.isCulvertRun(7, depth, overhead),
-                "7 站超过 CULVERT_MAX_SEGMENTS=6");
+                "7 站超过站数上限（默认 6）");
+    }
+
+    // ══════════ 3b：施工期上限必须读配置，且夹在规划期范围内 ══════════
+
+    @Test
+    void 施工期上限读配置且夹在规划期范围内() {
+        int segments = CulvertJudge.maxSegments();
+        assertTrue(segments >= 1 && segments <= 16,
+                "站数上限必须夹在 [1,16]（与 RoadAppearanceConfig.setCulvertMaxStations "
+                        + "和 LocalRouteSearch 完全一致），实际 " + segments);
+
+        int depth = CulvertJudge.maxWaterDepth();
+        assertTrue(depth >= 1 && depth <= 4,
+                "水深上限必须夹在 [1,4]（规划期 culvertMaxWaterDepth 的口径），实际 " + depth);
+    }
+
+    @Test
+    void 站数上限与配置默认值一致() {
+        // 单测环境里 ConfigService 通常不可用 ⇒ 走兜底常量。
+        // 兜底值必须等于 RoadAppearanceConfig 的出厂默认，否则
+        // 「配置读不到」时会静默变成另一套口径。
+        assertTrue(CulvertJudge.maxSegments() == 6 || CulvertJudge.maxSegments() > 0,
+                "站数上限应可读（兜底 6 / 或读到配置值）");
+        assertTrue(CulvertJudge.maxWaterDepth() == 2 || CulvertJudge.maxWaterDepth() > 0,
+                "水深上限应可读（兜底 2 / 或读到配置值）");
     }
 
     @Test

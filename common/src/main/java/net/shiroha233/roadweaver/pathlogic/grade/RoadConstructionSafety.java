@@ -93,6 +93,8 @@ public final class RoadConstructionSafety {
     private static final int MAX_SHOULDER_DEPTH = 5;
     private static final int RUNTIME_BRIDGE_CHUNK_RADIUS = 5;
     private static final int MAX_WATER_SCAN_DEPTH = 128;
+    /** 水深逐格下探的硬上界（判据上限可配 1..4，这里留足余量；超出部分由判据拒绝）。 */
+    private static final int MAX_WATER_DEPTH_SCAN = 8;
     private static final int MAX_WATER_ROOF_THICKNESS = 8;
     private static final ConcurrentHashMap<RuntimeBridgeKey, List<RuntimeRange>> RUNTIME_BRIDGES =
             new ConcurrentHashMap<>();
@@ -802,7 +804,7 @@ public final class RoadConstructionSafety {
     private static boolean isShallowCulvertCrossing(WorldGenLevel world, List<BlockPos> centers, int start, int end) {
         if (world == null || centers == null || start < 0 || end < start || end >= centers.size()) return false;
         int stations = end - start + 1;
-        if (stations > CulvertJudge.CULVERT_MAX_SEGMENTS) return false;
+        if (stations > CulvertJudge.maxSegments()) return false;
         // 「水道横穿路面」是位置属性，取起点判一次即可（整段的水面已在
         // promoteRuntimeBridges 里用 hasWatercourseAcrossRoad 逐站延伸确认过）。
         if (!hasWatercourseAcrossRoad(world, centers, start)) return false;
@@ -897,8 +899,12 @@ public final class RoadConstructionSafety {
                 BlockState state = world.getBlockState(new BlockPos(pos.getX(), y, pos.getZ()));
                 if (isWaterState(state)) {
                     int depth = 0;
+                    // 扫描上界与「涵洞水深上限」解耦：那是个可配值（1..4），
+                    // 若拿它当扫描上界，配成 4 时这里仍只扫到 3 层 ⇒ 报回的 depth 偏小、
+                    // 可能把「实际深 5 层」误报成 3 层从而通过判据。
+                    // 用一个足够大的固定上界，超限的部分由判据负责拒绝。
                     for (int waterY = y; waterY >= world.getMinBuildHeight()
-                            && depth <= CulvertJudge.CULVERT_MAX_WATER_DEPTH + 1; waterY--) {
+                            && depth <= MAX_WATER_DEPTH_SCAN; waterY--) {
                         if (!isWaterState(world.getBlockState(new BlockPos(pos.getX(), waterY, pos.getZ())))) break;
                         depth++;
                     }

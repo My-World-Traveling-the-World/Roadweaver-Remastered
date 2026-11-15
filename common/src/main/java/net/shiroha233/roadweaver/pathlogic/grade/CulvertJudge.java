@@ -1,6 +1,8 @@
 /* 文件职责：涵洞几何判据的唯一真值来源（常量 + 纯函数），与施工流程解耦以便单测。 */
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+import net.shiroha233.roadweaver.config.ConfigService;
+
 /**
  * 涵洞几何判据：<b>常量与纯函数的唯一真值来源</b>。
  *
@@ -24,10 +26,9 @@ package net.shiroha233.roadweaver.pathlogic.grade;
  *   <caption>规划期 vs 施工期</caption>
  *   <tr><th>判据</th><th>规划期</th><th>施工期</th><th>状态</th></tr>
  *   <tr><td>站数</td><td>{@code culvertMaxStations}（默认 6）</td>
- *       <td>{@link #CULVERT_MAX_SEGMENTS} = 6</td><td>已对齐默认值</td></tr>
+ *       <td>{@code maxSegments()}（读配置，兜底 6）</td><td>✅ 已同源</td></tr>
  *   <tr><td>水深</td><td>{@code culvertMaxWaterDepth}（默认 2，可配 1..4）</td>
- *       <td>{@link #CULVERT_MAX_WATER_DEPTH} = 2</td>
- *       <td><b>用户改配置时仍会漂移</b></td></tr>
+ *       <td>{@code maxWaterDepth()}（读配置，兜底 2）</td><td>✅ 已同源</td></tr>
  *   <tr><td>净空</td><td><b>没有这条判据</b></td>
  *       <td>{@link #CULVERT_MAX_OVERHEAD} = 6</td>
  *       <td><b>规划期缺失</b></td></tr>
@@ -55,17 +56,49 @@ public final class CulvertJudge {
     /** 水道横截面采样半宽：沿垂直于路线的方向左右各取这么多格。 */
     public static final int WATERCOURSE_HALF_WIDTH = 3;
 
-    /**
-     * 涵洞几何允许的最大水深。
-     *
-     * <p>⚠️ 规划期 {@code culvertMaxWaterDepth} <b>可配 1..4</b>，这里仍是硬编码 2
-     * ⇒ 用户配成 3/4 时又会出现「规划涵洞、施工架桥」。
-     * 彻底修法是让这里读配置，属独立改动（见 {@code docs/} 分析文档）。</p>
-     */
-    public static final int CULVERT_MAX_WATER_DEPTH = 2;
+    /** 配置缺失/不可读时的兜底：水深上限（与 {@code RoadAppearanceConfig} 出厂默认一致）。 */
+    static final int DEFAULT_MAX_WATER_DEPTH = 2;
 
-    /** 涵洞段允许的最大站数。见类注释「站数从 2 改成 6 的由来」。 */
-    public static final int CULVERT_MAX_SEGMENTS = 6;
+    /** 配置缺失/不可读时的兜底：站数上限（与 {@code RoadAppearanceConfig} 出厂默认一致）。 */
+    static final int DEFAULT_MAX_SEGMENTS = 6;
+
+    /**
+     * 涵洞几何允许的最大水深 —— <b>读配置 {@code culvertMaxWaterDepth}</b>。
+     *
+     * <h2>★ 2026-11-15 从硬编码改为读配置</h2>
+     * <p>原先是硬编码 2，而规划期 {@code culvertMaxWaterDepth} <b>可配 1..4</b>
+     * ⇒ 用户配成 3/4 时，规划期认得、施工期只认 2，于是
+     * <b>又产生「规划判涵洞、施工架桥」</b>（与站数那条同形）。</p>
+     *
+     * <p>现在两处都读同一个配置键，夹取范围统一为 {@code [1,4]}（规划期口径）。
+     * 配置不可读时（单测 / 启动早期）退回 {@link #DEFAULT_MAX_WATER_DEPTH}。</p>
+     */
+    public static int maxWaterDepth() {
+        try {
+            return clamp(ConfigService.get().roadAppearance().culvertMaxWaterDepth(), 1, 4);
+        } catch (Throwable ignored) {
+            return DEFAULT_MAX_WATER_DEPTH;
+        }
+    }
+
+    /**
+     * 涵洞段允许的最大站数 —— <b>读配置 {@code culvertMaxStations}</b>。
+     *
+     * <p>见类注释「站数从 2 改成 6 的由来」。夹取范围 {@code [1,16]}，
+     * 与 {@code RoadAppearanceConfig.setCulvertMaxStations} 和规划期
+     * {@code LocalRouteSearch} 完全一致（2026-11-15 统一）。</p>
+     */
+    public static int maxSegments() {
+        try {
+            return clamp(ConfigService.get().roadAppearance().culvertMaxStations(), 1, 16);
+        } catch (Throwable ignored) {
+            return DEFAULT_MAX_SEGMENTS;
+        }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
 
     /**
      * 涵洞几何允许的最大净空。
@@ -87,8 +120,8 @@ public final class CulvertJudge {
      * @param overhead     净空（路面之上到水面的厚度）
      */
     static boolean isCulvertGeometry(int segmentCount, int waterDepth, int overhead) {
-        return segmentCount > 0 && segmentCount <= CULVERT_MAX_SEGMENTS
-                && waterDepth > 0 && waterDepth <= CULVERT_MAX_WATER_DEPTH
+        return segmentCount > 0 && segmentCount <= maxSegments()
+                && waterDepth > 0 && waterDepth <= maxWaterDepth()
                 && overhead >= 0 && overhead <= CULVERT_MAX_OVERHEAD;
     }
 
