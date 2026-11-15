@@ -52,6 +52,8 @@ public final class RoadChunkStore implements AutoCloseable {
     public static final int SCHEMA_VERSION = 2;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final boolean CONSTRUCTION_SHADOW =
+            "on".equalsIgnoreCase(System.getProperty("roadweaver.constructionContentShadow"));
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String ROOT_SCHEMA = "roadweaver.roads";
     private static final String INDEX_SCHEMA = "roadweaver.roads.index";
@@ -215,7 +217,7 @@ public final class RoadChunkStore implements AutoCloseable {
                 changed = true;
 
                 if (removed != null) affectedChunks.addAll(removed.footprint().chunkKeys());
-                // 同 fingerprint 的既有 entry 与新 entry footprint 必然相同，取其一即可。
+                // 指纹不含占地列；即使指纹相同，也要覆盖被替换条目的旧区块。
                 if (superseded != null) affectedChunks.addAll(superseded.footprint().chunkKeys());
                 affectedChunks.addAll(created.footprint().chunkKeys());
             }
@@ -387,6 +389,31 @@ public final class RoadChunkStore implements AutoCloseable {
         }
         generation = nextGeneration;
         snapshot.set(next);
+        if (CONSTRUCTION_SHADOW) {
+            try {
+                reportConstructionChanges(previous, next);
+            } catch (RuntimeException failure) {
+                // 道路已经写完；取证错误不能让上层以为保存失败而重试。
+                LOGGER.warn("RoadWeaver construction content shadow failed at generation {}", nextGeneration, failure);
+            }
+        }
+    }
+
+    private static void reportConstructionChanges(RoadSnapshot previous, RoadSnapshot next) {
+        int changed = 0;
+        for (var current : next.entries().values()) {
+            var old = previous.entries().get(current.fingerprint());
+            if (old == null || old == current) continue;
+            var delta = RoadFingerprint.constructionChanges(old.road(), current.road());
+            if (delta.isEmpty()) continue;
+            // 完工仍从旧台账读取。日志只指出同键内容变化，不能据此认为已有区块应重新铺设。
+            if (++changed <= 8) {
+                LOGGER.info("[CONSTRUCTION-CONTENT-SHADOW] sameFingerprint={} changes={} oldChunks={} newChunks={}",
+                        current.fingerprint(), delta, old.footprint().chunkKeys().size(),
+                        current.footprint().chunkKeys().size());
+            }
+        }
+        if (changed > 8) LOGGER.info("[CONSTRUCTION-CONTENT-SHADOW] {} other changes not listed", changed - 8);
     }
 
     private long nextGeneration() {

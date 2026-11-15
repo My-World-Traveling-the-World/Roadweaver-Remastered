@@ -6,6 +6,8 @@ import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 
 import java.util.List;
+import java.util.EnumSet;
+import java.util.Set;
 
 public final class RoadFingerprint {
     private static final long FNV_OFFSET = 0xCBF29CE484222325L;
@@ -50,6 +52,25 @@ public final class RoadFingerprint {
             hash = mix(hash, secondOwner);
         }
         return nonZero(hash);
+    }
+
+    public enum ConstructionChange { SURFACE, STATIONS_AND_COLUMNS, PROFILE, SPANS }
+
+    /**
+     * 比较两份施工输入，独立于用于索引与台账查询的稳定指纹。
+     * <p>精确比较、保留站序和材料顺序，因为同一批列分给不同站时，目标高程和落块阶段也可能不同。</p>
+     */
+    public static Set<ConstructionChange> constructionChanges(RoadData before, RoadData after) {
+        var changes = EnumSet.noneOf(ConstructionChange.class);
+        if (before.width() != after.width() || before.roadType() != after.roadType()
+                || !before.materials().equals(after.materials())
+                || !before.slabMaterials().equals(after.slabMaterials())) {
+            changes.add(ConstructionChange.SURFACE);
+        }
+        if (!before.roadSegmentList().equals(after.roadSegmentList())) changes.add(ConstructionChange.STATIONS_AND_COLUMNS);
+        if (!before.targetY().equals(after.targetY())) changes.add(ConstructionChange.PROFILE);
+        if (!before.spans().equals(after.spans())) changes.add(ConstructionChange.SPANS);
+        return Set.copyOf(changes);
     }
 
     private static long mix(long hash, long value) {
