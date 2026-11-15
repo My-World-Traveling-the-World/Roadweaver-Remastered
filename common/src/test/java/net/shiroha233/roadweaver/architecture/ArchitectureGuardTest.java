@@ -142,21 +142,16 @@ class ArchitectureGuardTest {
      * 现按实测抬到 298，之后只许升不许降。2026-11-13 又补 12 个最大的文件 ⇒ 320。</p>
      */
 
-    /*
-     * 匹配本仓内部 import —— 必须同时覆盖四种写法，少一种就等于给守卫开天窗：
-     *   ① import net.x.Y;              （普通导入）
-     *   ② import static net.x.Y.member;（静态导入单成员）
-     *   ③ import static net.x.Y.*;     （静态通配）
-     *   ④ import net.x.*;              （普通通配）
-     *
-     * 2026-11-13 修正：原正则用 [\w.]+ 直接接 ;，**匹配不到 ③④ 两种通配导入**，
-     * 而全仓实测有 420 处通配 import（116 个文件、20%），来源前六全是重构时抽出的
-     * pathlogic.structures.* —— 抽取时用 import static X.* 做同包协作，
-     * 结果系统性地把守卫弄瞎了。教训：守卫自己的正则也要有负控。
-     */
-    private static final Pattern IMPORT = Pattern.compile(
-            "^\\s*import\\s+(?:static\\s+)?(net\\.shiroha233\\.roadweaver\\.[\\w.]+?)(?:\\.\\*)?\\s*;",
-            Pattern.MULTILINE);
+    private static final String INTERNAL = "net.shiroha233.roadweaver.";
+    private static java.util.Map<Path, JavaDependencyScanTest.References> parsedDependencies;
+
+    private static synchronized JavaDependencyScanTest.References dependencies(Path file) throws IOException {
+        if (parsedDependencies == null) {
+            // 测试进程只解析一次；所有依赖规则因此看到同一份源码，且不需要解析 Minecraft 类型。
+            parsedDependencies = JavaDependencyScanTest.parseFiles(allJavaFiles());
+        }
+        return java.util.Objects.requireNonNull(parsedDependencies.get(file.toAbsolutePath().normalize()), file.toString());
+    }
 
     private static final Pattern METHOD_DECL = Pattern.compile(
             "^\\s+(?:public|private|protected)\\s+(?:static\\s+)?[\\w<>\\[\\],.?\\s]+\\s+\\w+\\s*\\(",
@@ -199,14 +194,10 @@ class ArchitectureGuardTest {
             if (!Files.isDirectory(dir)) continue;
             try (Stream<Path> files = Files.walk(dir)) {
                 for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                    String text = Files.readString(f, StandardCharsets.UTF_8);
-                    Matcher m = IMPORT.matcher(text);
-                    while (m.find()) {
-                        String fqn = m.group(1);
-                        String rest = fqn.substring("net.shiroha233.roadweaver.".length());
-                        String target = rest.contains(".")
-                                ? rest.substring(0, rest.indexOf('.'))
-                                : rest;
+                    var refs = dependencies(f);
+                    for (String fqn : Stream.concat(refs.imports().stream(), refs.qualified().stream()).toList()) {
+                        if (!fqn.startsWith(INTERNAL)) continue;
+                        String target = topPackage(fqn);
                         if (target.equals(pkg)) continue;
                         if (!allowed.contains(target)) {
                             violations.add(pkg + " -> " + fqn
@@ -253,6 +244,16 @@ class ArchitectureGuardTest {
 
     /** 扫出全部「源包 -> 目标包」的依赖边及出现次数。 */
     private static java.util.Map<String, Integer> crossPackageEdges() throws IOException {
+        return crossPackageEdges(false);
+    }
+
+    private static String topPackage(String fqn) {
+        String rest = fqn.substring(INTERNAL.length());
+        int end = rest.indexOf('.');
+        return end < 0 ? rest : rest.substring(0, end);
+    }
+
+    private static java.util.Map<String, Integer> crossPackageEdges(boolean qualified) throws IOException {
         java.util.Map<String, Integer> edges = new java.util.TreeMap<>();
         for (Path f : allJavaFiles()) {
             // 必须相对 ROOT（src/main/java/net/shiroha233/roadweaver）而不是 SRC ——
@@ -264,10 +265,10 @@ class ArchitectureGuardTest {
             String srcPkg = rel.contains(java.io.File.separator)
                     ? rel.substring(0, rel.indexOf(java.io.File.separator))
                     : "(root)";
-            Matcher m = IMPORT.matcher(Files.readString(f, StandardCharsets.UTF_8));
-            while (m.find()) {
-                String rest = m.group(1).substring("net.shiroha233.roadweaver.".length());
-                String dstPkg = rest.contains(".") ? rest.substring(0, rest.indexOf('.')) : rest;
+            var refs = dependencies(f);
+            for (String fqn : qualified ? refs.qualified() : refs.imports()) {
+                if (!fqn.startsWith(INTERNAL)) continue;
+                String dstPkg = topPackage(fqn);
                 if (dstPkg.isEmpty() || dstPkg.equals(srcPkg)) continue;
                 edges.merge(srcPkg + " -> " + dstPkg, 1, Integer::sum);
             }
@@ -277,13 +278,23 @@ class ArchitectureGuardTest {
 
     @Test
     void 跨包依赖不许新增也不许变多() throws IOException {
-        assertTrue(Files.isRegularFile(DEPS_BASELINE),
-                "缺跨包依赖基线文件: " + DEPS_BASELINE.toAbsolutePath());
+        assertDependencyRatchet(DEPS_BASELINE, crossPackageEdges());
+    }
+
+    @Test
+    void 不能用全限定名绕过跨包依赖基线() throws IOException {
+        assertDependencyRatchet(
+                Path.of("src", "test", "resources", "architecture", "qualified-deps-baseline.txt"),
+                crossPackageEdges(true));
+    }
+
+    private static void assertDependencyRatchet(Path file, java.util.Map<String, Integer> current) throws IOException {
+        assertTrue(Files.isRegularFile(file), "缺跨包依赖基线文件: " + file.toAbsolutePath());
         // ★ 2026-11-13 修正：旧版用 replaceAll("\\s+\\d+$", "") 把次数抹掉，只比对「边是否存在」。
         // 于是同一条边上的 import 翻倍膨胀完全不被发现（独立审计实测：core->postprocess
         // 从 2 涨到 3，回归仍 689 全绿）。现在改成真计数 ratchet。
         java.util.Map<String, Integer> baseline = new java.util.TreeMap<>();
-        for (String line : Files.readAllLines(DEPS_BASELINE, StandardCharsets.UTF_8)) {
+        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             String s = line.trim();
             if (s.isEmpty() || s.startsWith("#")) continue;
             int sep = s.lastIndexOf(' ');
@@ -291,7 +302,6 @@ class ArchitectureGuardTest {
             baseline.put(s.substring(0, sep).trim(),
                     Integer.parseInt(s.substring(sep + 1).trim()));
         }
-        java.util.Map<String, Integer> current = crossPackageEdges();
 
         List<String> added = new ArrayList<>();
         List<String> grown = new ArrayList<>();
@@ -303,11 +313,11 @@ class ArchitectureGuardTest {
                 grown.add(e.getKey() + "  " + allowed + " -> " + e.getValue() + " 处");
             }
         }
-        // 基线里有、代码里已经没有了 —— 必须同步删掉，否则以后有人把这条边加回来
-        // 守卫会以为「它一直在」，等于给已消除的反向依赖留了一道后门。
+        // 次数减少也要收紧，免得以后用同一条边绕回去。
         List<String> stale = new ArrayList<>();
-        for (String edge : baseline.keySet()) {
-            if (!current.containsKey(edge)) stale.add(edge);
+        for (var entry : baseline.entrySet()) {
+            int count = current.getOrDefault(entry.getKey(), 0);
+            if (count < entry.getValue()) stale.add(entry.getKey() + "  " + entry.getValue() + " -> " + count);
         }
 
         List<String> problems = new ArrayList<>();
@@ -320,12 +330,12 @@ class ArchitectureGuardTest {
                     + String.join("\n    ", grown));
         }
         if (!stale.isEmpty()) {
-            problems.add("基线里这些边在代码中已不存在，请从基线删除（否则等于给它留后门）：\n    "
+            problems.add("这些边的引用次数已减少，请同步收紧基线：\n    "
                     + String.join("\n    ", stale));
         }
         assertTrue(problems.isEmpty(),
                 String.join("\n\n", problems)
-                        + "\n\n改基线文件：common/src/test/resources/architecture/deps-baseline.txt"
+                        + "\n\n基线文件：" + file
                         + "（新增/变多必须在提交信息里说明理由）。");
     }
 
