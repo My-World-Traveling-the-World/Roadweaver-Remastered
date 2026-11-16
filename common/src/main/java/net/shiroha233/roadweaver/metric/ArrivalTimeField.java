@@ -29,8 +29,8 @@ public final class ArrivalTimeField {
     private static final int[] DX = {1, -1, 0, 0, 1, 1, -1, -1};
     private static final int[] DZ = {0, 0, 1, -1, 1, -1, 1, -1};
 
-    // null 只表示已验证布局的全不可达常量场，避免为无结果的请求填充整幅 double 数组。
-    private final double[] times;
+    // null 只表示已验证布局的全不可达常量场，避免为无结果的请求创建网格存储。
+    private final FmmValues times;
     private final int minX;
     private final int minZ;
     private final int width;
@@ -40,6 +40,11 @@ public final class ArrivalTimeField {
 
     ArrivalTimeField(double[] times, int minX, int minZ,
                      int width, int depth, int step, FinslerMetric metric) {
+        this(times == null ? null : new FmmValues(times), minX, minZ, width, depth, step, metric);
+    }
+
+    private ArrivalTimeField(FmmValues times, int minX, int minZ,
+                             int width, int depth, int step, FinslerMetric metric) {
         this.times = times;
         this.minX = minX;
         this.minZ = minZ;
@@ -47,6 +52,12 @@ public final class ArrivalTimeField {
         this.depth = depth;
         this.step = Math.max(1, step);
         this.metric = metric;
+    }
+
+    /** 每次求解独占 values；后续源点新建工作区，不能清空已返回快照的页。 */
+    static ArrivalTimeField snapshot(FmmValues times, int minX, int minZ,
+                                     int width, int depth, int step, FinslerMetric metric) {
+        return new ArrivalTimeField(times, minX, minZ, width, depth, step, metric);
     }
 
     /**
@@ -59,13 +70,13 @@ public final class ArrivalTimeField {
                                                int step, FinslerMetric metric) {
         // 即使源点不可达，也必须先验证布局，不能靠数组长度溢出返回伪快照。
         new GridLayout(minX, minZ, width, depth, Math.max(1, step)).arrayLength();
-        return new ArrivalTimeField(null, minX, minZ, width, depth, step, metric);
+        return new ArrivalTimeField((double[]) null, minX, minZ, width, depth, step, metric);
     }
 
     /** 到该点的最小代价；不可达返回 {@link Double#POSITIVE_INFINITY}。 */
     public double at(int x, int z) {
         if (times == null || !contains(x, z)) return Double.POSITIVE_INFINITY;
-        return times[indexOf(x, z)];
+        return times.get(indexOf(x, z));
     }
 
     /** 采样步长（格）。 */
@@ -115,16 +126,16 @@ public final class ArrivalTimeField {
     public List<int[]> pathTo(int targetX, int targetZ) {
         if (times == null || !contains(targetX, targetZ)) return List.of();
         int index = indexOf(targetX, targetZ);
-        if (!Double.isFinite(times[index])) return List.of();
+        if (!Double.isFinite(times.get(index))) return List.of();
 
         // 世界坐标只参与一次吸附；用网格索引走，禁行边和场值便不会检查不同的线。
         List<int[]> reversed = new ArrayList<>();
         double[] neighbors = new double[DX.length];
         int ix = index % width, iz = index / width;
-        for (int guard = times.length; guard > 0; guard--) {
+        for (int guard = times.size(); guard > 0; guard--) {
             int x = minX + ix * step, z = minZ + iz * step;
             reversed.add(new int[]{x, z});
-            double current = times[ix + iz * width];
+            double current = times.get(ix + iz * width);
             if (current == 0.0) {
                 Collections.reverse(reversed);
                 return reversed;
@@ -133,7 +144,7 @@ public final class ArrivalTimeField {
                 int nx = ix + DX[dir], nz = iz + DZ[dir];
                 neighbors[dir] = Double.POSITIVE_INFINITY;
                 if (nx < 0 || nx >= width || nz < 0 || nz >= depth) continue;
-                double next = times[nx + nz * width];
+                double next = times.get(nx + nz * width);
                 if (next < current && !metric.blocksEdge(x, z, minX + nx * step, minZ + nz * step)) {
                     neighbors[dir] = next;
                 }

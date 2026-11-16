@@ -461,7 +461,9 @@ public final class RoadJUnitRegressionSuite {
                 // 分配前校验必须随全量运行，避免大范围异常被整型溢出伪装成小请求。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.GridLayoutTest"),
                 // 压缩状态必须与冻结的整场版本对拍场值和终态拓扑。
-                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmWorkingSetTest"))
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmWorkingSetTest"),
+                // 分页场必须同时证明近目标少分配、远端不断路和稠密访问数值不漂移。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmPagedWorkspaceTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。

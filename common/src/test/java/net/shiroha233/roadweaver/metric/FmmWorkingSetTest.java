@@ -139,9 +139,12 @@ class FmmWorkingSetTest {
         solver.solve(x + 8, z + 8);
         assertSameField(expected, first);
         // 验证实际保留的通行存储，防止只改估算日志而仍然分配字节数组。
-        var field = FastMarchingSolver.class.getDeclaredField("cachedPassable");
+        var cacheField = FastMarchingSolver.class.getDeclaredField("cachedCosts");
+        cacheField.setAccessible(true);
+        var cache = assertInstanceOf(FmmCostCache.class, cacheField.get(solver));
+        var field = FmmCostCache.class.getDeclaredField("cachedPassable");
         field.setAccessible(true);
-        var bits = assertInstanceOf(GridFlags.class, field.get(solver));
+        var bits = assertInstanceOf(GridFlags.class, field.get(cache));
         assertEquals(8L * ((23 * 19 + 63) / 64), bits.storagePayloadBytes());
     }
 

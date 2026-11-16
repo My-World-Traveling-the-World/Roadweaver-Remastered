@@ -4,6 +4,8 @@ param(
     [string]$Slf4jJar = '',
     [switch]$DirectionOnly,
     [switch]$WorkingSetOnly,
+    [switch]$PagingOnly,
+    [ValidateRange(32, 4096)][int]$HeapMiB = 512,
     [string]$FastutilJar = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -24,7 +26,7 @@ if (!$FastutilJar) {
         Select-Object -First 1 -ExpandProperty FullName
 }
 if (!$FastutilJar -or !(Test-Path -LiteralPath $FastutilJar -PathType Leaf)) { throw 'Pass a cached fastutil JAR with -FastutilJar.' }
-if ($WorkingSetOnly -and $DirectionOnly) { throw 'Choose one probe mode.' }
+if (@($WorkingSetOnly, $DirectionOnly, $PagingOnly).Where({ $_ }).Count -gt 1) { throw 'Choose one probe mode.' }
 $probeClasspath = "$Slf4jJar;$FastutilJar"
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('roadweaver-fmm-' + [Guid]::NewGuid().ToString('N'))
 [void][System.IO.Directory]::CreateDirectory($scratch)
@@ -37,15 +39,17 @@ try {
         foreach ($name in $types) { $source = $source -creplace "\b$name\b", "Baseline$name" }
         [System.IO.File]::WriteAllText((Join-Path $scratch "Baseline$type.java"), $source, [System.Text.UTF8Encoding]::new($false))
     }
-    $current = ($types + @('ObstacleField', 'TerrainField', 'GridTerrainField', 'GridLayout', 'GridFlags', 'FmmTargets', 'DenseGridWorkload')) | ForEach-Object { Join-Path $repo "$metric/$_.java" }
+    $current = ($types + @('ObstacleField', 'TerrainField', 'GridTerrainField', 'GridLayout', 'GridFlags', 'FmmTargets', 'DenseGridWorkload', 'FmmPages', 'FmmValues', 'FmmCostCache')) | ForEach-Object { Join-Path $repo "$metric/$_.java" }
     $topology = @('RoadNode', 'GeodesicMatrix', 'MinimumSpanningTree', 'TopologyPlan', 'TopologyCandidates') |
         ForEach-Object { Join-Path $repo "$src/topology/$_.java" }
     $before = $types | ForEach-Object { Join-Path $scratch "Baseline$_.java" }
-    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $probeClasspath -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java')
+    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $probeClasspath -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java') (Join-Path $PSScriptRoot 'FmmPagingProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
     # 方向夹具只读现有 FMM 的结果，无需重复做耗时统计。
     $probeArgs = @(if ($DirectionOnly) { 'direction' } elseif ($WorkingSetOnly) { 'working-set' })
-    & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$probeClasspath" net.shiroha233.roadweaver.metric.FmmProbe @probeArgs
+    $probeClass = if ($PagingOnly) { 'FmmPagingProbe' } else { 'FmmProbe' }
+    # 堆上限由调用显式指定，固定小堆只能证明当前夹具，不能外推整个游戏或采样缓存。
+    & (Join-Path $JavaHome 'bin/java.exe') "-Xms$($HeapMiB)m" "-Xmx$($HeapMiB)m" -cp "$scratch;$probeClasspath" "net.shiroha233.roadweaver.metric.$probeClass" @probeArgs
     if ($LASTEXITCODE -ne 0) { throw "probe failed: $LASTEXITCODE" }
 } finally {
     # 文件清单固定，逐个清理后只移除本次创建的空目录；不递归删除任意路径。

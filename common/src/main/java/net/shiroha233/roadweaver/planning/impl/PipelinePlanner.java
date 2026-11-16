@@ -143,12 +143,13 @@ public final class PipelinePlanner implements NetworkPlanner {
         try {
             var layout = SampledTerrainField.planningLayout(minX, minZ, maxX, maxZ, BOUNDS_PADDING, step);
             var work = SampledTerrainField.estimate(layout, BUILDABILITY_SHADOW, nodes.size());
-            // 这里只报告可复核的原始数组载荷，不把缓存、缺列对象、前沿和并发快照冒充已计入。
+            // 分页访问比例事前未知，同时给出稠密参考和全访问上界，不能冒充当前堆占用。
             LOGGER.info("[PLANNING-WORKSET] grid={}x{} step={} cells={} samplingHeightBytes={} "
-                            + "retainedHeightBytes={} solverFixedBytes={} targetBytesUpper={} "
-                            + "heapMaxBytes={} excludes=frontier,objects,samplerCaches,otherTasks",
+                            + "retainedHeightBytes={} solverDenseReferenceBytes={} solverPagedFullVisitBytes={} "
+                            + "targetBytesUpper={} heapMaxBytes={} excludes=pageDirectories,frontier,objects,samplerCaches,otherTasks",
                     layout.columns(), layout.rows(), step, work.cells(), work.samplingHeightBytes(),
-                    work.retainedHeightBytes(), work.solverFixedBytes(), work.targetBytesUpperBound(),
+                    work.retainedHeightBytes(), work.solverFixedBytes(), work.pagedSolverFullVisitPayloadBytes(),
+                    work.targetBytesUpperBound(),
                     Runtime.getRuntime().maxMemory());
             layout.arrayLength();
             minX = layout.minX(); minZ = layout.minZ();

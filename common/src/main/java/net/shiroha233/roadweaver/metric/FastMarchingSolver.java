@@ -45,24 +45,22 @@ public final class FastMarchingSolver {
     // 同一求解器的多源传播是串行的，和慢度数组一样复用存储，避免每个入队项新建对象。
     private final Frontier queue = new Frontier();
 
-    // ── 与源点无关的预计算（2026-11-14，审计「FMM 预计算代价数组」）──────────
-    //
-    // 轴对齐慢度 costX/costZ 与硬可通行性只由**格子**决定，与源点无关；
-    // 而 solve 每冻结一个节点就要为它的 4 个邻居各算 2 次 metric.cost()。
-    // GeodesicMatrix 会复用同一个 solver 连跑 N 次（N≈23~30），
-    // 于是同一格的代价被重复计算上百次。这里按网格尺寸缓存一次、所有源共享。
-    //
-    // 前提：FinslerMetric 与其 terrain/obstacles 在 solver 生命周期内不可变
-    // （它们都是不可变 record / 纯函数式实现）。网格尺寸变化时自动失效重建。
-    private int cachedSize = -1;
-    private double[] cachedCostX;
-    private double[] cachedCostZ;
-    private GridFlags cachedPassable;
-    private byte[] cachedEdgeBlocks;
+    // 小网格保留顺序数组，避免把分页查表成本加到日常短路线；大网格不再先分配整场。
+    static final int PAGED_THRESHOLD = 1 << 20;
+    private final int pagedThreshold;
+    private GridLayout cachedGrid;
+    private FmmCostCache cachedCosts;
 
     public FastMarchingSolver(FinslerMetric metric) {
+        this(metric, PAGED_THRESHOLD);
+    }
+
+    /** 包内入口让离线对拍能在小夹具强制两种存储；生产不增加配置或改变搜索域。 */
+    FastMarchingSolver(FinslerMetric metric, int pagedThreshold) {
         if (metric == null) throw new IllegalArgumentException("metric 不能为 null");
+        if (pagedThreshold < 0) throw new IllegalArgumentException("negative paging threshold");
         this.metric = metric;
+        this.pagedThreshold = pagedThreshold;
     }
 
     /**
@@ -121,53 +119,13 @@ public final class FastMarchingSolver {
         return solveInternal(sourceX, sourceZ, targets);
     }
 
-    /**
-     * 取（或建立）与源点无关的预计算数组。网格尺寸不变时复用。
-     */
-    private void ensurePrecomputed(int minX, int minZ, int w, int d, int step) {
-        int size = new GridLayout(minX, minZ, w, d, step).arrayLength();
-        if (cachedSize == size && cachedCostX != null) return;
-        double[] costX = new double[size];
-        double[] costZ = new double[size];
-        // 通行与冻结都是一位状态，不必为每格各占一个字节。
-        GridFlags passable = new GridFlags(size);
-        for (int iz = 0; iz < d; iz++) {
-            for (int ix = 0; ix < w; ix++) {
-                int index = ix + iz * w;
-                int bx = minX + ix * step;
-                int bz = minZ + iz * step;
-                if (metric.isPassable(bx, bz)) passable.set(index);
-                // 硬禁格从不入队，无需再读坡度、障碍势或代价优惠。
-                if (passable.get(index)) metric.writeAxialCosts(bx, bz, step, index, costX, costZ);
-            }
+    private FmmCostCache costs(GridLayout grid, boolean paged) {
+        // 多源串行求解共享同一份不可变度量，页内代价只准备一次；布局也参与复用判据。
+        if (!grid.equals(cachedGrid) || cachedCosts == null) {
+            cachedCosts = new FmmCostCache(metric, grid, paged);
+            cachedGrid = grid;
         }
-        cachedCostX = costX;
-        cachedCostZ = costZ;
-        cachedPassable = passable;
-        cachedEdgeBlocks = metric.hasEdgeBlock()
-                ? precomputeBlockedEdges(minX, minZ, w, d, step, passable) : null;
-        cachedSize = size;
-    }
-
-    private byte[] precomputeBlockedEdges(int minX, int minZ, int w, int d, int step, GridFlags passable) {
-        byte[] edges = new byte[w * d];
-        for (int iz = 0; iz < d; iz++) {
-            for (int ix = 0; ix < w; ix++) {
-                int i = ix + iz * w;
-                if (!passable.get(i)) continue;
-                int x = minX + ix * step, z = minZ + iz * step;
-                // 只读每条无向边一次；推进和逆向取邻居使用同一份结果。
-                if (ix + 1 < w && passable.get(i + 1) && metric.blocksEdge(x, z, x + step, z)) {
-                    edges[i] |= 1;
-                    edges[i + 1] |= 2;
-                }
-                if (iz + 1 < d && passable.get(i + w) && metric.blocksEdge(x, z, x, z + step)) {
-                    edges[i] |= 4;
-                    edges[i + w] |= 8;
-                }
-            }
-        }
-        return edges;
+        return cachedCosts;
     }
 
     private ArrivalTimeField solveInternal(int sourceX, int sourceZ,
@@ -204,13 +162,9 @@ public final class FastMarchingSolver {
         }
 
         long began = TRACE ? System.nanoTime() : 0;
-        // 预计算（与源点无关，多源共享；网格尺寸变了才重建）
-        ensurePrecomputed(minX, minZ, w, d, step);
+        boolean paged = size >= pagedThreshold;
+        FmmCostCache costs = costs(layout(terrain), paged);
         long prepared = TRACE ? System.nanoTime() : 0;
-        double[] costX = cachedCostX;
-        double[] costZ = cachedCostZ;
-        GridFlags passable = cachedPassable;
-        byte[] edgeBlocks = cachedEdgeBlocks;
 
         // 2026-11-14 修复（审计 NEW-2）：源点下标原来用向下取整 `(x - minX) / step`，
         // 与障碍场/地形场的 Math.round（就近吸附）口径冲突 —— step=8 时错位最多 7 格，
@@ -220,15 +174,14 @@ public final class FastMarchingSolver {
         int sourceIz = grid.snapZ(sourceZ);
         int sourceIndex = sourceIx + sourceIz * w;
         // 真实端点合法不代表吸附格合法；硬禁格不能作为传播起点。
-        if (!passable.get(sourceIndex)) {
+        if (!costs.passable(sourceIndex)) {
             LOGGER.warn("RoadWeaver FMM: 源点 ({},{}) 吸附到硬不可通行格，返回不可达场", sourceX, sourceZ);
             return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
-        double[] t = new double[size];
-        Arrays.fill(t, UNREACHABLE);
-        GridFlags frozen = new GridFlags(size);
-        t[sourceIndex] = 0.0;
+        FmmWorkspace workspace = new FmmWorkspace(size, paged);
+        FmmValues t = workspace.values;
+        t.set(sourceIndex, 0.0);
 
         queue.clear();
         queue.offer(0.0, sourceIndex);
@@ -239,8 +192,8 @@ public final class FastMarchingSolver {
 
         while (!queue.isEmpty()) {
             int index = queue.poll();
-            if (frozen.get(index)) continue;          // 过期条目
-            frozen.set(index);
+            if (workspace.frozen(index)) continue;          // 过期条目
+            workspace.freeze(index);
             if (TRACE) frozenCount++;
 
             // 目标早停：目标格冻结即为最终值，且回溯只会访问更小的 T（都已冻结）。
@@ -251,14 +204,14 @@ public final class FastMarchingSolver {
             int ix = index % w;
             int iz = index / w;
 
-            int blockedFrom = edgeBlocks == null ? 0 : edgeBlocks[index];
+            int blockedFrom = costs.blockedEdges(index);
             for (int dir = 0; dir < 4; dir++) {
                 if ((blockedFrom & (1 << dir)) != 0) continue;
                 int nix = ix + DX[dir];
                 int niz = iz + DZ[dir];
                 if (nix < 0 || nix >= w || niz < 0 || niz >= d) continue;
                 int nIndex = nix + niz * w;
-                if (frozen.get(nIndex)) continue;
+                if (workspace.frozen(nIndex)) continue;
 
                 // 硬不可通行的格子**不进队列**，而不是给一个很大的代价 ——
                 // 只有这样「不可达」才是真的不可达，拓扑层才能判断
@@ -267,8 +220,8 @@ public final class FastMarchingSolver {
                 // ★ 2026-11-13 修复：这里曾写成 `isPassable(minX + nix, minZ + niz)`，
                 // 漏乘了 step —— 网格下标被当成方块坐标，step=8 时硬障碍检查
                 // 落在离目标 8 倍近的错误位置，等价于硬约束大面积失明。
-                // 2026-11-14：改为读预计算表（同口径，只是不再每次重算）。
-                if (!passable.get(nIndex)) continue;
+                // 同口径缓存通行性；大网格只查询实际遇到的格，不扫描搜索域外的页。
+                if (!costs.passable(nIndex)) continue;
 
                 // **慢度必须取「正在求解的那一格」的，不能取「已冻结的那一格」的。**
                 //
@@ -292,12 +245,13 @@ public final class FastMarchingSolver {
                 // 数值上用对角各向异性 fast marching（每轴一个慢度的 Godunov 格式），
                 // 是各向异性 Eikonal 里已验证稳定的离散，不需要 Ordered Upwind。
                 // 平地（∇h=0、无障碍）严格退化为原各向同性解。
-                double hx = costX[nIndex];
-                double hz = costZ[nIndex];
-                int blockedAt = edgeBlocks == null ? 0 : edgeBlocks[nIndex];
+                costs.prepare(nIndex);
+                double hx = costs.costX(nIndex);
+                double hz = costs.costZ(nIndex);
+                int blockedAt = costs.blockedEdges(nIndex);
                 double candidate = solveEikonalAnisotropic(t, w, d, nix, niz, hx, hz, blockedAt);
-                if (candidate < t[nIndex]) {
-                    t[nIndex] = candidate;
+                if (candidate < t.get(nIndex)) {
+                    t.set(nIndex, candidate);
                     queue.offer(candidate, nIndex);
                     if (TRACE) {
                         offers++;
@@ -315,7 +269,7 @@ public final class FastMarchingSolver {
                     sourceX, sourceZ, w, d, step, targets == null ? "all" : stopCount, remainingStops,
                     frozenCount, offers, peak, (prepared - began) / 1000, totalMicros);
         }
-        return new ArrivalTimeField(t, minX, minZ, w, d, step, metric);
+        return ArrivalTimeField.snapshot(t, minX, minZ, w, d, step, metric);
     }
 
     private static GridLayout layout(TerrainField terrain) {
@@ -333,15 +287,15 @@ public final class FastMarchingSolver {
      * {@code hx/hz} 是「沿该轴走一格的代价」。
      * 平地且 hx=hz 时严格退化为各向同性解。</p>
      */
-    private static double solveEikonalAnisotropic(double[] t, int w, int d,
+    private static double solveEikonalAnisotropic(FmmValues t, int w, int d,
                                                   int ix, int iz, double hx, double hz, int blocked) {
         // 即使当前格是从另一方向到达，也不能从隔着禁行边的邻格偷取更小的到达时间。
         double a = Math.min(
-                ix > 0 && (blocked & 2) == 0 ? t[ix - 1 + iz * w] : UNREACHABLE,
-                ix < w - 1 && (blocked & 1) == 0 ? t[ix + 1 + iz * w] : UNREACHABLE);
+                ix > 0 && (blocked & 2) == 0 ? t.get(ix - 1 + iz * w) : UNREACHABLE,
+                ix < w - 1 && (blocked & 1) == 0 ? t.get(ix + 1 + iz * w) : UNREACHABLE);
         double b = Math.min(
-                iz > 0 && (blocked & 8) == 0 ? t[ix + (iz - 1) * w] : UNREACHABLE,
-                iz < d - 1 && (blocked & 4) == 0 ? t[ix + (iz + 1) * w] : UNREACHABLE);
+                iz > 0 && (blocked & 8) == 0 ? t.get(ix + (iz - 1) * w) : UNREACHABLE,
+                iz < d - 1 && (blocked & 4) == 0 ? t.get(ix + (iz + 1) * w) : UNREACHABLE);
 
         if (a == UNREACHABLE && b == UNREACHABLE) return UNREACHABLE;
         if (a == UNREACHABLE) return b + hz;

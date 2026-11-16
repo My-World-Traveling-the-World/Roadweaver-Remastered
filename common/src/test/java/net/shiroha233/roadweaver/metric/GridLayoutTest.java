@@ -21,6 +21,8 @@ class GridLayoutTest {
         assertEquals(3221225472L, work.samplingHeightBytes());
         assertEquals(1073741824L, work.retainedHeightBytes());
         assertEquals(6509559808L, work.solverFixedBytes());
+        // 分页全访问多保留准备状态；不能把稠密参考当作分页即时占用或更低上界。
+        assertEquals(6744440832L, work.pagedSolverFullVisitPayloadBytes());
         assertEquals(256L, work.targetBytesUpperBound());
         assertEquals(7583301888L, work.retainedAndSolverPayloadBytes());
     }
@@ -58,6 +60,7 @@ class GridLayoutTest {
         assertEquals(520, shadow.retainedHeightBytes() - normal.retainedHeightBytes());
         assertEquals(65, shadow.solverFixedBytes() - normal.solverFixedBytes());
         assertEquals(0, normal.targetBytesUpperBound());
+        assertEquals(1641, normal.pagedSolverFullVisitPayloadBytes());
         assertThrows(IllegalArgumentException.class, () -> DenseGridWorkload.estimate(grid, false, false, -1));
     }
 
