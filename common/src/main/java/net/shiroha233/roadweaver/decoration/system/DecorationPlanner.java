@@ -17,8 +17,11 @@ import net.shiroha233.roadweaver.decoration.types.LanternPostDecoration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +37,7 @@ public final class DecorationPlanner {
     public enum Mode { ARTIFICIAL, NATURAL }
 
     private static final int SIDE_OFFSET = 2;
+    private static final List<LampOffset> LAMP_OFFSETS = lampOffsets();
 
     /**
      * 已放置路灯底座位置的跨回填去重集合。历史缺陷:同一 chunk 被 backfill
@@ -131,45 +135,50 @@ public final class DecorationPlanner {
                                                   int sideOffset,
                                                   boolean left) {
         LampBaseTiming timing = LAMP_BASE_TIMINGS ? new LampBaseTiming() : null;
-        int side = left ? 1 : -1;
-        int chunkMinX = Math.floorDiv(roadPos.getX(), 16) * 16;
-        int chunkMinZ = Math.floorDiv(roadPos.getZ(), 16) * 16;
-        int chunkMaxX = chunkMinX + 15;
-        int chunkMaxZ = chunkMinZ + 15;
-        BlockPos best = null;
-        int bestScore = Integer.MAX_VALUE;
-        int baseY = roadPos.getY();
-
-        // Search a small band beside the road. Tangential offsets allow the
-        // lamp to move around a local hole while remaining next to this road.
-        // O-14（0.9.027）：「路侧灯压到路面最外列」。
-        // 搜索起点原来是 Math.max(1, sideOffset - 1)；width=5 ⇒ halfWidth=2、
-        // sideOffset=max(2, 3)=3 ⇒ 起点 lateral=2 = **正好是路面最外一列**，
-        // 于是灯基座落在铺装边缘上，灯柱插在路面里。
-        // 起点必须是 sideOffset 本身（= max(SIDE_OFFSET, halfWidth+1)），才保证在路面外一格。
-        for (int lateral = Math.max(1, sideOffset); lateral <= sideOffset + 3; lateral++) {
-            for (int tangent = -3; tangent <= 3; tangent++) {
-                int x = roadPos.getX() + side * ortho.getX() * lateral + ortho.getZ() * tangent;
-                int z = roadPos.getZ() + side * ortho.getZ() * lateral - ortho.getX() * tangent;
-                if (x < chunkMinX || x > chunkMaxX || z < chunkMinZ || z > chunkMaxZ) continue;
-                for (int yOffset : new int[]{0, -1, 1}) {
-                    BlockPos candidate = new BlockPos(x, baseY + yOffset, z);
-                    if (timing != null) timing.candidates++;
-                    if (!isSupportedLampBase(world, candidate, timing)) continue;
-                    int score = lateral * 100 + Math.abs(tangent) * 10 + Math.abs(yOffset) * 3;
-                    if (score < bestScore) {
-                        bestScore = score;
-                        best = candidate;
-                    }
-                }
-            }
-        }
+        BlockPos best = findRoadsideLampBase(roadPos, ortho, sideOffset, left, candidate -> {
+            if (timing != null) timing.candidates++;
+            return isSupportedLampBase(world, candidate, timing);
+        });
         if (timing != null) {
             long searchUs = (System.nanoTime() - timing.started) / 1000;
             LOGGER.info("[LAMP-BASE-TIMING] pos={} left={} candidates={} directReads={} found={} searchUs={}",
                     roadPos, left, timing.candidates, timing.directReads, best != null, searchUs);
         }
         return best;
+    }
+
+    static BlockPos findRoadsideLampBase(BlockPos roadPos, Vec3i ortho, int sideOffset, boolean left,
+                                         Predicate<BlockPos> supported) {
+        int side = left ? 1 : -1;
+        int chunkX = roadPos.getX() >> 4, chunkZ = roadPos.getZ() >> 4;
+        // 跨一条横向带至少加 100 分，带内最多加 33 分；按总分的顺序找到第一处支撑即可停。
+        // 从路面宽度以外开始，不能把更靠内却会压住最外铺装的列加回候选。
+        for (int lateral = Math.max(1, sideOffset); lateral <= sideOffset + 3; lateral++) {
+            for (LampOffset offset : LAMP_OFFSETS) {
+                int x = roadPos.getX() + side * ortho.getX() * lateral + ortho.getZ() * offset.tangent();
+                int z = roadPos.getZ() + side * ortho.getZ() * lateral - ortho.getX() * offset.tangent();
+                if ((x >> 4) != chunkX || (z >> 4) != chunkZ) continue;
+                BlockPos candidate = new BlockPos(x, roadPos.getY() + offset.dy(), z);
+                if (supported.test(candidate)) return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static List<LampOffset> lampOffsets() {
+        var offsets = new ArrayList<LampOffset>(21);
+        for (int tangent = -3; tangent <= 3; tangent++) {
+            for (int dy : new int[]{0, -1, 1}) offsets.add(new LampOffset(tangent, dy));
+        }
+        // 稳定排序保持旧遍历的平分次序：先负切向，再同切向的低侧高度。
+        offsets.sort(Comparator.comparingInt(LampOffset::score));
+        return List.copyOf(offsets);
+    }
+
+    private record LampOffset(int tangent, int dy) {
+        int score() {
+            return Math.abs(tangent) * 10 + Math.abs(dy) * 3;
+        }
     }
 
     private static boolean isSupportedLampBase(WorldGenLevel world, BlockPos base, LampBaseTiming timing) {
