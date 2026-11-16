@@ -10,6 +10,9 @@ public record AccurateHeightGridRequest(int minX, int minZ, int width, int heigh
             throw new IllegalArgumentException("invalid accurate height grid");
         }
         Math.multiplyExact(width, height);
+        // 在调度与分配前检查最后一列，避免半批采完才发现世界坐标溢出。
+        Math.toIntExact((long) minX + (width - 1L) * step);
+        Math.toIntExact((long) minZ + (height - 1L) * step);
     }
 
     public int sampleCount() {
@@ -18,12 +21,12 @@ public record AccurateHeightGridRequest(int minX, int minZ, int width, int heigh
 
     public int blockX(int index) {
         checkIndex(index);
-        return Math.addExact(minX, Math.multiplyExact(index % width, step));
+        return Math.toIntExact((long) minX + (long) (index % width) * step);
     }
 
     public int blockZ(int index) {
         checkIndex(index);
-        return Math.addExact(minZ, Math.multiplyExact(index / width, step));
+        return Math.toIntExact((long) minZ + (long) (index / width) * step);
     }
 
     private void checkIndex(int index) {

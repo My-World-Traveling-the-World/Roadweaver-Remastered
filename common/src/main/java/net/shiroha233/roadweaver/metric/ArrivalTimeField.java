@@ -57,7 +57,8 @@ public final class ArrivalTimeField {
      */
     public static ArrivalTimeField unreachable(int minX, int minZ, int width, int depth,
                                                int step, FinslerMetric metric) {
-        double[] times = new double[width * depth];
+        // 即使源点不可达，也必须先验证布局，不能靠数组长度溢出返回伪快照。
+        double[] times = new double[new GridLayout(minX, minZ, width, depth, Math.max(1, step)).arrayLength()];
         Arrays.fill(times, Double.POSITIVE_INFINITY);
         return new ArrivalTimeField(times, minX, minZ, width, depth, step, metric);
     }
@@ -78,7 +79,9 @@ public final class ArrivalTimeField {
 
     /** 点是否在场内。 */
     public boolean contains(int x, int z) {
-        return x >= minX && x < minX + width * step && z >= minZ && z < minZ + depth * step;
+        // 半开区间保持原语义，端点乘加升 long 避免靠近 int 边界时误判。
+        return x >= minX && x < (long) minX + (long) width * step
+                && z >= minZ && z < (long) minZ + (long) depth * step;
     }
 
     /** 场宽（采样点数）。 */
@@ -181,8 +184,8 @@ public final class ArrivalTimeField {
         // （就近吸附）—— 两套口径并存时，step=8 的网格会错位最多 7 格
         // （恰好一个路宽），障碍场与到达时间场在世界坐标上系统性平移。
         // 统一为就近吸附（与障碍场/地形场同口径）。
-        int ix = Math.round((x - minX) / (float) step);
-        int iz = Math.round((z - minZ) / (float) step);
+        int ix = Math.round(((long) x - minX) / (float) step);
+        int iz = Math.round(((long) z - minZ) / (float) step);
         ix = Math.max(0, Math.min(width - 1, ix));
         iz = Math.max(0, Math.min(depth - 1, iz));
         return ix + iz * width;

@@ -80,22 +80,23 @@ public interface TerrainField {
 
     /** 沿 x 的采样点数 = ⌊(maxX−minX)/step⌋ + 1。 */
     default int columns() {
-        return (maxX() - minX()) / step() + 1;
+        // 方块差值先升 long；世界坐标跨越零点时也不能把大跨度算成负数。
+        return Math.toIntExact(((long) maxX() - minX()) / step() + 1);
     }
 
     /** 沿 z 的采样点数 = ⌊(maxZ−minZ)/step⌋ + 1。 */
     default int rows() {
-        return (maxZ() - minZ()) / step() + 1;
+        return Math.toIntExact(((long) maxZ() - minZ()) / step() + 1);
     }
 
     /** 可行区域宽度（格，含两端）。 */
     default int width() {
-        return maxX() - minX() + 1;
+        return Math.toIntExact((long) maxX() - minX() + 1);
     }
 
     /** 可行区域高度（格，含两端）。 */
     default int depth() {
-        return maxZ() - minZ() + 1;
+        return Math.toIntExact((long) maxZ() - minZ() + 1);
     }
 
     /** 点是否在可行区域内。 */

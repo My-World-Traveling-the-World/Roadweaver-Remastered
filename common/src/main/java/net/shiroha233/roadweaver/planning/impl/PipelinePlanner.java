@@ -133,23 +133,32 @@ public final class PipelinePlanner implements NetworkPlanner {
             minZ = Math.min(minZ, p.getZ());
             maxZ = Math.max(maxZ, p.getZ());
         }
-        minX -= BOUNDS_PADDING;
-        maxX += BOUNDS_PADDING;
-        minZ -= BOUNDS_PADDING;
-        maxZ += BOUNDS_PADDING;
-        int width = maxX - minX + 1;
-        int depth = maxZ - minZ + 1;
+        // 原始边界先保留；加余量、算点数和估算载荷都在读世界之前完成。
+        long width = (long) maxX - minX + 1;
+        long depth = (long) maxZ - minZ + 1;
 
         // ③ 地形场（带步长）+ 度量（无避让，理由见类注释）
         TerrainField terrain;
         SampledTerrainField.SurfaceGrid shadowSurface;
         try {
+            var layout = SampledTerrainField.planningLayout(minX, minZ, maxX, maxZ, BOUNDS_PADDING, step);
+            var work = SampledTerrainField.estimate(layout, BUILDABILITY_SHADOW, nodes.size());
+            // 这里只报告可复核的原始数组载荷，不把缓存、缺列对象、前沿和并发快照冒充已计入。
+            LOGGER.info("[PLANNING-WORKSET] grid={}x{} step={} cells={} samplingHeightBytes={} "
+                            + "retainedHeightBytes={} solverFixedBytes={} targetBytesUpper={} "
+                            + "heapMaxBytes={} excludes=frontier,objects,samplerCaches,otherTasks",
+                    layout.columns(), layout.rows(), step, work.cells(), work.samplingHeightBytes(),
+                    work.retainedHeightBytes(), work.solverFixedBytes(), work.targetBytesUpperBound(),
+                    Runtime.getRuntime().maxMemory());
+            layout.arrayLength();
+            minX = layout.minX(); minZ = layout.minZ();
+            width = layout.blockWidth(); depth = layout.blockDepth();
             var sampler = AccurateHeightSampler.create(level);
             // 只有试评时才保留两张额外高度图，不增加第二次采样或结构查找。
             shadowSurface = BUILDABILITY_SHADOW
-                    ? SampledTerrainField.sampleSurface(sampler, minX, minZ, width, depth, step) : null;
+                    ? SampledTerrainField.sampleSurface(sampler, minX, minZ, Math.toIntExact(width), Math.toIntExact(depth), step) : null;
             terrain = shadowSurface == null
-                    ? SampledTerrainField.fromAccurateSampler(sampler, minX, minZ, width, depth, step)
+                    ? SampledTerrainField.fromAccurateSampler(sampler, minX, minZ, Math.toIntExact(width), Math.toIntExact(depth), step)
                     : shadowSurface.terrain();
         } catch (RuntimeException samplingFailure) {
             // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败。

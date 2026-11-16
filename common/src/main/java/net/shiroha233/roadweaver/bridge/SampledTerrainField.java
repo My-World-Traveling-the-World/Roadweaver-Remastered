@@ -2,6 +2,8 @@
 package net.shiroha233.roadweaver.bridge;
 
 import net.shiroha233.roadweaver.metric.GridTerrainField;
+import net.shiroha233.roadweaver.metric.GridLayout;
+import net.shiroha233.roadweaver.metric.DenseGridWorkload;
 import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGrid;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGridRequest;
@@ -84,13 +86,16 @@ public final class SampledTerrainField {
             throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
         }
         int safeStep = Math.max(1, step);
-        int columns = (blockWidth - 1) / safeStep + 1;
-        int rows = (blockDepth - 1) / safeStep + 1;
+        // 先验证尺寸与坐标，再调用世界采样器，避免异常请求先制造大批临时列。
+        GridLayout layout = GridLayout.coveringBlocks(minX, minZ, blockWidth, blockDepth, safeStep);
+        layout.arrayLength();
+        int columns = layout.columns();
+        int rows = layout.rows();
         int[] heights = sampler.sampleHeights(minX, minZ, columns, rows);
         // 长度由 GridTerrainField 的构造器校验；这里先给出更有指向性的错误
-        if (heights == null || heights.length != columns * rows) {
+        if (heights == null || heights.length != layout.arrayLength()) {
             throw new IllegalArgumentException(
-                    "采样器返回的长度必须是 " + (columns * rows) + "，实际 "
+                    "采样器返回的长度必须是 " + layout.arrayLength() + "，实际 "
                             + (heights == null ? "null" : heights.length));
         }
         return new GridTerrainField(minX, minZ, columns, rows, safeStep, heights);
@@ -134,6 +139,15 @@ public final class SampledTerrainField {
         return sampleSurface(sampler, minX, minZ, blockWidth, blockDepth, step).terrain();
     }
 
+    // 在读世界前计算同一份布局和载荷，让大范围诊断不再依赖成功分配数组。
+    public static GridLayout planningLayout(int minX, int minZ, int maxX, int maxZ, int padding, int step) {
+        return GridLayout.aroundBounds(minX, minZ, maxX, maxZ, padding, step);
+    }
+
+    public static DenseGridWorkload estimate(GridLayout grid, boolean keepAllHeightMaps, int targetCount) {
+        return DenseGridWorkload.estimate(grid, keepAllHeightMaps, false, targetCount);
+    }
+
     // 影子回溯只读这次采样已有的高度差，避免为了日志再采一块地形或加载区块。
     public static SurfaceGrid sampleSurface(AccurateHeightSampler sampler, int minX, int minZ,
                                             int blockWidth, int blockDepth, int step) {
@@ -142,8 +156,11 @@ public final class SampledTerrainField {
             throw new IllegalArgumentException("区域尺寸必须为正: " + blockWidth + "x" + blockDepth);
         }
         int safeStep = Math.max(1, step);
-        int columns = (blockWidth - 1) / safeStep + 1;
-        int rows = (blockDepth - 1) / safeStep + 1;
+        // 先验证尺寸与坐标，再调用世界采样器，避免异常请求先制造大批临时列。
+        GridLayout layout = GridLayout.coveringBlocks(minX, minZ, blockWidth, blockDepth, safeStep);
+        layout.arrayLength();
+        int columns = layout.columns();
+        int rows = layout.rows();
 
         AccurateHeightGridRequest request =
                 new AccurateHeightGridRequest(minX, minZ, columns, rows, safeStep);

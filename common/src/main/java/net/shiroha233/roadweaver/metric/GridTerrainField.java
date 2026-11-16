@@ -67,9 +67,12 @@ public final class GridTerrainField implements TerrainField {
         if (width <= 0 || depth <= 0) {
             throw new IllegalArgumentException("区域尺寸必须为正: " + width + "x" + depth);
         }
-        if (heights == null || heights.length != width * depth) {
+        // 校验必须早于数组比长；int 连乘溢出曾可把巨大请求伪装成合法的小数组。
+        GridLayout layout = new GridLayout(minX, minZ, width, depth, Math.max(1, step));
+        int expected = layout.arrayLength();
+        if (heights == null || heights.length != expected) {
             throw new IllegalArgumentException(
-                    "高度数组长度必须是 " + (width * depth) + "，实际 "
+                    "高度数组长度必须是 " + expected + "，实际 "
                             + (heights == null ? "null" : heights.length));
         }
         this.minX = minX;
@@ -83,7 +86,7 @@ public final class GridTerrainField implements TerrainField {
     /** 用地形函数构造（测试友好）。 */
     public static GridTerrainField fromFunction(int minX, int minZ, int width, int depth,
                                                 java.util.function.IntBinaryOperator heightFn) {
-        int[] heights = new int[width * depth];
+        int[] heights = new int[new GridLayout(minX, minZ, width, depth, 1).arrayLength()];
         for (int iz = 0; iz < depth; iz++) {
             for (int ix = 0; ix < width; ix++) {
                 heights[ix + iz * width] = heightFn.applyAsInt(minX + ix, minZ + iz);
@@ -135,13 +138,13 @@ public final class GridTerrainField implements TerrainField {
 
     /** 方块坐标 → 列下标（就近吸附，与 {@code StridedTerrainField} 同一口径）。 */
     private int snapX(int x) {
-        int ix = Math.round((x - minX) / (float) step);
+        int ix = Math.round(((long) x - minX) / (float) step);
         return Math.max(0, Math.min(width - 1, ix));
     }
 
     /** 方块坐标 → 行下标（就近吸附）。 */
     private int snapZ(int z) {
-        int iz = Math.round((z - minZ) / (float) step);
+        int iz = Math.round(((long) z - minZ) / (float) step);
         return Math.max(0, Math.min(depth - 1, iz));
     }
 

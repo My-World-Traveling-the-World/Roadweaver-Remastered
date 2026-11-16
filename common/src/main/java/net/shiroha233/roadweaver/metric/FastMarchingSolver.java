@@ -96,7 +96,7 @@ public final class FastMarchingSolver {
         int w = terrain.columns();
         int d = terrain.rows();
         int step = terrain.step();
-        boolean[] stopMask = new boolean[w * d];
+        boolean[] stopMask = new boolean[layout(terrain).arrayLength()];
         int tix = Math.max(0, Math.min(w - 1, Math.round((targetX - terrain.minX()) / (float) step)));
         int tiz = Math.max(0, Math.min(d - 1, Math.round((targetZ - terrain.minZ()) / (float) step)));
         stopMask[tix + tiz * w] = true;
@@ -124,7 +124,7 @@ public final class FastMarchingSolver {
         int step = terrain.step();
         int minX = terrain.minX();
         int minZ = terrain.minZ();
-        boolean[] stopMask = new boolean[w * d];
+        boolean[] stopMask = new boolean[layout(terrain).arrayLength()];
         int count = 0;
         for (int i = 0; i < targetsX.length; i++) {
             int ix = Math.max(0, Math.min(w - 1, Math.round((targetsX[i] - minX) / (float) step)));
@@ -142,7 +142,7 @@ public final class FastMarchingSolver {
      * 取（或建立）与源点无关的预计算数组。网格尺寸不变时复用。
      */
     private void ensurePrecomputed(int minX, int minZ, int w, int d, int step) {
-        int size = w * d;
+        int size = new GridLayout(minX, minZ, w, d, step).arrayLength();
         if (cachedSize == size && cachedCostX != null) return;
         double[] costX = new double[size];
         double[] costZ = new double[size];
@@ -197,6 +197,8 @@ public final class FastMarchingSolver {
         int w = terrain.columns();
         int d = terrain.rows();
         int step = terrain.step();
+        // 外部场也必须先过布局检查，不能先调用世界查询或分配缓存再发现溢出。
+        int size = layout(terrain).arrayLength();
         if (!terrain.contains(sourceX, sourceZ)) {
             // 2026-11-14 修复（审计 NEW-1）：源点在区域外时**不抛异常** ——
             // 整条调用链（BandRouteSolver → BandPathfinder → RawPathSearch →
@@ -238,9 +240,9 @@ public final class FastMarchingSolver {
             return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
-        double[] t = new double[w * d];
+        double[] t = new double[size];
         Arrays.fill(t, UNREACHABLE);
-        boolean[] frozen = new boolean[w * d];
+        boolean[] frozen = new boolean[size];
         t[sourceIndex] = 0.0;
 
         queue.clear();
@@ -328,6 +330,10 @@ public final class FastMarchingSolver {
                     frozenCount, offers, peak, (prepared - began) / 1000, totalMicros);
         }
         return new ArrivalTimeField(t, minX, minZ, w, d, step, metric);
+    }
+
+    private static GridLayout layout(TerrainField terrain) {
+        return new GridLayout(terrain.minX(), terrain.minZ(), terrain.columns(), terrain.rows(), terrain.step());
     }
 
     private static final int[] DX = {1, -1, 0, 0};
