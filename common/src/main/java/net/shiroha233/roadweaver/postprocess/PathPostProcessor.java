@@ -593,370 +593,68 @@ public final class PathPostProcessor {
         segmentedBlocks.get(bestIdx).add(new BlockPos(x, 0, z));
     }
 
-    /**
-     * Douglas-Peucker 垂直距离容差（格）。
-     *
-     * <p>取 4 = {@code RoadConstants.DEFAULT_ASTAR_STEP / 2}，即 A* 网格量化误差的上限：
-     * 被删掉的点偏离保留折线不超过半步长，与「网格离散化本身的不确定度」不可区分，
-     * 因此不会削掉真实的地形弯曲（沿山谷/绕山脊的弯曲振幅是几十格量级）。</p>
-     *
-     * <p>0.9.016 之前这里用的是叉积阈值 16，与步长强耦合：步长 8 时 45° 转弯叉积约 45、
-     * 90° 为 128，全部大于阈值 ⇒ 几乎不删点 ⇒ A* 的 8 格锯齿原样留在控制点里，
-     * 而下游 Catmull-Rom 样条「穿过」每个控制点，锯齿就被画成波浪。步长 1~2 时
-     * 反而会全删只剩起终点。换 DP 后阈值与步长解耦。</p>
-     */
-    static final double SIMPLIFY_TOLERANCE = 4.0D;
+    // 保留包内入口供现有几何调用方使用；参数和产物完全透传到对应职责的纯计算类。
+    static final double SIMPLIFY_TOLERANCE = PathControlSimplifier.SIMPLIFY_TOLERANCE;
+    static final double SIMPLIFY_MIN_POINTS_PER_BLOCK = PathControlSimplifier.SIMPLIFY_MIN_POINTS_PER_BLOCK;
+    static final int RELAX_PASSES = PathControlRelaxer.RELAX_PASSES;
+    static final double RELAX_MAX_DISPLACEMENT = PathControlRelaxer.RELAX_MAX_DISPLACEMENT;
+    static final double RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT = PathControlRelaxer.RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT;
+    static final int RELAX_BRIDGE_APPROACH_STATIONS = PathControlRelaxer.RELAX_BRIDGE_APPROACH_STATIONS;
+    static final double RELAX_BRIDGE_APPROACH_MAX_DISPLACEMENT = PathControlRelaxer.RELAX_BRIDGE_APPROACH_MAX_DISPLACEMENT;
+    static final double SHARP_TURN_FREEZE_DEG = PathControlRelaxer.SHARP_TURN_FREEZE_DEG;
 
-    /** 控制点密度下限：每这么多格路径长度至少保留一个控制点，防止把真实弯道拉成直线。 */
-    static final double SIMPLIFY_MIN_POINTS_PER_BLOCK = 64.0D;
-
-    /** 容差跟步长走：{@code clamp(0.5×step, 2, SIMPLIFY_TOLERANCE)}（O-13）。 */
+    /** 步距容差保持原口径，不在门面再解释参数。 */
     static double toleranceForStep(int gridStep) {
-        double half = Math.max(1, gridStep) * 0.5D;
-        return Math.max(2.0D, Math.min(SIMPLIFY_TOLERANCE, half));
+        return PathControlSimplifier.toleranceForStep(gridStep);
     }
 
     static List<BlockPos> simplifyPath(List<BlockPos> nodes) {
-        return simplifyPath(nodes, 8);
+        return PathControlSimplifier.simplifyPath(nodes);
     }
 
-    /**
-     * 步距感知版本（O-13）：容差跟步长走，{@code clamp(0.5×step, 2, 4)}。
-     *
-     * <p>写死 4 时，一旦有人把 {@code aStarStep} 调到 2（局部修复档就是 2），容差 4
-     * 会把 2 格网格上的**所有转角**一起抹平 —— 因为 DP 只看「偏离保留折线多远」。
-     * 而默认档 {@code step=8} 时 {@code 0.5×8 = 4} 与原常量完全相同，所以
-     * <b>默认档逐位不变</b>。</p>
-     */
     static List<BlockPos> simplifyPath(List<BlockPos> nodes, int gridStep) {
-        if (nodes == null || nodes.size() < 3) return nodes == null ? new ArrayList<>() : new ArrayList<>(nodes);
-        double totalLength = 0.0D;
-        for (int i = 1; i < nodes.size(); i++) {
-            totalLength += Math.hypot((double) nodes.get(i).getX() - nodes.get(i - 1).getX(),
-                    (double) nodes.get(i).getZ() - nodes.get(i - 1).getZ());
-        }
-        int minPoints = Math.max(2, (int) Math.ceil(totalLength / SIMPLIFY_MIN_POINTS_PER_BLOCK));
-        double tolerance = toleranceForStep(gridStep);
-        List<BlockPos> result = simplifyPath(nodes, tolerance);
-        if (result.size() >= minPoints) return result;
-        // 0.9.019（O-02）：密度下限不满足时，**不再把容差对半砍**。
-        //
-        // 0.9.016 的写法是「收紧容差重试」，后果是把整个修复自我否决掉：一条
-        // 22.5° 锯齿路在容差 4 下只剩 2 个控制点（< minPoints），重试到容差 2 又
-        // 退回 61 个点 —— **等于零简化**，锯齿原样进 Catmull-Rom 被画成波浪。
-        // 现在改成「带密度约束的 DP」：保持容差 4，按「偏离当前折线最大」的次序
-        // 把被删掉的原始点**逐点放回来**，直到达到密度下限。这样既保住容差与步长
-        // 解耦的设计，又不会因为一次极端判断把整条路的简化全部作废。
-        return reinstateUntilDense(nodes, result, minPoints);
+        return PathControlSimplifier.simplifyPath(nodes, gridStep);
     }
 
-    /**
-     * 把偏离当前折线最大的原始点逐点放回，直到点数达到 {@code minPoints}（O-02）。
-     *
-     * <p>只放回**原始点本身**（XZ 与 Y 都是原值），不移动、不新建任何坐标，所以
-     * 结果始终是原始点列的一个子序列 —— 与 DP 的语义一致，几何变化仍有严格上界。</p>
-     */
+    static List<BlockPos> simplifyPath(List<BlockPos> nodes, double tolerance) {
+        return PathControlSimplifier.simplifyPath(nodes, tolerance);
+    }
+
+    /** 密度补点仍只恢复原始点，不能改成插值生成新的高度。 */
     static List<BlockPos> reinstateUntilDense(List<BlockPos> nodes, List<BlockPos> kept, int minPoints) {
-        if (nodes == null || kept == null || kept.size() >= minPoints) return kept;
-        int n = nodes.size();
-        boolean[] keptFlag = new boolean[n];
-        int cursor = 0;
-        for (BlockPos point : kept) {
-            int found = -1;
-            for (int i = cursor; i < n; i++) {
-                if (nodes.get(i).equals(point)) {
-                    found = i;
-                    break;
-                }
-            }
-            if (found < 0) return kept;   // 对不上就放弃，绝不猜
-            keptFlag[found] = true;
-            cursor = found + 1;
-        }
-        int keptCount = kept.size();
-        while (keptCount < minPoints) {
-            int bestIndex = -1;
-            double bestDeviation = -1.0D;
-            int previousKept = -1;
-            for (int i = 0; i < n; i++) {
-                if (!keptFlag[i]) continue;
-                if (previousKept >= 0 && i - previousKept > 1) {
-                    BlockPos a = nodes.get(previousKept);
-                    BlockPos b = nodes.get(i);
-                    for (int k = previousKept + 1; k < i; k++) {
-                        double deviation = perpendicularDistance(nodes.get(k), a, b);
-                        if (deviation > bestDeviation) {
-                            bestDeviation = deviation;
-                            bestIndex = k;
-                        }
-                    }
-                }
-                previousKept = i;
-            }
-            if (bestIndex < 0 || bestDeviation <= 1.0E-9D) break;   // 已无可放回的点
-            keptFlag[bestIndex] = true;
-            keptCount++;
-        }
-        List<BlockPos> out = new ArrayList<>(keptCount);
-        for (int i = 0; i < n; i++) {
-            if (keptFlag[i]) out.add(nodes.get(i));
-        }
-        return out;
+        return PathControlSimplifier.reinstateUntilDense(nodes, kept, minPoints);
     }
 
     static double perpendicularDistance(BlockPos point, BlockPos a, BlockPos b) {
-        double ax = a.getX();
-        double az = a.getZ();
-        double dx = b.getX() - ax;
-        double dz = b.getZ() - az;
-        double lenSq = dx * dx + dz * dz;
-        double x = point.getX();
-        double z = point.getZ();
-        if (lenSq < 1.0E-9D) {
-            return Math.hypot(x - ax, z - az);
-        }
-        double t = Math.max(0.0D, Math.min(1.0D, ((x - ax) * dx + (z - az) * dz) / lenSq));
-        return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+        return PathControlSimplifier.perpendicularDistance(point, a, b);
     }
-
-    /**
-     * Douglas-Peucker（迭代栈实现，避免深递归）。
-     *
-     * <p>只删「到保留折线的垂直距离 ≤ tolerance」的点，保留点的 XZ 与 Y 都是原始值，
-     * 因此在容差内的几何变化有严格上界。</p>
-     */
-    static List<BlockPos> simplifyPath(List<BlockPos> nodes, double tolerance) {
-        int n = nodes.size();
-        if (n < 3) return new ArrayList<>(nodes);
-        boolean[] keep = new boolean[n];
-        keep[0] = true;
-        keep[n - 1] = true;
-        java.util.ArrayDeque<int[]> stack = new java.util.ArrayDeque<>();
-        stack.push(new int[]{0, n - 1});
-        while (!stack.isEmpty()) {
-            int[] span = stack.pop();
-            int from = span[0], to = span[1];
-            if (to - from < 2) continue;
-            double ax = nodes.get(from).getX(), az = nodes.get(from).getZ();
-            double dx = (double) nodes.get(to).getX() - ax;
-            double dz = (double) nodes.get(to).getZ() - az;
-            double length2 = dx * dx + dz * dz;
-            double worst = -1.0D;
-            int worstIndex = -1;
-            for (int i = from + 1; i < to; i++) {
-                double px = (double) nodes.get(i).getX() - ax;
-                double pz = (double) nodes.get(i).getZ() - az;
-                double distance;
-                if (length2 <= 1.0E-9D) {
-                    distance = Math.hypot(px, pz);
-                } else {
-                    double t = (px * dx + pz * dz) / length2;
-                    if (t < 0.0D) t = 0.0D; else if (t > 1.0D) t = 1.0D;
-                    distance = Math.hypot(px - t * dx, pz - t * dz);
-                }
-                if (distance > worst) {
-                    worst = distance;
-                    worstIndex = i;
-                }
-            }
-            if (worstIndex >= 0 && worst > tolerance) {
-                keep[worstIndex] = true;
-                stack.push(new int[]{worstIndex, to});
-                stack.push(new int[]{from, worstIndex});
-            }
-        }
-        List<BlockPos> simplified = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            if (keep[i]) simplified.add(nodes.get(i));
-        }
-        return simplified;
-    }
-
-    /** 平滑迭代轮数。单轮 1-2-1 加权对 8 格锯齿只能削掉约 1/4 幅度，三轮才看得出「顺」。 */
-    static final int RELAX_PASSES = 3;
-
-    /**
-     * 普通点的累计横向位移上限（格）。防止把真实弯道一路拉直。
-     *
-     * <p>0.9.025（H-02 的安全一半）：**2.0 → 3.0**。</p>
-     *
-     * <p>闭式关系是「残余 ≈ 锯齿幅 − cap」：锯齿峰 8 / 谷 0 时，cap 2.0 把峰 8→6、谷 0→2，
-     * 净残余 **±2 格** —— 这正是真机 D1 里「沿河还有些抖」的那个 2。放到 3.0 后峰 8→5、谷 0→3，
-     * 净残余 **±1 格**。</p>
-     *
-     * <p><b>为什么只到 3.0、不到 {@code d/2 = 4}</b>：3.0 仍然严格小于半个网格步长，
-     * 「被挪动的幅度与网格离散化本身的不确定度同量级」这条不变量还成立；到 4.0 就跨过了
-     * 半步长，等于允许把点挪到一个可能属于相邻网格单元的位置，会开始改路面走向（那是 H-02
-     * 的激进一半，用户未批）。</p>
-     *
-     * <p><b>为什么桥不受影响</b>：桥段本身由 {@code straightenBridgeRuns} 拉直、且
-     * {@code frozenByBridge} 让桥段与紧邻桥的点<b>完全不参与平滑</b>；桥头外侧 2~3 点走
-     * 独立的 {@link #RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT} = 1.0。改这个常量<strong>只影响
-     * 非桥、非桥头的普通点</strong>。</p>
-     *
-     * <p>端点是硬契约（{@code relax} 循环从 1 到 n-2），一寸都不动。</p>
-     */
-    static final double RELAX_MAX_DISPLACEMENT = 3.0D;
-
-    /**
-     * 桥头点的累计横向位移上限（格）。
-     *
-     * <p>桥面本身由 {@code straightenBridgeRuns} 拉直、桥段与紧邻桥的点完全不参与平滑
-     * （否则桥面端点会和路面错位）；这里只放宽到「桥头外侧 2~3 个点」做过渡，
-     * 并用更严的 1 格上限保证接缝不错位。</p>
-     */
-    static final double RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT = 1.0D;
-
-    /**
-     * 桥头"引道带"的站数半径（0.9.027 / V-4 甲）。
-     *
-     * <p>0.9.025 把全局上限 2.0 提到 3.0 时，桥段冻结、桥头 ±2/±3 仍是 1.0，但**4 站以外**
-     * 的引道一下多挪了 1 格 —— 真机上就是桥头接缝处路面明显错位（V-4）。现在按距离分三档：
-     * ±2/±3 = 1.0、±4..±8 = 2.0（0.9.025 之前的值）、更远 = 3.0。
-     */
-    static final int RELAX_BRIDGE_APPROACH_STATIONS = 8;
-
-    /** 桥头引道带（±4..±8 站）的位移上限。用户 2026-11-08 选定「桥头 ±8 站回 2.0」。 */
-    static final double RELAX_BRIDGE_APPROACH_MAX_DISPLACEMENT = 2.0D;
-
-    /**
-     * 0.9.067（C2）：急弯冻结阈值（度）。发卡弯顶点 / 90° 直角弯的转向角超过它就
-     * 完全不参与 1-2-1 平滑 —— 否则会把弯心磨圆（盘山路的回头线被当成抖动拉直）。
-     * 缓弯照常平滑。纯几何，与桥掩码正交。
-     */
-    static final double SHARP_TURN_FREEZE_DEG = 60.0D;
 
     static List<BlockPos> relaxPath(List<BlockPos> nodes) {
-        return relax(nodes, null);
+        return PathControlRelaxer.relaxPath(nodes);
     }
 
     static List<BlockPos> relaxPathSkippingBridge(List<BlockPos> nodes, boolean[] bridgeMask) {
-        return relax(nodes, bridgeMask);
+        return PathControlRelaxer.relaxPathSkippingBridge(nodes, bridgeMask);
     }
 
-    /**
-     * 多轮 1-2-1 加权平滑，带逐点累计位移上限。
-     *
-     * <p>端点、桥段点、以及紧邻桥的点一律不动（保持桥面直线与端点对齐）；桥头外侧
-     * 2~3 个点参与平滑但上限收紧到 {@link #RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT}。
-     * Y 完全不动 —— 纵断面由 {@code RoadGradePlanner} 单独负责。</p>
-     */
-    /** 包级可见：供 {@code RelaxCapInvariantTest} 直接断言位移上限是严格不变量。 */
+    /** 保留生产松弛，不改变影子 A/B 的选择或执行顺序。 */
     static List<BlockPos> relax(List<BlockPos> nodes, boolean[] bridgeMask) {
-        int n = nodes == null ? 0 : nodes.size();
-        if (n < 3) return nodes == null ? new ArrayList<>() : new ArrayList<>(nodes);
-
-        int[] x = new int[n], y = new int[n], z = new int[n];
-        for (int i = 0; i < n; i++) {
-            BlockPos p = nodes.get(i);
-            x[i] = p.getX();
-            y[i] = p.getY();
-            z[i] = p.getZ();
-        }
-        int[] originX = x.clone(), originZ = z.clone();
-
-        // 0.9.067（C2）：急弯冻结。发卡弯顶点（转向角 > SHARP_TURN_FREEZE_DEG）不参与平滑，
-        // 否则 1-2-1 会把回头线的弯心磨圆。只在首轮前算一次（originX/Z 已固定，几何不变）。
-        boolean[] sharpTurn = new boolean[n];
-        for (int i = 1; i < n - 1; i++) {
-            if (frozenByBridge(bridgeMask, i)) continue;
-            sharpTurn[i] = turningAngleDeg(x[i - 1], z[i - 1], x[i], z[i], x[i + 1], z[i + 1])
-                    >= SHARP_TURN_FREEZE_DEG;
-        }
-
-        for (int pass = 0; pass < RELAX_PASSES; pass++) {
-            int[] nextX = x.clone(), nextZ = z.clone();
-            boolean moved = false;
-            for (int i = 1; i < n - 1; i++) {
-                if (frozenByBridge(bridgeMask, i)) continue;
-                if (sharpTurn[i]) continue;   // 0.9.067（C2）：急弯冻结
-                // 0.9.019（O-05）：本行原来是整数除法 `(a + 2b + c) / 4`。Java 的 /
-                // 是「向零截断」而不是向下取整，负坐标下会系统性偏正（-1/4 得 0、
-                // 向下取整应得 -1）⇒ 整条西/北向的路会整体偏一格。改成真正的四舍五入。
-                int smoothedX = (int) Math.round((x[i - 1] + 2.0D * x[i] + x[i + 1]) / 4.0D);
-                int smoothedZ = (int) Math.round((z[i - 1] + 2.0D * z[i] + z[i + 1]) / 4.0D);
-                double cap = bridgeHeadCap(bridgeMask, i);
-                double dx = (double) smoothedX - originX[i];
-                double dz = (double) smoothedZ - originZ[i];
-                double distance = Math.hypot(dx, dz);
-                if (distance > cap) {
-                    double scale = cap / distance;
-                    smoothedX = (int) Math.round(originX[i] + dx * scale);
-                    smoothedZ = (int) Math.round(originZ[i] + dz * scale);
-                }
-                // 0.9.019（O-05）：上面的 Math.round 每个轴都可能多走 0.5 格，
-                // 于是取整后的实际位移可以超出 cap（实测 2.24 / 1.24 格，而 cap 是
-                // 2.0 / 1.0）。这里把 cap 变成**严格不变量**：超了就沿位移较大的
-                // 那个轴一次退回一格，最多退 2 步就必进界（每步减少 ≥0.5 格）。
-                double roundedDx = (double) smoothedX - originX[i];
-                double roundedDz = (double) smoothedZ - originZ[i];
-                for (int retract = 0; retract < 2
-                        && Math.hypot(roundedDx, roundedDz) > cap; retract++) {
-                    if (Math.abs(roundedDx) >= Math.abs(roundedDz)) {
-                        smoothedX -= Integer.signum(smoothedX - originX[i]);
-                    } else {
-                        smoothedZ -= Integer.signum(smoothedZ - originZ[i]);
-                    }
-                    roundedDx = (double) smoothedX - originX[i];
-                    roundedDz = (double) smoothedZ - originZ[i];
-                }
-                // `moved` 比的是本轮的输入（x/z 尚未写回），语义正确，本批不动。
-                if (smoothedX != x[i] || smoothedZ != z[i]) moved = true;
-                nextX[i] = smoothedX;
-                nextZ[i] = smoothedZ;
-            }
-            x = nextX;
-            z = nextZ;
-            if (!moved) break;
-        }
-
-        List<BlockPos> relaxed = new ArrayList<>(n);
-        for (int i = 0; i < n; i++) {
-            relaxed.add(new BlockPos(x[i], y[i], z[i]));
-        }
-        return relaxed;
+        return PathControlRelaxer.relax(nodes, bridgeMask);
     }
 
-    /**
-     * 0.9.067（C2）：三点转向角（度）。0=直行、180=完全折返。
-     * 纯几何，无世界访问；三点共线或相邻点重合时返回 0（不判急弯）。
-     */
     static double turningAngleDeg(int ax, int az, int bx, int bz, int cx, int cz) {
-        double v1x = bx - ax, v1z = bz - az;
-        double v2x = cx - bx, v2z = cz - bz;
-        double len1 = Math.hypot(v1x, v1z);
-        double len2 = Math.hypot(v2x, v2z);
-        if (len1 < 1.0E-9D || len2 < 1.0E-9D) return 0.0D;
-        double cos = (v1x * v2x + v1z * v2z) / (len1 * len2);
-        cos = Math.max(-1.0D, Math.min(1.0D, cos));
-        return Math.toDegrees(Math.acos(cos));
+        return PathControlRelaxer.turningAngleDeg(ax, az, bx, bz, cx, cz);
     }
 
-    /** 桥段本身与紧邻桥的点完全不参与平滑，保证桥面直线与端点对齐。 */
     static boolean frozenByBridge(boolean[] bridgeMask, int index) {
-        if (bridgeMask == null) return false;
-        return isBridgeAt(bridgeMask, index)
-                || isBridgeAt(bridgeMask, index - 1)
-                || isBridgeAt(bridgeMask, index + 1);
+        return PathControlRelaxer.frozenByBridge(bridgeMask, index);
     }
 
-    /** 桥头外侧 2~3 格：参与平滑，但位移上限更严。包级可见供上限不变量测试核验。 */
     static double bridgeHeadCap(boolean[] bridgeMask, int index) {
-        if (bridgeMask == null) return RELAX_MAX_DISPLACEMENT;
-        if (isBridgeAt(bridgeMask, index - 2) || isBridgeAt(bridgeMask, index + 2)
-                || isBridgeAt(bridgeMask, index - 3) || isBridgeAt(bridgeMask, index + 3)) {
-            return RELAX_BRIDGE_HEAD_MAX_DISPLACEMENT;
-        }
-        // V-4 甲（0.9.027）：桥头 ±4..±8 站的引道回到 0.9.025 之前的 2.0。
-        for (int d = 4; d <= RELAX_BRIDGE_APPROACH_STATIONS; d++) {
-            if (isBridgeAt(bridgeMask, index - d) || isBridgeAt(bridgeMask, index + d)) {
-                return RELAX_BRIDGE_APPROACH_MAX_DISPLACEMENT;
-            }
-        }
-        return RELAX_MAX_DISPLACEMENT;
+        return PathControlRelaxer.bridgeHeadCap(bridgeMask, index);
     }
 
     static boolean isBridgeAt(boolean[] bridgeMask, int index) {
-        return index >= 0 && index < bridgeMask.length && bridgeMask[index];
+        return PathControlRelaxer.isBridgeAt(bridgeMask, index);
     }
 }

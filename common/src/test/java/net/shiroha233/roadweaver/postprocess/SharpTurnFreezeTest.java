@@ -33,7 +33,7 @@ public class SharpTurnFreezeTest {
 
     @Test
     void relaxFreezesHairpinVertex() {
-        // 发卡弯：A(0,0) B(10,10) C(0,20)。B 的转向角 180°，必须冻结不动。
+        // A(0,0) B(10,10) C(0,20) 的转向角为 90°，超过冻结阈值，顶点必须不动。
         List<BlockPos> nodes = List.of(new BlockPos(0, 64, 0), new BlockPos(10, 64, 10), new BlockPos(0, 64, 20));
         List<BlockPos> relaxed = PathPostProcessor.relaxPath(nodes);
         // 端点本来就不动；关键是顶点 B 不被 1-2-1 磨圆。
@@ -45,7 +45,10 @@ public class SharpTurnFreezeTest {
         // 缓弯（转向角 45° 左右）应该被平滑，顶点不再等于原坐标。
         List<BlockPos> nodes = List.of(new BlockPos(0, 64, 0), new BlockPos(10, 64, 1), new BlockPos(20, 64, 10));
         List<BlockPos> relaxed = PathPostProcessor.relaxPath(nodes);
-        // 缓弯顶点参与平滑，与原始顶点不同（或至少不抛异常、长度不变）。
+        // 只断言长度会让整段松弛被跳过时仍全绿；固定实际坐标才能守住生产行为。
         assertEquals(nodes.size(), relaxed.size());
+        assertEquals(new BlockPos(10, 64, 4), relaxed.get(1));
+        assertEquals(nodes.get(0), relaxed.get(0));
+        assertEquals(nodes.get(2), relaxed.get(2));
     }
 }

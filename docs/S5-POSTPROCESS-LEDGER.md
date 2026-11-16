@@ -55,6 +55,8 @@ S5|postprocess/JunctionConnector.java|KEEP_SEAM|路口连接与共享走廊|—
 S5|postprocess/JunctionTrimOps.java|KEEP_SEAM|路口裁剪，避免两条路重叠铺装|—
 S5|postprocess/NetworkReuseMerger.java|KEEP_SEAM|复用既有路网，避免重复开路|—
 S5|postprocess/PathPostProcessor.java|KEEP_INPUT|raw path → 站点 → 栅格化的几何流水线|—
+S5|postprocess/PathControlSimplifier.java|KEEP_INPUT|控制点简化与原始点密度补点；从门面等价迁出，不改变容差或顺序|—
+S5|postprocess/PathControlRelaxer.java|KEEP_INPUT|控制点限幅松弛，统一保留桥头及急弯冻结约束；未移除第二次松弛|—
 S5|postprocess/RoadIndex.java|KEEP_SEAM|既有路的空间索引|—
 S5|postprocess/RoadSnapService.java|KEEP_SEAM|把新路端点吸附到既有路|—
 S5|postprocess/SawtoothMetric.java|KEEP_INPUT|锯齿度量，仅用于诊断|—
