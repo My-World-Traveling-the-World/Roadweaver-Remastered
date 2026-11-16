@@ -286,6 +286,11 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateTileClaimsTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerLifecycleTest"),
+                        // 真实临时文件与共享锁覆盖缓存故障，避免 Fake 保存成功掩盖落盘失败。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.files.AccurateSampleStoreFileTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.persistence.files.AccurateSampleStoreCloseTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlannerFindViolationTest"),
                         DiscoverySelectors.selectClass(

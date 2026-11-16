@@ -50,6 +50,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
     private final Path dimensionRoot;
     private final Path namespaceRoot;
     private final WorldgenFingerprint fingerprint;
+    private final AccurateStoreLifecycle lifecycle = new AccurateStoreLifecycle();
     private final Map<TileCoord, Object> tileLocks = new ConcurrentHashMap<>();
     private final Object decodedTileCacheLock = new Object();
     private final Map<TileCoord, SparseTile> decodedTileCache = new LinkedHashMap<>(32, 0.75F, true) {
@@ -92,162 +93,186 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
 
     @Override
     public Map<Long, AccurateHeightChunk> loadChunks(Collection<Long> chunkKeys) {
-        if (chunkKeys == null || chunkKeys.isEmpty()) {
-            return Map.of();
-        }
-        LinkedHashMap<TileCoord, LongArrayList> grouped = new LinkedHashMap<>();
-        for (long chunkKey : new LinkedHashSet<>(chunkKeys)) {
-            grouped.computeIfAbsent(TileCoord.fromChunkKey(chunkKey), ignored -> new LongArrayList()).add(chunkKey);
-        }
-        LinkedHashMap<Long, AccurateHeightChunk> result = new LinkedHashMap<>();
-        for (Map.Entry<TileCoord, LongArrayList> entry : grouped.entrySet()) {
-            TileCoord tileCoord = entry.getKey();
-            synchronized (lockFor(tileCoord)) {
-                SparseTile tile = loadTileForRead(tileCoord);
-                if (tile == null) {
-                    continue;
-                }
-                LongArrayList tileChunkKeys = entry.getValue();
-                for (int index = 0; index < tileChunkKeys.size(); index++) {
-                    long chunkKey = tileChunkKeys.getLong(index);
-                    AccurateHeightChunk chunk = tile.loadChunk(chunkKey);
-                    if (chunk != null) {
-                        result.put(chunkKey, chunk);
+        // 租约覆盖整次访问，避免关闭返回后仍读盘、写盘或重新填充瓦片缓存。
+        try (var access = lifecycle.enter()) {
+            if (chunkKeys == null || chunkKeys.isEmpty()) {
+                return Map.of();
+            }
+            LinkedHashMap<TileCoord, LongArrayList> grouped = new LinkedHashMap<>();
+            for (long chunkKey : new LinkedHashSet<>(chunkKeys)) {
+                grouped.computeIfAbsent(TileCoord.fromChunkKey(chunkKey), ignored -> new LongArrayList()).add(chunkKey);
+            }
+            LinkedHashMap<Long, AccurateHeightChunk> result = new LinkedHashMap<>();
+            for (Map.Entry<TileCoord, LongArrayList> entry : grouped.entrySet()) {
+                TileCoord tileCoord = entry.getKey();
+                synchronized (lockFor(tileCoord)) {
+                    SparseTile tile = loadTileForRead(tileCoord);
+                    if (tile == null) {
+                        continue;
+                    }
+                    LongArrayList tileChunkKeys = entry.getValue();
+                    for (int index = 0; index < tileChunkKeys.size(); index++) {
+                        long chunkKey = tileChunkKeys.getLong(index);
+                        AccurateHeightChunk chunk = tile.loadChunk(chunkKey);
+                        if (chunk != null) {
+                            result.put(chunkKey, chunk);
+                        }
                     }
                 }
             }
+            return result;
+        
         }
-        return result;
     }
 
     @Override
     public Map<Long, AccurateHeightSample> loadSamples(Collection<Long> sampleKeys) {
-        if (sampleKeys == null || sampleKeys.isEmpty()) {
-            return Map.of();
-        }
-        LinkedHashMap<TileCoord, LongArrayList> grouped = new LinkedHashMap<>();
-        for (long sampleKey : new LinkedHashSet<>(sampleKeys)) {
-            grouped.computeIfAbsent(TileCoord.fromSampleKey(sampleKey), ignored -> new LongArrayList()).add(sampleKey);
-        }
-        LinkedHashMap<Long, AccurateHeightSample> result = new LinkedHashMap<>();
-        for (Map.Entry<TileCoord, LongArrayList> entry : grouped.entrySet()) {
-            TileCoord tileCoord = entry.getKey();
-            synchronized (lockFor(tileCoord)) {
-                SparseTile tile = loadTileForRead(tileCoord);
-                if (tile == null) {
-                    continue;
-                }
-                LongArrayList tileKeys = entry.getValue();
-                for (int index = 0; index < tileKeys.size(); index++) {
-                    long sampleKey = tileKeys.getLong(index);
-                    AccurateHeightSample sample = tile.loadSample(sampleKey);
-                    if (sample != null) {
-                        result.put(sampleKey, sample);
+        // 租约覆盖整次访问，避免关闭返回后仍读盘、写盘或重新填充瓦片缓存。
+        try (var access = lifecycle.enter()) {
+            if (sampleKeys == null || sampleKeys.isEmpty()) {
+                return Map.of();
+            }
+            LinkedHashMap<TileCoord, LongArrayList> grouped = new LinkedHashMap<>();
+            for (long sampleKey : new LinkedHashSet<>(sampleKeys)) {
+                grouped.computeIfAbsent(TileCoord.fromSampleKey(sampleKey), ignored -> new LongArrayList()).add(sampleKey);
+            }
+            LinkedHashMap<Long, AccurateHeightSample> result = new LinkedHashMap<>();
+            for (Map.Entry<TileCoord, LongArrayList> entry : grouped.entrySet()) {
+                TileCoord tileCoord = entry.getKey();
+                synchronized (lockFor(tileCoord)) {
+                    SparseTile tile = loadTileForRead(tileCoord);
+                    if (tile == null) {
+                        continue;
+                    }
+                    LongArrayList tileKeys = entry.getValue();
+                    for (int index = 0; index < tileKeys.size(); index++) {
+                        long sampleKey = tileKeys.getLong(index);
+                        AccurateHeightSample sample = tile.loadSample(sampleKey);
+                        if (sample != null) {
+                            result.put(sampleKey, sample);
+                        }
                     }
                 }
             }
+            return result;
+        
         }
-        return result;
     }
 
     @Override
     public void saveChunks(Map<Long, AccurateHeightChunk> chunks) {
-        if (chunks == null || chunks.isEmpty()) {
-            return;
-        }
-        LinkedHashMap<TileCoord, LinkedHashMap<Long, AccurateHeightChunk>> grouped = new LinkedHashMap<>();
-        for (Map.Entry<Long, AccurateHeightChunk> entry : chunks.entrySet()) {
-            AccurateHeightChunk chunk = entry.getValue();
-            if (chunk == null) {
-                continue;
+        // 租约覆盖整次访问，避免关闭返回后仍读盘、写盘或重新填充瓦片缓存。
+        try (var access = lifecycle.enter()) {
+            if (chunks == null || chunks.isEmpty()) {
+                return;
             }
-            grouped.computeIfAbsent(TileCoord.fromChunkKey(entry.getKey()), ignored -> new LinkedHashMap<>())
-                    .put(entry.getKey(), chunk);
-        }
-
-        for (Map.Entry<TileCoord, LinkedHashMap<Long, AccurateHeightChunk>> entry : grouped.entrySet()) {
-            TileCoord tileCoord = entry.getKey();
-            synchronized (lockFor(tileCoord)) {
-                SparseTile tile = loadTileForWrite(tileCoord);
-                if (tile == null) {
+            LinkedHashMap<TileCoord, LinkedHashMap<Long, AccurateHeightChunk>> grouped = new LinkedHashMap<>();
+            for (Map.Entry<Long, AccurateHeightChunk> entry : chunks.entrySet()) {
+                AccurateHeightChunk chunk = entry.getValue();
+                if (chunk == null) {
                     continue;
                 }
-                for (AccurateHeightChunk chunk : entry.getValue().values()) {
-                    tile.putChunk(chunk);
-                }
-                writeTile(tileCoord, tile);
+                grouped.computeIfAbsent(TileCoord.fromChunkKey(entry.getKey()), ignored -> new LinkedHashMap<>())
+                        .put(entry.getKey(), chunk);
             }
+
+            for (Map.Entry<TileCoord, LinkedHashMap<Long, AccurateHeightChunk>> entry : grouped.entrySet()) {
+                TileCoord tileCoord = entry.getKey();
+                synchronized (lockFor(tileCoord)) {
+                    SparseTile tile = loadTileForWrite(tileCoord);
+                    if (tile == null) {
+                        continue;
+                    }
+                    for (AccurateHeightChunk chunk : entry.getValue().values()) {
+                        tile.putChunk(chunk);
+                    }
+                    writeTile(tileCoord, tile);
+                }
+            }
+        
         }
     }
 
     @Override
     public void saveSamples(Map<Long, AccurateHeightSample> samples) {
-        if (samples == null || samples.isEmpty()) {
-            return;
-        }
-        LinkedHashMap<TileCoord, LinkedHashMap<Long, AccurateHeightSample>> grouped = new LinkedHashMap<>();
-        for (Map.Entry<Long, AccurateHeightSample> entry : samples.entrySet()) {
-            AccurateHeightSample sample = entry.getValue();
-            if (sample == null) {
-                continue;
+        // 租约覆盖整次访问，避免关闭返回后仍读盘、写盘或重新填充瓦片缓存。
+        try (var access = lifecycle.enter()) {
+            if (samples == null || samples.isEmpty()) {
+                return;
             }
-            grouped.computeIfAbsent(TileCoord.fromSampleKey(entry.getKey()), ignored -> new LinkedHashMap<>())
-                    .put(entry.getKey(), sample);
-        }
-
-        for (Map.Entry<TileCoord, LinkedHashMap<Long, AccurateHeightSample>> entry : grouped.entrySet()) {
-            TileCoord tileCoord = entry.getKey();
-            synchronized (lockFor(tileCoord)) {
-                SparseTile tile = loadTileForWrite(tileCoord);
-                if (tile == null) {
+            LinkedHashMap<TileCoord, LinkedHashMap<Long, AccurateHeightSample>> grouped = new LinkedHashMap<>();
+            for (Map.Entry<Long, AccurateHeightSample> entry : samples.entrySet()) {
+                AccurateHeightSample sample = entry.getValue();
+                if (sample == null) {
                     continue;
                 }
-                for (Map.Entry<Long, AccurateHeightSample> sampleEntry : entry.getValue().entrySet()) {
-                    tile.putSample(sampleEntry.getKey(), sampleEntry.getValue());
-                }
-                writeTile(tileCoord, tile);
+                grouped.computeIfAbsent(TileCoord.fromSampleKey(entry.getKey()), ignored -> new LinkedHashMap<>())
+                        .put(entry.getKey(), sample);
             }
+
+            for (Map.Entry<TileCoord, LinkedHashMap<Long, AccurateHeightSample>> entry : grouped.entrySet()) {
+                TileCoord tileCoord = entry.getKey();
+                synchronized (lockFor(tileCoord)) {
+                    SparseTile tile = loadTileForWrite(tileCoord);
+                    if (tile == null) {
+                        continue;
+                    }
+                    for (Map.Entry<Long, AccurateHeightSample> sampleEntry : entry.getValue().entrySet()) {
+                        tile.putSample(sampleEntry.getKey(), sampleEntry.getValue());
+                    }
+                    writeTile(tileCoord, tile);
+                }
+            }
+        
         }
     }
 
     @Override
     public void saveGrid(AccurateHeightGrid grid) {
-        if (grid == null) {
-            return;
-        }
-        LinkedHashMap<TileCoord, SparseTile> updates = new LinkedHashMap<>();
-        for (int index = 0; index < grid.request().sampleCount(); index++) {
-            long sampleKey = AccurateHeightSample.key(grid.request().blockX(index), grid.request().blockZ(index));
-            TileCoord tileCoord = TileCoord.fromSampleKey(sampleKey);
-            SparseTile tile = updates.computeIfAbsent(
-                    tileCoord,
-                    ignored -> new SparseTile(tileCoord.tileX(), tileCoord.tileZ()));
-            tile.putSample(
-                    sampleKey,
-                    new AccurateHeightSample(
-                            grid.worldSurface()[index],
-                            grid.oceanFloor()[index],
-                            grid.motionBlocking()[index]));
-        }
-
-        for (Map.Entry<TileCoord, SparseTile> entry : updates.entrySet()) {
-            TileCoord tileCoord = entry.getKey();
-            synchronized (lockFor(tileCoord)) {
-                SparseTile tile = loadTileForWrite(tileCoord);
-                if (tile == null) {
-                    continue;
-                }
-                tile.mergeFrom(entry.getValue());
-                writeTile(tileCoord, tile);
+        // 租约覆盖整次访问，避免关闭返回后仍读盘、写盘或重新填充瓦片缓存。
+        try (var access = lifecycle.enter()) {
+            if (grid == null) {
+                return;
             }
+            LinkedHashMap<TileCoord, SparseTile> updates = new LinkedHashMap<>();
+            for (int index = 0; index < grid.request().sampleCount(); index++) {
+                long sampleKey = AccurateHeightSample.key(grid.request().blockX(index), grid.request().blockZ(index));
+                TileCoord tileCoord = TileCoord.fromSampleKey(sampleKey);
+                SparseTile tile = updates.computeIfAbsent(
+                        tileCoord,
+                        ignored -> new SparseTile(tileCoord.tileX(), tileCoord.tileZ()));
+                tile.putSample(
+                        sampleKey,
+                        new AccurateHeightSample(
+                                grid.worldSurface()[index],
+                                grid.oceanFloor()[index],
+                                grid.motionBlocking()[index]));
+            }
+
+            for (Map.Entry<TileCoord, SparseTile> entry : updates.entrySet()) {
+                TileCoord tileCoord = entry.getKey();
+                synchronized (lockFor(tileCoord)) {
+                    SparseTile tile = loadTileForWrite(tileCoord);
+                    if (tile == null) {
+                        continue;
+                    }
+                    tile.mergeFrom(entry.getValue());
+                    writeTile(tileCoord, tile);
+                }
+            }
+        
         }
     }
 
     @Override
     public void close() {
-        synchronized (decodedTileCacheLock) {
-            decodedTileCache.clear();
-        }
+        lifecycle.close(() -> {
+            synchronized (decodedTileCacheLock) {
+                decodedTileCache.clear();
+            }
+            // 关闭已排空访问者，瓦片锁不再被旧请求引用，可以一起释放。
+            tileLocks.clear();
+        });
     }
 
     Path namespaceRoot() {
@@ -400,6 +425,9 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
             FileStorageIO.writeBytesAtomic(path, data);
             cacheTile(tileCoord, tile);
         } catch (IOException failure) {
+            // 写前会原地合并缓存瓦片；失败必须驱逐，否则本实例把未落盘更新冒充文件命中。
+            // 保留磁盘旧版，后续访问重新读取；缓存可重采，不把磁盘失败升级成整路失败。
+            evictTile(tileCoord);
             LOGGER.warn("写入精确样本瓦片失败: {}", path, failure);
         }
     }
