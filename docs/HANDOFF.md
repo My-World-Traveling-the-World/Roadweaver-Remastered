@@ -950,3 +950,39 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 没有长城只说明长城依赖满足，不代表河流已好；道路必须直接消费河流 API。既有长城门 complete(null) 包含成功与超时放弃，若不重查会把“结束等待”混成“已就绪”。whenComplete 回调中探针再抛错会只让衍生 Future 失败，原门仍悬挂，因此必须完成原门异常。Fabric 类只编译不进入 common 的 JUnit，故用行为端口测决策、单列静态接线守卫验入口，不能把后者叫运行时验证。
 
 交付同步记录：源码 bd61dd8、文档 b93f4e8 已本地提交，工作区干净。停止前 pull --rebase 成功；随后 push 及 HTTP/1.1 重试分别因 github.com:443 连接失败、连接重置未成功。当前 origin/main=f78c6c0，未声称已推送；网络恢复后执行 git push 并核对远端。
+
+
+---
+
+## 第 33 轮 ｜ 2026-11-16 ｜ 河流发布方失败语义 ｜ Streams源码82cc818 ｜ 道路PASS tests=1222 skipped=0 aborted=0 failed=0
+
+### 一、改了什么
+
+本轮实际代码在河流仓库 streams-reflowing-src，测试也在河流仓库。新增 RiverStartupReadiness 每世界结果门，StreamsPrewarmService 的成功、明确禁用、初始化失败、异步失败和停服出口不再混淆。两个 Fabric 生命周期入口改走 publishStartupReadiness；失败不发布，禁用作为无前置工作明确放行，停服后成功迟到也不发布。保留旧 awaitStartup 签名、API/配置键、缓存格式、几何和 Mixin 优先级。新增10项行为测试和2项静态接线守卫，零测试发现改为失败。河流HANDOFF.md完整记录同一轮。
+
+道路本轮仅同步 STATUS、ROADMAP、HANDOFF，不把外部守卫塞进道路。长城只读，未修改。当前清单：河流出口离线完成 → 长城订阅/晚订阅/重开/完成守卫 → 三模组现场顺序 → 道路CPU采样与粗路径预算 → 4096工作集 → READY状态转换 → 继续拆职责 → 按计时证据优化写盘等热点。
+
+### 二、我验证了什么（附负控）
+
+河流基线8项，完成后20项，skipped/failures/errors均0，test compileJava BUILD SUCCESSFUL。8组生产变异全部目标JUnit变红：异步失败改成功、初始化失败改成功、所有结果都发布、禁用不放行、忽略停止；另外重开入口漏接门、服务停止漏停门、初始化异常漏记录失败3组为静态接线。唯一锚点计数；finally git checkout -- 精确文件从本轮暂存索引恢复，并核对原字节。正向复验通过，日志/脚本/JSON在河流忽略目录build/round33-*。道路完整双模块回归1222、0跳过/中止/失败，Fabric编译成功，日志.analysis_tmp/round33-road-final.log。
+
+### 三、我没能验证什么（最重要）
+
+- 需真机：新建、重开、无长城的最终Mixin顺序与实际发布；没有部署，没有FPS/MSPT或加载耗时结论。
+- 需真实ServerLevel：初始化/构建故障与广播实际联动。本轮以生产结果组件行为和静态入口守卫确认，未宣称端到端通过。
+- 已知未修：河流API只有ready布尔值，没有失败状态；失败后道路非阻塞等待直到停服，无重试或失败UI。河流旧构建仍可能迟到清理全局采样模式/进度，跨世界清理代次待验。
+- 长城自身订阅/晚订阅/重开和完成守卫待做，必须在长城仓库。道路子任务预算、4096全域内存仍待做；crossing等依赖真机的项目继续保持现状。
+
+### 四、遗留半截的东西
+
+本轮河流结果门与守卫完整，变异全部恢复并已提交82cc818。河流仓库没有remote/upstream，pull无法同步、push无目的地，未擅自设置。道路之前两个提交因GitHub网络失败仍待推送；本轮文档提交后再尝试，以最终同步结果为准。
+
+### 五、下一轮我会先做什么
+
+在长城仓库验证河流订阅与晚订阅、世界切换和自身就绪完成/失败出口，基线先行，再做端口/负控。之后推进道路CPU精确采样和粗路径内部任务预算，不重新造总调度器。
+
+### 六、我踩到但已解决的坑
+
+河流Gradle9.4.1测试worker ClassNotFound源自本机JDK把含中文路径的UTF-8参数文件按GBK读取，独立java @args同classpath对照已复现：UTF-8失败、GBK LOAD_OK。该仓命令需GRADLE_OPTS和Gradle参数同时指定-Dfile.encoding=GBK（源码编译仍UTF-8），再执行test compileJava --offline --daemon；道路8.8命令不变。原源码实际LF，保留行尾避免整文件diff。await返回不表示完成，失败记录必须在同步初始化和异步回调两处覆盖。
+
+本轮同步结果：文档提交后再次 pull --rebase、push 均因 github.com 低速超时失败，origin/main 仍 f78c6c0，本地领先3个提交；未声称推送成功。河流82cc818及道路文档已本地提交，两个工作区git status --porcelain为空。
