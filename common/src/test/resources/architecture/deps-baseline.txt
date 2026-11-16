@@ -7,6 +7,7 @@
 #   现在改为真计数 ratchet：current.get(edge) <= baseline.get(edge)。
 #
 # 2026-11-16：精确采样新增唯一 BackgroundCpuWork 执行端口；启动、代次和许可仍封装在 runtime。
+# 2026-11-16：两轮粗路径通过 BackgroundCpuWork 复用预算；普通父用 INITIAL 子池，同池父用已有公共池。
 # 要消除某条边：改代码，然后把该行从本文件删掉。
 # 要合法地加一条 import：必须同时把这里的次数 +1 并说明理由。
 
@@ -140,7 +141,7 @@ planning -> pathfinding                        53
 planning -> pathlogic                          84
 planning -> persistence                        29
 planning -> pipeline                           2
-planning -> runtime                            18
+planning -> runtime                            19
 planning -> search                             5
 planning -> topology                           2
 planning -> util                               5

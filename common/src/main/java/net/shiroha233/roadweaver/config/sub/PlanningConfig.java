@@ -215,7 +215,8 @@ public final class PlanningConfig implements SubConfig {
      * <h2>取值考量</h2>
      * 粗搜索本身是**分钟级**任务（真机实测单条 pathfindingMs 可到 81~84 秒，
      * 内存压力下更久），所以阈值不能小。默认 3 分钟 ≈ 正常耗时的 2 倍余量：
-     * 正常情况永远不会触发，只有真卡住才生效。设 0 可完全关闭（恢复旧行为）。
+     * 搜索与物理队列分别限时，主动等游玩许可不消耗搜索期限，避免前台暂停耗尽重试次数。
+     * 设 0 关闭期限，但停服、换世界和中断仍可取消等待。
      */
     private int coarsePathWaitTimeoutMs = 180_000;
 

@@ -53,9 +53,9 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
             LinkedHashMap<StructureConnection, List<BlockPos>> paths = new LinkedHashMap<>();
             long pathfindingStartedAt = System.nanoTime();
             // ════════════════════════════════════════════════════════════════════
-            // ① 第一遍并行：提交方式与 0.9.055 一字未改（每条连接一个独立任务，
-            //    全部丢给 INITIAL 池，主线程只负责等）。0.9.056 曾为了让「后算的路
-            //    被先算完的路吸过去」把这里改成串行 —— 那是拿吞吐换联动，本版撤掉。
+            // ① 第一遍仍为每条连接独立搜索，由提交器选择独立子池并取得执行许可。
+            //    普通父用 INITIAL 子池；INITIAL 父借已有公共池，不能占唯一线程等自己。
+            //    各路不依次读取别路的结果，避免把预算控制变成改变联动几何的串行算法。
             // ════════════════════════════════════════════════════════════════════
             List<java.util.concurrent.Future<List<BlockPos>>> pathFutures = new ArrayList<>();
             java.util.Map<StructureConnection, List<BlockPos>> found =
@@ -75,12 +75,9 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                     return path;
                 }));
             }
-            // 0.8.340：等待方式可切换。任务**提交**方式完全不变（同样是 16 个独立任务
-            // 交给同一个线程池），只改「主线程怎么等」：原实现逐个 future.get() 串行等待，
-            // 第一个任务拖多久后面就白等多久；开启并行等待后改为同时等全部完成。
-            //
-            // 语义严格保持：任一任务失败立即抛出（ExecutionException → IllegalStateException），
-            // 线程被中断立即取消剩余任务并抛 CancellationException。因此产出与旧实现逐位一致。
+            // 保留两种等待入口及原配置；提交和等待都共用同一执行边界。
+            // 许可等待与实际搜索分开计时，失败或取消都撤销兄弟任务，
+            // 最后仍按请求连接的原顺序组装结果，不让调度完成次序影响路网。
             if (parallelWaitEnabled()) {
                 awaitAllPathsParallel(pathFutures);
             } else {
@@ -134,10 +131,9 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
     /**
      * 0.9.057：③ 第二遍并行规划 —— 只重算「协商后拿到共享过河点」的路。
      *
-     * <p>与第一遍<b>完全同一套提交方式</b>：每条被吸引的连接一个独立任务丢进 INITIAL 池，
-     * 主线程只负责等。路与路之间不共享任何状态（吸引器是按路造好的不可变实例，
-     * 不从别的路的产出里累积），所以第二遍并行与第一遍并行是同一个并行度 ——
-     * 这正是 0.9.056 的串行实现做不到的那件事。</p>
+     * <p>与第一遍共用提交器：每条被吸引的连接仍是独立任务，物理池与预算由提交方上下文决定。
+     * 吸引器是按路生成的不可变实例，不从别路的产出中累积；
+     * 因此执行预算只限制实际搜索并发，不改变共享过河点的协商输入。</p>
      *
      * <p>三条质量约束：</p>
      * <ul>
@@ -258,6 +254,8 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                 getBounded(future);
             } catch (java.util.concurrent.ExecutionException execution) {
                 cancelAll(futures);
+                // 内部许可等待的取消会被 Future 包装，不能让第二轮把它当普通失败后保留旧路。
+                if (execution.getCause() instanceof java.util.concurrent.CancellationException cancelled) throw cancelled;
                 throw new IllegalStateException("coarse path planning failed", execution.getCause());
             } catch (java.util.concurrent.TimeoutException timedOut) {
                 // ★ 审计 P1-1：超时同样取消其余任务。
@@ -298,12 +296,19 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
         try {
             getBounded(future);
         } catch (java.util.concurrent.ExecutionException execution) {
+            cancelAll(all);
+            // 顺序等待也要释放兄弟任务，否则外层已处置地形时它们仍在读同一视图。
+            if (execution.getCause() instanceof java.util.concurrent.CancellationException cancelled) throw cancelled;
             throw new IllegalStateException("coarse path planning failed", execution.getCause());
         } catch (java.util.concurrent.TimeoutException timedOut) {
             cancelAll(all);
             throw new java.util.concurrent.CancellationException(
                     "coarse path planning timed out after " + coarsePathWaitTimeoutMs() + "ms");
+        } catch (java.util.concurrent.CancellationException cancelled) {
+            cancelAll(all);
+            throw cancelled;
         } catch (InterruptedException interrupted) {
+            cancelAll(all);
             Thread.currentThread().interrupt();
             throw new java.util.concurrent.CancellationException("coarse planning interrupted");
         }
@@ -313,8 +318,8 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
      * 有界等待单个 future。
      *
      * <p>超时阈值来自 {@code planning.coarsePathWaitTimeoutMs}，
-     * {@code 0} 表示**不限时**（完全恢复旧行为，供出问题时回退）。
-     * 语义与 {@code RoadPathCalculator#awaitPlanningSnapshot} 对齐：
+     * {@code 0} 表示不限时，但仍处理停止、换世界与中断，不能退化成无法取消的等待。
+     * 实际搜索与物理队列各有期限，主动等待游玩许可不消耗搜索期限；停止/换世界仍可取消。
      * 超时 → 抛 {@code TimeoutException}，由调用方 {@code cancel(true)} 并转成
      * {@code CancellationException}。</p>
      */
@@ -322,12 +327,8 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
             throws java.util.concurrent.ExecutionException,
             java.util.concurrent.TimeoutException,
             InterruptedException {
-        long timeoutMs = coarsePathWaitTimeoutMs();
-        if (timeoutMs <= 0L) {
-            future.get();
-        } else {
-            future.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-        }
+        // 搜索期限不包含主动等预算的时间，避免开着界面就耗尽 region 的重试次数。
+        CoarsePathTasks.await(future, coarsePathWaitTimeoutMs());
     }
 
     /**

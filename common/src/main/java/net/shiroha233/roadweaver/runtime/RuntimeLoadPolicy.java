@@ -438,19 +438,25 @@ public final class RuntimeLoadPolicy {
     // 取消条件传到暂停循环内部，否则换世界后仍可能一直等前台保护结束。
     private static void beforeBackgroundUnit(boolean initialGeneration,
                                              java.util.function.BooleanSupplier cancelled) {
+        beforeBackgroundUnit(initialGeneration, cancelled, ThreadPoolManager.currentTaskRole());
+    }
+
+    private static void beforeBackgroundUnit(boolean initialGeneration,
+                                             java.util.function.BooleanSupplier cancelled,
+                                             ThreadPoolManager.TaskRole originRole) {
         cancelIfStopping();
         if (initialGeneration || InitialGenManager.isActive()) return;
-        if (ThreadPoolManager.currentTaskRole() == ThreadPoolManager.TaskRole.MAP) {
+        if (originRole == ThreadPoolManager.TaskRole.MAP) {
             beforeMapUnit(cancelled);
             return;
         }
         refreshRoadWorkerBudget();
-        if (ThreadPoolManager.isCoordinatorTask()) {
+        if (originRole == ThreadPoolManager.TaskRole.COORDINATOR) {
             if (chunkyPreflightActive) return;
             awaitCoordinatorPermit(cancelled);
             return;
         }
-        awaitRuntimePermit(cancelled);
+        awaitRuntimePermit(cancelled, originRole);
     }
 
     public static boolean acquireCoarseUnit(boolean initialGeneration) {
@@ -460,9 +466,16 @@ public final class RuntimeLoadPolicy {
     /** 共用已有粗采样计数，精确采样不能再另开一份预算绕过并发上限。 */
     public static boolean acquireCoarseUnit(boolean initialGeneration,
                                              java.util.function.BooleanSupplier cancelled) {
+        return acquireCoarseUnit(initialGeneration, cancelled, ThreadPoolManager.currentTaskRole());
+    }
+
+    /** 子任务按提交方角色让路，不能因落在 INITIAL 池就丢失地图读取的界面豁免。 */
+    public static boolean acquireCoarseUnit(boolean initialGeneration,
+                                             java.util.function.BooleanSupplier cancelled,
+                                             ThreadPoolManager.TaskRole originRole) {
         if (initialGeneration) return true;
         while (!Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
-            beforeBackgroundUnit(false, cancelled);
+            beforeBackgroundUnit(false, cancelled, originRole);
             if (Thread.currentThread().isInterrupted() || cancelled.getAsBoolean()) return false;
             int limit = Math.max(1, recommendedRoadWorkerThreads());
             int active = ACTIVE_COARSE_UNITS.get();
@@ -737,12 +750,17 @@ public final class RuntimeLoadPolicy {
     }
 
     private static void awaitRuntimePermit(java.util.function.BooleanSupplier cancelled) {
+        awaitRuntimePermit(cancelled, ThreadPoolManager.currentTaskRole());
+    }
+
+    private static void awaitRuntimePermit(java.util.function.BooleanSupplier cancelled,
+                                           ThreadPoolManager.TaskRole originRole) {
         PauseReason current = pauseReason();
         // 0.8.360：地图读取（MAP_READ）豁免「界面让路」暂停。
         // 打开地图界面本身就会让 isScreenPauseActive() 为真，若不豁免，
         // 界面要读的 12 个瓦片会被自己触发的暂停永久挡住（实测卡在 0/12 三分钟）。
         // 只放行 PLAYER_INTERACTION；Chunky / 跑动 / 系统压力等仍照常让路。
-        boolean mapReadLane = ThreadPoolManager.currentTaskRole() == ThreadPoolManager.TaskRole.MAP_READ;
+        boolean mapReadLane = originRole == ThreadPoolManager.TaskRole.MAP_READ;
         while (current != PauseReason.NONE && !Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
             if (mapReadLane && current == PauseReason.PLAYER_INTERACTION) {
                 break;

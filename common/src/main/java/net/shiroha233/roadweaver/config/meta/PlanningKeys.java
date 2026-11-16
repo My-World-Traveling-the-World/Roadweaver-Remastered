@@ -237,7 +237,8 @@ public final class PlanningKeys {
             ConfigKey.integer("coarsePathWaitTimeoutMs", 180000, 10000, 1800000,
                     ConfigCategory.PERFORMANCE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "粗寻路等待超时", "Coarse path wait timeout",
-                    "等待粗寻路结果的上限。超时后放弃该连接，避免整局卡死",
+                    // 让路时间不能被描述成寻路超时，否则玩家会把正常暂停误认为规划失败。
+                    "实际粗搜索与执行队列分别使用此期限；等待游玩预算不计时，超时取消本批并交上层处理",
                     "毫秒", ""),
 
             ConfigKey.decimal("baseWaterPenalty", 200.0D, 0.0, 100000.0D,
