@@ -251,6 +251,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.apiimpl.ApiModulePurityTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.apiimpl.ApiLifecycleAndLoadBridgeTest"),
+                        // 直接检查生产负载策略，防止 API 注册成功但消费端仍只认两个旧来源。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.runtime.RuntimeLoadSignalsTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.grade.RoadCutFillAsymmetryTest"),
                         DiscoverySelectors.selectClass(

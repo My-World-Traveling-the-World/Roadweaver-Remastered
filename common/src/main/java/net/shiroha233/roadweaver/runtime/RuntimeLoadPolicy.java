@@ -808,11 +808,12 @@ public final class RuntimeLoadPolicy {
         }
         if (chunkyExclusiveActive || CHUNKY_ACTIVE.invoke()) return 1;
         if (CRUISE_ACTIVE.invoke()) return 0;
+        // 显式暂停优先于别的提供方的正数建议；开局预热和 Chunky readiness 已在前面放行。
+        if (ROAD_COORDINATOR_PAUSE.invoke()) return 0;
         if (INTERACTION_ACTIVE.invoke()) return 1;
         Integer recommendation = ROAD_COORDINATOR_LANES.invoke(
                 pendingRegions, readyAheadRegions, currentLanes);
         if (recommendation != null) return Math.max(0, Math.min(4, recommendation));
-        if (ROAD_COORDINATOR_PAUSE.invoke()) return 0;
         if (readyAheadRegions > 0) return 1;
         if (pendingRegions >= 12) return 4;
         return pendingRegions >= 3 ? 2 : 1;
@@ -893,8 +894,8 @@ public final class RuntimeLoadPolicy {
     //
     // 现在所有提供方都已迁到 roadweaver-api，兜底路径删除：
     // 没有 provider 就返回"无意见"的默认值，调用方按自己的默认值走。
-    // className / methodName 仍作为**分派键**保留（LoadSignalBridge 用它挑
-    // provider 与信号），但它们不再是反射目标。
+    // className / methodName 仅保留调用键兼容：普通保护和预算聚合全部 API 来源，
+    // 只有 Chunky 所有权按 owner 匹配，避免其他模组的 busy 掩盖独占标志泄漏。
 
     private static final class OptionalBooleanMethod {
         private final String className;
@@ -906,7 +907,7 @@ public final class RuntimeLoadPolicy {
         }
 
         boolean invoke() {
-            Boolean bridged = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.booleanSignal(className, methodName);
+            Boolean bridged = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.booleanSignal(className, methodName);
             return Boolean.TRUE.equals(bridged);
         }
     }
@@ -935,8 +936,9 @@ public final class RuntimeLoadPolicy {
         }
 
         Integer invoke(int pendingRegions, int readyAheadRegions, int currentLanes) {
-            return net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.intSignal(
-                    className, methodName, pendingRegions, readyAheadRegions, currentLanes);
+            int value = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.recommendedLanes(
+                    pendingRegions, readyAheadRegions, currentLanes);
+            return value < 0 ? null : value;
         }
     }
 
@@ -950,7 +952,8 @@ public final class RuntimeLoadPolicy {
         }
 
         Integer invoke(int value) {
-            return net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.intOneArgSignal(className, methodName, value);
+            int recommendation = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.recommendedWorkers(value);
+            return recommendation < 0 ? null : recommendation;
         }
     }
 

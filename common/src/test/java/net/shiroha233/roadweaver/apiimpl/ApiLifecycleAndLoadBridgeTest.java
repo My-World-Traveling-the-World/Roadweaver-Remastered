@@ -33,6 +33,8 @@ class ApiLifecycleAndLoadBridgeTest {
         ApiBackendImpl.clearListenersForTest();
         RoadLoadSignalsRegistry.unregister(LoadSignalBridge.OWNER_CHUNKY);
         RoadLoadSignalsRegistry.unregister(LoadSignalBridge.OWNER_HYPERSPEED);
+        // 注册表是进程级状态，未知来源夹具也必须清走，否则会污染后续多源聚合用例。
+        RoadLoadSignalsRegistry.unregister("some-other-mod");
         RoadLoadSignalsRegistry.registerStreamsThreadControl(null);
     }
 
