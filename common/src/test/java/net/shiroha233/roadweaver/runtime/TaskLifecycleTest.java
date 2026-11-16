@@ -205,6 +205,12 @@ class TaskLifecycleTest {
         var checked = new java.io.IOException("checked");
         var standard = ThreadPoolManager.submit(role, () -> { throw checked; }); results.add(standard);
         assertSame(checked, assertThrows(ExecutionException.class, () -> standard.get(3, TimeUnit.SECONDS)).getCause());
+        var worker = pools.getFirst(); awaitCondition(() -> worker.getCompletedTaskCount() == 4);
+        // 两份追踪表都应释放闭包；仅验证任务成功不够，长期游玩不能一直保留旧世界引用。
+        for (String name : List.of("created", "accepted")) {
+            Field tracked = LifecycleWorkerPool.class.getDeclaredField(name); tracked.setAccessible(true);
+            assertEquals(0, ((Set<?>) tracked.get(worker)).size(), name);
+        }
     }
 
     @Test void completingQueuedResultManuallySkipsTheSupplierAndKeepsTheValue() throws Exception {
