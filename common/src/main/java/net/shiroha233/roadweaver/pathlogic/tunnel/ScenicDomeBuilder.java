@@ -59,7 +59,7 @@ final class ScenicDomeBuilder {
     static boolean containsWater(WorldGenLevel world, List<BlockPos> positions) {
         if (world == null || positions == null) return false;
         for (BlockPos position : positions) {
-            if (position != null && world.getBlockState(position).getFluidState().is(FluidTags.WATER)) {
+            if (position != null && TunnelReadTiming.block(world, position).getFluidState().is(FluidTags.WATER)) {
                 return true;
             }
         }

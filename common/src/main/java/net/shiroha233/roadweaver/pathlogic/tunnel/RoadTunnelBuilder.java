@@ -167,9 +167,15 @@ public final class RoadTunnelBuilder {
                 segment == null || segment.middlePos() == null ? -1 : segment.middlePos().getZ(),
                 junction);
         SpanState state = spanState(world.getLevel(), road, span, centers);
-        prepareSpanState(world, state, road, centers, profile, span);
-        construction.accept(preflight(world, road, segment, segmentIndex, centers, profile,
-                span, state, junction, externalJunction));
+        TunnelPlan plan;
+        // 消费者可能立即铺路；先结束只读阶段的计时，避免把落块计进探测。
+        try (var timing = TunnelReadTiming.begin("probe", segment == null ? null : segment.middlePos())) {
+            prepareSpanState(world, state, road, centers, profile, span);
+            plan = preflight(world, road, segment, segmentIndex, centers, profile,
+                    span, state, junction, externalJunction);
+            if (timing != null) timing.completed = true;
+        }
+        construction.accept(plan);
     }
 
     static void prepareSpanState(WorldGenLevel world, SpanState state, RoadData road,
@@ -285,7 +291,7 @@ public final class RoadTunnelBuilder {
             int roadY = profile == null || segmentIndex < 0 || segmentIndex >= profile.length
                     ? -1 : profile[segmentIndex];
             int terrainY = center == null ? -1 :
-                    RoadConstructionSafety.terrainHeight(world, center.getX(), center.getZ());
+                    TunnelReadTiming.terrain(world, center.getX(), center.getZ());
             LOGGER.info("RoadWeaver tunnel section segment={} role={} roadY={} terrainY={} "
                             + "overburden={} center={},{}",
                     segmentIndex,
@@ -307,10 +313,10 @@ public final class RoadTunnelBuilder {
                 if (!columnAvailableWithoutLoading(world, column)) {
                     return SafetyCheck.failure("unavailable-loaded-column", column);
                 }
-                int terrain = RoadConstructionSafety.terrainHeight(world, column.getX(), column.getZ());
+                int terrain = TunnelReadTiming.terrain(world, column.getX(), column.getZ());
                 // Overburden is rock, never water. The walkable surface answers "sea level + 1" for a water
                 // column, so an undersea tunnel used to pass this gate with zero real cover.
-                int rock = RoadConstructionSafety.rockSurfaceHeight(world, column.getX(), column.getZ());
+                int rock = TunnelReadTiming.rock(world, column.getX(), column.getZ());
                 if (column.getY() < world.getMinBuildHeight()
                         || column.getY() + roofOffset() >= world.getMaxBuildHeight()) {
                     return SafetyCheck.failure("invalid-section-height", column);
@@ -321,7 +327,7 @@ public final class RoadTunnelBuilder {
                 int fromDy = section.isRoadColumn(column) ? 0 : 1;
                 for (int dy = fromDy; dy <= roofOffset(); dy++) {
                     BlockPos volume = column.above(dy);
-                    BlockState block = world.getBlockState(volume);
+                    BlockState block = TunnelReadTiming.block(world, volume);
                     if (!block.getFluidState().isEmpty()
                             && !block.getFluidState().is(FluidTags.WATER)) {
                         return SafetyCheck.failure("fluid-in-volume", volume);
@@ -340,8 +346,8 @@ public final class RoadTunnelBuilder {
                 if (!columnAvailableWithoutLoading(world, wall)) {
                     return SafetyCheck.failure("unavailable-loaded-wall-column", wall);
                 }
-                int terrain = RoadConstructionSafety.terrainHeight(world, wall.getX(), wall.getZ());
-                int rock = RoadConstructionSafety.rockSurfaceHeight(world, wall.getX(), wall.getZ());
+                int terrain = TunnelReadTiming.terrain(world, wall.getX(), wall.getZ());
+                int rock = TunnelReadTiming.rock(world, wall.getX(), wall.getZ());
                 if (wall.getY() < world.getMinBuildHeight()
                         || wall.getY() + roofOffset() >= world.getMaxBuildHeight()) {
                     return SafetyCheck.failure("invalid-wall-height", wall);
@@ -351,7 +357,7 @@ public final class RoadTunnelBuilder {
                 }
                 for (int dy = 0; dy <= roofOffset(); dy++) {
                     BlockPos volume = wall.above(dy);
-                    BlockState block = world.getBlockState(volume);
+                    BlockState block = TunnelReadTiming.block(world, volume);
                     if (!block.getFluidState().isEmpty()
                             && !block.getFluidState().is(FluidTags.WATER)) {
                         return SafetyCheck.failure("fluid-in-wall-volume", volume);
@@ -371,6 +377,13 @@ public final class RoadTunnelBuilder {
     /** Call after SegmentPaver has put down the selected road deck. */
     public static void apply(WorldGenLevel world, TunnelPlan plan) {
         if (world == null || plan == null || !plan.active()) return;
+        try (var timing = TunnelReadTiming.begin("apply", plan.interior().isEmpty() ? null : plan.interior().get(0))) {
+            applyActive(world, plan);
+            if (timing != null) timing.completed = true;
+        }
+    }
+
+    private static void applyActive(WorldGenLevel world, TunnelPlan plan) {
         BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
         BlockPos spanStart = plan.interior().isEmpty() ? null : plan.interior().get(0);
         double spanLength = scenicSpanLength(plan);
@@ -387,10 +400,10 @@ public final class RoadTunnelBuilder {
         for (BlockPos interior : plan.interior()) {
             // Per column, so a long tunnel fades instead of changing tint per section.
             BlockState glass = scenicGlassState(scenicProgress(interior, spanStart, spanLength));
-            int terrain = RoadConstructionSafety.terrainHeight(world, interior.getX(), interior.getZ());
+            int terrain = TunnelReadTiming.terrain(world, interior.getX(), interior.getZ());
             // Rock, not the walkable surface: for a seabed column the latter is sea level + 1, which made
             // every undersea section read as "14..20 blocks of cover" while it had none.
-            int rock = RoadConstructionSafety.rockSurfaceHeight(world, interior.getX(), interior.getZ());
+            int rock = TunnelReadTiming.rock(world, interior.getX(), interior.getZ());
             int overburden = rock - interior.getY();
             minOverburden = Math.min(minOverburden, overburden);
             maxOverburden = Math.max(maxOverburden, overburden);
@@ -411,7 +424,7 @@ public final class RoadTunnelBuilder {
                 BlockPos volume = interior.above(dy);
                 // 0.9.027（N-11）：净空里已经挂着的灯笼一律保留（用户明确要求「不要清除灯笼」）。
                 // 以前这里无条件 setBlock(AIR)，相邻 section 交错到同一列时会把灯一起削掉。
-                if (world.getBlockState(volume).is(Blocks.LANTERN)) {
+                if (TunnelReadTiming.block(world, volume).is(Blocks.LANTERN)) {
                     lanternsKept++;
                     clearTop = dy;
                     continue;
@@ -460,7 +473,7 @@ public final class RoadTunnelBuilder {
                 BlockPos shallowRoof = new BlockPos(interior.getX(), Math.max(rock - 1, roofLineY), interior.getZ());
                 if (!isWallOwned(shallowRoof)
                         && !RoadConstructionSafety.isProtectedTunnelVolume(world, shallowRoof, plan.road(),
-                        world.getBlockState(shallowRoof), terrain)) {
+                        TunnelReadTiming.block(world, shallowRoof), terrain)) {
                     world.setBlock(shallowRoof, plan.scenic() ? glass : stone, 3);
                     roofedColumns++;
                 }
@@ -475,12 +488,12 @@ public final class RoadTunnelBuilder {
             clearLegacyPortalWalls(world, plan);
         } else if (!plan.junction()) {
             for (BlockPos wall : plan.walls()) {
-                int terrain = RoadConstructionSafety.terrainHeight(world, wall.getX(), wall.getZ());
+                int terrain = TunnelReadTiming.terrain(world, wall.getX(), wall.getZ());
                 // Skip a wall column only when the rock itself runs out *and* no open water sits above it.
                 // The old test used the walkable surface, which for a seabed column is always far above the
                 // roof, so the skip never fired there; and on a hillside it fired on the whole column,
                 // leaving a one-column gap in the lining for the sea to pour through.
-                if (RoadConstructionSafety.rockSurfaceHeight(world, wall.getX(), wall.getZ())
+                if (TunnelReadTiming.rock(world, wall.getX(), wall.getZ())
                         < wall.getY() + roofOffset() && !isWaterAboveRoof(world, wall)) continue;
                 for (int dy = 0; dy <= roofOffset(); dy++) {
                     BlockPos volume = wall.above(dy);
@@ -488,7 +501,7 @@ public final class RoadTunnelBuilder {
                     // genuinely hard-protected block, leave that cell natural
                     // instead of overwriting it or rejecting the whole section.
                     if (RoadConstructionSafety.isProtectedTunnelVolume(world, volume, plan.road(),
-                            world.getBlockState(volume), terrain) || isWallOwned(volume)) {
+                            TunnelReadTiming.block(world, volume), terrain) || isWallOwned(volume)) {
                         continue;
                     }
                     world.setBlock(volume, stone, 3);
@@ -738,7 +751,7 @@ public final class RoadTunnelBuilder {
 
     /** 生产地形读取：沿用本类已有的 {@code WorldGenLevel} 入参，读法与被覆土判定完全相同。 */
     static PortalTerrain terrainOf(WorldGenLevel world) {
-        return world == null ? null : (x, z) -> RoadConstructionSafety.terrainHeight(world, x, z);
+        return world == null ? null : (x, z) -> TunnelReadTiming.terrain(world, x, z);
     }
 
     /** 洞口站的路面列（含路面高度）；取不到就返回 {@code null}（⇒ 退回 14 站）。 */
@@ -824,7 +837,7 @@ public final class RoadTunnelBuilder {
     static int terrainHeightAt(WorldGenLevel world, BlockPos pos) {
         return pos == null || world == null
                 ? Integer.MIN_VALUE
-                : RoadConstructionSafety.terrainHeight(world, pos.getX(), pos.getZ());
+                : TunnelReadTiming.terrain(world, pos.getX(), pos.getZ());
     }
 
     /**

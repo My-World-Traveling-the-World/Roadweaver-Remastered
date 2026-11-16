@@ -26,6 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class DecorationPlanner {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final boolean LAMP_BASE_TIMINGS = "on".equalsIgnoreCase(
+            System.getProperty("roadweaver.lampBaseTimings", "off"));
 
     private DecorationPlanner() {}
 
@@ -128,6 +130,7 @@ public final class DecorationPlanner {
                                                   Vec3i ortho,
                                                   int sideOffset,
                                                   boolean left) {
+        LampBaseTiming timing = LAMP_BASE_TIMINGS ? new LampBaseTiming() : null;
         int side = left ? 1 : -1;
         int chunkMinX = Math.floorDiv(roadPos.getX(), 16) * 16;
         int chunkMinZ = Math.floorDiv(roadPos.getZ(), 16) * 16;
@@ -151,7 +154,8 @@ public final class DecorationPlanner {
                 if (x < chunkMinX || x > chunkMaxX || z < chunkMinZ || z > chunkMaxZ) continue;
                 for (int yOffset : new int[]{0, -1, 1}) {
                     BlockPos candidate = new BlockPos(x, baseY + yOffset, z);
-                    if (!isSupportedLampBase(world, candidate)) continue;
+                    if (timing != null) timing.candidates++;
+                    if (!isSupportedLampBase(world, candidate, timing)) continue;
                     int score = lateral * 100 + Math.abs(tangent) * 10 + Math.abs(yOffset) * 3;
                     if (score < bestScore) {
                         bestScore = score;
@@ -160,18 +164,35 @@ public final class DecorationPlanner {
                 }
             }
         }
+        if (timing != null) {
+            long searchUs = (System.nanoTime() - timing.started) / 1000;
+            LOGGER.info("[LAMP-BASE-TIMING] pos={} left={} candidates={} directReads={} found={} searchUs={}",
+                    roadPos, left, timing.candidates, timing.directReads, best != null, searchUs);
+        }
         return best;
     }
 
-    private static boolean isSupportedLampBase(WorldGenLevel world, BlockPos base) {
-        BlockState below = world.getBlockState(base.below());
+    private static boolean isSupportedLampBase(WorldGenLevel world, BlockPos base, LampBaseTiming timing) {
+        BlockState below = lampBlock(world, base.below(), timing);
         if (!below.isFaceSturdy(world, base.below(), Direction.UP)) return false;
         if (!below.getFluidState().isEmpty()) return false;
-        if (!world.getBlockState(base).canBeReplaced()) return false;
+        if (!lampBlock(world, base, timing).canBeReplaced()) return false;
         for (int y = 1; y <= 6; y++) {
-            if (!world.getBlockState(base.above(y)).canBeReplaced()) return false;
+            if (!lampBlock(world, base.above(y), timing).canBeReplaced()) return false;
         }
         return true;
+    }
+
+    private static BlockState lampBlock(WorldGenLevel world, BlockPos position, LampBaseTiming timing) {
+        // 只数灯座算法主动发出的读请求；方块形状查询的内部开销由总时长覆盖。
+        if (timing != null) timing.directReads++;
+        return world.getBlockState(position);
+    }
+
+    private static final class LampBaseTiming {
+        private final long started = System.nanoTime();
+        private int candidates;
+        private int directReads;
     }
 
     private static int computeApproxDistanceMeters(WorldGenLevel world, BlockPos fromPos, boolean isStart, List<BlockPos> middlePositions) {

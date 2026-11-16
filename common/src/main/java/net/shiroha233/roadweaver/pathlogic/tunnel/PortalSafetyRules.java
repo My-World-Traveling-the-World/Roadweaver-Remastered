@@ -66,7 +66,7 @@ final class PortalSafetyRules {
         if (world == null || section == null) return false;
         try {
             for (BlockPos column : section.road()) {
-                int rock = RoadConstructionSafety.rockSurfaceHeight(world, column.getX(), column.getZ());
+                int rock = TunnelReadTiming.rock(world, column.getX(), column.getZ());
                 if (rock > column.getY() + roofOffset()) continue;
                 if (isWaterAboveRoof(world, column)) continue;
                 return true;
@@ -104,7 +104,7 @@ final class PortalSafetyRules {
         int dried = 0;
         int sealed = 0;
         for (BlockPos interior : plan.interior()) {
-            int terrain = RoadConstructionSafety.terrainHeight(world, interior.getX(), interior.getZ());
+            int terrain = TunnelReadTiming.terrain(world, interior.getX(), interior.getZ());
             for (int dy = 1; dy <= roof; dy++) {
                 BlockPos inside = interior.above(dy);
                 if (isWaterCell(world, inside)) {
@@ -115,12 +115,12 @@ final class PortalSafetyRules {
                     continue;
                 }
                 if (!sealShell) continue;
-                if (!world.getBlockState(inside).isAir()) continue;
+                if (!TunnelReadTiming.block(world, inside).isAir()) continue;
                 for (int[] side : BORE_SIDES) {
                     BlockPos shell = inside.offset(side[0], 0, side[1]);
                     if (!isWaterCell(world, shell)) continue;
                     if (RoadConstructionSafety.isProtectedTunnelVolume(world, shell, plan.road(),
-                            world.getBlockState(shell), terrain) || isWallOwned(shell)) continue;
+                            TunnelReadTiming.block(world, shell), terrain) || isWallOwned(shell)) continue;
                     world.setBlock(shell, stone, 3);
                     sealed++;
                 }
@@ -138,7 +138,7 @@ final class PortalSafetyRules {
     }
 
     static boolean isWaterCell(WorldGenLevel world, BlockPos pos) {
-        return world.getBlockState(pos).getFluidState().is(FluidTags.WATER);
+        return TunnelReadTiming.block(world, pos).getFluidState().is(FluidTags.WATER);
     }
 
     /** Every direct tunnel write goes through the same wall veto; planning is never consulted here. */
@@ -164,7 +164,7 @@ final class PortalSafetyRules {
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos(column.getX(), from, column.getZ());
         for (int y = from; y <= to; y++) {
             cursor.setY(y);
-            if (world.getBlockState(cursor).getFluidState().is(FluidTags.WATER)) return true;
+            if (TunnelReadTiming.block(world, cursor).getFluidState().is(FluidTags.WATER)) return true;
         }
         return false;
     }
@@ -211,7 +211,7 @@ final class PortalSafetyRules {
                 if (!columnAvailableWithoutLoading(world, column)) {
                     return SafetyCheck.failure("unavailable-loaded-portal-column", column);
                 }
-                int terrain = RoadConstructionSafety.terrainHeight(world, column.getX(), column.getZ());
+                int terrain = TunnelReadTiming.terrain(world, column.getX(), column.getZ());
                 int clearTo = Math.min(MAX_PORTAL_CLEAR_HEIGHT,
                         Math.max(clearHeight(), terrain - column.getY() + 1));
                 if (column.getY() < world.getMinBuildHeight()
@@ -221,8 +221,8 @@ final class PortalSafetyRules {
                 int fromDy = section.isRoadColumn(column) ? 0 : 1;
                 for (int dy = fromDy; dy <= clearTo; dy++) {
                     BlockPos volume = column.above(dy);
-                    if (!world.getBlockState(volume).getFluidState().isEmpty()
-                            && !world.getBlockState(volume).getFluidState().is(FluidTags.WATER)) {
+                    if (!TunnelReadTiming.block(world, volume).getFluidState().isEmpty()
+                            && !TunnelReadTiming.block(world, volume).getFluidState().is(FluidTags.WATER)) {
                         return SafetyCheck.failure("fluid-in-portal", volume);
                     }
                 }
@@ -256,8 +256,8 @@ final class PortalSafetyRules {
                 int fromDy = section.isRoadColumn(column) ? 0 : 1;
                 for (int dy = fromDy; dy <= clearHeight(); dy++) {
                     BlockPos volume = column.above(dy);
-                    if (!world.getBlockState(volume).getFluidState().isEmpty()
-                            && !world.getBlockState(volume).getFluidState().is(FluidTags.WATER)) {
+                    if (!TunnelReadTiming.block(world, volume).getFluidState().isEmpty()
+                            && !TunnelReadTiming.block(world, volume).getFluidState().is(FluidTags.WATER)) {
                         return SafetyCheck.failure("fluid-in-junction", volume);
                     }
                 }
@@ -283,9 +283,9 @@ final class PortalSafetyRules {
             if (!columnAvailableWithoutLoading(world, roadbed)) {
                 return SafetyCheck.failure("unavailable-loaded-roadbed", roadbed);
             }
-            int terrain = RoadConstructionSafety.terrainHeight(world, roadbed.getX(), roadbed.getZ());
+            int terrain = TunnelReadTiming.terrain(world, roadbed.getX(), roadbed.getZ());
             if (RoadConstructionSafety.isProtectedTunnelVolume(world, roadbed, road,
-                    world.getBlockState(roadbed), terrain)) {
+                    TunnelReadTiming.block(world, roadbed), terrain)) {
                 return SafetyCheck.failure("protected-roadbed", roadbed);
             }
         }
@@ -302,14 +302,14 @@ final class PortalSafetyRules {
 
     static boolean isOwnTunnelLantern(WorldGenLevel world, BlockPos position, RoadData road, SpanState state) {
         return position != null && isOwnedTunnelLantern(
-                        world.getBlockState(position), position, state.plannedLanterns)
+                        TunnelReadTiming.block(world, position), position, state.plannedLanterns)
                 && !RoadConstructionSafety.isProtectedPreparedLocation(world, position, road);
     }
 
     static boolean isOwnLegacyPortalWall(WorldGenLevel world, BlockPos position,
                                                   RoadData road, PlannedSection section) {
         if (world == null || position == null || section == null
-                || !world.getBlockState(position).is(Blocks.STONE_BRICKS)
+                || !TunnelReadTiming.block(world, position).is(Blocks.STONE_BRICKS)
                 || RoadConstructionSafety.isProtectedPreparedLocation(world, position, road)) return false;
         for (BlockPos wall : section.walls()) {
             if (wall == null || wall.getX() != position.getX() || wall.getZ() != position.getZ()) continue;
@@ -323,7 +323,7 @@ final class PortalSafetyRules {
         for (BlockPos wall : plan.walls()) {
             for (int dy = 0; dy <= 3; dy++) {
                 BlockPos position = wall.above(dy);
-                BlockState state = world.getBlockState(position);
+                BlockState state = TunnelReadTiming.block(world, position);
                 if (!state.is(Blocks.STONE_BRICKS)
                         || RoadConstructionSafety.isProtectedPreparedLocation(world, position, plan.road())) continue;
                 // 这里只认「石砖」就删 —— 长城的墙带正是 stone_bricks，所以必须否决长城列，
