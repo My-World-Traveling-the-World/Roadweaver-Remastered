@@ -7,7 +7,9 @@ import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.core.model.StructureInfo;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
+import java.util.AbstractList;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -100,14 +102,70 @@ class VillageEndpointFilterTest {
     void endpointOwnershipRequiresExactPositionChunkAndFirstVerifiedId() {
         var duplicate = List.of(new StructureInfo(VILLAGE, "unknown"),
                 new StructureInfo(VILLAGE, ID), new StructureInfo(VILLAGE, "test:village_b"));
-        assertFalse(VillageEndpointFilter.isUnknownEndpoint(VILLAGE.above(70), duplicate));
-        assertTrue(VillageEndpointFilter.endpointMatchesStructure(VILLAGE, OWNER, duplicate));
-        assertFalse(VillageEndpointFilter.endpointMatchesStructure(VILLAGE,
-                new StructureOwnerKey(OWNER.startChunkKey(), "test:village_b"), duplicate),
+        var verified = new VillageEndpointFilter.VerifiedEndpoints(duplicate);
+        assertFalse(verified.isUnknown(VILLAGE.above(70)));
+        assertTrue(verified.matches(VILLAGE, OWNER));
+        assertFalse(verified.matches(VILLAGE,
+                new StructureOwnerKey(OWNER.startChunkKey(), "test:village_b")),
                 "同 X/Z 多条结构记录仍由第一条有效 ID 决定，不能悄悄改成任意匹配");
-        assertFalse(VillageEndpointFilter.endpointMatchesStructure(VILLAGE,
-                new StructureOwnerKey(ChunkPos.asLong(1, 0), ID), duplicate));
-        assertFalse(VillageEndpointFilter.endpointMatchesStructure(VILLAGE.east(), OWNER, duplicate));
-        assertTrue(VillageEndpointFilter.isUnknownEndpoint(UNKNOWN, duplicate));
+        assertFalse(verified.matches(VILLAGE,
+                new StructureOwnerKey(ChunkPos.asLong(1, 0), ID)));
+        assertFalse(verified.matches(VILLAGE.east(), OWNER));
+        assertTrue(verified.isUnknown(UNKNOWN));
+    }
+
+    @Test
+    void readsKnownPositionsOncePerRoundAndSkipsIndexWithoutSnapshots() {
+        var data = new ArrayList<>(known());
+        for (int i = 0; i < 198; i++) data.add(new StructureInfo(OUTSIDE.west(i + 1), "test:village_far"));
+        var reads = new int[1];
+        List<StructureInfo> counted = new AbstractList<>() {
+            @Override public int size() { return data.size(); }
+            @Override public StructureInfo get(int i) { reads[0]++; return data.get(i); }
+        };
+        var edges = new ArrayList<StructureConnection>();
+        for (int i = 0; i < 20; i++) edges.add(new StructureConnection(VILLAGE, UNKNOWN.offset(i, 0, 0)));
+        var result = VillageEndpointFilter.filter(edges, counted, c -> snapshot(-4));
+        assertEquals(edges, result.kept(), "超过阈值的整轮撤销语义保持不变");
+        assertEquals("too_many_per_round", result.heldBackReason());
+        assertEquals(200, reads[0], "20 条连接也只遍历一遍结构列表");
+        reads[0] = 0;
+        assertEquals(edges, VillageEndpointFilter.filter(edges, counted, c -> PlanningSnapshot.EMPTY).kept());
+        assertEquals(0, reads[0], "快照不可用时无需建立索引");
+    }
+
+    @Test
+    void indexedQueriesMatchLegacyScanIncludingDuplicateAndNegativeCoordinates() {
+        var random = new Random(2401);
+        var infos = new ArrayList<StructureInfo>();
+        for (int i = 0; i < 256; i++) {
+            var pos = new BlockPos(random.nextInt(32) - 16, random.nextInt(128), random.nextInt(32) - 16);
+            infos.add(new StructureInfo(pos, i % 5 == 0 ? "unknown" : "test:village_" + i % 3));
+        }
+        infos.add(null);
+        infos.add(new StructureInfo(null, ID));
+        var index = new VillageEndpointFilter.VerifiedEndpoints(infos);
+        int knownQueries = 0;
+        for (int i = 0; i < 1024; i++) {
+            var pos = new BlockPos(random.nextInt(32) - 16, 200, random.nextInt(32) - 16);
+            // 独立保留旧扫描规则，不能拿索引结果反过来生成期望值。
+            String first = null;
+            for (var info : infos) {
+                if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
+                if (info.pos().getX() == pos.getX() && info.pos().getZ() == pos.getZ()) {
+                    first = info.structureId();
+                    break;
+                }
+            }
+            if (first != null) knownQueries++;
+            assertEquals(first == null, index.isUnknown(pos));
+            for (int id = 0; id < 3; id++) {
+                var owner = new StructureOwnerKey(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4),
+                        "test:village_" + id);
+                assertEquals(owner.structureId().equals(first), index.matches(pos, owner));
+            }
+        }
+        assertTrue(knownQueries > 100, "必须实际命中有效位点，不能让全未知夹具空转");
+        assertTrue(knownQueries < 900, "也必须实际覆盖未知位点");
     }
 }

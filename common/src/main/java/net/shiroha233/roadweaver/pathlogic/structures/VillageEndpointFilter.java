@@ -30,6 +30,8 @@ final class VillageEndpointFilter {
         // (-864,752)↔(-813,716)，14 格）不算"这个村庄的路"，因此不参与安全阀二。
         // 否则阀门会把它保下来，而它必然规划失败 → 每局固定 failed=1。
         Set<StructureConnection> villageInternal = new HashSet<>();
+        // 无可用快照时不建索引；首次需要判端点时才扫一次结构表，之后只查 X/Z 键。
+        VerifiedEndpoints verified = null;
         for (StructureConnection connection : connections) {
             if (connection == null) continue;
             PlanningSnapshot snapshot = snapshots.apply(connection);
@@ -37,8 +39,9 @@ final class VillageEndpointFilter {
                 kept.add(connection);
                 continue;
             }
-            boolean fromUnknown = isUnknownEndpoint(connection.from(), knownInfos);
-            boolean toUnknown = isUnknownEndpoint(connection.to(), knownInfos);
+            if (verified == null) verified = new VerifiedEndpoints(knownInfos);
+            boolean fromUnknown = verified.isUnknown(connection.from());
+            boolean toUnknown = verified.isUnknown(connection.to());
             StructureConnection matched = null;
             // 0.8.315：不再要求两端点距离 ≤ ENDPOINT_REPLACEMENT_MATCH_BLOCKS(24)。
             // villageOwnerAt(unknown) 已经证明未知端点落在该村庄的建筑聚合盒内；距离不提供
@@ -55,7 +58,7 @@ final class VillageEndpointFilter {
             if (fromUnknown && !toUnknown) {
                 StructureOwnerKey village = snapshot.villageOwnerAt(
                         connection.from().getX(), connection.from().getZ());
-                if (village != null && endpointMatchesStructure(connection.to(), village, knownInfos)) {
+                if (village != null && verified.matches(connection.to(), village)) {
                     matched = connection;
                     logFilteredVillageEndpoint(village, connection.from(), connection.to(), connection);
                     if (village.equals(snapshot.villageOwnerAt(
@@ -66,7 +69,7 @@ final class VillageEndpointFilter {
             } else if (toUnknown && !fromUnknown) {
                 StructureOwnerKey village = snapshot.villageOwnerAt(
                         connection.to().getX(), connection.to().getZ());
-                if (village != null && endpointMatchesStructure(connection.from(), village, knownInfos)) {
+                if (village != null && verified.matches(connection.from(), village)) {
                     matched = connection;
                     logFilteredVillageEndpoint(village, connection.to(), connection.from(), connection);
                     if (village.equals(snapshot.villageOwnerAt(
@@ -106,41 +109,27 @@ final class VillageEndpointFilter {
                 village.structureId(), villageEndpoint, unknown, connection.from(), connection.to());
     }
 
-    /**
-     * 端点是否"未知"：不在已核验结构位点。
-     *
-     * <p>0.8.312 修正：旧实现还要求 {@code villageOwnerAt(endpoint) == null}，于是
-     * "落在村庄盒内的未知端点"——正是本过滤要处理的那一类——被判成"已知"，
-     * 过滤器因此永不触发（真机 0.8.311 日志 {@code filtered=0}，失败路仍在）。
-     * 未知的判定只看它是不是已核验结构位点；是否落在村庄盒内由调用方单独判定。</p>
-     */
-    static boolean isUnknownEndpoint(BlockPos endpoint, List<StructureInfo> infos) {
-        if (endpoint == null) return false;
-        for (StructureInfo info : infos) {
-            if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
-            if (info.pos().getX() == endpoint.getX() && info.pos().getZ() == endpoint.getZ()) return false;
-        }
-        return true;
-    }
+    /** 每轮独占的位点索引；只存第一条已核验 ID，保持旧线性扫描遇首个匹配即返回的语义。 */
+    static final class VerifiedEndpoints {
+        private final Map<Long, String> firstIdByPosition = new HashMap<>();
 
-    /**
-     * 0.8.317：端点是否**就是**该 owner 对应的已核验结构位点。
-     *
-     * <p>比 {@code snapshot.ownsEndpoint(owner)} 严格：后者是"两个端点 owner 的并集里
-     * 有它就返回 true"，而未知端点自己也会因为"从附近建筑推断 owner"而进入并集，于是
-     * 别的村庄通往同一个未知点的正常路会被误判。这里直接核对端点区块与结构 id。</p>
-     */
-    static boolean endpointMatchesStructure(BlockPos endpoint,
-                                                     StructureOwnerKey owner,
-                                                     List<StructureInfo> knownInfos) {
-        if (endpoint == null || owner == null || knownInfos == null || knownInfos.isEmpty()) return false;
-        if (ChunkPos.asLong(endpoint.getX() >> 4, endpoint.getZ() >> 4) != owner.startChunkKey()) return false;
-        for (StructureInfo info : knownInfos) {
-            if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
-            if (info.pos().getX() != endpoint.getX() || info.pos().getZ() != endpoint.getZ()) continue;
-            return owner.structureId().equals(info.structureId());
+        VerifiedEndpoints(List<StructureInfo> infos) {
+            if (infos == null) return;
+            for (StructureInfo info : infos) {
+                if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
+                firstIdByPosition.putIfAbsent(PlanningUtils.pos2dKey(info.pos()), info.structureId());
+            }
         }
-        return false;
+
+        boolean isUnknown(BlockPos endpoint) {
+            return endpoint != null && !firstIdByPosition.containsKey(PlanningUtils.pos2dKey(endpoint));
+        }
+
+        boolean matches(BlockPos endpoint, StructureOwnerKey owner) {
+            if (endpoint == null || owner == null) return false;
+            if (ChunkPos.asLong(endpoint.getX() >> 4, endpoint.getZ() >> 4) != owner.startChunkKey()) return false;
+            return owner.structureId().equals(firstIdByPosition.get(PlanningUtils.pos2dKey(endpoint)));
+        }
     }
 
     /** 过滤后是否有端点从"有连接"变成"0 连接"。 */
