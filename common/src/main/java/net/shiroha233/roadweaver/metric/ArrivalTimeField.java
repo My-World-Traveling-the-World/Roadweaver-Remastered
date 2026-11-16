@@ -2,7 +2,6 @@
 package net.shiroha233.roadweaver.metric;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,6 +29,7 @@ public final class ArrivalTimeField {
     private static final int[] DX = {1, -1, 0, 0, 1, 1, -1, -1};
     private static final int[] DZ = {0, 0, 1, -1, 1, -1, 1, -1};
 
+    // null 只表示已验证布局的全不可达常量场，避免为无结果的请求填充整幅 double 数组。
     private final double[] times;
     private final int minX;
     private final int minZ;
@@ -58,14 +58,13 @@ public final class ArrivalTimeField {
     public static ArrivalTimeField unreachable(int minX, int minZ, int width, int depth,
                                                int step, FinslerMetric metric) {
         // 即使源点不可达，也必须先验证布局，不能靠数组长度溢出返回伪快照。
-        double[] times = new double[new GridLayout(minX, minZ, width, depth, Math.max(1, step)).arrayLength()];
-        Arrays.fill(times, Double.POSITIVE_INFINITY);
-        return new ArrivalTimeField(times, minX, minZ, width, depth, step, metric);
+        new GridLayout(minX, minZ, width, depth, Math.max(1, step)).arrayLength();
+        return new ArrivalTimeField(null, minX, minZ, width, depth, step, metric);
     }
 
     /** 到该点的最小代价；不可达返回 {@link Double#POSITIVE_INFINITY}。 */
     public double at(int x, int z) {
-        if (!contains(x, z)) return Double.POSITIVE_INFINITY;
+        if (times == null || !contains(x, z)) return Double.POSITIVE_INFINITY;
         return times[indexOf(x, z)];
     }
 
@@ -114,7 +113,7 @@ public final class ArrivalTimeField {
      * @return 从源格到目标格的方块坐标（含两格）；不可达或无法回到源格时返回空列表
      */
     public List<int[]> pathTo(int targetX, int targetZ) {
-        if (!contains(targetX, targetZ)) return List.of();
+        if (times == null || !contains(targetX, targetZ)) return List.of();
         int index = indexOf(targetX, targetZ);
         if (!Double.isFinite(times[index])) return List.of();
 

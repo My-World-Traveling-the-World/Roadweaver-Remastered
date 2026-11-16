@@ -186,6 +186,44 @@ class FmmWorkingSetTest {
     }
 
     @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3})
+    void unreachableSnapshotsKeepTheirGeometryWithoutAllocatingArrivalArrays(int mode) {
+        var bean = java.lang.management.ManagementFactory.getPlatformMXBean(com.sun.management.ThreadMXBean.class);
+        assertNotNull(bean);
+        assertTrue(bean.isThreadAllocatedMemorySupported());
+        if (!bean.isThreadAllocatedMemoryEnabled()) bean.setThreadAllocatedMemoryEnabled(true);
+        var terrain = new GridTerrainField(0, 0, 257, 257, 8, new int[257 * 257]);
+        var obstacles = new ObstacleField() {
+            public double potential(int x, int z) { return 0; }
+            public boolean impassable(int x, int z) { return x == 8; }
+        };
+        var metric = FinslerMetric.of(terrain, obstacles);
+        var solver = new FastMarchingSolver(metric);
+        // 先建共享代价缓存；第3档专门验证真实点合法但吸附格被禁的返回路径。
+        solver.solve(0, 0, 0, 0);
+        java.util.function.Supplier<ArrivalTimeField> create = () -> switch (mode) {
+            case 0 -> ArrivalTimeField.unreachable(0, 0, 257, 257, 8, metric);
+            case 1 -> solver.solve(-1, 0);
+            case 2 -> solver.solve(8, 0);
+            default -> solver.solve(7, 0);
+        };
+        create.get();
+        long before = bean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        var field = create.get();
+        long allocated = bean.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before;
+        assertTrue(allocated < 4096, "返回不可达语义不应再制造约528KiB的面积数组：" + allocated);
+        assertEquals(257, field.width()); assertEquals(257, field.depth()); assertEquals(8, field.step());
+        assertEquals(0, field.minX()); assertEquals(0, field.minZ()); assertSame(metric, field.metric());
+        assertTrue(field.contains(0, 0)); assertTrue(field.contains(2055, 2055));
+        assertFalse(field.contains(-1, 0)); assertFalse(field.contains(2056, 2056));
+        for (int coordinate : new int[]{-1, 0, 7, 8, 63, 64, 129, 2048, 2055, 2056}) {
+            assertEquals(Double.POSITIVE_INFINITY, field.at(coordinate, coordinate));
+            assertFalse(field.reachable(coordinate, coordinate));
+            assertEquals(List.of(), field.pathTo(coordinate, coordinate));
+        }
+    }
+
+    @ParameterizedTest
     @ValueSource(ints = {1, 3, 5, 6})
     void candidateWeightsAndTheChosenNetworkMatchTheDenseOracle(int scenario) {
         var metric = fixture(scenario);
