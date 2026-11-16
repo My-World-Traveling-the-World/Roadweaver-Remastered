@@ -949,3 +949,49 @@ RW-03 还需要对照真实预留相交与落块拦截，再决定如何保护�
 ### 六、我踩到但已解决的坑
 
 ArchitectureGuardTest 的千行规则本来就是有效代码口径，不能把 1000 物理行误报成违规；现有独立行尾守卫阻止孤立 CR 入库。32 个加载在途窗口不等于 32 个区块施工都有可接受的 tick 耗时。
+
+
+## 第 23 轮 ｜ 2026-11-16 ｜ 施工预算、局部去重与职责拆分 ｜ 源码 `0376ac2` ｜ `PASS tests=1090 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+- 行为变更 `5c7e34b`：手绘生产构造器每 tick 最多消费 8 个就绪区块，加载窗口仍 32；延期保留票据、刷新 FULL 句柄，不消耗重试。`4c5e0d6` 补生产默认接线守卫。
+- 行为等价 `d2cd6df`：共用桥最近距离与重叠计数合并扫描；修复反向桥测试夹具的空集合，保持几何规则。
+- 行为等价 `8e82876` / `5d13cef`：拆 JunctionSpanIndex 和 JunctionBatchCoordinator，裁切内共用索引；ExistingRoadJunctionService 从 912/718 降到 672/516 行（物理/有效）。
+- 行为等价 `0376ac2`：拆 PathControlSimplifier（191/136）与 PathControlRelaxer（199/111），PathPostProcessor 从 962 物理行降到 660/481。保留全部流水线步骤，补正缓弯测试的产物断言及 90° 注释；同步 S5 台账。
+- 改动处保留/补充中文原因注释；未把全库历史英文注释宣称为已完成。清理无用跨层导入，依赖基线只将 pathlogic→generation 从 67 降到 66。
+
+### 二、我验证了什么（附负控）
+
+开工树干净，pull --rebase 成功且 main 已同步。JDK 21 / 外置 Gradle 8.8 / daemon 基线 1082；新增 8 项后，恢复变异的最终全量为 1090，0 跳过/中止/失败，Fabric 编译通过。
+
+| 故意破坏 | 目标守卫 | 结果 |
+|---|---|---|
+| 移除就绪施工预算判断 | RoutePreloadWorkTest 突发、撤票和失败 Future | 红 |
+| 生产构造器把预算接为 window | productionConstructorConsumesAtMostEightReadyChunksPerTick | 红 |
+| 半径由 <= 改 < | BridgeDistanceScanTest 与共享桥边界 | 红 |
+| 恢复第二次点列表遍历 | scansEachPairOnceAndKeepsClosedRadiusBoundary | 红 |
+| 重复 X/Z 改取首站 | reusesOneIndexAndKeepsLastStationAtDuplicateXZ | 红 |
+| 路口覆盖物理桥/硬缺口保护 | preservesBridgeHeadsAndHardGapsAcrossTunnelJunctions | 红 |
+| 批量跳过选主合并 / 绕过结构安全校验 | JunctionOrchestrationTest（分别运行） | 两次红 |
+| 跳过密度补点 | densityFloorIsMetWithoutShrinkingTolerance | 红：需要 26 点却仅 2 点 |
+| 取消急弯冻结 | relaxFreezesASharpTurnVertex / relaxFreezesHairpinVertex | 红 |
+| 整段跳过松弛 | relaxStillSmoothsGentleBend | 红：预期 z=4，实际 z=1 |
+
+每条唯一锚点替换、独立运行，确认目标断言失败后以 git checkout -- 精确恢复；没有把编译失败当红。桥扫描最初仅重复局部 sqrt 的试探仍绿，说明访问计数不衡量纯算术重复，之后改为真实第二次遍历才红。256 组双向桥曲线对拍旧规则，小夹具点列表访问 9→6；不外推 FPS/TPS。
+
+### 三、我没能验证什么
+
+没有真机、存档副本或现场耗时。每 tick 8 块只限制数量，单个重区块及多调用方合计的毫秒预算未解决；桥热点占比、跨区块加载顺序和真实桥头产物仍需现场验收。crossing、双平滑默认、跨度回写、QualityGate 和旧区块重铺策略未改。不能断言整体加载更快。
+
+### 四、遗留半截的东西
+
+没有未完成的生产修改。已同步 STATUS、ROADMAP、ARCHITECTURE 和 S5 台账；提交及推送结果以本轮交付为准。全库 664 个生产 Java 文件，0 个超过 1000 有效行、3 个超过 800；行数达标不代表职责拆分结束。
+
+### 五、下一轮我会先做什么
+
+优先拆 StructureAvoidanceService 的端点/快照职责及 TargetYComputation 的输入约束编排，再分离 AccurateHeightSampler 的调度生命周期；先行为等价与拒绝分支守卫，之后才合并采样。READY 增量计数、异步写盘仍需一致性夹具和阶段样本。
+
+### 六、我踩到但已解决的坑
+
+反向桥旧夹具生成空列表，原默认半径 24 也不满足“只一站重合”的假设，已改成真实 115 站/半径 3/重叠 1 的拒绝用例。旧缓弯测试只断言长度，无法守住平滑行为，已钉住坐标。新增后处理文件必须同步 S5 分类，否则文档守卫正确报红。
