@@ -255,6 +255,8 @@ final class AccurateColumnBatch {
             }
             cache.ensureOpen();
             store.saveSamples(verified);
+            // 保存可能与关闭交错；持久化已进入也不能在关闭后重新发布内存样本。
+            cache.ensureOpen();
             for (Map.Entry<Long, AccurateHeightSample> entry : verified.entrySet()) {
                 long key = entry.getKey();
                 AccurateHeightSample sample = entry.getValue();
@@ -291,7 +293,8 @@ final class AccurateColumnBatch {
                     throw new IllegalStateException("Accurate height backend returned a different grid request");
                 }
                 cache.ensureOpen();
-                // 与逐列批次一致，保存成功后才发布；否则缓存命中会掩盖失败、吞掉重试。
+                // 与逐列一致，保存调用返回后才发布；端口抛错不能被缓存吞掉。
+                // 文件缓存后端会告警并吞掉部分 IO 错误，正常返回不等于确认数据已落盘。
                 store.saveGrid(sampled);
                 cache.ensureOpen();
                 cacheGridColumns(sampled);

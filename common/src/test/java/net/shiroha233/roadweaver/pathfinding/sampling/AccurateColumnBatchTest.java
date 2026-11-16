@@ -249,6 +249,50 @@ final class AccurateColumnBatchTest {
         }
     }
 
+    @Test
+    void closingDuringColumnSaveCannotRepublishCache() { assertCloseDuringSave(false); }
+
+    @Test
+    void closingDuringGridSaveCannotRepublishCache() { assertCloseDuringSave(true); }
+
+    private static void assertCloseDuringSave(boolean wholeGrid) {
+        Harness h = new Harness();
+        h.store.onSave = h::close;
+        assertThrows(IllegalStateException.class, () -> {
+            if (wholeGrid) h.grid(GRID);
+            else h.columns(positions(GRID));
+        });
+        assertEquals(1, h.store.saves.get(), "必须真实进入保存路径再触发关闭");
+        assertTrue(h.values.isEmpty(), "已经进入的保存可以结案，关闭后不得再复活内存缓存");
+    }
+
+    @Test
+    void gridFailureReachesWaitingColumnsAndFreshRequestRetries() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch joining = new CountDownLatch(1);
+        Harness h = new Harness(() -> { joining.countDown(); return 1_000; });
+        IllegalStateException fault = new IllegalStateException("controlled grid failure");
+        h.backend.onGrid = () -> { entered.countDown(); await(release); throw fault; };
+        try (ExecutorService pool = Executors.newCachedThreadPool()) {
+            Future<?> owner = pool.submit(() -> h.grid(GRID));
+            try {
+                await(entered);
+                Future<?> waiter = pool.submit(() -> h.columns(List.of(P)));
+                await(joining);
+                release.countDown();
+                assertSame(fault, failure(owner));
+                assertSame(fault, failure(waiter), "等待者必须收到原故障，不能把失败偷偷转成超时重算成功");
+                assertEquals(0, h.store.saves.get());
+                assertTrue(h.values.isEmpty());
+                h.backend.onGrid = () -> {};
+                assertGrid(h.grid(GRID));
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
     private static void assertGrid(AccurateHeightGrid grid) {
         assertTrue(grid.request().sampleCount() > 0);
         for (int i = 0; i < grid.request().sampleCount(); i++) {
@@ -333,6 +377,7 @@ final class AccurateColumnBatchTest {
         final AtomicBoolean failSave = new AtomicBoolean();
         final AtomicInteger saves = new AtomicInteger();
         volatile Runnable onLoad = () -> {};
+        volatile Runnable onSave = () -> {};
         volatile List<Long> lastSaved = List.of();
         @Override
         public Map<Long, AccurateHeightSample> loadSamples(Collection<Long> keys) {
@@ -344,7 +389,7 @@ final class AccurateColumnBatchTest {
         public void saveSamples(Map<Long, AccurateHeightSample> values) {
             saves.incrementAndGet();
             if (failSave.get()) throw new IllegalStateException("controlled persistence failure");
-            lastSaved = List.copyOf(values.keySet()); samples.putAll(values);
+            lastSaved = List.copyOf(values.keySet()); samples.putAll(values); onSave.run();
         }
         @Override
         public Map<Long, AccurateHeightChunk> loadChunks(Collection<Long> keys) { return Map.of(); }
