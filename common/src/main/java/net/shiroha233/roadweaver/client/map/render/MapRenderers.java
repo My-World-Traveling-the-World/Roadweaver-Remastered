@@ -8,7 +8,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
 
@@ -89,6 +92,7 @@ public final class MapRenderers {
     }
 
     public static void renderRoadPolylines(GuiGraphics g,
+                                           RoadPolylineCache cache,
                                            List<List<BlockPos>> polylines,
                                            SegmentInView segmentInView,
                                            IntUnaryOperator toScreenX,
@@ -97,44 +101,64 @@ public final class MapRenderers {
                                            int color,
                                            int left, int top, int right, int bottom,
                                            int lodStepBlocks) {
-        for (List<BlockPos> pl : polylines) {
-            if (pl == null || pl.size() < 2) continue;
-            BlockPos keep = pl.get(0);
-            for (int i = 1; i < pl.size(); i++) {
-                BlockPos curr = pl.get(i);
-                int dx = curr.getX() - keep.getX();
-                int dz = curr.getZ() - keep.getZ();
-                int adx = Math.abs(dx);
-                int adz = Math.abs(dz);
-                int manhattan = adx + adz;
-                if (manhattan < lodStepBlocks) continue;
-                int x1w = keep.getX();
-                int z1w = keep.getZ();
-                int x2w = curr.getX();
-                int z2w = curr.getZ();
-                if (segmentInView.test(x1w, z1w, x2w, z2w)) {
-                    int x1 = toScreenX.applyAsInt(x1w);
-                    int y1 = toScreenY.applyAsInt(z1w);
-                    int x2 = toScreenX.applyAsInt(x2w);
-                    int y2 = toScreenY.applyAsInt(z2w);
-                    RenderUtils.drawThickLine(g, x1, y1, x2, y2, color, thickness, left, top, right, bottom);
-                }
-                keep = curr;
+        cache.forEachVisible(polylines, lodStepBlocks, segmentInView, (x1, z1, x2, z2) ->
+                RenderUtils.drawThickLine(g, toScreenX.applyAsInt(x1), toScreenY.applyAsInt(z1),
+                        toScreenX.applyAsInt(x2), toScreenY.applyAsInt(z2), color, thickness, left, top, right, bottom));
+    }
+
+    @FunctionalInterface
+    public interface RoadLineConsumer {
+        void draw(int x1, int z1, int x2, int z2);
+    }
+
+    /** 屏幕会话内按不可变折线列表和实际抽样步长缓存世界坐标；平移每帧仍用当前视口。 */
+    public static final class RoadPolylineCache {
+        private static final int MAX_LOD_STEPS = 2;
+        private List<List<BlockPos>> source;
+        private final Map<Integer, int[]> lod = new LinkedHashMap<>(4, 0.75F, true);
+
+        public void forEachVisible(List<List<BlockPos>> polylines, int step, SegmentInView inView,
+                                   RoadLineConsumer consumer) {
+            if (source != polylines) {
+                // 删路、切维度、更新快照和过滤列表都可能复用同一缩放档位。
+                source = polylines;
+                lod.clear();
             }
-            BlockPos tail = pl.get(pl.size() - 1);
-            if (tail != keep) {
-                int x1w = keep.getX();
-                int z1w = keep.getZ();
-                int x2w = tail.getX();
-                int z2w = tail.getZ();
-                if (segmentInView.test(x1w, z1w, x2w, z2w)) {
-                    int x1 = toScreenX.applyAsInt(x1w);
-                    int y1 = toScreenY.applyAsInt(z1w);
-                    int x2 = toScreenX.applyAsInt(x2w);
-                    int y2 = toScreenY.applyAsInt(z2w);
-                    RenderUtils.drawThickLine(g, x1, y1, x2, y2, color, thickness, left, top, right, bottom);
-                }
+            int[] segments = lod.get(step);
+            if (segments == null) {
+                segments = compile(polylines, step);
+                if (lod.size() >= MAX_LOD_STEPS) lod.remove(lod.keySet().iterator().next());
+                lod.put(step, segments);
             }
+            for (int i = 0; i < segments.length; i += 4) {
+                int x1 = segments[i], z1 = segments[i + 1], x2 = segments[i + 2], z2 = segments[i + 3];
+                if (inView.test(x1, z1, x2, z2)) consumer.draw(x1, z1, x2, z2);
+            }
+        }
+
+        private static int[] compile(List<List<BlockPos>> polylines, int step) {
+            // 每档只存整数端点，保持原 roads/stations 遍历序与末段判定。
+            IntArrayList segments = new IntArrayList();
+            for (List<BlockPos> pl : polylines) {
+                if (pl == null || pl.size() < 2) continue;
+                BlockPos keep = pl.getFirst();
+                for (int i = 1; i < pl.size(); i++) {
+                    BlockPos curr = pl.get(i);
+                    if (Math.abs(curr.getX() - keep.getX()) + Math.abs(curr.getZ() - keep.getZ()) < step) continue;
+                    append(segments, keep, curr);
+                    keep = curr;
+                }
+                BlockPos tail = pl.getLast();
+                if (tail != keep) append(segments, keep, tail);
+            }
+            return segments.toIntArray();
+        }
+
+        private static void append(IntArrayList segments, BlockPos from, BlockPos to) {
+            segments.add(from.getX());
+            segments.add(from.getZ());
+            segments.add(to.getX());
+            segments.add(to.getZ());
         }
     }
 

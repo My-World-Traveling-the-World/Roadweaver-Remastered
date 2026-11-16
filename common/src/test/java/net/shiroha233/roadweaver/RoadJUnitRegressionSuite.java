@@ -208,6 +208,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.client.map.MapSearchControllerTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.map.MapRoutePreloadEstimatorTest"),
+                        // 地图折线对照独立于整合客户端，必须在无渲染的回归入口登记。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.client.map.MapRoadPolylineCacheTest"),
                         // 非阻塞调度必须显式登记，避免只编译未运行。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.route.RoutePreloadWorkTest"),

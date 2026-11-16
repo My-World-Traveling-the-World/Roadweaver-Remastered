@@ -90,11 +90,11 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
                     request.seq(), request.dimensionId(), request.query()),
             query -> ClientMapNotes.searchAliases(query, MapStructureSearchService.MAX_RESULTS),
             MapStructureSearchService.MAX_RESULTS);
+    // 只保留当前可见快照的折线档位，地图平移不再逐站抽点。
+    private final MapRenderers.RoadPolylineCache roadPolylineCache = new MapRenderers.RoadPolylineCache();
     private MapSnapshot filteredSnapshot;
     private int filteredSnapshotRevision = -1;
     private MapSnapshot filteredSnapshotSource;
-    
-    // 布局
     private int mapX, mapY, mapW, mapH;
 
     public RoadMapScreen() {
@@ -190,7 +190,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
                 view.getMinX(), view.getMaxX(), view.getMinZ(), view.getMaxZ(),
                 MapTheme.COLOR_GRID, MapTheme.GRID_TARGET_PX, MapTheme.COLOR_TEXT);
         int thickness = computeThickness();
-        MapRenderers.renderRoadPolylines(g, visibleSnapshot.roadPolylines(),
+        MapRenderers.renderRoadPolylines(g, roadPolylineCache, visibleSnapshot.roadPolylines(),
                 (x1, z1, x2, z2) -> view.segmentInViewWorld(x1, z1, x2, z2),
                 v -> view.toScreenX(v, 0, 0, contentW),
                 v -> view.toScreenY(v, 0, 0, contentH),
@@ -701,8 +701,6 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         filteredSnapshotRevision = -1;
     }
 
-    // ========== 回调实现 ==========
-    
     @Override
     public void onCloseScreen() {
         this.onClose();
