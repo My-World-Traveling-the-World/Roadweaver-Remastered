@@ -16,6 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.shiroha233.roadweaver.generation.LoadedChunkRoadBackfill;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -251,7 +252,7 @@ public final class RouteChunkPreloader {
                 List<Long> ordered = new ArrayList<>(chunks);
                 ordered.sort(Comparator.comparingLong(key -> distanceSquared(origin, key)));
                 ActivePreload created = new ActivePreload(route, state,
-                        new RoutePreloadWork(ordered, BATCH_SIZE, MAX_CHUNK_ATTEMPTS),
+                        new RoutePreloadWork<>(ordered, BATCH_SIZE, MAX_CHUNK_ATTEMPTS),
                         countNotInMemory(level, ordered), System.nanoTime());
                 ACTIVE.put(level, created);
                 RoutePreloadStatus.begin(level, routeId, ordered.size(), created.notInMemory());
@@ -270,7 +271,7 @@ public final class RouteChunkPreloader {
         return 0;
     }
 
-    private record ActivePreload(PlayerRoute route, PendingState attempt, RoutePreloadWork work,
+    private record ActivePreload(PlayerRoute route, PendingState attempt, RoutePreloadWork<LevelChunk> work,
                                  int notInMemory, long startedAt) {}
 
     private static final Map<ServerLevel, ActivePreload> ACTIVE =
@@ -304,7 +305,7 @@ public final class RouteChunkPreloader {
     }
 
     private static void advance(ServerLevel level, ActivePreload active) {
-        RoutePreloadWork work = active.work();
+        RoutePreloadWork<LevelChunk> work = active.work();
         int processedBefore = work.processed();
         int failuresBefore = work.failures();
         UUID id = active.route().id();
@@ -323,7 +324,7 @@ public final class RouteChunkPreloader {
         }
     }
 
-    private record WorldAccess(ServerLevel level, UUID routeId) implements RoutePreloadWork.Access {
+    private record WorldAccess(ServerLevel level, UUID routeId) implements RoutePreloadWork.Access<LevelChunk> {
         @Override
         public RoutePreloadWork.Request request(long key) {
             var request = chunkRequester.request(level, new ChunkPos(key));
@@ -331,14 +332,14 @@ public final class RouteChunkPreloader {
         }
 
         @Override
-        public boolean loaded(long key) {
-            return level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) != null;
+        public LevelChunk loaded(long key) {
+            return level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
         }
 
         @Override
-        public void place(List<Long> ready) {
-            // 铺路仍在常规服务端 tick，不能从区块完成回调写世界。
-            LoadedChunkRoadBackfill.placeLoadedChunks(level, ready, false, BATCH_SIZE);
+        public Set<Long> place(Map<Long, LevelChunk> ready) {
+            // 铺路仍在服务端 tick；只把结案信息还给进度，不以 Future 完成代替施工。
+            return LoadedChunkRoadBackfill.placePreloadedChunks(level, ready);
         }
 
         @Override
@@ -355,7 +356,7 @@ public final class RouteChunkPreloader {
                                boolean obsolete, boolean success) {
         UUID id = active.route().id();
         if (!ACTIVE.remove(level, active)) return;
-        RoutePreloadWork work = active.work();
+        RoutePreloadWork<LevelChunk> work = active.work();
         work.stop();
         Map<UUID, PendingState> map = PENDING.get(level);
         if (obsolete) {
@@ -389,7 +390,7 @@ public final class RouteChunkPreloader {
         }
     }
 
-    private static List<ChunkPos> failedPositions(RoutePreloadWork work) {
+    private static List<ChunkPos> failedPositions(RoutePreloadWork<?> work) {
         return work.failureKeys().stream().map(ChunkPos::new).toList();
     }
 

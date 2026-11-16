@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +56,13 @@ public final class LoadedChunkRoadBackfill {
     // 只接受当前同步 drain 的结果，不能跨 tick 保留作为已加载证明。
     static int placeSelectedLoadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded) {
         return placeLoadedChunks(level, knownLoaded.keySet(), false, MAX_BACKFILL_CHUNKS_PER_INVOCATION, knownLoaded);
+    }
+
+    /** 手绘在本次 tick 已确认 FULL；回传台账结案和空计划，区别施工还需重试。 */
+    public static Set<Long> placePreloadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded) {
+        Set<Long> verified = new HashSet<>();
+        placeLoadedChunks(level, knownLoaded.keySet(), false, knownLoaded.size(), knownLoaded, verified);
+        return verified;
     }
 
     /**
@@ -131,6 +139,12 @@ public final class LoadedChunkRoadBackfill {
 
     private static int placeLoadedChunks(ServerLevel level, Collection<Long> candidateChunkKeys,
                                          boolean expandNeighbors, int budget, Map<Long, LevelChunk> knownLoaded) {
+        return placeLoadedChunks(level, candidateChunkKeys, expandNeighbors, budget, knownLoaded, null);
+    }
+
+    private static int placeLoadedChunks(ServerLevel level, Collection<Long> candidateChunkKeys,
+                                         boolean expandNeighbors, int budget, Map<Long, LevelChunk> knownLoaded,
+                                         Set<Long> verified) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())
                 || candidateChunkKeys == null || candidateChunkKeys.isEmpty()) return 0;
         if (!level.getServer().isSameThread()) {
@@ -143,9 +157,10 @@ public final class LoadedChunkRoadBackfill {
                 key -> DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, key)
                         || DeferredInitialRoadConstructionService.isConstructionComplete(level, new ChunkPos(key)),
                 (key, chunk) -> PathFeature.replayLoadedChunk(level, chunk.getPos(),
-                        level.getSeed() ^ key ^ RANDOM_SALT));
+                        level.getSeed() ^ key ^ RANDOM_SALT), verified);
         if (!pass.noConstruction().isEmpty()) {
             DeferredInitialRoadConstructionService.markNoConstructionRequired(level, pass.noConstruction());
+            if (verified != null) verified.addAll(pass.noConstruction());
         }
         if (pass.placed() > 0 || !pass.noConstruction().isEmpty()) {
             RoadConstructionLedger.flush(level);
@@ -166,6 +181,14 @@ public final class LoadedChunkRoadBackfill {
 
     static <T> BackfillPass runBackfill(Collection<Long> keys, int budget, Map<Long, T> knownLoaded,
                                          LongFunction<T> loadedNow, LongPredicate settled, Replay<T> replay) {
+        return runBackfill(keys, budget, knownLoaded, loadedNow, settled, replay, null);
+    }
+
+    static <T> BackfillPass runBackfill(Collection<Long> keys, int budget, Map<Long, T> knownLoaded,
+                                         LongFunction<T> loadedNow, LongPredicate settled, Replay<T> replay,
+                                         Set<Long> verified) {
+        // 只有手绘进度需要每个块的终态；被动调用维持原预算和查询成本。
+        List<Long> replayed = verified == null ? null : new ArrayList<>();
         int loaded = 0, processed = 0, placed = 0, fullLookups = 0;
         int limit = Math.max(1, budget);
         List<Long> noConstruction = new ArrayList<>();
@@ -176,13 +199,24 @@ public final class LoadedChunkRoadBackfill {
             if (chunk == null) continue;
             loaded++;
             // 前一块可能写台账或保护缺口；只能复用 FULL 句柄，不能复用排队时的施工资格。
-            if (settled.test(key)) continue;
-            switch (replay.place(key, chunk)) {
+            if (settled.test(key)) {
+                if (verified != null) verified.add(key);
+                continue;
+            }
+            PathFeature.LoadedPlacement outcome = replay.place(key, chunk);
+            if (replayed != null && outcome != PathFeature.LoadedPlacement.EMPTY_PLAN) replayed.add(key);
+            switch (outcome) {
                 case PLACED -> placed++;
                 case EMPTY_PLAN -> noConstruction.add(key);
                 case NO_PLACEMENT -> { /* 保留重试资格，不能把失败记成空计划。 */ }
             }
             processed++;
+        }
+        if (replayed != null) {
+            // PLACED 也有可能只完成了同区块的一部分道路；重查台账才能确认结案。
+            for (long key : replayed) {
+                if (settled.test(key)) verified.add(key);
+            }
         }
         return new BackfillPass(loaded, processed, placed, List.copyOf(noConstruction), fullLookups);
     }

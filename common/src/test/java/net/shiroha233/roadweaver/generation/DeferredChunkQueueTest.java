@@ -15,6 +15,7 @@ import static net.shiroha233.roadweaver.generation.DeferredChunkQueue.Probe.SETT
 import static net.shiroha233.roadweaver.generation.DeferredChunkQueue.Probe.WAITING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DeferredChunkQueueTest {
@@ -134,6 +135,26 @@ class DeferredChunkQueueTest {
         assertEquals(List.of(10L, 20L, 30L, 40L), eligibility);
         assertEquals(List.of("full-10"), writes);
         assertEquals(new LoadedChunkRoadBackfill.BackfillPass(4, 3, 1, List.of(30L), 0), pass);
+    }
+
+    @Test
+    void preloadedBackfillRequiresCompleteLedgerEvenForPartiallyPlacedChunk() {
+        var verified = new HashSet<Long>();
+        var ledger = new HashSet<>(Set.of(10L));
+        var pass = LoadedChunkRoadBackfill.runBackfill(List.of(10L, 20L, 30L, 40L, 50L), 5,
+                Map.of(10L, "ready", 20L, "ready", 30L, "ready", 40L, "ready", 50L, "ready"),
+                key -> { throw new AssertionError("已确认 FULL 不应再次查世界"); }, ledger::contains,
+                (key, chunk) -> {
+                    assertNotEquals(10L, key, "已结案块不应施工");
+                    if (key == 20L) return LoadedPlacement.EMPTY_PLAN;
+                    if (key == 30L) ledger.add(key);
+                    // 40 只铺成一部分路，50 没铺成；两者都仍待施工。
+                    return key == 50L ? LoadedPlacement.NO_PLACEMENT : LoadedPlacement.PLACED;
+                }, verified);
+        assertEquals(Set.of(10L, 30L), verified);
+        assertEquals(List.of(20L), pass.noConstruction());
+        assertEquals(2, pass.placed());
+        assertEquals(0, pass.fullLookups());
     }
 
     private static DeferredChunkQueue pending(int count) {

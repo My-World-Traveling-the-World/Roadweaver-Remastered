@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 final class RoutePreloadWorkTest {
     @Test
     void slowNearestChunkDoesNotBlockReadyChunksOrRefillingTheWindow() {
-        var work = new RoutePreloadWork(List.of(10L, 20L, 30L, 40L), 2, 3);
+        var work = new RoutePreloadWork<Full>(List.of(10L, 20L, 30L, 40L), 2, 3);
         var fake = new Fake();
         work.tick(fake);
         assertEquals(List.of(10L, 20L), fake.requested);
@@ -39,7 +39,7 @@ final class RoutePreloadWorkTest {
 
     @Test
     void stopReleasesAllTicketsAndIgnoresLateCompletion() {
-        var work = new RoutePreloadWork(List.of(1L, 2L, 3L), 2, 3);
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L, 3L), 2, 3);
         var fake = new Fake();
         work.tick(fake);
         work.stop();
@@ -55,7 +55,7 @@ final class RoutePreloadWorkTest {
 
     @Test
     void failedAndMissingFullChunksBothRetryWithFiniteAttempts() {
-        var work = new RoutePreloadWork(List.of(1L, 2L), 2, 3);
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L), 2, 3);
         var fake = new Fake();
         work.tick(fake);
         fake.futures.get(1L).completeExceptionally(new IllegalStateException("fixture read failure"));
@@ -77,7 +77,7 @@ final class RoutePreloadWorkTest {
 
     @Test
     void failedPlacementCannotReportSuccessOrKeepATicket() {
-        var work = new RoutePreloadWork(List.of(7L), 1, 3);
+        var work = new RoutePreloadWork<Full>(List.of(7L), 1, 3);
         var fake = new Fake();
         work.tick(fake);
         fake.ready(7L);
@@ -89,7 +89,7 @@ final class RoutePreloadWorkTest {
 
     @Test
     void pauseReleasesTicketsWithoutSpendingAttemptsOrForgettingProgress() {
-        var work = new RoutePreloadWork(List.of(1L, 2L), 2, 1);
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L), 2, 1);
         var fake = new Fake();
         work.tick(fake);
         fake.ready(1L);
@@ -106,12 +106,42 @@ final class RoutePreloadWorkTest {
         assertEquals(0, work.failures());
     }
 
-    private static final class Fake implements RoutePreloadWork.Access {
+    @Test
+    void loadedButUnsettledChunkRetriesWithoutRepeatingSettledNeighbor() {
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L), 2, 2);
+        var fake = new Fake();
+        fake.unsettled.add(1L);
+        work.tick(fake);
+        fake.ready(1L);
+        fake.ready(2L);
+        var firstHandle = fake.loaded(1L);
+        work.tick(fake);
+        assertEquals(1, work.processed());
+        assertEquals(0, work.failures());
+        assertEquals(List.of(1L, 2L, 1L), fake.requested);
+        assertEquals(List.of(1L, 2L), fake.placed);
+        assertEquals(Set.of(1L), fake.tickets);
+        assertFalse(work.done());
+
+        fake.ready(1L);
+        assertNotSame(firstHandle, fake.loaded(1L), "重试应使用当次 FULL 句柄");
+        work.tick(fake);
+        assertTrue(work.done());
+        assertEquals(1, work.processed());
+        assertEquals(List.of(1L), work.failureKeys());
+        assertEquals(List.of(1L, 2L, 1L), fake.placed);
+        assertTrue(fake.tickets.isEmpty());
+    }
+
+    private record Full(long key) {}
+
+    private static final class Fake implements RoutePreloadWork.Access<Full> {
         final List<Long> requested = new ArrayList<>();
         final List<Long> placed = new ArrayList<>();
         final Map<Long, CompletableFuture<Void>> futures = new LinkedHashMap<>();
         final Set<Long> tickets = new HashSet<>();
-        final Set<Long> loaded = new HashSet<>();
+        final Map<Long, Full> loaded = new LinkedHashMap<>();
+        final Set<Long> unsettled = new HashSet<>();
         boolean failPlacement;
 
         @Override
@@ -124,21 +154,25 @@ final class RoutePreloadWorkTest {
         }
 
         @Override
-        public boolean loaded(long key) { return loaded.contains(key); }
+        public Full loaded(long key) { return loaded.get(key); }
 
         @Override
-        public void place(List<Long> ready) {
-            // 先释放再施工会丢区块；夹具保持与服务端相同的票据契约。
-            assertTrue(tickets.containsAll(ready));
+        public Set<Long> place(Map<Long, Full> ready) {
+            // 不能从旧 tick 捞一个已经过期的 FULL 句柄，也不能在施工前撤票。
+            assertTrue(tickets.containsAll(ready.keySet()));
+            ready.forEach((key, chunk) -> assertSame(loaded.get(key), chunk));
             if (failPlacement) throw new IllegalStateException("fixture placement failure");
-            placed.addAll(ready);
+            placed.addAll(ready.keySet());
+            var finished = new HashSet<>(ready.keySet());
+            finished.removeAll(unsettled);
+            return finished;
         }
 
         @Override
         public void failed(long key, RuntimeException failure, boolean finalAttempt) {}
 
         boolean ready(long key) {
-            loaded.add(key);
+            loaded.put(key, new Full(key));
             return futures.get(key).complete(null);
         }
     }

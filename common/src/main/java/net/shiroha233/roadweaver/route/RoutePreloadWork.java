@@ -6,15 +6,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-final class RoutePreloadWork {
+final class RoutePreloadWork<C> {
     record Request(CompletableFuture<?> future, Runnable release) {}
 
-    interface Access {
+    interface Access<C> {
         Request request(long key);
-        boolean loaded(long key);
-        void place(List<Long> ready);
+        C loaded(long key);
+        Set<Long> place(Map<Long, C> ready);
         void failed(long key, RuntimeException failure, boolean finalAttempt);
     }
 
@@ -37,9 +38,10 @@ final class RoutePreloadWork {
         this.maxAttempts = maxAttempts;
     }
 
-    void tick(Access access) {
+    void tick(Access<C> access) {
         if (stopped) return;
         List<Task> ready = new ArrayList<>();
+        Map<Long, C> confirmedLoaded = null;
         var iterator = inFlight.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();
@@ -50,8 +52,12 @@ final class RoutePreloadWork {
             RuntimeException problem = null;
             try {
                 request.future().getNow(null);
-                if (access.loaded(task.key())) {
+                C loaded = access.loaded(task.key());
+                if (loaded != null) {
                     ready.add(task);
+                    // FULL 句柄只在本次服务端回调使用，重试和后续 tick 必须重新确认。
+                    if (confirmedLoaded == null) confirmedLoaded = new LinkedHashMap<>();
+                    confirmedLoaded.put(task.key(), loaded);
                     continue;
                 }
                 problem = new IllegalStateException("FULL chunk was not available after completion");
@@ -64,11 +70,19 @@ final class RoutePreloadWork {
         }
         if (!ready.isEmpty()) {
             // 保持票据直到施工返回；异常也要释放，不得把已加载误报成已处理。
+            Set<Long> settled;
             try {
-                access.place(ready.stream().map(Task::key).toList());
-                processed += ready.size();
+                settled = access.place(confirmedLoaded);
             } finally {
                 for (Task task : ready) inFlight.remove(task).release().run();
+            }
+            for (Task task : ready) {
+                if (settled.contains(task.key())) {
+                    processed++;
+                } else {
+                    // “加载且已尝试”不能算完工：只重试没结案的块，不重新发送成功块。
+                    retry(access, task, new IllegalStateException("Loaded road construction did not settle"));
+                }
             }
         }
         // 请求若同步失败也只消耗本 tick 的额度，避免一次扫完整条长路线。
@@ -83,7 +97,7 @@ final class RoutePreloadWork {
         }
     }
 
-    private void retry(Access access, Task task, RuntimeException failure) {
+    private void retry(Access<C> access, Task task, RuntimeException failure) {
         boolean exhausted = task.attempt() >= maxAttempts;
         if (exhausted) {
             failures++;
