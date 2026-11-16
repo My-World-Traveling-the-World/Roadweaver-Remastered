@@ -8,12 +8,18 @@ import java.util.Random;
 import java.util.Set;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -36,6 +42,50 @@ class StructureBoxIndexTest {
                 new StructureOwnerKey(0L, "test:probe"),
                 BoundingBox.fromCorners(new BlockPos(minX, 0, minZ), new BlockPos(maxX, 63, maxZ)),
                 (net.shiroha233.roadweaver.pathlogic.structures.PieceOccupancy) null);
+    }
+
+    @Test
+    void mergeReusesNegativeBucketsButRecomputesEndpointExemption() {
+        var owner = new StructureOwnerKey(11L, "test:remote");
+        var building = new OwnedStructureBox(owner, new BoundingBox(-21, 60, -18, -17, 71, -15),
+                java.util.Map.of(new BlockPos(-19, 65, -16), Blocks.OAK_PLANKS.defaultBlockState()));
+        var far = new StructureConnection(new BlockPos(-100, 64, -20), new BlockPos(100, 64, -20));
+        var base = PlanningSnapshot.forRoute(far, List.of(building), Set.of(), Set.of(), Set.of());
+        assertSame(building, base.findCollision(-19, -16, 63, 68));
+        assertNull(base.findCollision(-19, -16, 0, 5), "允许完全在地基下方的道路");
+        var start = new PreparedStartKey("test", 4, ChunkPos.asLong(-2, -1), 0, null);
+        var covered = Set.of(ChunkPos.asLong(-2, -1));
+        var merged = PlanningSnapshot.merge(far, base, List.of(building), Set.of(start), covered, Set.of(owner));
+        var full = PlanningSnapshot.forRoute(far, List.of(building), Set.of(start), covered, Set.of(owner));
+
+        assertSame(base.boxesByChunk(), merged.boxesByChunk(), "仅更新解析状态和归属不应扫包围盒");
+        assertEquals(full, merged);
+        assertEquals(Set.of(start), merged.resolvedStarts());
+        assertEquals(covered, merged.coveredCandidateChunks());
+        assertTrue(merged.ownsEndpoint(owner));
+        assertNull(merged.findCollision(-19, -16, 63, 68), "新端点归属立即豁免原建筑");
+    }
+
+    @Test
+    void mergeReindexesChangedGeometryOrRadiusEvenWithoutNewCoverage() {
+        var owner = new StructureOwnerKey(11L, "test:remote");
+        var building = new OwnedStructureBox(owner, new BoundingBox(-20, 60, -20, -17, 71, -17),
+                java.util.Map.of(new BlockPos(-19, 65, -19), Blocks.OAK_PLANKS.defaultBlockState()));
+        var far = new StructureConnection(new BlockPos(-100, 64, -20), new BlockPos(100, 64, -20));
+        var base = PlanningSnapshot.forRoute(far, List.of(building), Set.of(), Set.of(), Set.of());
+        var wide = base.withAdditionalRoadRadius(32);
+        assertTrue(wide.boxesByChunk().size() > base.boxesByChunk().size());
+        var narrowed = PlanningSnapshot.merge(far, wide, List.of(), Set.of(), Set.of(), Set.of());
+        assertEquals(base.roadRadius(), narrowed.roadRadius());
+        assertNotSame(wide.boxesByChunk(), narrowed.boxesByChunk());
+        assertEquals(base.boxesByChunk(), narrowed.boxesByChunk());
+
+        var added = new OwnedStructureBox(owner, new BoundingBox(29, 60, -20, 34, 71, -17),
+                java.util.Map.of(new BlockPos(32, 65, -19), Blocks.OAK_PLANKS.defaultBlockState()));
+        var enlarged = PlanningSnapshot.merge(far, base, List.of(added), Set.of(), Set.of(), Set.of());
+        assertNotSame(base.boxesByChunk(), enlarged.boxesByChunk());
+        assertSame(added, enlarged.findCollision(32, -19, 63, 68));
+        assertNull(base.findCollision(32, -19, 63, 68));
     }
 
     @Test

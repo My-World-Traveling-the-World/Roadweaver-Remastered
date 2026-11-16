@@ -88,11 +88,22 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
                                      Collection<PreparedStartKey> resolvedStarts,
                                      Collection<Long> coveredCandidateChunks,
                                      Collection<StructureOwnerKey> explicitEndpointOwners) {
-        int roadWidth = Math.max(1, ConfigService.get().roadAppearance().roadWidth());
-        // Match the rasterized road footprint. The construction planner
-        // covers ceil(width / 2) columns from the centerline, including
-        // the far edge of even-width roads.
-        int roadRadius = Math.max(0, (int) Math.ceil(roadWidth / 2.0D));
+        return build(connection, boxes, resolvedStarts, coveredCandidateChunks,
+                explicitEndpointOwners, configuredRoadRadius(), null);
+    }
+
+    private static int configuredRoadRadius() {
+        int width = Math.max(1, ConfigService.get().roadAppearance().roadWidth());
+        // 栅格足迹包含偶数宽度道路的外侧列，桶半径必须与施工口径一致。
+        return (int) Math.ceil(width / 2.0D);
+    }
+
+    private static PlanningSnapshot build(StructureConnection connection,
+                                          Collection<OwnedStructureBox> boxes,
+                                          Collection<PreparedStartKey> resolvedStarts,
+                                          Collection<Long> coveredCandidateChunks,
+                                          Collection<StructureOwnerKey> explicitEndpointOwners,
+                                          int roadRadius, PlanningSnapshot reuse) {
         Set<PreparedStartKey> immutableStarts = resolvedStarts == null || resolvedStarts.isEmpty()
                 ? Set.of()
                 : Set.copyOf(resolvedStarts);
@@ -115,8 +126,25 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
                 ? findEndpointOwners(connection, immutableBoxes)
                 : immutableEndpointOwners;
         endpointOwners = expandEndpointVillageOwners(connection, immutableBoxes, endpointOwners);
+        // 同一批盒可改变端点归属，但归属不参与建桶；首个碰撞有含义，桶内顺序也需相同。
+        Map<Long, List<OwnedStructureBox>> byChunk = reuse != null && reuse.roadRadius() == roadRadius
+                && sameBoxOrder(immutableBoxes, reuse.boxes())
+                ? reuse.boxesByChunk() : indexBoxes(immutableBoxes, roadRadius);
+        return new PlanningSnapshot(immutableBoxes, byChunk, endpointOwners, Set.of(),
+                immutableStarts, immutableCoveredChunks, roadRadius);
+    }
+
+    private static boolean sameBoxOrder(Set<OwnedStructureBox> a, Set<OwnedStructureBox> b) {
+        if (a == b) return true;
+        if (a.size() != b.size()) return false;
+        var previous = b.iterator();
+        for (OwnedStructureBox box : a) if (box != previous.next()) return false;
+        return true;
+    }
+
+    private static Map<Long, List<OwnedStructureBox>> indexBoxes(Set<OwnedStructureBox> boxes, int roadRadius) {
         Map<Long, List<OwnedStructureBox>> mutable = new HashMap<>();
-        for (OwnedStructureBox owned : immutableBoxes) {
+        for (OwnedStructureBox owned : boxes) {
             if (owned == null || owned.box() == null) continue;
             BoundingBox box = owned.box();
             for (int cx = (box.minX() - roadRadius) >> 4;
@@ -131,9 +159,7 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         for (Map.Entry<Long, List<OwnedStructureBox>> entry : mutable.entrySet()) {
             immutable.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
-        return new PlanningSnapshot(
-                immutableBoxes, Map.copyOf(immutable), endpointOwners, Set.of(), immutableStarts,
-                immutableCoveredChunks, roadRadius);
+        return Map.copyOf(immutable);
     }
 
     static PlanningSnapshot merge(StructureConnection connection,
@@ -173,7 +199,10 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
                 || previous.coveredCandidateChunks().containsAll(addedCoveredChunks);
         boolean endpointOwnersUnchanged = explicitEndpointOwners == null
                 || previous.endpointOwners().equals(Set.copyOf(explicitEndpointOwners));
-        if (boxesUnchanged && startsUnchanged && coveredChunksUnchanged && endpointOwnersUnchanged) {
+        int roadRadius = configuredRoadRadius();
+        // 配置路宽变化即使没解析出新结构，也会改变哪些近邻列必须参与保护。
+        if (boxesUnchanged && startsUnchanged && coveredChunksUnchanged && endpointOwnersUnchanged
+                && previous.roadRadius() == roadRadius) {
             return previous;
         }
         Set<OwnedStructureBox> merged = new HashSet<>(previous.boxes());
@@ -184,8 +213,8 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         if (addedCoveredChunks != null) {
             for (long chunk : addedCoveredChunks) mergedCoveredChunks.add(chunk);
         }
-        PlanningSnapshot result = forRoute(
-                connection, merged, mergedStarts, mergedCoveredChunks, explicitEndpointOwners);
+        PlanningSnapshot result = build(connection, merged, mergedStarts, mergedCoveredChunks,
+                explicitEndpointOwners, roadRadius, boxesUnchanged ? previous : null);
         return result.withForcedVerticalOwners(previous.forcedVerticalOwners());
     }
 
@@ -689,23 +718,8 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         if (additionalRoadRadius <= 0 || this == EMPTY) return this;
         int expandedRadius = roadRadius + additionalRoadRadius;
         if (expandedRadius == roadRadius) return this;
-        Map<Long, List<OwnedStructureBox>> mutable = new HashMap<>();
-        for (OwnedStructureBox owned : boxes) {
-            if (owned == null || owned.box() == null) continue;
-            BoundingBox box = owned.box();
-            for (int cx = (box.minX() - expandedRadius) >> 4;
-                 cx <= (box.maxX() + expandedRadius) >> 4; cx++) {
-                for (int cz = (box.minZ() - expandedRadius) >> 4;
-                     cz <= (box.maxZ() + expandedRadius) >> 4; cz++) {
-                    mutable.computeIfAbsent(ChunkPos.asLong(cx, cz), ignored -> new ArrayList<>()).add(owned);
-                }
-            }
-        }
-        Map<Long, List<OwnedStructureBox>> expandedByChunk = new HashMap<>();
-        for (Map.Entry<Long, List<OwnedStructureBox>> entry : mutable.entrySet()) {
-            expandedByChunk.put(entry.getKey(), List.copyOf(entry.getValue()));
-        }
-        return new PlanningSnapshot(boxes, Map.copyOf(expandedByChunk), endpointOwners,
+        // 扩路宽使用同一建桶口径，因为扩大半径后原桶边缘已不可复用。
+        return new PlanningSnapshot(boxes, indexBoxes(boxes, expandedRadius), endpointOwners,
                 forcedVerticalOwners, resolvedStarts, coveredCandidateChunks, expandedRadius);
     }
 
