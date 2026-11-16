@@ -1109,7 +1109,7 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 
 ### 四、遗留半截的东西
 
-本轮CPU/粗路径接线及产物、取消、超时守卫已完成。源码提交e113ee3；文档随本条提交。河流82cc818、长城5ade8e9b只读，测试均放道路。代码push已尝试两次，均因无法连接github.com:443退出128（约21秒），日志round35-code-push.log、round35-code-push-retry.log。远端跟踪仍为f78c6c0，本地源码领先8项提交；文档提交后再次推送，未成功前不称远端已同步。
+本轮CPU/粗路径接线及产物、取消、超时守卫已完成。源码提交e113ee3；文档随本条提交。河流82cc818、长城5ade8e9b只读，测试均放道路。代码push已尝试两次，均因无法连接github.com:443退出128（约21秒），日志round35-code-push.log、round35-code-push-retry.log。随后含文档提交d5c8d9d的推送成功，远端main从f78c6c0推进到d5c8d9d；本次补记单独提交，停下前再核对最终HEAD与origin/main及工作区。
 
 ### 五、下一轮我会先做什么
 
