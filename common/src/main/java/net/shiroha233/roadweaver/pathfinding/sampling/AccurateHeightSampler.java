@@ -503,8 +503,10 @@ public final class AccurateHeightSampler {
         tileInFlight.clear();
         acceleratedTileInFlight.values().forEach(future -> future.completeExceptionally(failure));
         acceleratedTileInFlight.clear();
-        store.close();
-        backend.close();
+        // 资源按声明的逆序关闭：先存储后后端；即使两者都失败也保留首个异常及 suppressed。
+        try (backend; store) {
+            // 求值认领已经结案，这里只负责确保每个资源都获得一次关闭机会。
+        }
     }
 
     AccurateHeightChunk chunkAt(int x, int z) {

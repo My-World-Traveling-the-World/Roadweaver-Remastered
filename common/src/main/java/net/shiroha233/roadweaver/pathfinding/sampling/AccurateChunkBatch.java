@@ -90,6 +90,12 @@ final class AccurateChunkBatch {
                 }
                 // 重入检查整批通过后才写入认领，避免前面的无冲突键成为无人完成的孤儿。
                 for (long key : unresolved) {
+                    // 读盘期间别的所有者可能已发布缓存并释放认领，锁内复查防止重复求值。
+                    AccurateHeightChunk cached = cache.get(key);
+                    if (cached != null) {
+                        result.put(key, cached);
+                        continue;
+                    }
                     CompletableFuture<AccurateHeightChunk> existing = inFlight.get(key);
                     if (existing != null) {
                         waiting.put(key, existing);
@@ -100,6 +106,8 @@ final class AccurateChunkBatch {
                     owned.put(key, future);
                 }
             }
+            // 锁内复查的成功项不属于本轮 owned，需独立结案才能退出循环。
+            unresolved.removeAll(result.keySet());
             if (!owned.isEmpty()) {
                 ownedChunks.get().addAll(owned.keySet());
                 try {

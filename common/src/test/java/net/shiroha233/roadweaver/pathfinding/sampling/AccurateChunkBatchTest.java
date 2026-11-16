@@ -227,6 +227,42 @@ final class AccurateChunkBatchTest {
     }
 
     @Test
+    void rechecksMemoryAfterAnotherOwnerFinishesDuringStoredLookup() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch releaseOwner = new CountDownLatch(1);
+        CountDownLatch storedSnapshotTaken = new CountDownLatch(1);
+        CountDownLatch releaseLookup = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        Store store = new Store();
+        Harness h = new Harness(keys -> {
+            if (calls.incrementAndGet() == 1) {
+                entered.countDown();
+                await(releaseOwner);
+            }
+            return chunks(keys);
+        }, store, () -> 5_000);
+        try (ExecutorService pool = Executors.newCachedThreadPool()) {
+            Future<?> owner = pool.submit(() -> h.batch.sample(List.of(A)));
+            try {
+                await(entered);
+                // 模拟读盘拿到旧的空快照后停顿，此时原所有者才完成、发布缓存并释放认领。
+                store.onLoad = () -> { storedSnapshotTaken.countDown(); await(releaseLookup); };
+                Future<Map<Long, AccurateHeightChunk>> follower =
+                        pool.submit(() -> h.batch.sample(List.of(A)));
+                await(storedSnapshotTaken);
+                releaseOwner.countDown();
+                owner.get(5, TimeUnit.SECONDS);
+                releaseLookup.countDown();
+                assertEquals(List.of(A), new ArrayList<>(follower.get(5, TimeUnit.SECONDS).keySet()));
+                assertEquals(1, calls.get(), "旧读盘快照不能让已完成的区块被再次认领计算");
+            } finally {
+                releaseOwner.countDown();
+                releaseLookup.countDown();
+            }
+        }
+    }
+
+    @Test
     void closingFacadeWakesWaiterAndRejectsLateBackendResult() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -258,6 +294,38 @@ final class AccurateChunkBatchTest {
             } finally {
                 release.countDown();
                 sampler.clear();
+            }
+        }
+    }
+
+    @Test
+    void closingBatchImmediatelyFailsAnAlreadyRegisteredWaiter() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch joining = new CountDownLatch(1);
+        Store store = new Store();
+        Harness h = new Harness(keys -> {
+            entered.countDown();
+            await(release);
+            return chunks(keys);
+        }, store, () -> { joining.countDown(); return 30_000; });
+        IllegalStateException closed = new IllegalStateException("controlled world close");
+        try (ExecutorService pool = Executors.newCachedThreadPool()) {
+            Future<?> owner = pool.submit(() -> h.batch.sample(List.of(A)));
+            try {
+                await(entered);
+                Future<?> waiter = pool.submit(() -> h.batch.sample(List.of(A)));
+                // 超时供给器在读取到共享 Future 后调用，能证明本用例确实走进等待路径。
+                await(joining);
+                h.closed.set(true);
+                h.batch.close(closed);
+                assertSame(closed, failure(waiter), "无需等所有者返回或等待超时，关闭必须主动唤醒");
+                release.countDown();
+                assertInstanceOf(IllegalStateException.class, failure(owner));
+                assertEquals(0, store.saves.get());
+                assertTrue(h.values.isEmpty());
+            } finally {
+                release.countDown();
             }
         }
     }
@@ -318,6 +386,7 @@ final class AccurateChunkBatchTest {
     /** 调度器直接测试可注入短超时，不改生产配置，也不依赖真实世界生成耗时。 */
     private static final class Harness implements AccurateChunkBatch.Cache {
         final Map<Long, AccurateHeightChunk> values = new ConcurrentHashMap<>();
+        final AtomicBoolean closed = new AtomicBoolean();
         final AccurateChunkBatch batch;
 
         Harness(Function<Collection<Long>, Map<Long, AccurateHeightChunk>> fn, Store store, LongSupplier timeout) {
@@ -329,7 +398,9 @@ final class AccurateChunkBatchTest {
         @Override
         public void put(long key, AccurateHeightChunk chunk) { values.put(key, chunk); }
         @Override
-        public void ensureOpen() {}
+        public void ensureOpen() {
+            if (closed.get()) throw new IllegalStateException("controlled cache closed");
+        }
     }
 
     /** 读写次数与失败可观察，防止内存通过却把持久化失败当成功。 */
@@ -343,9 +414,9 @@ final class AccurateChunkBatchTest {
 
         @Override
         public Map<Long, AccurateHeightChunk> loadChunks(Collection<Long> keys) {
-            onLoad.run();
             Map<Long, AccurateHeightChunk> result = new LinkedHashMap<>();
             keys.forEach(key -> { if (stored.containsKey(key)) result.put(key, stored.get(key)); });
+            onLoad.run();
             return result;
         }
         @Override

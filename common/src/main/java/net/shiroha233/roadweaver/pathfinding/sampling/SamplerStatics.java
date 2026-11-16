@@ -86,7 +86,7 @@ public final class SamplerStatics {
             } catch (TimeoutException timedOut) {
                 coalescer.remove(entry.getKey(), entry.getValue());
             } catch (InterruptedException interrupted) {
-                entry.getValue().cancel(true);
+                // 取消仅属于当前等待线程，共用瓦片的所有者和其他路线仍需拿到结果。
                 Thread.currentThread().interrupt();
                 throw new CancellationException("interrupted while waiting for accurate tile");
             } catch (ExecutionException failure) {
