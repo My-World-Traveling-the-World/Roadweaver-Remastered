@@ -1,6 +1,6 @@
 # 开发现状
 
-源码基线 `3ba2247`（2026-11-16），Windows / JDK 21 全量回归 `PASS tests=1078 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
+源码基线 `c4ac5b0`（2026-11-16），Windows / JDK 21 全量回归 `PASS tests=1082 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
 
 | 范围 | 默认生产行为 | 未完成或不能下结论 |
 |---|---|---|
