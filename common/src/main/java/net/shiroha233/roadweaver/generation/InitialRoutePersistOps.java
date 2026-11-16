@@ -201,7 +201,8 @@ public final class InitialRoutePersistOps {
         List<CompletableFuture<FinalRoadWork>> finalRoadFutures = new ArrayList<>();
         for (RoadData connectedRoad : connected) {
             final RoadData finalConnectedRoad = connectedRoad;
-            finalRoadFutures.add(CompletableFuture.supplyAsync(() -> {
+            // 终态道路任务必须绑定生命周期结果，停服丢队列不能留下 join 等待。
+            finalRoadFutures.add(ThreadPoolManager.supplyAsync(ThreadPoolManager.TaskRole.POSTPROCESS, () -> {
                 long roadStartedAt = System.nanoTime();
                 try {
                     FinalRoadWork work = processFinalRoad(level, finalConnectedRoad, originalsByEdge, streams,
@@ -217,7 +218,7 @@ public final class InitialRoutePersistOps {
                     finalRoadTotalNanos.addAndGet(spent);
                     finalRoadSlowestNanos.accumulateAndGet(spent, Math::max);
                 }
-            }, ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS)));
+            }));
         }
         for (CompletableFuture<FinalRoadWork> future : finalRoadFutures) {
             try {

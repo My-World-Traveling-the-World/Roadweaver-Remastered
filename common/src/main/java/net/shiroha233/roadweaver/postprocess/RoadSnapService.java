@@ -161,7 +161,8 @@ public final class RoadSnapService {
 
         return RoadShardStorage.queryRectAsync(level,
                 minX - margin, minZ - margin, maxX + margin, maxZ + margin)
-                .thenAcceptAsync(ignored -> {
+                .thenCompose(ignored -> ThreadPoolManager.runAsync(ThreadPoolManager.TaskRole.POSTPROCESS, () -> {
+                    // 跟踪真正的落地任务，前置读取完成后停服也能结束整条完成链。
                     if (!ThreadPoolManager.isEpoch(epoch) || RoadLifecycle.isStopping()) return;
                     // P0-6a: the whole pass now runs on the postprocess lane. The
                     // reconciliation lock already serialises passes and makes the
@@ -172,7 +173,7 @@ public final class RoadSnapService {
                     synchronized (RECONCILIATION_LOCK) {
                         snapAroundConnection(level, from, to);
                     }
-                }, ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS));
+                }));
     }
 
     /** Reconciles all persisted routes once, without loading any chunk. */
@@ -182,13 +183,14 @@ public final class RoadSnapService {
         if (server == null) return CompletableFuture.completedFuture(null);
         long epoch = ThreadPoolManager.currentEpoch();
         return CompletableFuture.supplyAsync(() -> RoadShardStorage.loadAll(level))
-                .thenAcceptAsync(roads -> {
+                .thenCompose(roads -> ThreadPoolManager.runAsync(ThreadPoolManager.TaskRole.POSTPROCESS, () -> {
+                    // 与局部修整共用可终结任务口，不把 JDK 内部阶段交给角色池。
                     if (!ThreadPoolManager.isEpoch(epoch) || RoadLifecycle.isStopping()
                             || roads == null || roads.size() < 2) return;
                     synchronized (RECONCILIATION_LOCK) {
                         snapRoadList(level, roads);
                     }
-                }, ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS));
+                }));
     }
 
     static void snapRoadList(ServerLevel level, List<RoadData> roads) {

@@ -38,6 +38,11 @@ public final class ComputeService {
         return ThreadPoolManager.supplyAsync(role, supplier);
     }
 
+    /** 地图读取也必须返回与实际执行绑定的结果，否则退出世界后界面请求可能一直 pending。 */
+    public static <T> CompletableFuture<T> supplyMapReadAsync(Supplier<T> supplier) {
+        return supplyAsync(ThreadPoolManager.TaskRole.MAP_READ, supplier);
+    }
+
     public static CompletableFuture<Void> runAsync(Runnable runnable) {
         return runAsync(ThreadPoolManager.TaskRole.PLANNING, runnable);
     }

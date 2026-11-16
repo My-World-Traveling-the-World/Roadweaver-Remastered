@@ -57,8 +57,8 @@ public final class MapSnapshotLoading {
             final MapLoadPhase phase = request.phase();
             final MapViewportController.RequestRect rect = request.rect();
             Supplier<MapSnapshot> supplier = () -> buildSnapshotForPhase(level, phase, rect);
-            java.util.concurrent.CompletableFuture
-                    .supplyAsync(supplier, ComputeService.mapReadExecutor())
+            // 经计算服务绑定结果，停服取消会结束本阶段而不执行旧世界快照读取。
+            ComputeService.supplyMapReadAsync(supplier)
                     .thenAccept(snap -> mc.execute(() -> {
                         // 换存档了 → 整批作废
                         if (!Objects.equals(worldId, MapSnapshotCache.getCurrentWorldId())) return;

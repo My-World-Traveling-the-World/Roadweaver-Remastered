@@ -408,10 +408,16 @@ public final class RuntimeLoadPolicy {
     }
 
     static void beforeTask(ThreadPoolManager.TaskRole role) {
+        beforeTask(role, () -> false);
+    }
+
+    // 在闸门内也检查排队任务的取消/代次，FutureTask 尚未执行时 cancel(true) 没有可中断的 runner。
+    static void beforeTask(ThreadPoolManager.TaskRole role, java.util.function.BooleanSupplier cancelled) {
         cancelIfStopping();
+        if (cancelled.getAsBoolean()) throw new CancellationException("task scope expired before admission");
         if (role == ThreadPoolManager.TaskRole.INITIAL || InitialGenManager.isActive()) return;
         if (role == ThreadPoolManager.TaskRole.MAP) {
-            beforeMapUnit();
+            beforeMapUnit(cancelled);
             return;
         }
         // 注意：MAP_READ 不在这里改道 beforeMapUnit —— 那会连 Chunky 独占期与
@@ -420,10 +426,10 @@ public final class RuntimeLoadPolicy {
         refreshRoadWorkerBudget();
         if (role == ThreadPoolManager.TaskRole.COORDINATOR) {
             if (chunkyPreflightActive) return;
-            awaitCoordinatorPermit();
+            awaitCoordinatorPermit(cancelled);
             return;
         }
-        awaitRuntimePermit();
+        awaitRuntimePermit(cancelled);
     }
 
     /**

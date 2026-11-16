@@ -1,7 +1,7 @@
 /* 文件职责：共享优先级工作池的生命周期与线程数管理 —— 启动、停止、按配置缩放。
  *
- * 所有入口都是 synchronized：线程数变更与服务器启停必须互斥，
- * 否则会出现「池正在停、线程数又被改大」的窗口。
+ * 状态变更与容量调整在同一管理锁内互斥，防止停服时重新创建线程池；
+ * 结果取消放在管理锁外，避免同步完成回调重入门面时互等。
  */
 package net.shiroha233.roadweaver.runtime;
 
@@ -53,6 +53,9 @@ public final class ThreadPoolManager {
         TaskRole(int priority) {
             this.priority = priority;
         }
+
+        // 排序实现迁出门面，仍按原角色权重与提交序号比较。
+        int priority() { return priority; }
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
@@ -73,7 +76,6 @@ public final class ThreadPoolManager {
     private static final java.util.Set<String> MAP_PRIORITY_PREFIXES =
             java.util.Set.of("RW-MapRead", "RW-Map");
     private static final AtomicLong EPOCH = new AtomicLong(0L);
-    private static final AtomicLong TASK_SEQ = new AtomicLong(0L);
     private static final AtomicReference<StartupHardwareProfile> STARTUP_PROFILE = new AtomicReference<>();
     private static int runtimeAdaptiveThreads = 1;
     private static int chunkySupplyThreads;
@@ -95,58 +97,67 @@ public final class ThreadPoolManager {
 
     // ==================== 生命周期 ====================
 
-    public static synchronized void onServerStarted(MinecraftServer server) {
-        EPOCH.incrementAndGet();
-        StartupHardwareProfile startupProfile = resolveStartupHardwareProfile();
-        STARTUP_PROFILE.set(startupProfile);
-        runtimeAdaptiveThreads = resolveSharedWorkerThreads();
-        chunkySupplyThreads = 0;
-        rebuildInitialPool(startupProfile.roadWorkers());
-        rebuildSharedPool(runtimeAdaptiveThreads);
-        rebuildStructurePool(startupProfile.structureWorkers());
-        rebuildSnapshotPool();
-        rebuildMapPool(resolveMapWorkerThreads());
-        rebuildMapReadPool();
-        var performance = ConfigService.get().performance();
-        LOGGER.info("RoadWeaver adaptive startup profile: processors={}, maxHeapMiB={}, roads={}, coarse={}, "
-                        + "structures={}, nativeStructures={}, startupCap={}, runtimeCap={}, runtimeConcurrency={}, "
-                        + "idleConcurrency={}, chunkyRoadCap={}.",
-                startupProfile.processors(), startupProfile.maxHeapMiB(), startupProfile.roadWorkers(),
-                startupProfile.coarseWorkers(), startupProfile.structureWorkers(),
-                startupProfile.nativeStructureWorkers(), configuredInitialGenerationLimit(),
-                performance.sharedWorkerThreads(), performance.maxConcurrentGenerations(),
-                performance.idleConcurrentGenerations(), performance.chunkyRoadThreadCap());
+    public static void onServerStarted(MinecraftServer server) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                EPOCH.incrementAndGet();
+                StartupHardwareProfile startupProfile = resolveStartupHardwareProfile();
+                STARTUP_PROFILE.set(startupProfile);
+                runtimeAdaptiveThreads = resolveSharedWorkerThreads();
+                chunkySupplyThreads = 0;
+                rebuildInitialPool(startupProfile.roadWorkers());
+                rebuildSharedPool(runtimeAdaptiveThreads);
+                rebuildStructurePool(startupProfile.structureWorkers());
+                rebuildSnapshotPool();
+                rebuildMapPool(resolveMapWorkerThreads());
+                rebuildMapReadPool();
+                var performance = ConfigService.get().performance();
+                LOGGER.info("RoadWeaver adaptive startup profile: processors={}, maxHeapMiB={}, roads={}, coarse={}, "
+                                + "structures={}, nativeStructures={}, startupCap={}, runtimeCap={}, runtimeConcurrency={}, "
+                                + "idleConcurrency={}, chunkyRoadCap={}.",
+                        startupProfile.processors(), startupProfile.maxHeapMiB(), startupProfile.roadWorkers(),
+                        startupProfile.coarseWorkers(), startupProfile.structureWorkers(),
+                        startupProfile.nativeStructureWorkers(), configuredInitialGenerationLimit(),
+                        performance.sharedWorkerThreads(), performance.maxConcurrentGenerations(),
+                        performance.idleConcurrentGenerations(), performance.chunkyRoadThreadCap());
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
-    public static synchronized void onServerStopping() {
-        EPOCH.incrementAndGet();
-        chunkySupplyThreads = 0;
-        shutdownQuietly(INITIAL_WORKERS.get());
-        shutdownQuietly(SHARED_EXEC.get());
-        shutdownQuietly(STRUCTURE_WORKERS.get());
-        shutdownQuietly(SNAPSHOT_WORKERS.get());
-        shutdownQuietly(MAP_WORKERS.get());
-        shutdownQuietly(MAP_READ_WORKERS.get());
-        INITIAL_WORKERS.set(null);
-        SHARED_EXEC.set(null);
-        STRUCTURE_WORKERS.set(null);
-        SNAPSHOT_WORKERS.set(null);
-        MAP_WORKERS.set(null);
-        MAP_READ_WORKERS.set(null);
-        STARTUP_PROFILE.set(null);
+    public static void onServerStopping() {
+        List<ThreadPoolExecutor> closing;
+        synchronized (ThreadPoolManager.class) {
+            EPOCH.incrementAndGet(); chunkySupplyThreads = 0;
+            closing = java.util.stream.Stream.of(
+                    INITIAL_WORKERS.getAndSet(null), SHARED_EXEC.getAndSet(null),
+                    STRUCTURE_WORKERS.getAndSet(null), SNAPSHOT_WORKERS.getAndSet(null),
+                    MAP_WORKERS.getAndSet(null), MAP_READ_WORKERS.getAndSet(null))
+                    .filter(java.util.Objects::nonNull).toList();
+            STARTUP_PROFILE.set(null);
+        }
+        // CompletableFuture 的完成回调可同步重入门面；不持管理锁进行取消和线程中断。
+        closing.forEach(ThreadPoolManager::shutdownQuietly);
         LOGGER.debug("ThreadPoolManager: 工作池已关闭 (epoch={})", EPOCH.get());
     }
 
     // ==================== 运行时重建 ====================
 
-    public static synchronized void resizeInitialPool(int threads) {
-        int resolved = threads <= 0 ? resolveInitialGenerationThreads() : Math.max(1, threads);
-        rebuildInitialPool(resolved);
+    public static void resizeInitialPool(int threads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                int resolved = threads <= 0 ? resolveInitialGenerationThreads() : Math.max(1, threads);
+                rebuildInitialPool(resolved);
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
-    public static synchronized void resizeSharedPool(int threads) {
-        int resolved = threads <= 0 ? resolveSharedWorkerThreads() : Math.max(1, threads);
-        rebuildSharedPool(resolved);
+    public static void resizeSharedPool(int threads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                int resolved = threads <= 0 ? resolveSharedWorkerThreads() : Math.max(1, threads);
+                rebuildSharedPool(resolved);
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
     /**
@@ -155,23 +166,27 @@ public final class ThreadPoolManager {
      * is a bounded gate, so no player-facing runtime work should shrink its
      * road or exact-structure lanes underneath it.
      */
-    public static synchronized void prepareInitialGeneration() {
-        if (RoadLifecycle.isStopping()) return;
-        StartupHardwareProfile profile = startupHardwareProfile();
-        ThreadPoolExecutor initial = INITIAL_WORKERS.get();
-        if (initial == null || initial.isShutdown()
-                || initial.getCorePoolSize() != profile.roadWorkers()) {
-            rebuildInitialPool(profile.roadWorkers());
-        }
-        ThreadPoolExecutor structure = STRUCTURE_WORKERS.get();
-        if (structure == null || structure.isShutdown()
-                || structure.getCorePoolSize() != profile.structureWorkers()) {
-            rebuildStructurePool(profile.structureWorkers());
-        }
-        setSharedRuntimeThreads(Math.max(
-                configuredSharedWorkerThreads(), profile.roadWorkers()));
-        LOGGER.info("RoadWeaver initial generation hardware lanes prepared: roads={} structures={} shared={}",
-                profile.roadWorkers(), profile.structureWorkers(), currentSharedRuntimeThreads());
+    public static void prepareInitialGeneration() {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                if (RoadLifecycle.isStopping()) return;
+                StartupHardwareProfile profile = startupHardwareProfile();
+                ThreadPoolExecutor initial = INITIAL_WORKERS.get();
+                if (initial == null || initial.isShutdown()
+                        || initial.getCorePoolSize() != profile.roadWorkers()) {
+                    rebuildInitialPool(profile.roadWorkers());
+                }
+                ThreadPoolExecutor structure = STRUCTURE_WORKERS.get();
+                if (structure == null || structure.isShutdown()
+                        || structure.getCorePoolSize() != profile.structureWorkers()) {
+                    rebuildStructurePool(profile.structureWorkers());
+                }
+                setSharedRuntimeThreads(Math.max(
+                        configuredSharedWorkerThreads(), profile.roadWorkers()));
+                LOGGER.info("RoadWeaver initial generation hardware lanes prepared: roads={} structures={} shared={}",
+                        profile.roadWorkers(), profile.structureWorkers(), currentSharedRuntimeThreads());
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
     /**
@@ -179,23 +194,35 @@ public final class ThreadPoolManager {
      * running planning work. Chunky readiness uses this for a small temporary
      * supply boost; ordinary runtime work returns it to the configured size.
      */
-    public static synchronized void setSharedRuntimeThreads(int requestedThreads) {
-        if (RoadLifecycle.isStopping()) return;
-        int target = Math.max(1, Math.min(maxRuntimeRoadThreads(), requestedThreads));
-        ThreadPoolExecutor executor = sharedExecutor();
-        applySharedRuntimeThreads(executor, target);
+    public static void setSharedRuntimeThreads(int requestedThreads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                if (RoadLifecycle.isStopping()) return;
+                int target = Math.max(1, Math.min(maxRuntimeRoadThreads(), requestedThreads));
+                ThreadPoolExecutor executor = sharedExecutor();
+                applySharedRuntimeThreads(executor, target);
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
-    public static synchronized void setRuntimeAdaptiveThreads(int requestedThreads) {
-        if (RoadLifecycle.isStopping()) return;
-        runtimeAdaptiveThreads = clampRuntimeThreads(requestedThreads);
-        applyResolvedRuntimeThreads();
+    public static void setRuntimeAdaptiveThreads(int requestedThreads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                if (RoadLifecycle.isStopping()) return;
+                runtimeAdaptiveThreads = clampRuntimeThreads(requestedThreads);
+                applyResolvedRuntimeThreads();
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
-    public static synchronized void setChunkySupplyThreads(int requestedThreads) {
-        if (RoadLifecycle.isStopping()) return;
-        chunkySupplyThreads = requestedThreads <= 0 ? 0 : clampRuntimeThreads(requestedThreads);
-        applyResolvedRuntimeThreads();
+    public static void setChunkySupplyThreads(int requestedThreads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                if (RoadLifecycle.isStopping()) return;
+                chunkySupplyThreads = requestedThreads <= 0 ? 0 : clampRuntimeThreads(requestedThreads);
+                applyResolvedRuntimeThreads();
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
     static int resolveRuntimeThreadTarget(int adaptiveThreads, int supplyThreads, int maximum) {
@@ -371,12 +398,20 @@ public final class ThreadPoolManager {
         return Math.max(2, Math.min(8, processors / 2));
     }
 
-    public static synchronized void resizeGenerationPool(int threads) {
-        resizeSharedPool(threads);
+    public static void resizeGenerationPool(int threads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                resizeSharedPool(threads);
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
-    public static synchronized void resizeComputePool(int threads) {
-        resizeSharedPool(threads);
+    public static void resizeComputePool(int threads) {
+        try {
+            synchronized (ThreadPoolManager.class) {
+                resizeSharedPool(threads);
+            }
+        } finally { PoolRetirements.drain(); }
     }
 
     // ==================== Executor 访问 ====================
@@ -403,6 +438,9 @@ public final class ThreadPoolManager {
      *                          只显式列出 5 个「有独立物理池」的角色，
      *                          其余 default -&gt; sharedExecutor() 是**有意的**
      * </pre>
+     *
+     * <p>Future 使用 submit/execute；CompletableFuture 使用本类 runAsync/supplyAsync，
+     * JDK 的不透明异步包装会明确拒收，避免停服时无法结束其关联结果。</p>
      *
      * <p>物理池共 **6 个**：INITIAL / MAP_READ / STRUCTURE / SNAPSHOT / MAP 五个专用
      * + SHARED 一个共享兜底，与 6 个 {@code *_WORKERS} / {@code SHARED_EXEC} 引用一一对应。</p>
@@ -436,11 +474,13 @@ public final class ThreadPoolManager {
     }
 
     public static CompletableFuture<Void> runAsync(TaskRole role, Runnable runnable) {
-        return CompletableFuture.runAsync(runnable, roleExecutor(role));
+        java.util.Objects.requireNonNull(runnable);
+        return supplyAsync(role, () -> { runnable.run(); return null; });
     }
 
     public static <T> CompletableFuture<T> supplyAsync(TaskRole role, Supplier<T> supplier) {
-        return CompletableFuture.supplyAsync(supplier, roleExecutor(role));
+        // 自有任务同时持有可取消执行体与对外结果，不能依赖 JDK 内部包装的取消状态。
+        return LifecycleCompletableTask.submit(roleExecutor(role), supplier);
     }
 
     // ==================== Epoch ====================
@@ -453,15 +493,33 @@ public final class ThreadPoolManager {
         return EPOCH.get() == epoch;
     }
 
-    /** Invalidates runtime continuations without rebuilding any executor. */
-    public static synchronized long invalidateRuntimeEpoch() {
-        long epoch = EPOCH.incrementAndGet();
+    /** 换代但不重建物理池，同时取消旧代次结果，避免未执行任务永远等不到 worker。 */
+    public static long invalidateRuntimeEpoch() {
+        long epoch;
+        List<ThreadPoolExecutor> pools;
+        synchronized (ThreadPoolManager.class) {
+            epoch = EPOCH.incrementAndGet();
+            pools = java.util.stream.Stream.of(INITIAL_WORKERS.get(), SHARED_EXEC.get(), STRUCTURE_WORKERS.get(),
+                    SNAPSHOT_WORKERS.get(), MAP_WORKERS.get(), MAP_READ_WORKERS.get())
+                    .filter(java.util.Objects::nonNull).toList();
+        }
+        // 单纯换代也要结束旧结果，不能只指望旧 worker 最终取得执行机会。
+        pools.forEach(pool -> ((LifecycleWorkerPool) pool).cancelExpiredTasks());
         LOGGER.info("RoadWeaver runtime epoch invalidated: {}", epoch);
         return epoch;
     }
 
     public static TaskRole currentTaskRole() {
         return CURRENT_ROLE.get();
+    }
+
+    // 角色上下文仍由门面持有，执行包装只借此成对进入/恢复，防止串到下一任务。
+    static TaskRole enterTaskRole(TaskRole role) {
+        TaskRole previous = CURRENT_ROLE.get(); CURRENT_ROLE.set(role); return previous;
+    }
+
+    static void restoreTaskRole(TaskRole previous) {
+        if (previous == null) CURRENT_ROLE.remove(); else CURRENT_ROLE.set(previous);
     }
 
     public static boolean isCoordinatorTask() {
@@ -516,94 +574,118 @@ public final class ThreadPoolManager {
     }
 
     private static ThreadPoolExecutor initialExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = INITIAL_WORKERS.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = INITIAL_WORKERS.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildInitialPool(resolveInitialGenerationThreads());
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = INITIAL_WORKERS.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = INITIAL_WORKERS.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildInitialPool(resolveInitialGenerationThreads());
+                        e = INITIAL_WORKERS.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     private static ThreadPoolExecutor sharedExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = SHARED_EXEC.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = SHARED_EXEC.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildSharedPool(resolveSharedWorkerThreads());
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = SHARED_EXEC.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = SHARED_EXEC.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildSharedPool(resolveSharedWorkerThreads());
+                        e = SHARED_EXEC.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     private static ThreadPoolExecutor mapExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = MAP_WORKERS.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = MAP_WORKERS.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildMapPool(resolveMapWorkerThreads());
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = MAP_WORKERS.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = MAP_WORKERS.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildMapPool(resolveMapWorkerThreads());
+                        e = MAP_WORKERS.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     private static ThreadPoolExecutor structureExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = STRUCTURE_WORKERS.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = STRUCTURE_WORKERS.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildStructurePool(resolveStructureWorkerThreads());
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = STRUCTURE_WORKERS.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = STRUCTURE_WORKERS.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildStructurePool(resolveStructureWorkerThreads());
+                        e = STRUCTURE_WORKERS.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     private static ThreadPoolExecutor mapReadExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = MAP_READ_WORKERS.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = MAP_READ_WORKERS.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildMapReadPool();
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = MAP_READ_WORKERS.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = MAP_READ_WORKERS.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildMapReadPool();
+                        e = MAP_READ_WORKERS.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     /** Small dedicated lane for snapshot predictions that road tasks block on. */
     private static ThreadPoolExecutor snapshotExecutor() {
-        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
-        ThreadPoolExecutor e = SNAPSHOT_WORKERS.get();
-        if (e == null || e.isShutdown()) {
-            synchronized (ThreadPoolManager.class) {
-                e = SNAPSHOT_WORKERS.get();
-                if (e == null || e.isShutdown()) {
-                    rebuildSnapshotPool();
+        try {
+            if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+            ThreadPoolExecutor e = SNAPSHOT_WORKERS.get();
+            if (e == null || e.isShutdown()) {
+                synchronized (ThreadPoolManager.class) {
                     e = SNAPSHOT_WORKERS.get();
+                    if (e == null || e.isShutdown()) {
+                        // 等管理锁期间可能已经停服；外层检查不能阻止旧调用重新创建线程池。
+                        if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
+                        rebuildSnapshotPool();
+                        e = SNAPSHOT_WORKERS.get();
+                    }
                 }
             }
-        }
-        return e;
+            return e;
+        } finally { PoolRetirements.drain(); }
     }
 
     /**
@@ -615,7 +697,7 @@ public final class ThreadPoolManager {
      */
     private static void rebuildSnapshotPool() {
         shutdownQuietly(SNAPSHOT_WORKERS.get());
-        SNAPSHOT_WORKERS.set(new ThreadPoolExecutor(
+        SNAPSHOT_WORKERS.set(new LifecycleWorkerPool(
                 2,
                 2,
                 0L,
@@ -627,7 +709,7 @@ public final class ThreadPoolManager {
 
     private static void rebuildInitialPool(int threads) {
         shutdownQuietly(INITIAL_WORKERS.get());
-        INITIAL_WORKERS.set(new ThreadPoolExecutor(
+        INITIAL_WORKERS.set(new LifecycleWorkerPool(
                 threads,
                 threads,
                 0L,
@@ -639,7 +721,7 @@ public final class ThreadPoolManager {
 
     private static void rebuildSharedPool(int threads) {
         shutdownQuietly(SHARED_EXEC.get());
-        SHARED_EXEC.set(new ThreadPoolExecutor(
+        SHARED_EXEC.set(new LifecycleWorkerPool(
                 threads,
                 threads,
                 0L,
@@ -651,7 +733,7 @@ public final class ThreadPoolManager {
 
     private static void rebuildStructurePool(int threads) {
         shutdownQuietly(STRUCTURE_WORKERS.get());
-        STRUCTURE_WORKERS.set(new ThreadPoolExecutor(
+        STRUCTURE_WORKERS.set(new LifecycleWorkerPool(
                 threads,
                 threads,
                 0L,
@@ -663,7 +745,7 @@ public final class ThreadPoolManager {
 
     private static void rebuildMapPool(int threads) {
         shutdownQuietly(MAP_WORKERS.get());
-        MAP_WORKERS.set(new ThreadPoolExecutor(
+        MAP_WORKERS.set(new LifecycleWorkerPool(
                 threads,
                 threads,
                 0L,
@@ -678,7 +760,7 @@ public final class ThreadPoolManager {
         // 0.8.357：1 -> 2。地图一次要取 12 个瓦片，单线程串行时即便优先级正常
         // 也偏慢；两个线程足以并行处理当前/相邻瓦片，且不会与生成任务争抢过多
         // CPU（相比开局 22+ 线程可忽略）。
-        MAP_READ_WORKERS.set(new ThreadPoolExecutor(
+        MAP_READ_WORKERS.set(new LifecycleWorkerPool(
                 2,
                 2,
                 0L,
@@ -689,9 +771,8 @@ public final class ThreadPoolManager {
     }
 
     private static void shutdownQuietly(ExecutorService exec) {
-        if (exec != null && !exec.isShutdown()) {
-            try { exec.shutdownNow(); } catch (Throwable ignored) {}
-        }
+        // 已经 graceful shutdown 的池仍可能有队列；重建时先发布新池，再在锁外取消旧结果。
+        PoolRetirements.retire(exec);
     }
 
     private static ThreadFactory namedFactory(String prefix) {
@@ -804,12 +885,27 @@ public final class ThreadPoolManager {
         }
 
         @Override
+        protected <T> java.util.concurrent.RunnableFuture<T> newTaskFor(java.util.concurrent.Callable<T> action) {
+            // 标准完成服务通过此虚方法创建内层 Future，也要随实际物理池结束。
+            return ((LifecycleWorkerPool) executorFor(role)).createTask(action);
+        }
+
+        @Override
+        protected <T> java.util.concurrent.RunnableFuture<T> newTaskFor(Runnable action, T value) {
+            return newTaskFor(java.util.concurrent.Executors.callable(action, value));
+        }
+
+        @Override
         public void execute(Runnable command) {
             if (command == null) throw new NullPointerException("command");
             if (RoadLifecycle.isStopping()) {
                 throw new RejectedExecutionException("RoadWeaver server is stopping");
             }
-            executorFor(role).execute(new PrioritizedRunnable(role, command));
+            // JDK 的异步包装没有公开的关联结果访问口；拒收比停服后遗留 pending 更可诊断。
+            if (command instanceof CompletableFuture.AsynchronousCompletionTask) {
+                throw new RejectedExecutionException("Use ThreadPoolManager.runAsync/supplyAsync for lifecycle completion");
+            }
+            executorFor(role).execute(new PrioritizedTask(role, command));
         }
     }
 
@@ -824,70 +920,4 @@ public final class ThreadPoolManager {
         };
     }
 
-    private static final class PrioritizedRunnable implements Runnable, Comparable<PrioritizedRunnable> {
-        private final TaskRole role;
-        private final Runnable delegate;
-        private final long sequence;
-
-        private PrioritizedRunnable(TaskRole role, Runnable delegate) {
-            this.role = role == null ? TaskRole.PLANNING : role;
-            this.delegate = delegate;
-            this.sequence = TASK_SEQ.getAndIncrement();
-        }
-
-        @Override
-        public void run() {
-            TaskRole previous = CURRENT_ROLE.get();
-            CURRENT_ROLE.set(role);
-            try {
-                // 0.8.345：**先决定是否运行 delegate，再运行**。
-                //
-                // 关键链条：submit()/runAsync() 路径下 delegate 其实是 FutureTask
-                // （AbstractExecutorService.submit 先包 FutureTask，再经本类的
-                // execute() 包成 PrioritizedRunnable）。而 FutureTask.run()
-                // **自己会捕获异常**，所以从 delegate 内部抛出的异常不会到达这里；
-                // 真正会穿透的是 **beforeTask(role)** —— 它在 delegate 之外。
-                //
-                // 若 beforeTask 抛出且我们直接返回，后果是：
-                //   delegate 从未执行 → FutureTask **永不完成**
-                //   → 任何 future.get() / join() 的调用方**永久挂起**
-                //   （而本项目所有 join() 都没有超时 → 就是死锁）。
-                // 因此除"正在停服"外，gate 故障一律**失败开放**：照样跑 delegate。
-                boolean runDelegate = true;
-                try {
-                    RuntimeLoadPolicy.beforeTask(role);
-                    if (Thread.currentThread().isInterrupted()) runDelegate = false;
-                } catch (CancellationException stopping) {
-                    // cancelIfStopping() 在停服时**故意**抛 CancellationException，
-                    // 属正常控制流：此时不应再跑 delegate，且不记日志（否则关服刷屏）。
-                    runDelegate = false;
-                } catch (Throwable gateFailure) {
-                    // gate 本身故障：**失败开放**，让 Future 能正常完成，避免永久挂起。
-                    LOGGER.warn("RoadWeaver admission gate failed on role={} thread={}; running task anyway "
-                                    + "to avoid a permanently pending future: {}",
-                            role, Thread.currentThread().getName(), gateFailure.toString(), gateFailure);
-                }
-                if (runDelegate) {
-                    delegate.run();
-                }
-            } catch (Throwable failure) {
-                // 兜底：worker 线程死亡会让 ThreadPoolExecutor 用同一工厂补位
-                // → 线程编号单调递增（真机见到 RW-Structure-1554，正常应 1~6）；
-                // 且任务被永久丢弃、不重排、无日志 → "无法诊断的偶发失败"。
-                // 这里只记录不重排（重排可能造成无限循环 / 雪崩）。
-                LOGGER.warn("RoadWeaver task failed on role={} thread={} (task dropped, not re-queued): {}",
-                        role, Thread.currentThread().getName(), failure.toString(), failure);
-            } finally {
-                if (previous == null) CURRENT_ROLE.remove();
-                else CURRENT_ROLE.set(previous);
-            }
-        }
-
-        @Override
-        public int compareTo(PrioritizedRunnable other) {
-            int byPriority = Integer.compare(this.role.priority, other.role.priority);
-            if (byPriority != 0) return byPriority;
-            return Long.compare(this.sequence, other.sequence);
-        }
-    }
 }

@@ -94,8 +94,8 @@ public final class MapNetworkFabric {
             }
             long epoch = ThreadPoolManager.currentEpoch();
             try {
-                CompletableFuture
-                        .supplyAsync(() -> {
+                // 结果与角色任务同生命周期，退出世界时也会释放请求占位。
+                ThreadPoolManager.supplyAsync(ThreadPoolManager.TaskRole.MAP_READ, () -> {
                             if (!ThreadPoolManager.isEpoch(epoch)) return null;
                             MapSnapshot snapshot = buildSnapshot(level, payload.phase(), payload.minX(), payload.minZ(), payload.maxX(), payload.maxZ());
                             return new MapNetworkPayloads.MapSnapshotPayload(
@@ -106,7 +106,7 @@ public final class MapNetworkFabric {
                                     snapshot,
                                     AutomaticPlanningSamplingActivities.snapshot(level)
                             );
-                        }, ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.MAP_READ))
+                        })
                         .whenComplete((reply, failure) -> {
                             finishMapRequest(player.getUUID());
                             if (failure != null) {
@@ -184,12 +184,11 @@ public final class MapNetworkFabric {
             }
             long epoch = ThreadPoolManager.currentEpoch();
             try {
-                CompletableFuture
-                        .<java.util.List<net.shiroha233.roadweaver.map.search.MapSearchResult>>supplyAsync(
-                                () -> ThreadPoolManager.isEpoch(epoch)
+                // 搜索沿用读取角色；取消必须驱动 handle 的请求清理。
+                ThreadPoolManager.<java.util.List<net.shiroha233.roadweaver.map.search.MapSearchResult>>supplyAsync(
+                                ThreadPoolManager.TaskRole.MAP_READ, () -> ThreadPoolManager.isEpoch(epoch)
                                         ? MapStructureSearchService.search(level, payload.query())
-                                        : java.util.List.of(),
-                                ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.MAP_READ))
+                                        : java.util.List.of())
                         .handle((results, failure) -> {
                             MapStructureSearchService.finishRequest(player.getUUID());
                             return new MapNetworkPayloads.MapSearchResponsePayload(

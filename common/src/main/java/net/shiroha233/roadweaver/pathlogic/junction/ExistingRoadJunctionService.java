@@ -101,9 +101,9 @@ public final class ExistingRoadJunctionService {
             StreamsReflowingCompat.SamplingSession streams = StreamsReflowingCompat.openSession(level);
             return new BatchRefinement() {
                 public CompletableFuture<MergeResult> refine(MergeWork item) {
-                    return CompletableFuture.supplyAsync(
-                            () -> refineMergedCandidate(level, item),
-                            ThreadPoolManager.roleExecutor(ThreadPoolManager.TaskRole.POSTPROCESS));
+                    // 让精修结果在排队/闸门取消时也结束，避免批量 join 永久等待。
+                    return ThreadPoolManager.supplyAsync(ThreadPoolManager.TaskRole.POSTPROCESS,
+                            () -> refineMergedCandidate(level, item));
                 }
 
                 public FinalRoadStructureValidator.ValidationResult validate(RoadData road) {
