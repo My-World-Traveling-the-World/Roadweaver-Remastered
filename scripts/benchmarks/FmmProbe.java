@@ -52,6 +52,10 @@ public final class FmmProbe {
     };
 
     public static void main(String[] args) {
+        if (args.length == 1 && "working-set".equals(args[0])) {
+            compareWorkingSet();
+            return;
+        }
         if (args.length == 1 && "direction".equals(args[0])) {
             compareDirections();
             return;
@@ -78,6 +82,73 @@ public final class FmmProbe {
         compare(source, target, 1, "far-target");
         compareTopology();
         compareDirections();
+    }
+
+    private static void compareWorkingSet() {
+        int side = 1025, step = 8, origin = -4096, max = origin + (side - 1) * step;
+        int[] heights = new int[side * side];
+        for (int i = 0; i < heights.length; i++) heights[i] = 64 + (i % side) / 47 + (i / side) / 61;
+        TerrainField grid = new GridTerrainField(origin, origin, side, side, step, heights);
+        var currentMetric = FinslerMetric.of(grid, ObstacleField.NONE);
+        var baselineMetric = BaselineFinslerMetric.of(grid, ObstacleField.NONE);
+        var current = new FastMarchingSolver(currentMetric);
+        var baseline = new BaselineFastMarchingSolver(baselineMetric);
+        int[] xs = new int[30], zs = new int[30];
+        for (int i = 0; i < xs.length; i++) {
+            xs[i] = origin + (i * 37 % side) * step;
+            zs[i] = origin + (i * 71 % side) * step;
+        }
+        xs[0] = max; zs[0] = max;
+        var a = baseline.solveReachingAll(origin, origin, xs, zs);
+        var b = current.solveReachingAll(origin, origin, xs, zs);
+        for (int z = origin; z <= max; z += step) for (int x = origin; x <= max; x += step) {
+            if (Double.doubleToLongBits(a.at(x, z)) != Double.doubleToLongBits(b.at(x, z))) {
+                throw new AssertionError("workset field mismatch: " + x + ":" + z);
+            }
+        }
+        List<int[]> before = a.pathTo(max, max), after = b.pathTo(max, max);
+        if (before.isEmpty() || before.size() != after.size()) throw new AssertionError("workset path size");
+        for (int i = 0; i < before.size(); i++) if (!Arrays.equals(before.get(i), after.get(i))) {
+            throw new AssertionError("workset path point " + i);
+        }
+        System.out.printf("WORKSET_MATCH cells=%d routePoints=%d heapMax=%d%n", side * side, before.size(), Runtime.getRuntime().maxMemory());
+        // 热求解器隔离每源工作区；冷求解器另计预计算。两组都在同一固定堆中交替运行。
+        compareWorkingSetRuns("workset-hot-near-single",
+                () -> sink = baseline.solve(origin, origin, origin + 16, origin + 16).at(origin + 16, origin + 16),
+                () -> sink = current.solve(origin, origin, origin + 16, origin + 16).at(origin + 16, origin + 16));
+        compareWorkingSetRuns("workset-hot-far-multi",
+                () -> sink = baseline.solveReachingAll(origin, origin, xs, zs).at(max, max),
+                () -> sink = current.solveReachingAll(origin, origin, xs, zs).at(max, max));
+        compareWorkingSetRuns("workset-cold-far-multi",
+                () -> sink = new BaselineFastMarchingSolver(baselineMetric).solveReachingAll(origin, origin, xs, zs).at(max, max),
+                () -> sink = new FastMarchingSolver(currentMetric).solveReachingAll(origin, origin, xs, zs).at(max, max));
+    }
+
+    private static void compareWorkingSetRuns(String label, Runnable baseline, Runnable current) {
+        for (int i = 0; i < 8; i++) { baseline.run(); current.run(); }
+        double[] oldMs = new double[11], newMs = new double[11];
+        long[] oldBytes = new long[11], newBytes = new long[11];
+        for (int i = 0; i < 11; i++) {
+            if ((i & 1) == 0) {
+                collect(measureWorkingSet(baseline), oldMs, oldBytes, i);
+                collect(measureWorkingSet(current), newMs, newBytes, i);
+            } else {
+                collect(measureWorkingSet(current), newMs, newBytes, i);
+                collect(measureWorkingSet(baseline), oldMs, oldBytes, i);
+            }
+        }
+        printTiming(label, oldMs, newMs);
+        if (oldBytes[0] >= 0 && newBytes[0] >= 0) {
+            Arrays.sort(oldBytes); Arrays.sort(newBytes);
+            System.out.printf("%s allocation p50 baseline=%d B current=%d B samples=11%n", label, oldBytes[5], newBytes[5]);
+        }
+    }
+
+    private static Sample measureWorkingSet(Runnable run) {
+        long bytes = threadBytes(), began = System.nanoTime();
+        run.run();
+        long ended = System.nanoTime(), after = threadBytes();
+        return new Sample((ended - began) / 1_000_000.0, bytes < 0 || after < 0 ? -1 : after - bytes);
     }
 
     private static void compareDirections() {

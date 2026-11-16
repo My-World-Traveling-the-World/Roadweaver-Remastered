@@ -9,9 +9,10 @@ public record DenseGridWorkload(long cells, long samplingHeightBytes, long retai
         // 当前采样接口总是产出三张 int 图；普通拓扑随后只保留行走面，影子试评保留三张。
         long sampling = grid.payloadBytes(3 * Integer.BYTES);
         long retained = grid.payloadBytes((keepAllHeightMaps ? 3 : 1) * Integer.BYTES);
-        // 初始口径对应整场数组：双轴代价、通行位、到达值、冻结位；不计对象头和前沿。
-        long solver = grid.payloadBytes(3 * Double.BYTES + 2 + (blockedEdges ? 1 : 0));
-        long targets = targetCount == 0 ? 0 : grid.payloadBytes(1);
+        // 双轴代价与到达值仍是整场 double；两个布尔状态压成 long 位图，分别按字取整。
+        long solver = Math.addExact(grid.payloadBytes(3 * Double.BYTES + (blockedEdges ? 1 : 0)),
+                Math.multiplyExact(grid.bitsetPayloadBytes(), 2));
+        long targets = FmmTargets.payloadBytesUpperBound(grid.cellCount(), targetCount);
         return new DenseGridWorkload(grid.cellCount(), sampling, retained, solver, targets);
     }
 

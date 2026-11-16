@@ -57,7 +57,7 @@ public final class FastMarchingSolver {
     private int cachedSize = -1;
     private double[] cachedCostX;
     private double[] cachedCostZ;
-    private boolean[] cachedPassable;
+    private GridFlags cachedPassable;
     private byte[] cachedEdgeBlocks;
 
     public FastMarchingSolver(FinslerMetric metric) {
@@ -73,7 +73,7 @@ public final class FastMarchingSolver {
      * @return 到达时间场（不可变快照）
      */
     public ArrivalTimeField solve(int sourceX, int sourceZ) {
-        return solveInternal(sourceX, sourceZ, null, 0);
+        return solveInternal(sourceX, sourceZ, null);
     }
 
     /**
@@ -92,15 +92,10 @@ public final class FastMarchingSolver {
      * 因此只能用于「读目标点 + 回溯」，不要拿 {@link ArrivalTimeField#at} 去读别的点。</p>
      */
     public ArrivalTimeField solve(int sourceX, int sourceZ, int targetX, int targetZ) {
-        TerrainField terrain = metric.terrain();
-        int w = terrain.columns();
-        int d = terrain.rows();
-        int step = terrain.step();
-        boolean[] stopMask = new boolean[layout(terrain).arrayLength()];
-        int tix = Math.max(0, Math.min(w - 1, Math.round((targetX - terrain.minX()) / (float) step)));
-        int tiz = Math.max(0, Math.min(d - 1, Math.round((targetZ - terrain.minZ()) / (float) step)));
-        stopMask[tix + tiz * w] = true;
-        return solveInternal(sourceX, sourceZ, stopMask, 1);
+        GridLayout grid = layout(metric.terrain());
+        FmmTargets targets = new FmmTargets(grid.arrayLength(), 1);
+        targets.add(grid.snapX(targetX) + grid.snapZ(targetZ) * grid.columns());
+        return solveInternal(sourceX, sourceZ, targets);
     }
 
     /**
@@ -118,24 +113,12 @@ public final class FastMarchingSolver {
         if (targetsX == null || targetsZ == null || targetsX.length != targetsZ.length) {
             throw new IllegalArgumentException("目标坐标数组不能为 null 且长度必须相等");
         }
-        TerrainField terrain = metric.terrain();
-        int w = terrain.columns();
-        int d = terrain.rows();
-        int step = terrain.step();
-        int minX = terrain.minX();
-        int minZ = terrain.minZ();
-        boolean[] stopMask = new boolean[layout(terrain).arrayLength()];
-        int count = 0;
+        GridLayout grid = layout(metric.terrain());
+        FmmTargets targets = new FmmTargets(grid.arrayLength(), targetsX.length);
         for (int i = 0; i < targetsX.length; i++) {
-            int ix = Math.max(0, Math.min(w - 1, Math.round((targetsX[i] - minX) / (float) step)));
-            int iz = Math.max(0, Math.min(d - 1, Math.round((targetsZ[i] - minZ) / (float) step)));
-            int index = ix + iz * w;
-            if (!stopMask[index]) {
-                stopMask[index] = true;
-                count++;
-            }
+            targets.add(grid.snapX(targetsX[i]) + grid.snapZ(targetsZ[i]) * grid.columns());
         }
-        return solveInternal(sourceX, sourceZ, stopMask, count);
+        return solveInternal(sourceX, sourceZ, targets);
     }
 
     /**
@@ -146,15 +129,16 @@ public final class FastMarchingSolver {
         if (cachedSize == size && cachedCostX != null) return;
         double[] costX = new double[size];
         double[] costZ = new double[size];
-        boolean[] passable = new boolean[size];
+        // 通行与冻结都是一位状态，不必为每格各占一个字节。
+        GridFlags passable = new GridFlags(size);
         for (int iz = 0; iz < d; iz++) {
             for (int ix = 0; ix < w; ix++) {
                 int index = ix + iz * w;
                 int bx = minX + ix * step;
                 int bz = minZ + iz * step;
-                passable[index] = metric.isPassable(bx, bz);
+                if (metric.isPassable(bx, bz)) passable.set(index);
                 // 硬禁格从不入队，无需再读坡度、障碍势或代价优惠。
-                if (passable[index]) metric.writeAxialCosts(bx, bz, step, index, costX, costZ);
+                if (passable.get(index)) metric.writeAxialCosts(bx, bz, step, index, costX, costZ);
             }
         }
         cachedCostX = costX;
@@ -165,19 +149,19 @@ public final class FastMarchingSolver {
         cachedSize = size;
     }
 
-    private byte[] precomputeBlockedEdges(int minX, int minZ, int w, int d, int step, boolean[] passable) {
+    private byte[] precomputeBlockedEdges(int minX, int minZ, int w, int d, int step, GridFlags passable) {
         byte[] edges = new byte[w * d];
         for (int iz = 0; iz < d; iz++) {
             for (int ix = 0; ix < w; ix++) {
                 int i = ix + iz * w;
-                if (!passable[i]) continue;
+                if (!passable.get(i)) continue;
                 int x = minX + ix * step, z = minZ + iz * step;
                 // 只读每条无向边一次；推进和逆向取邻居使用同一份结果。
-                if (ix + 1 < w && passable[i + 1] && metric.blocksEdge(x, z, x + step, z)) {
+                if (ix + 1 < w && passable.get(i + 1) && metric.blocksEdge(x, z, x + step, z)) {
                     edges[i] |= 1;
                     edges[i + 1] |= 2;
                 }
-                if (iz + 1 < d && passable[i + w] && metric.blocksEdge(x, z, x, z + step)) {
+                if (iz + 1 < d && passable.get(i + w) && metric.blocksEdge(x, z, x, z + step)) {
                     edges[i] |= 4;
                     edges[i + w] |= 8;
                 }
@@ -187,7 +171,7 @@ public final class FastMarchingSolver {
     }
 
     private ArrivalTimeField solveInternal(int sourceX, int sourceZ,
-                                           boolean[] stopMask, int stopCount) {
+                                           FmmTargets targets) {
         TerrainField terrain = metric.terrain();
         int minX = terrain.minX();
         int minZ = terrain.minZ();
@@ -225,40 +209,42 @@ public final class FastMarchingSolver {
         long prepared = TRACE ? System.nanoTime() : 0;
         double[] costX = cachedCostX;
         double[] costZ = cachedCostZ;
-        boolean[] passable = cachedPassable;
+        GridFlags passable = cachedPassable;
         byte[] edgeBlocks = cachedEdgeBlocks;
 
         // 2026-11-14 修复（审计 NEW-2）：源点下标原来用向下取整 `(x - minX) / step`，
         // 与障碍场/地形场的 Math.round（就近吸附）口径冲突 —— step=8 时错位最多 7 格，
         // 源点被注入到与它实际位置差一个路宽的格子里。统一为就近吸附 + clamp 兜底。
-        int sourceIx = Math.max(0, Math.min(w - 1, Math.round((sourceX - minX) / (float) step)));
-        int sourceIz = Math.max(0, Math.min(d - 1, Math.round((sourceZ - minZ) / (float) step)));
+        GridLayout grid = layout(terrain);
+        int sourceIx = grid.snapX(sourceX);
+        int sourceIz = grid.snapZ(sourceZ);
         int sourceIndex = sourceIx + sourceIz * w;
         // 真实端点合法不代表吸附格合法；硬禁格不能作为传播起点。
-        if (!passable[sourceIndex]) {
+        if (!passable.get(sourceIndex)) {
             LOGGER.warn("RoadWeaver FMM: 源点 ({},{}) 吸附到硬不可通行格，返回不可达场", sourceX, sourceZ);
             return ArrivalTimeField.unreachable(minX, minZ, w, d, step, metric);
         }
 
         double[] t = new double[size];
         Arrays.fill(t, UNREACHABLE);
-        boolean[] frozen = new boolean[size];
+        GridFlags frozen = new GridFlags(size);
         t[sourceIndex] = 0.0;
 
         queue.clear();
         queue.offer(0.0, sourceIndex);
 
+        int stopCount = targets == null ? 0 : targets.count();
         int remainingStops = stopCount;
         int frozenCount = 0, offers = 1, peak = 1;
 
         while (!queue.isEmpty()) {
             int index = queue.poll();
-            if (frozen[index]) continue;          // 过期条目
-            frozen[index] = true;
+            if (frozen.get(index)) continue;          // 过期条目
+            frozen.set(index);
             if (TRACE) frozenCount++;
 
             // 目标早停：目标格冻结即为最终值，且回溯只会访问更小的 T（都已冻结）。
-            if (stopMask != null && stopMask[index]) {
+            if (targets != null && targets.contains(index)) {
                 if (--remainingStops <= 0) break;
             }
 
@@ -272,7 +258,7 @@ public final class FastMarchingSolver {
                 int niz = iz + DZ[dir];
                 if (nix < 0 || nix >= w || niz < 0 || niz >= d) continue;
                 int nIndex = nix + niz * w;
-                if (frozen[nIndex]) continue;
+                if (frozen.get(nIndex)) continue;
 
                 // 硬不可通行的格子**不进队列**，而不是给一个很大的代价 ——
                 // 只有这样「不可达」才是真的不可达，拓扑层才能判断
@@ -282,7 +268,7 @@ public final class FastMarchingSolver {
                 // 漏乘了 step —— 网格下标被当成方块坐标，step=8 时硬障碍检查
                 // 落在离目标 8 倍近的错误位置，等价于硬约束大面积失明。
                 // 2026-11-14：改为读预计算表（同口径，只是不再每次重算）。
-                if (!passable[nIndex]) continue;
+                if (!passable.get(nIndex)) continue;
 
                 // **慢度必须取「正在求解的那一格」的，不能取「已冻结的那一格」的。**
                 //
@@ -326,7 +312,7 @@ public final class FastMarchingSolver {
             long totalMicros = (System.nanoTime() - began) / 1000;
             LOGGER.info("[FMM-TIMING] source={}:{} grid={}x{} step={} stops={} remaining={} "
                             + "frozen={} offers={} queuePeak={} prepareUs={} totalUs={}",
-                    sourceX, sourceZ, w, d, step, stopMask == null ? "all" : stopCount, remainingStops,
+                    sourceX, sourceZ, w, d, step, targets == null ? "all" : stopCount, remainingStops,
                     frozenCount, offers, peak, (prepared - began) / 1000, totalMicros);
         }
         return new ArrivalTimeField(t, minX, minZ, w, d, step, metric);

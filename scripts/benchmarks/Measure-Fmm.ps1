@@ -2,7 +2,9 @@ param(
     [string]$Baseline = '818b076',
     [string]$JavaHome = $env:JAVA_HOME,
     [string]$Slf4jJar = '',
-    [switch]$DirectionOnly
+    [switch]$DirectionOnly,
+    [switch]$WorkingSetOnly,
+    [string]$FastutilJar = ''
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -15,6 +17,15 @@ if (!$Slf4jJar) {
         Where-Object Name -Like 'slf4j-api-2.*.jar' | Select-Object -First 1 -ExpandProperty FullName
 }
 if (!$Slf4jJar -or !(Test-Path -LiteralPath $Slf4jJar -PathType Leaf)) { throw 'Pass a cached SLF4J 2 API JAR with -Slf4jJar.' }
+# 当前稀疏拓扑使用 fastutil；独立探针必须编译真实依赖，不能靠旧清单漏掉生产类型。
+if (!$FastutilJar) {
+    $gradleCache = if ($env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME } else { Join-Path $env:USERPROFILE '.gradle' }
+    $FastutilJar = Get-ChildItem -LiteralPath (Join-Path $gradleCache 'caches/modules-2/files-2.1/it.unimi.dsi/fastutil') -Filter '*.jar' -Recurse |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+if (!$FastutilJar -or !(Test-Path -LiteralPath $FastutilJar -PathType Leaf)) { throw 'Pass a cached fastutil JAR with -FastutilJar.' }
+if ($WorkingSetOnly -and $DirectionOnly) { throw 'Choose one probe mode.' }
+$probeClasspath = "$Slf4jJar;$FastutilJar"
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('roadweaver-fmm-' + [Guid]::NewGuid().ToString('N'))
 [void][System.IO.Directory]::CreateDirectory($scratch)
 $types = @('ArrivalTimeField', 'FastMarchingSolver', 'FinslerMetric')
@@ -26,15 +37,15 @@ try {
         foreach ($name in $types) { $source = $source -creplace "\b$name\b", "Baseline$name" }
         [System.IO.File]::WriteAllText((Join-Path $scratch "Baseline$type.java"), $source, [System.Text.UTF8Encoding]::new($false))
     }
-    $current = ($types + @('ObstacleField', 'TerrainField')) | ForEach-Object { Join-Path $repo "$metric/$_.java" }
-    $topology = @('RoadNode', 'GeodesicMatrix', 'MinimumSpanningTree', 'TopologyPlan') |
+    $current = ($types + @('ObstacleField', 'TerrainField', 'GridTerrainField', 'GridLayout', 'GridFlags', 'FmmTargets', 'DenseGridWorkload')) | ForEach-Object { Join-Path $repo "$metric/$_.java" }
+    $topology = @('RoadNode', 'GeodesicMatrix', 'MinimumSpanningTree', 'TopologyPlan', 'TopologyCandidates') |
         ForEach-Object { Join-Path $repo "$src/topology/$_.java" }
     $before = $types | ForEach-Object { Join-Path $scratch "Baseline$_.java" }
-    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $Slf4jJar -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java')
+    & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $probeClasspath -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
     # 方向夹具只读现有 FMM 的结果，无需重复做耗时统计。
-    $probeArgs = @(if ($DirectionOnly) { 'direction' })
-    & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$Slf4jJar" net.shiroha233.roadweaver.metric.FmmProbe @probeArgs
+    $probeArgs = @(if ($DirectionOnly) { 'direction' } elseif ($WorkingSetOnly) { 'working-set' })
+    & (Join-Path $JavaHome 'bin/java.exe') -Xms512m -Xmx512m -cp "$scratch;$probeClasspath" net.shiroha233.roadweaver.metric.FmmProbe @probeArgs
     if ($LASTEXITCODE -ne 0) { throw "probe failed: $LASTEXITCODE" }
 } finally {
     # 文件清单固定，逐个清理后只移除本次创建的空目录；不递归删除任意路径。

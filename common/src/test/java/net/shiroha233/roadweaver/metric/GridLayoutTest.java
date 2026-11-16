@@ -20,9 +20,9 @@ class GridLayoutTest {
         assertEquals(268435456L, grid.cellCount());
         assertEquals(3221225472L, work.samplingHeightBytes());
         assertEquals(1073741824L, work.retainedHeightBytes());
-        assertEquals(6979321856L, work.solverFixedBytes());
-        assertEquals(268435456L, work.targetBytesUpperBound());
-        assertEquals(8321499136L, work.retainedAndSolverPayloadBytes());
+        assertEquals(6509559808L, work.solverFixedBytes());
+        assertEquals(256L, work.targetBytesUpperBound());
+        assertEquals(7583301888L, work.retainedAndSolverPayloadBytes());
     }
 
     @ParameterizedTest
@@ -115,7 +115,12 @@ class GridLayoutTest {
             public int maxZ() { return 65535; }
             public int height(int x, int z) { queries.incrementAndGet(); throw new AssertionError("read before validation"); }
         };
-        var solver = new FastMarchingSolver(FinslerMetric.of(terrain, ObstacleField.NONE));
+        // 世界边界前置检查不只保护高度读取，还要早于硬障碍查询。
+        ObstacleField obstacles = new ObstacleField() {
+            public double potential(int x, int z) { queries.incrementAndGet(); throw new AssertionError("potential before validation"); }
+            public boolean impassable(int x, int z) { queries.incrementAndGet(); throw new AssertionError("obstacle before validation"); }
+        };
+        var solver = new FastMarchingSolver(FinslerMetric.of(terrain, obstacles));
         assertThrows(IllegalArgumentException.class, () -> {
             if (mode == 0) solver.solve(0, 0);
             else if (mode == 1) solver.solve(0, 0, 1, 1);

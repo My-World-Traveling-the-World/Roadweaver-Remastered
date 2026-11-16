@@ -459,7 +459,9 @@ public final class RoadJUnitRegressionSuite {
                 // 停服终态必须随全量执行，避免只在定向任务中通过。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.runtime.TaskLifecycleTest"),
                 // 分配前校验必须随全量运行，避免大范围异常被整型溢出伪装成小请求。
-                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.GridLayoutTest"))
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.GridLayoutTest"),
+                // 压缩状态必须与冻结的整场版本对拍场值和终态拓扑。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmWorkingSetTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。
