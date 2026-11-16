@@ -13,6 +13,25 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class RoutePreloadWorkTest {
+    /** 直接守住生产使用的三参入口，避免只测可注入预算却漏掉默认接线。 */
+    @Test
+    void productionConstructorConsumesAtMostEightReadyChunksPerTick() {
+        var keys = java.util.stream.LongStream.rangeClosed(1, 10).boxed().toList();
+        var work = new RoutePreloadWork<Full>(keys, 32, 1);
+        var fake = new Fake();
+        work.tick(fake);
+        keys.forEach(fake::ready);
+        work.tick(fake);
+        assertEquals(keys.subList(0, 8), fake.placed);
+        assertEquals(Set.of(9L, 10L), fake.tickets);
+        assertEquals(8, work.processed());
+        work.tick(fake);
+        assertEquals(keys, fake.placed);
+        assertEquals(10, work.processed());
+        assertTrue(work.done());
+        assertEquals(0, work.failures());
+    }
+
     @Test
     void readyBurstKeepsTicketsAndRefreshesHandlesWithoutSpendingAttempts() {
         var work = new RoutePreloadWork<Full>(List.of(1L, 2L, 3L, 4L), 4, 1, 1);
