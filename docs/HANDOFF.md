@@ -722,3 +722,53 @@ NOSHARE_READ 不能冒充写失败，替换故障要单独用 NOSHARE_DELETE 并
 ### 六、我踩到但已解决的坑
 
 观察版本必须早于首次缓存扫描，放到旧存储快照返回后会漏掉整个竞争窗口。全局任意发布都重查会让无关冷网格多扫一遍，因此只查所需瓦片对应槽。版本不是数据，即使记录显示发布过，也必须实际查到样本；碰撞只能多查，不能伪造命中。旧发布晚到会把直接 set 的槽版本写小，须按原子最大值推进。重查时持有新认领，异常若只走 close/remove 会把已登记等待者留成未完成 Future。真实门面必须共用整块与列/网格的发布记录，单独测小组件无法发现接线遗漏。
+
+---
+
+## 第 29 轮 ｜ 2026-11-16 ｜ 开局半径上限 4096 与游玩负载复核 ｜ 源码 `fe48172` ｜ `PASS tests=1186 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| RoadConstants；PlanningConfig；PlanningKeys | 新增开局专用上限 INITIAL_PLAN_MAX_RADIUS_CHUNKS=4096，界面和 sanitize 统一；默认仍为 128，动态半径与地图 AOI 的既有 2048 上限不变。原 GSON 字段名及存档协议不改，新增/改动代码有中文原因注释。 | 行为变更，按用户要求放宽开局配置 |
+| PlanningConfigTest；AdaptiveCandidateBoundsScaleTest | 新增 7 项配置断言用例和 1 项 4096 参数化几何档。两个类已在套件登记，本轮无需新增类；校验范围、默认、旧键读回、快照、UI 一致和动态边界。 | 测试基建 |
+| STATUS；ROADMAP；VALIDATION | 明确配置上限不等于已验证安全规模；优先路线改为游玩预算遗漏、大范围工作集，再做 READY 状态收敛。 | 文档同步，不宣称帧率改善 |
+
+源码提交 fe48172。这次没有改实际当前配置值，没有打包、安装或部署 jar；用户要在配置中主动选择更大范围才会扩大工作量。原算法、道路质量判据和几何结果不改。
+
+### 二、我验证了什么（附负控）
+
+开工干净，main / 7489971，pull --rebase 为 Already up to date；基线 1178 全绿且 Fabric 编译通过。修改后 1186、0 跳过/中止/失败，Fabric 编译通过；变异恢复后重新执行完整回归与 Fabric。生产 Java 仍为 671 个，超过 1000 有效行 0。
+
+| 故意改坏生产代码 | 目标测试 PlanningConfigTest | 结果 |
+|---|---|---|
+| 开局专用常量退回 2048 | initialRadiusUiAllows4096WithoutIncreasingDynamicRadiusRange | 红 |
+| UI 改回动态用的旧上限 | initialRadiusUiAllows4096WithoutIncreasingDynamicRadiusRange | 红 |
+| sanitize 改回旧上限 | initialRadius4096SurvivesExistingJsonKeyAndSnapshot | 红 |
+| snapshot 不复制开局半径 | initialRadius4096SurvivesExistingJsonKeyAndSnapshot | 红 |
+
+四项均唯一锚点替换、独立跑全量并确认目标 JUnit 方法实际失败；finally 用 git checkout -- 精确恢复并逐字节核对，不把编译失败算红。日志及逐项 JSON 在忽略目录 .analysis_tmp/round29-*，本表为持久记录。
+
+另外只读核对旧仓库 2c6547a 的干净工作区：RoadConstants:42 仍为 2048，PlanningConfig:314 会夹取；没有改动旧仓库，也未核对用户当时运行的发布件。2048 是区块半径，本身对应约 65536 格边长，不能混成方块半径。新版 4096 对应约 131072 格边长。几何测试只说明坐标与面积判据正常，不实际申请该大小的采样场。
+
+### 三、我没能验证什么
+
+- **需要真机的**：新版在同种子下的 FPS、帧时间 p95/p99、MSPT、GC、首次生成/重开及 Chunky 同跑，尤其玩家移动、打开界面时正在进行的采样和路径计算。当前没有任何“后台已经不卡”结论。
+- **需要真实存档的**：4096 档完整预热的耗时、峰值堆、落盘量、恢复和实际覆盖；未运行实际大范围世界，未部署。不能把 1186 项离线全绿当成该范围的安全证书。
+- **我怀疑但没有证据的**：本次没有运行并发采样性能探针，不能量化以下预算遗漏实际增加多少工作线程或掉多少帧；旧发布件的配置范围没有验证。
+- **已知未修的预算边界**：CpuAccurateHeightBackend:59/90/127 使用 parallelStream，未在该类或 NoiseChunkHeightSampler 中接入 RuntimeLoadPolicy 预算/让路；CoarseCorridorPlanningAdapter:70/178 的两轮子任务均提交 INITIAL，RuntimeLoadPolicy.beforeTask 对此角色直接豁免。开局放宽不代表这些游玩期路径已治理。帧率影响未实测，但不能宣称 gameplayThreadCap=2 约束全部线程。
+- **已知未修的大范围工作集**：PipelinePlanner:145..159 按全端点包围盒采样；SampledTerrainField:138..156 直接请求整网格；CpuAccurateHeightBackend:121..123 分配三张 int 数组，FMM 还有整场工作数组。131072 格边长按 step=8 满铺约 2.68 亿采样，仅三张 int 数组载荷约 3 GiB，不含缺列 Map 和求解内存。此为尺寸推算，不是真机内存测量。候选面积守卫仅缩外扩余量，不裁核心，所以不会替这个工作集兜底。
+- crossing、双平滑默认、跨度回写、QualityGate、旧区块重铺、GPU 精确采样禁用和持久化 schema 都保持。
+
+### 四、遗留半截的东西
+
+开局范围修改已独立提交，临时变异全部恢复；配置可用性守卫完成，4096 安全运行未完成，不能声称“扩上限就解决卡死”。预算和工作集问题仅完成源码复核及任务拆分，没有混入未经验证的调度改法。文档已同步，最终提交和推送以交付为准。
+
+### 五、下一轮我会先做什么
+
+按用户最新关注把游玩不卡放在 READY 拆分类之前：先给 CPU 精确采样和粗路径子任务加执行策略端口，用受控夹具验最大并发、前台让路、取消和开局豁免；再换有界调度并对拍高度、键集合和路径，严防父子同池同步等待。随后做分配前工作量估算及按需瓦片/稀疏求解工作集，与原求解结果对拍，保留核心完整覆盖和跨分区连边。没有真机证据前，不把提高预热上限当成游玩负载治理。
+
+### 六、我踩到但已解决的坑
+
+COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使用，直接改成 4096 会把无关游玩范围一起放大，因此必须分开常量。配置 setter 存得下并不代表加载后保留，需经过 GSON 旧键读回、sanitize 和 snapshot。新算法加稀疏候选不代表采样场与 FMM 工作数组也已稀疏；“外层最多两线程”和“所有内部计算最多两线程”不是同一契约。源码中的历史帧率注释不能代替新版现场数据。
