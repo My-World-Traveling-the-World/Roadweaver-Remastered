@@ -27,6 +27,8 @@ $gradle = 'C:/Users/18364/.gradle/wrapper/dists/gradle-8.8-bin/4u0rgm4geyrm56fyh
 
 负载 API 的离线生产接线见 `RuntimeLoadSignalsTest`：不是只调用诊断快照，而是注册非旧 owner 的来源后直接查询 RuntimeLoadPolicy 的 worker/lane、相位、暂停与恢复；断言带真实上下文的 `road` 消费者重载、多源取最小、零 lane、显式暂停优先、异常与 LinkageError 隔离、注销恢复、配置上限及 Chunky 专属进展。用会抛断言的提供方证明 preflight 完全不咨询压力；移动与交互保持不同语义。新类 14 项已按 FQCN 加入套件；另在既有 API 桥类补 1 项日志无预算副作用用例，先复现打印诊断把预算从 6 写成 1，再验证保留 6 且 worker/lane 查询为零。第 30 轮 11 项变异全部实际触发目标 JUnit 失败并恢复。外部六个工程只读核查，没有运行整合包、重编外部 mod 或部署 jar。实际联动仍需核对安装件、注册来源和现场执行线程，尤其不能用 `snapshot()` 的 `-1` 参数推荐值决定派发。
 
+CPU与粗路径执行回归见CpuAccurateHeightBackendTest、RuntimeCpuSamplingWorkTest、CoarsePathTasksTest：新增52项，均已显式登记。世界读口Fake通过默认生产出口验证完整键、请求列、三通道及共享许可；另验暂停、MAP_READ角色、中断/代次/停止、异常释放和预热。语法树守卫分别钉住公开工厂及两轮调用，不等于真实ServerLevel已运行。真实INITIAL池缩为1先红两项；公共池取消也先复现“Future已取消、实际线程未中断”，自有FutureTask修后转绿。许可等待不耗搜索期限，物理队列/实际搜索超时、0不限时的停止取消分别验证；两种等待方式均验兄弟取消和异常分类。第35轮31组生产变异逐项目标JUnit红（3组静态），精确checkout恢复后1274全绿、Fabric通过。原版NoiseChunk、FMM实际中断尾延迟、公共池争用、吞吐及真实路网仍须现场对照，不能据此证明4096安全或FPS提高。
+
 预热门回归见 `PrewarmGateWorkTest`：两项直接调用公开生产入口确认无长城立即完成、已注册提供方仍等待；其余用受控时钟与拒绝调度器验证五秒宽限、首次/后续提交失败、取消、显式期限、进展刷新、无进度信号及持续进展下的绝对期限。默认仍是十分钟停滞和三十分钟绝对上限，不睡眠十分钟来验边界。7 项生产变异实际触发对应 JUnit 失败，恢复后 1212 项无跳过且 Fabric 编译通过，见交接第 31 轮。未启动整合包或验证最终 Mixin 顺序，未修改相邻模组和安装件。
 
 道路消费方回归见 `RoadStartupGateTest`：缺长城仍等河流，有长城则河流就绪后才等长城；两者完成保留同步快路径，长城超时但未 ready 不放行。另验 API 读回、停服取消、旧通知迟到、下一任务和完成回调探针异常；Fabric 自有源码接线另有静态守卫，不能等同真实 Mixin 运行测试。10 项新增、7 项变异恢复后全量 1222，Fabric 编译通过。测试只放道路仓库，河流预热/发布与长城订阅/自身发布的守卫留给对应仓库；本轮二者仅只读核查。已确认 Streams awaitStartup 吞 CompletionException 后外层仍 publishReady，尚未修复，不把 API ready 当成真实河流产物已验收。

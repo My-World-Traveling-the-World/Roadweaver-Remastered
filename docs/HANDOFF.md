@@ -1041,3 +1041,80 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 负控发现本轮一条测试先detach再clear，使“clear不清会话表”仍绿；已新增不先detach的独立用例，原变异确实转红。旧测试保留，继续守卫detach本身。Windows新文件checkout会把LF转CRLF；先核对内容再恢复原始行尾字节，修正脚本后完整重跑16组。定向锁更新会移除未解析配置的锁归属，只合入新坐标。严格门的清理唤醒与成功发布必须区分，不能靠“等到了”推断“成功了”。
 
 本轮同步结果：道路pull成功；普通push与HTTP/1.1重试均因GitHub低速超时失败，origin/main仍f78c6c0，本地领先4个提交。长城HEAD及其远端均为5ade8e9b，已同步。河流仍无remote。本条并入道路文档提交后保持工作区干净，未声称道路push成功。
+
+---
+
+## 第35轮 ｜ 2026-11-16 ｜ 游玩期CPU预算与粗路径任务边界
+
+### 一、改了什么
+
+先行为等价fa17851拆CPU世界读取与执行口，新增9项、1231全绿；再行为变更95253e5接预算。粗路径先行为等价3007411统一提交器，1251全绿；随后行为变更e113ee3完成下面边界。
+
+- CPU三入口及非噪声顺序路径共用已有粗采样许可；普通游玩每批在调用线程逐单元执行，多批共用活跃数。开局/preflight保留并行。前台在单元边界复核，同步嵌套只占一份许可。
+- 异步搜索在提交方捕获角色、世界代次及预热状态，MAP_READ界面豁免保留，Chunky独占仍阻挡；中断/停止/换代在暂停循环内可退出，最后一次读取中换代也拒绝成功。
+- 普通父用INITIAL子池。实际启动链AsyncPlanningOps又将父任务发到INITIAL，真实池缩为1先红两项；INITIAL父改借已有公共计算池，避免同池互等，不新增物理池。
+- 公共池直接submit返回的取消状态没有中断实际搜索，先红一项，再改自有FutureTask经execute提交，使cancel(true)到达真实线程。
+- 许可等待不耗搜索期限；物理排队和实际搜索仍分别限时，0不限时也检查停止/代次。内部取消透过Future包装正确上抛；顺序等待的失败/中断/直接取消也取消兄弟。
+- 五类API调用键包装器迁到RuntimeSignalMethods。新增中文原因注释；两条合法执行端口依赖在基线逐项说明，未放宽求解层规则。配置键/默认、存档schema、几何算法未变；更新超时说明。
+- 生产Java文件679个，有效行超1000为0；本轮修改文件物理行也均小于1000，RuntimeLoadPolicy约941行，新增协作类均小于200行。
+
+### 二、我验证了什么（附负控）
+
+开工e7496e9，git status空，pull --rebase成功；基线1222零跳过/中止/失败，Fabric成功。新增52项：CPU29、粗路径23，含2项语法树接线，三类都已显式登记。真实INITIAL=1先红2项，公共池取消先红1项；编译/命令参数失败不算复现。
+
+最终PASS tests=1274 skipped=0 aborted=0 failed=0且BUILD SUCCESSFUL，Fabric编译通过；日志.analysis_tmp/round35-final-after-mutations.log。31组（28行为、3静态）均断言唯一锚点、编译成功、指定JUnit失败；finally git checkout -- 精确文件，从已验证暂存索引逐字恢复，再跑全量。脚本/JSON为.analysis_tmp/round35_mutations.py、round35-mutations.json。
+
+| # | 改坏了什么 | 目标用例 | 结果 |
+|---|---|---|---|
+| 1 | 公开工厂绕开预算出口 | `publicFactoryActuallyUsesTheBudgetedSourceFactory` | 红（静态） |
+| 2 | 默认采样改无限制执行 | `everyDefaultEntryRunsGameplayUnitsOnCallerAndKeepsChannels(int)` | 红 |
+| 3 | 读世界前不取得共享许可 | `everyDefaultEntryRunsGameplayUnitsOnCallerAndKeepsChannels(int)` | 红 |
+| 4 | 超过活跃预算仍放行 | `accurateSamplingSharesTheExistingCoarsePermit` | 红 |
+| 5 | 跳过前台暂停 | `foregroundPauseIsRecheckedBetweenChunks` | 红 |
+| 6 | 完成/异常后不释放许可 | `readFailureReleasesPermitAndNextRequestStillWorks` | 红 |
+| 7 | 忽略世界代次 | `epochChangingDuringLastReadDoesNotReportGridSuccess` | 红 |
+| 8 | 暂停循环丢失取消条件 | `cancellationEscapesForegroundWaitWithoutReadingWorld(java.lang.String)` | 红 |
+| 9 | 预热丢失实际并行 | `startupAndPreflightKeepParallelExecutionWithoutGameplayPermit(boolean)` | 红 |
+| 10 | MAP_READ被自身界面暂停 | `mapReadKeepsScreenExemptionButStillWaitsForChunky(boolean)` | 红 |
+| 11 | 非噪声顺序路径绕开预算 | `everyDefaultEntryRunsGameplayUnitsOnCallerAndKeepsChannels(int)` | 红 |
+| 12 | 逐列请求读错列 | `positionsDeduplicateXZAndOnlyReadRequestedColumns(boolean)` | 红 |
+| 13 | 网格运动阻挡通道读成海床 | `gridKeepsSignedCoordinatesAndReportsCompletionOnce(boolean)` | 红 |
+| 14 | 粗路径直接提交无预算任务 | `productionDefaultUsesInitialPhysicalPoolButStillTakesGameplayPermit` | 红 |
+| 15 | 普通父子池误接同一共享池 | `productionDefaultUsesInitialPhysicalPoolButStillTakesGameplayPermit` | 红 |
+| 16 | 第一遍绕开提交器 | `bothProductionPassesUseTheSharedSubmissionBoundary` | 红（静态） |
+| 17 | 第二遍绕开提交器 | `bothProductionPassesUseTheSharedSubmissionBoundary` | 红（静态） |
+| 18 | 排队后才捕获代次 | `epochIsCapturedBeforeQueueingAndFreshSubmissionCanStillRun` | 红 |
+| 19 | 丢失提交方角色 | `submittingMapReadRoleSurvivesDifferentWorkerRole` | 红 |
+| 20 | 同步嵌套重复占许可 | `nestedSynchronousCpuUnitsUseTheSamePermit` | 红 |
+| 21 | 主动让路算入搜索超时 | `waitingForPermitDoesNotSpendSearchTimeout` | 红 |
+| 22 | 实际搜索不限时 | `actualSearchStillHasATimeout` | 红 |
+| 23 | 物理队列不限时 | `physicalQueueStillHasATimeout` | 红 |
+| 24 | 未执行任务停服后无限等待 | `stoppedTaskThatNeverRanDoesNotLeaveAnUnlimitedWaitPending` | 红 |
+| 25 | 并行等待把内部取消当失败 | `wrappedCancellationDoesNotBecomeOrdinaryFailureAndCancelsSiblings(boolean)` | 红 |
+| 26 | 顺序等待把内部取消当失败 | `wrappedCancellationDoesNotBecomeOrdinaryFailureAndCancelsSiblings(boolean)` | 红 |
+| 27 | 顺序失败不取消兄弟 | `ordinaryFailureCancelsAllSiblingTasks(boolean)` | 红 |
+| 28 | 顺序中断不取消兄弟 | `interruptedParentCancelsAllSiblingTasks(boolean)` | 红 |
+| 29 | 等待绕过执行期限口径 | `waitingForPermitDoesNotSpendSearchTimeout` | 红 |
+| 30 | INITIAL父子回同一单线程池 | `initialParentWithOnePhysicalWorkerCanWaitForItsChildren(boolean)` | 红 |
+| 31 | 公共池直接submit导致取消不打断线程 | `cancellingCommonPoolChildInterruptsActualSearch` | 红 |
+
+### 三、我没能验证什么（最重要）
+
+- 需真机/存档：FPS/MSPT、游玩单批吞吐、公共池与其他mod争用、公平性、NoiseChunk单元耗时、FMM中断尾延迟。无性能倍数或不卡顿保证。读口Fake不等于真实NoiseChunk/ServerLevel已运行。
+- 固定非空路径验证任务传递和异常，原FMM/DP/BAND回归继续跑；未做真实整路几何A/B，未部署jar。一次已开始的噪声计算及不响应中断的代码不能强停。
+- 共享的是本轮接入的执行边界，不是整合包所有线程。其他结构解析、采样入口及外层等待仍须盘点；gameplayThreadCap=2不是整合包总共两线程。
+- 源码核对ThreadPoolManager:870在runDelegate=false时跳过delegate，其他Future类型的终态未逐条实跑。本轮Coarse Task主动取消只能局部兜住；下一项先复现通用FutureTask/CompletableFuture链，不声称全局解决。
+- 4096全域采样和FMM工作集未解决，仍无OOM安全验收。没缩核心、丢候选或重开废弃GPU精确采样。
+- 三模组真实Mixin/启动重开、旧异步进度的世界令牌仍待验；crossing、双平滑、跨度回写、QualityGate和自动重铺保持现状。
+
+### 四、遗留半截的东西
+
+本轮CPU/粗路径接线及产物、取消、超时守卫已完成。源码提交e113ee3；文档随本条提交。河流82cc818、长城5ade8e9b只读，测试均放道路。代码push已尝试两次，均因无法连接github.com:443退出128（约21秒），日志round35-code-push.log、round35-code-push-retry.log。远端跟踪仍为f78c6c0，本地源码领先8项提交；文档提交后再次推送，未成功前不称远端已同步。
+
+### 五、下一轮我会先做什么
+
+先用真实排队/前置闸门核对通用RoleExecutor的FutureTask、CompletableFuture停止终态，保证取消不执行世界动作；然后做4096分配前长整型估算，再对拍按需瓦片、稀疏求解工作区。READY增量和写盘优化继续按计时推进；需真机的几何/跨度裁决不改默认。
+
+### 六、我踩到但已解决的坑
+
+Windows Python默认CRLF被守卫抓到，改为write_bytes UTF-8/LF。普通Executor线程没有道路角色，实际是null而不是PLANNING，夹具已纠正。CompletableFuture内部取消直接抛出，FutureTask会包装ExecutionException，分别实测。只验普通父/INITIAL子会漏掉开局同池父，真实缩池才复现。ForkJoin取消状态不代表中断，必须断言真实阻塞线程。PowerShell带点的-PtargetClass需整参加引号，命令错误不记作JUnit红。
