@@ -179,8 +179,8 @@ public final class BridgeSegmentPlannerNew {
             return true;
         };
         boolean clampToBody = access.isOpenWater(middle);
-        TemplateVisit visit = visitTemplateBlocks(
-                bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collect);
+        ColumnProjection projection = projectColumns(bridge, line, segment, deckY, minX, maxX, minZ, maxZ);
+        TemplateVisit visit = visitTemplateBlocks(bridge, projection, deckY, clampToBody, collect);
 
         // 0.9.033（O-14「陆侧桥口缺甲板」）：模板的**桥台段**在甲板高度上是空的
         // （{@link #visitTemplateBlocks} 里的原文：the abutment layers are empty exactly
@@ -195,7 +195,7 @@ public final class BridgeSegmentPlannerNew {
             placements.clear();
             blocked[0] = false;
             TemplateVisit forced = visitTemplateBlocks(
-                    bridge, line, segment, deckY, minX, maxX, minZ, maxZ, true, collect);
+                    bridge, projection, deckY, true, collect);
             if (!blocked[0] && forced.handles(landingStation)) {
                 visit = forced;
                 long filled = LANDING_MOUTHS_FILLED.incrementAndGet();
@@ -444,15 +444,15 @@ public final class BridgeSegmentPlannerNew {
             return true;
         };
         boolean clampToBody = access.isOpenWater(middle);
-        TemplateVisit visit = visitTemplateBlocks(
-                bridge, line, segment, deckY, minX, maxX, minZ, maxZ, clampToBody, collectAll);
+        ColumnProjection projection = projectColumns(bridge, line, segment, deckY, minX, maxX, minZ, maxZ);
+        TemplateVisit visit = visitTemplateBlocks(bridge, projection, deckY, clampToBody, collectAll);
         // 0.9.033：与 processSegment 保持**逐条一致**的重试，否则存档期校验算出的
         // centerChunkHandles 会和真正生成的体素对不上（退回程序化桥面会双铺）。
         if (landingStation && !clampToBody && !visit.handles(landingStation)) {
             List<BlockPos> firstAttempt = List.copyOf(blocks);
             blocks.clear();
             TemplateVisit forced = visitTemplateBlocks(
-                    bridge, line, segment, deckY, minX, maxX, minZ, maxZ, true, collectAll);
+                    bridge, projection, deckY, true, collectAll);
             if (forced.handles(landingStation)) {
                 visit = forced;
             } else {
@@ -463,7 +463,7 @@ public final class BridgeSegmentPlannerNew {
         if (!visit.handles(landingStation)) return PlannedBridge.none();
 
         ChunkPos centerChunk = new ChunkPos(middle);
-        Set<Long> roadColumns = footprintColumns(segment);
+        Set<Long> roadColumns = projection.roadColumns();
         int centerBlocks = 0;
         int centerRoadColumns = 0;
         for (BlockPos block : blocks) {
@@ -478,21 +478,10 @@ public final class BridgeSegmentPlannerNew {
         return new PlannedBridge(List.copyOf(blocks), centerChunkHandles);
     }
 
-    private static TemplateVisit visitTemplateBlocks(
-            BridgeTemplateStructureRegistry.BridgeTemplate bridge,
-            Line line,
-            RoadSegmentPlacement segment,
-            int deckY,
-            int minX,
-            int maxX,
-            int minZ,
-            int maxZ,
-            boolean clampColumnToBody,
-            TemplateBlockConsumer consumer) {
-        double bridgeLength = line.getTotalLength();
+    private static TemplateVisit visitTemplateBlocks(BridgeTemplate bridge, ColumnProjection projection,
+            int deckY, boolean clampColumnToBody, TemplateBlockConsumer consumer) {
         int placedBlocks = 0;
         int coveredRoadColumns = 0;
-        Set<Long> roadColumns = footprintColumns(segment);
         // The bundled templates put their deck body in the middle and their abutments at the ends; the
         // abutment layers are empty exactly where a deck would be, so the first and last few columns of every
         // template bridge have no surface at all. On land the abutment sits in the bank and nobody notices.
@@ -504,39 +493,56 @@ public final class BridgeSegmentPlannerNew {
         // 水上桥口，以及陆侧桥口第一次拿不到甲板时的重试。
         double bodyLow = bridge.getStartLength();
         double bodyHigh = Math.max(bodyLow, bridge.getTotalLength() - bridge.getEndLength() - 1.0E-4D);
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                Vec3 testPos = new Vec3(x, deckY, z);
-                Line.Frame frame = line.getFrame(testPos);
-                Vec3 horizontalOffset = testPos.subtract(frame.closestPoint);
-                double testX = horizontalOffset.dot(frame.tangent0);
-                double testZ = horizontalOffset.dot(frame.binormal0);
-                if (Math.abs(testX) > 2 || !bridge.isInVoxelGrid(0, 0, testZ)) continue;
-
-                double columnX = Math.min(Math.max(0, frame.globalT), 1) * bridgeLength;
-                columnX = mapTemplateX(columnX, bridgeLength, bridge.getStartLength(),
-                        bridge.getEndLength(), bridge.getDeckLength(), bridge.getTotalLength());
-                if (clampColumnToBody) {
-                    columnX = Math.max(bodyLow, Math.min(bodyHigh, columnX));
-                }
-
-                for (int y = deckY + 20; y >= deckY - 60; y--) {
-                    Vec3 local = new Vec3(x, y, z).subtract(frame.closestPoint);
-                    double localY = local.dot(frame.normal0);
-                    double localZ = local.dot(frame.binormal0);
-                    BlockState state = bridge.getBlock(columnX, localY, localZ);
-                    if (state == null || state.is(Blocks.AIR)) continue;
-                    BlockPos pos = new BlockPos(x, y, z);
-                    if (!consumer.accept(pos, state)) continue;
-                    placedBlocks++;
-                    if (y >= deckY - 4 && y <= deckY + 3 && roadColumns.contains(columnKey(x, z))) {
-                        coveredRoadColumns++;
-                    }
-                }
+        for (ProjectedColumn column : projection.columns()) {
+            double localX = clampColumnToBody ? Math.max(bodyLow, Math.min(bodyHigh, column.templateX()))
+                    : column.templateX();
+            for (int y = deckY + 20; y >= deckY - 60; y--) {
+                double dy = y - column.centerY();
+                // 沿用点积原有运算顺序，模板恰好贴体素边界时也不能换格。
+                double localY = column.normalX() + dy * column.normalY() + column.normalZ();
+                double localZ = column.binormalX() + dy * column.binormalY() + column.binormalZ();
+                BlockState state = bridge.getBlock(localX, localY, localZ);
+                if (state == null || state.is(Blocks.AIR)) continue;
+                if (!consumer.accept(new BlockPos(column.x(), y, column.z()), state)) continue;
+                placedBlocks++;
+                if (column.onRoad() && y >= deckY - 4 && y <= deckY + 3) coveredRoadColumns++;
             }
         }
         return new TemplateVisit(placedBlocks, coveredRoadColumns);
     }
+
+    /** 只投影静态坐标；碰撞、实际水位、支撑和写方块仍由各自的入口负责。 */
+    private static ColumnProjection projectColumns(BridgeTemplate bridge, Line line, RoadSegmentPlacement segment,
+            int deckY, int minX, int maxX, int minZ, int maxZ) {
+        double length = line.getTotalLength();
+        Set<Long> roadColumns = footprintColumns(segment);
+        List<ProjectedColumn> columns = new ArrayList<>();
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                Vec3 testPos = new Vec3(x, deckY, z);
+                Line.Frame frame = line.getFrame(testPos);
+                Vec3 offset = testPos.subtract(frame.closestPoint);
+                if (Math.abs(offset.dot(frame.tangent0)) > 2 || !bridge.isInVoxelGrid(0, 0, offset.dot(frame.binormal0))) {
+                    continue;
+                }
+                double along = Math.min(Math.max(0, frame.globalT), 1) * length;
+                double localX = mapTemplateX(along, length, bridge.getStartLength(),
+                        bridge.getEndLength(), bridge.getDeckLength(), bridge.getTotalLength());
+                // 陆侧桥头改用桥身时只改变 localX 的夹取，曲线帧与列坐标不应重新计算。
+                columns.add(new ProjectedColumn(x, z, localX, frame.closestPoint.y,
+                        offset.x * frame.normal0.x, frame.normal0.y, offset.z * frame.normal0.z,
+                        offset.x * frame.binormal0.x, frame.binormal0.y, offset.z * frame.binormal0.z,
+                        roadColumns.contains(columnKey(x, z))));
+            }
+        }
+        return new ColumnProjection(columns, roadColumns);
+    }
+
+    private record ColumnProjection(List<ProjectedColumn> columns, Set<Long> roadColumns) {}
+
+    private record ProjectedColumn(int x, int z, double templateX, double centerY,
+                                   double normalX, double normalY, double normalZ,
+                                   double binormalX, double binormalY, double binormalZ, boolean onRoad) {}
 
     @FunctionalInterface
     private interface TemplateBlockConsumer {
