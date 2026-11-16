@@ -286,6 +286,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateTileClaimsTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerLifecycleTest"),
+                        // 只读查询仍可能读盘发布，关闭交错必须与采样入口同样受保护。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.AccurateSamplerCacheLifecycleTest"),
                         // 真实临时文件与共享锁覆盖缓存故障，避免 Fake 保存成功掩盖落盘失败。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.files.AccurateSampleStoreFileTest"),

@@ -71,8 +71,8 @@ public final class AccurateHeightSampler {
         List<Shard<AccurateHeightChunk>> chunks = new ArrayList<>(CACHE_SHARDS);
         List<Shard<AccurateHeightSample>> columns = new ArrayList<>(CACHE_SHARDS);
         for (int index = 0; index < CACHE_SHARDS; index++) {
-            chunks.add(new Shard<>(CHUNK_SHARD_CAPACITY));
-            columns.add(new Shard<>(COLUMN_SHARD_CAPACITY));
+            chunks.add(new Shard<>(CHUNK_SHARD_CAPACITY, this::ensureOpen));
+            columns.add(new Shard<>(COLUMN_SHARD_CAPACITY, this::ensureOpen));
         }
         this.chunkShards = chunks;
         this.columnShards = columns;
@@ -114,8 +114,10 @@ public final class AccurateHeightSampler {
     static final class Shard<V> {
         private final Object lock = new Object();
         private final Map<Long, V> entries;
+        private final Runnable ensureOpen;
 
-        Shard(int capacity) {
+        Shard(int capacity, Runnable ensureOpen) {
+            this.ensureOpen = ensureOpen;
             this.entries = new LinkedHashMap<>(Math.min(64, capacity), 0.75F, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<Long, V> eldest) {
@@ -126,12 +128,15 @@ public final class AccurateHeightSampler {
 
         V get(long key) {
             synchronized (lock) {
+                ensureOpen.run();
                 return entries.get(key);
             }
         }
 
         void put(long key, V value) {
             synchronized (lock) {
+                // 关闭先置标志再逐桶清空；同锁检查使迟到发布只能在清空之前或被明确拒绝。
+                ensureOpen.run();
                 entries.put(key, value);
             }
         }
@@ -274,6 +279,8 @@ public final class AccurateHeightSampler {
 
     /** Returns only already cached/persisted samples and never invokes worldgen. */
     public Map<Long, AccurateHeightSample> cachedSamples(Collection<BlockPos> positions) {
+        // 只读查询也会读盘并填充缓存，关闭后不能把它当成无副作用的诊断 API。
+        ensureOpen();
         if (positions == null || positions.isEmpty()) return Map.of();
         LinkedHashMap<Long, BlockPos> unique = uniquePositions(positions);
         LinkedHashMap<Long, AccurateHeightSample> result = new LinkedHashMap<>();
@@ -286,6 +293,8 @@ public final class AccurateHeightSampler {
         }
         if (!missing.isEmpty()) {
             Map<Long, AccurateHeightSample> stored = store.loadSamples(missing);
+            // 即使存储返回空集合也要拒绝迟到结果，不能靠后面的 put 偶然检查关闭。
+            ensureOpen();
             for (Map.Entry<Long, AccurateHeightSample> entry : stored.entrySet()) {
                 putColumnCached(entry.getKey(), entry.getValue());
                 result.put(entry.getKey(), entry.getValue());
@@ -295,10 +304,13 @@ public final class AccurateHeightSampler {
     }
 
     public AccurateHeightSample cachedSample(int x, int z) {
+        ensureOpen();
         long key = AccurateHeightSample.key(x, z);
         AccurateHeightSample sample = cachedSample(key, x, z);
         if (sample != null) return sample;
         Map<Long, AccurateHeightSample> stored = store.loadSamples(java.util.Set.of(key));
+        // 未命中同样属于本次读取结果，必须与批量入口保持关闭契约一致。
+        ensureOpen();
         sample = stored.get(key);
         if (sample != null) putColumnCached(key, sample);
         return sample;
@@ -445,7 +457,7 @@ public final class AccurateHeightSampler {
             return null;
         }
         AccurateHeightSample fromChunk = sampleFromChunk(chunk, blockX, blockZ);
-        columnShard(key).put(key, fromChunk);
+        putColumnCached(key, fromChunk);
         return fromChunk;
     }
 
