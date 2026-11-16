@@ -359,6 +359,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.runtime.ThreadPoolCapacityDebounceTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.compat.GreatWallReadinessApiTest"),
+                        // 预热门必须在首次调度失败时结案，离线时钟直接运行生产入口。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.compat.PrewarmGateWorkTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.tunnel.RoadDeckAndTunnelGeometryTest"),
                         DiscoverySelectors.selectClass(
