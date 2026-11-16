@@ -34,6 +34,16 @@
 - CoarsePathTasks统一首遍和共享渡口重算的提交/等待。普通父用INITIAL子池；INITIAL父用已有公共计算池，防单线程同池互等。自有FutureTask让cancel(true)中断实际线程。角色、代次和预热阶段在提交方捕获，不用物理INITIAL角色推断豁免。
 - 物理队列等待保留限时；进入worker后主动等许可不耗搜索期限，获许可后开始搜索计时。不限时仍检查取消/停止/代次。失败、中断和取消都取消兄弟任务；算法实际中断尾延迟仍需真机。
 
+## 任务生命周期与结果
+
+- ThreadPoolManager保留角色到六个物理池的映射。LifecycleWorkerPool分别追踪已接收的PrioritizedTask和newTaskFor产生的真实Future，后者用于ExecutorCompletionService及invokeAny/invokeAll，不能只取消QueueingFuture。
+- PrioritizedTask负责原优先级/FIFO、角色上下文和可取消前置闸门。停服、旧代次、用户取消或物理池关闭均拒绝新动作并结束可见结果；正常的闸门故障仍告警后放行，取消及停止不放行。
+- LifecycleCompletableTask绑定真实FutureTask与对外CompletableFuture。cancel(true)先中断计算再发布取消回调，cancel(false)不打断正在执行的动作；提前complete的排队结果跳过supplier。七处地图读取、路口精修及终态道路完成链已迁到跟踪工厂。
+- 角色Executor的submit/execute保留；JDK CompletableFuture.AsynchronousCompletionTask缺少公开关联结果口，现明确拒收。完成阶段使用ThreadPoolManager.runAsync/supplyAsync或ComputeService，后继异步动作用thenCompose接跟踪工厂。运行时内部入口的此项行为变更不改api模块协议；第三方直接把角色Executor传给JDK异步工厂需要迁移。
+- 停服/换代先在管理锁内更新状态和引用，再锁外取消。池重建由PoolRetirements在最外层管理调用的finally排空，保证新池已发布且不持管理锁触发旧完成回调。物理池先关执行闸门，再取消结果、强停；任务完成和拒收均清理追踪表。没有新增物理线程池或总调度器。
+
+以上保证所测任务结果的结束，不保证任意世界计算可被强停，也不把结果取消当成真实线程已退出。服务端的世界写闸门仍不可删除；真实停服重开及完成回调阻塞风险须现场验收。
+
 ## 跨模组资源协调
 
 负载协作继续复用 `roadweaver-api`，不在道路中再建整合包总调度器。API 注册表表达意见，各消费者约束自己的任务；这不是一张能自动限制所有线程的全局许可证表。
@@ -53,7 +63,7 @@
 
 相邻工程目前仍通过旧仓库的 named contract 编译。四份已核对的 `RoadLoadSignals`、注册表、`LoadKind`、`StreamsThreadControl` 在新旧源码中的差异仅为中文文件职责注释；本轮未改 `api/` 或外部工程。源码核对不能证明玩家已安装的 jar 一致；发布时仍须核实运行中只有预期的 API 提供件及这些适配器。
 
-**尚未闭合的执行边界：** CPU 精确采样的 `parallelStream`、粗路径子任务的 `INITIAL` 豁免，仍能绕过普通道路预算。已有 API 约束不等于这些内部工作已经受控。先在同一信号体系下补有界执行、单元让路及取消，再做整合包现场的帧时间/MSPT 验收；大范围采样/FMM 工作集另行治理。
+**执行守卫的范围：** 第35轮已接入CPU精确采样及两轮粗路径的预算、单元让路、取消和执行期限，第36轮再补六池的任务终态。API约束与实际执行分别验证；其他结构解析、采样入口、外层等待及整合包总线程不由这些局部守卫一概覆盖。帧时间/MSPT需现场验收，大范围采样/FMM工作集仍待治理。
 
 ## 开局河流、长城、道路流程
 

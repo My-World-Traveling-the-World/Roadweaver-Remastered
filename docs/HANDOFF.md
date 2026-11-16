@@ -1118,3 +1118,76 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 ### 六、我踩到但已解决的坑
 
 Windows Python默认CRLF被守卫抓到，改为write_bytes UTF-8/LF。普通Executor线程没有道路角色，实际是null而不是PLANNING，夹具已纠正。CompletableFuture内部取消直接抛出，FutureTask会包装ExecutionException，分别实测。只验普通父/INITIAL子会漏掉开局同池父，真实缩池才复现。ForkJoin取消状态不代表中断，必须断言真实阻塞线程。PowerShell带点的-PtargetClass需整参加引号，命令错误不记作JUnit红。
+
+## 第36轮 ｜ 2026-11-16 ｜ 通用任务终态、内层Future与池退役
+
+### 一、改了什么
+
+源码行为变更提交d035b93，守卫增强fa70cb2、d5f417c。ThreadPoolManager分出PrioritizedTask（86行）、LifecycleWorkerPool（73行）、LifecycleCompletableTask（43行）、PoolRetirements（35行）；门面923物理行，RuntimeLoadPolicy947物理行，本轮生产文件均小于1000行，683个生产Java文件继续通过有效行守卫。新增注释解释中文原因。
+
+- 六个物理池同时追踪接收的包装与标准完成服务newTaskFor创建的内层结果。排队、闸门中和运行中的Future，在停服、世界换代和池替换时进入终态；不把取消QueueingFuture误当成内层结果完成。
+- 前置闸门接取消判据，暂停循环可以退出；角色上下文、优先级/FIFO、普通闸门故障告警后放行保留。停止、换代及取消的未开始任务不进入世界动作。
+- 自有FutureTask关联对外CF，cancel(true)先抵达实际线程再发布回调；cancel(false)不打断已开始的动作。异常原因原样、null返回和手动complete语义保留。
+- 六路惰性建池在锁内复核停止；已graceful关闭的池也升级强停。旧池先换引用，再由最外层finally锁外取消，避免同步回调看见旧池或占着管理锁。物理池在释放运行任务前关闭旧执行闸门，防worker抢先消费旧队列。
+- 地图服务端两处、单机地图一处、道路终态一处、路口精修一处、道路吸附两处，共七处完成链迁到跟踪工厂。JDK AsynchronousCompletionTask缺少公开关联结果口，角色Executor明确拒收；能力经ThreadPoolManager/ComputeService工厂保留，不靠反射读JDK私有字段。
+- 未改API模块协议、GSON配置键、枚举持久化或存档schema，未新增物理池/总调度器；FMM、DP、BAND、长桥弯和村庄裁切规则不改。
+
+### 二、我验证了什么（附负控）
+
+开工41701c9，git status空，pull --rebase已是最新；基线1274零跳过/中止/失败，Fabric通过。新增62项（61行为、1项七处接线语法树），TaskLifecycleTest已按FQCN登记。最初真实失败：排队4项、闸门4项、回调反序2项、完成服务内层1项、懒创建6项、graceful遗漏1项及重建回调1项；均是JUnit失败，不把编译失败计入。
+
+最终PASS tests=1336 skipped=0 aborted=0 failed=0且BUILD SUCCESSFUL，Fabric成功；日志.analysis_tmp/round36-final-after-mutations.log。标准完成服务、invokeAny/invokeAll均通过真实角色池；非合作计算夹具证明结果取消与真实退出的区别，两份追踪表的成功/失败清理均断言为零。
+
+28组生产变异（27行为、1静态）每次断言锚点次数，定向目标必须产生JUnit失败且零跳过/中止；finally git checkout --精确文件，再逐字核对HEAD，最终全量复验。脚本/记录为.analysis_tmp/round36_mutations.py、round36-mutations.json；日志round36-mut-*.log。第一轮锁内回调变异误绿，记录另存round36-mutations-initial.json；修正占位夹具后全部28组重跑，不把初始绿说成红。
+
+| # | 改坏了什么 | 目标用例 | 结果 |
+|---|---|---|---|
+| 1 | 闸门拒绝时不取消真实Future | `taskInsideAdmissionGateCompletesWithoutWorldActionOnStop(int)` | 红 |
+| 2 | 真实Future已取消但不结束对外CF | `queuedTaskCompletesWithoutExecutingWorldActionOnStop(int)` | 红 |
+| 3 | 先发取消回调再中断计算 | `cancellationInterruptsCalculationBeforeInvokingCompletionCallbacks(int)` | 红 |
+| 4 | 旧池取消回调直接在管理锁内执行 | `rebuildingPublishesTheNewPoolBeforeCompletingOldResultsOutsideTheMonitor` | 红 |
+| 5 | 池退役队列从不排空 | `rebuildCancelsOldQueueAndFreshTaskCanStillRun(int)` | 红 |
+| 6 | 角色优先级倒置 | `priorityFifoAndRoleContextSurviveTheExtractedWrapper` | 红 |
+| 7 | 同优先级FIFO倒置 | `priorityFifoAndRoleContextSurviveTheExtractedWrapper` | 红 |
+| 8 | 完成后不恢复角色上下文 | `admissionFaultStillRunsButCancellationAndLateStopDoNotRun` | 红 |
+| 9 | 普通闸门异常改成丢任务 | `admissionFaultStillRunsButCancellationAndLateStopDoNotRun` | 红 |
+| 10 | 故障放行绕过迟到停止复核 | `admissionFaultStillRunsButCancellationAndLateStopDoNotRun` | 红 |
+| 11 | 暂停循环忽略单任务取消 | `cancelWithoutInterruptReleasesAdmissionWorker(int)` | 红 |
+| 12 | 完成服务内层Future绕开登记 | `completionServiceKeepsItsInnerFutureTerminalWhenQueueIsStopped` | 红 |
+| 13 | 停止不取消登记的内层结果 | `completionServiceKeepsItsInnerFutureTerminalWhenQueueIsStopped` | 红 |
+| 14 | 世界换代只改代次不取消结果 | `completionServiceInnerFutureIsCancelledWhenWorldChanges(boolean)` | 红 |
+| 15 | 六个懒创建入口移除锁内停止复核 | `stopWinsAgainstLazyCreationWaitingForTheManagerMonitor(java.lang.String)` | 红 |
+| 16 | 跳过已经graceful关闭的池 | `stoppingAlsoCancelsAnAlreadyGracefullyShuttingDownPool` | 红 |
+| 17 | SNAPSHOT漏接生命周期物理池 | `everyPhysicalPoolCancelsBothFutureTypesInItsQueue(java.lang.String)` | 红 |
+| 18 | 直接接收不透明JDK完成任务 | `opaqueJdkRootSubmissionIsRejectedInsteadOfLeavingAnUntrackedResult(boolean)` | 红 |
+| 19 | 手动complete后仍执行排队supplier | `completingQueuedResultManuallySkipsTheSupplierAndKeepsTheValue` | 红 |
+| 20 | 对外异常额外包一层原包装 | `successfulValuesFailuresAndNullResultsKeepTheirOriginalMeaning` | 红 |
+| 21 | 任务完成不清执行追踪表 | `priorityFifoAndRoleContextSurviveTheExtractedWrapper` | 红 |
+| 22 | 真实Future完成不清结果追踪表 | `successfulValuesFailuresAndNullResultsKeepTheirOriginalMeaning` | 红 |
+| 23 | 物理拒收不取消提交的Future | `physicalRejectionCancelsTheSubmittedFutureAndRemovesTracking` | 红 |
+| 24 | cancel(false)也中断实际计算 | `cancellingWithoutInterruptKeepsAnAlreadyStartedCalculationRunning` | 红 |
+| 25 | 停服方法重新持整个管理锁 | `stoppingCompletesCleanupChainOutsideTheManagerMonitor` | 红 |
+| 26 | 执行体不登记导致在途结果遗漏 | `runningTaskIsCancelledEvenWhenCalculationHasNotExited(int)` | 红 |
+| 27 | 路口精修改回JDK不透明工厂 | `allSevenProductionCompletionSitesUseTrackedFactories` | 红（静态） |
+| 28 | 公开CF工厂绕开关联任务 | `successfulValuesFailuresAndNullResultsKeepTheirOriginalMeaning` | 红 |
+
+### 三、我没能验证什么（最重要）
+
+- 需真机/真实存档：最终Mixin与服务端事件、三个mod启动/停止/重开、FPS/MSPT、加载尾延迟、4096堆占用和吞吐。本轮没有部署jar，不给不卡顿或内存安全保证。
+- 取消结果不会强停不响应中断的NoiseChunk/FMM或外部世界计算。运行中夹具在取消后仍等待释放，真实线程退出单独验证；世界写闸门及代次复核不能删除。
+- CF取消回调仍可能同步阻塞调用方，锁外完成不等于任意阻塞回调都安全。外部自行嵌套Runnable/Future、完成服务单任务取消的全部组合未穷举；已验的完成服务范围是停服、换代，以及invokeAny/invokeAll结束。
+- 角色Executor对不透明JDK CF任务的明确拒收是有意行为变更。内部七处已迁移并编译；第三方若直接拿运行时角色Executor给JDK异步工厂，须改用跟踪工厂。api模块公开协议未变，但不能把内部运行时类的行为写成完全无变化。
+- 真正ServerLevel下七条业务链的世界内容没有在本轮Fake中重放；语法树守卫只验证生产调用接线。原几何产物回归仍全量执行，不能代替真机桥隧/保护A/B。
+- 4096工作集尚未实现；crossing、双平滑最终裁决、跨度回写、QualityGate及旧区块自动重铺继续保持现状。
+
+### 四、遗留半截的东西
+
+通用任务生命周期这一项完成离线实现和守卫。源码/测试基线d5f417c，本节与架构、现状、验证和路线同步提交。源码push两次均无法连接github.com:443，约21秒后退出128，日志round36-code-push.log、round36-code-push-retry.log；当时origin/main仍为41701c9，本地领先3项提交。文档提交后再尝试，未成功前不称远端已同步。河流与长城本轮只读，测试放道路。
+
+### 五、下一轮我会先做什么
+
+转入4096分配前工作量/内存估算：先盘点采样网格、FMM数组与坐标乘法，提取长整型尺寸计算并做边界/溢出测试，不缩核心、不丢候选；然后对拍按需瓦片与稀疏工作区。READY增量和落盘优化继续依实测推进；现场启动及真实中断尾延迟并列待验收。
+
+### 六、我踩到但已解决的坑
+
+取消JDK内部包装不等于结束关联CF，取消QueueingFuture也不等于内层结果完成；两者必须分别建模。CF先回调再中断会让清理等计算互等。只检查锁外stopping挡不住等待管理锁的旧调用。池重建若先取消旧池再发布新引用，同步回调会重入旧池。初版持锁守卫夹具在中断后释放worker，worker可能抢先取消，使负控误绿；改用忽略中断且必须手动释放的占位任务后，该变异红。Future已取消不意味着实际线程退出，二者分别断言。

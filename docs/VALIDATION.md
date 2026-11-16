@@ -33,6 +33,10 @@ CPU与粗路径执行回归见CpuAccurateHeightBackendTest、RuntimeCpuSamplingW
 
 道路消费方回归见 `RoadStartupGateTest`：缺长城仍等河流，有长城则河流就绪后才等长城；两者完成保留同步快路径，长城超时但未 ready 不放行。另验 API 读回、停服取消、旧通知迟到、下一任务和完成回调探针异常；Fabric 自有源码接线另有静态守卫，不能等同真实 Mixin 运行测试。10 项新增、7 项变异恢复后全量 1222，Fabric 编译通过。测试只放道路仓库，河流预热/发布与长城订阅/自身发布的守卫留给对应仓库；本轮二者仅只读核查。已确认 Streams awaitStartup 吞 CompletionException 后外层仍 publishReady，尚未修复，不把 API ready 当成真实河流产物已验收。
 
+任务生命周期守卫见TaskLifecycleTest：62项新增（61行为、1项语法树），显式登记在总套件。先实际复现排队四种Future、前置闸门四种Future、取消回调反序、完成服务内层结果、六路懒创建、已graceful关闭池及重建回调问题，再修复。六个真实物理池、运行中不合作夹具、用户取消true/false、旧代次、invokeAny/invokeAll、异常原样传播、优先级/FIFO和追踪表释放均覆盖。七处完成链的语法树守卫只证明接线，不代替真实ServerLevel；JDK不透明完成任务明确拒收的行为须保留。
+
+第36轮28组生产变异（27行为、1静态）逐项触发指定JUnit失败，编译/命令失败不算红；finally精确git checkout恢复并逐字对照，再跑1336项零跳过/中止/失败和Fabric编译。锁内取消变异第一次仍绿，原因是worker抢先取消；夹具改为忽略中断并继续占位，确保取消调用方结案，修正后该变异红，最终28组全部重跑。脚本、JSON和日志位于.analysis_tmp/round36_mutations.py、round36-mutations.json和round36-mut-*.log；初始误绿记录另存round36-mutations-initial.json。结果取消不代表实际计算退出；最终Mixin、真实停止重开、外部任意嵌套Future和阻塞回调仍需独立验证。
+
 ## 最新构建的真机对照
 
 开局半径上限现为 4096 区块，默认仍是 128；PlanningConfigTest 验证 2048/4096 原值保留、超上限夹到 4096、UI 与归一化一致、旧 JSON 键读回与快照、动态上限和默认不变；AdaptiveCandidateBoundsScaleTest 新增半径 4096 的几何档，核对长整型面积及不裁核心。这些夹具不实际枚举结构、生成大网格或加载世界，不能证明 4096 档不会长时间等待或内存耗尽。先解决路线中的采样/求解工作集与预算遗漏，再用存档副本逐档采样；开局全域预热和游玩期按区域规划须分开评估。
