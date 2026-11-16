@@ -297,6 +297,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathlogic.junction.RoadBraidDetectorTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareDetectorTest"),
+                        // 双扫描合一后必须保持原几何判据，并验证实际点对访问次数。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.bridge.BridgeDistanceScanTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareAbsorberTest"),
                         DiscoverySelectors.selectClass(

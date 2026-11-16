@@ -68,15 +68,12 @@ public final class BridgeShareDetector {
         List<BlockPos> bSamples = sample(b, MAX_SAMPLES);
         List<BlockPos> aSamples = sample(a, MAX_SAMPLES);
 
-        // 最近距离：两个方向都扫，取更紧的一侧（避免长桥采样稀疏时高估）
-        int forwardMin = nearestDistance(a, bSamples);
-        int backwardMin = nearestDistance(b, aSamples);
-        int minDistance = Math.min(forwardMin, backwardMin);
-
-        // 重叠里程：以「一侧的站到另一侧折线的最近距离 ≤ radius」计站数，取两方向较大者
-        int forwardOverlap = overlapCount(a, bSamples, limit);
-        int backwardOverlap = overlapCount(b, aSamples, limit);
-        int overlap = Math.max(forwardOverlap, backwardOverlap);
+        // 最近距离本来就要遍历全部站点对，同次收集重叠数可省去第二遍距离计算。
+        // 两个方向仍独立采样，避免长桥的稀疏样本改变原来的较小距离与较大重叠口径。
+        DistanceScan forward = scanDistances(a, bSamples, limit);
+        DistanceScan backward = scanDistances(b, aSamples, limit);
+        int minDistance = Math.min(forward.minDistance(), backward.minDistance());
+        int overlap = Math.max(forward.overlapStations(), backward.overlapStations());
 
         boolean shares = minDistance <= limit
                 && overlap >= Math.max(1, minOverlapStations)
@@ -165,31 +162,24 @@ public final class BridgeShareDetector {
         return out;
     }
 
-    /** {@code whole} 里每个点到 {@code samples} 的最近 XZ 距离，再取全局最小（四舍五入）。 */
-    private static int nearestDistance(List<BlockPos> whole, List<BlockPos> samples) {
+    /** 同次扫描的几何统计，不携带世界对象或跨批次缓存。 */
+    record DistanceScan(int minDistance, int overlapStations) {}
+
+    /** 每站最近距离与全局最近距离共用一次遍历，保留原开方、四舍五入和闭区间判据。 */
+    static DistanceScan scanDistances(List<BlockPos> whole, List<BlockPos> samples, int limit) {
         double best = Double.MAX_VALUE;
+        int overlap = 0;
         for (BlockPos p : whole) {
+            boolean touches = false;
             for (BlockPos q : samples) {
                 double d = xzDistance(p, q);
                 if (d < best) best = d;
+                if (d <= limit) touches = true;
             }
+            if (touches) overlap++;
         }
-        if (best == Double.MAX_VALUE) return Integer.MAX_VALUE;
-        return (int) Math.round(best);
-    }
-
-    /** {@code whole} 里到 {@code samples} 最近距离 ≤ {@code limit} 的点数。 */
-    private static int overlapCount(List<BlockPos> whole, List<BlockPos> samples, int limit) {
-        int count = 0;
-        for (BlockPos p : whole) {
-            for (BlockPos q : samples) {
-                if (xzDistance(p, q) <= limit) {
-                    count++;
-                    break;
-                }
-            }
-        }
-        return count;
+        int minimum = best == Double.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.round(best);
+        return new DistanceScan(minimum, overlap);
     }
 
     private static double xzDistance(BlockPos a, BlockPos b) {

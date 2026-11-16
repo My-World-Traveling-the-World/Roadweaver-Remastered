@@ -26,7 +26,12 @@ class BridgeShareDetectorTest {
 
     private static List<BlockPos> line(int z, int fromX, int toX) {
         List<BlockPos> out = new ArrayList<>();
-        for (int x = fromX; x <= toX; x++) out.add(new BlockPos(x, 63, z));
+        // 反向桥也必须产生合法的非空夹具，否则“不共享”的断言会被空输入提前满足。
+        int step = fromX <= toX ? 1 : -1;
+        for (int x = fromX; ; x += step) {
+            out.add(new BlockPos(x, 63, z));
+            if (x == toX) break;
+        }
         return out;
     }
 
@@ -51,9 +56,13 @@ class BridgeShareDetectorTest {
         // a 沿 +x，b 沿 -x，只在 x≈206 处点一下，然后各自远离
         List<BlockPos> a = line(0, 206, 320);
         List<BlockPos> b = line(3, 206, 92);
+        assertEquals(115, b.size(), "反向夹具必须覆盖整条桥");
 
-        BridgeShareDetector.Report report = BridgeShareDetector.detect(a, b);
+        // 3 格半径只覆盖相对端头；默认 24 格会覆盖两边各 24 站，不能拿它声称只擦肩。
+        BridgeShareDetector.Report report = BridgeShareDetector.detect(a, b, 3, 6);
 
+        assertEquals(3, report.minDistance());
+        assertEquals(1, report.overlapStations());
         assertFalse(report.shares(), "只在桥头擦肩的不许吸附：" + report);
     }
 
