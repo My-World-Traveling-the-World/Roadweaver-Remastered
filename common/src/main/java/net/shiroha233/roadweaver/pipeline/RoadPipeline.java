@@ -150,12 +150,16 @@ public final class RoadPipeline {
 
     // 上层知道端点的限制（含 Y）；内核仍只关心测地距离与候选下标。
     public TopologyPlan planTopology(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed) {
-        return planTopology(nodes, allowed, null, null);
+        return planTopologyWithin(nodes, 0, allowed);
     }
 
-    public TopologyPlan planTopologyWithShadow(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed,
+    public TopologyPlan planTopologyWithin(List<RoadNode> nodes, int radius, MinimumSpanningTree.EdgeFilter allowed) {
+        return planTopology(nodes, radius, allowed, null, null);
+    }
+
+    public TopologyPlan planTopologyWithShadow(List<RoadNode> nodes, int radius, MinimumSpanningTree.EdgeFilter allowed,
                                                IntBinaryOperator waterProxy) {
-        return planTopology(nodes, allowed,
+        return planTopology(nodes, radius, allowed,
                 (x, z) -> new BuildabilityShadow.Column(metric.terrain().height(x, z),
                         waterProxy.applyAsInt(x, z), BuildabilityShadow.Protection.UNKNOWN),
                 (report, nanos) -> LOGGER.info("RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
@@ -171,11 +175,17 @@ public final class RoadPipeline {
     TopologyPlan planTopology(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed,
                               BuildabilityShadow.Probe probe,
                               BiConsumer<BuildabilityShadow.Report, Long> observer) {
+        return planTopology(nodes, 0, allowed, probe, observer);
+    }
+
+    private TopologyPlan planTopology(List<RoadNode> nodes, int radius, MinimumSpanningTree.EdgeFilter allowed,
+                                      BuildabilityShadow.Probe probe,
+                                      BiConsumer<BuildabilityShadow.Report, Long> observer) {
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalArgumentException("节点列表不能为空");
         }
         // 让被长度上限淘汰的终点也退出传播早停条件；选树仍读相同的有效边权。
-        GeodesicMatrix matrix = GeodesicMatrix.build(metric, nodes, allowed);
+        GeodesicMatrix matrix = GeodesicMatrix.buildWithin(metric, nodes, radius, allowed);
         TopologyPlan selected = MinimumSpanningTree.solve(matrix);
         if (observer != null) {
             try {
@@ -208,16 +218,13 @@ public final class RoadPipeline {
         var candidates = new PriorityQueue<>(alternateLimit, nearest.reversed());
         var selectedKeys = new HashSet<Long>();
         for (var edge : selected) selectedKeys.add(shadowKey(edge.from(), edge.to()));
-        for (int a = 0; a < matrix.size(); a++) {
-            for (int b = a + 1; b < matrix.size(); b++) {
-                double distance = matrix.distance(a, b);
-                if (!Double.isFinite(distance) || selectedKeys.contains(shadowKey(a, b))) continue;
-                // 复用矩阵且只保留最短的少量候补，不复制密集的边表。
-                if (candidates.size() == alternateLimit && distance >= candidates.peek().geodesic()) continue;
-                candidates.add(new BuildabilityShadow.Choice(a, b, distance, false));
-                if (candidates.size() > alternateLimit) candidates.remove();
-            }
-        }
+        matrix.forEachFiniteEdge((a, b, distance) -> {
+            if (selectedKeys.contains(shadowKey(a, b))) return;
+            // 复用同一有序边表，让候补并列时继续保留较小下标。
+            if (candidates.size() == alternateLimit && distance >= candidates.peek().geodesic()) return;
+            candidates.add(new BuildabilityShadow.Choice(a, b, distance, false));
+            if (candidates.size() > alternateLimit) candidates.remove();
+        });
         var choices = new ArrayList<BuildabilityShadow.Choice>(budget);
         int selectedCount = Math.min(selected.size(), budget - candidates.size());
         for (int i = 0; i < selectedCount; i++) {

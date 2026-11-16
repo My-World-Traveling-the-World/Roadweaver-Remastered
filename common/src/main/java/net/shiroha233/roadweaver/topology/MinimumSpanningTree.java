@@ -49,7 +49,12 @@ public final class MinimumSpanningTree {
     }
 
     public static TopologyPlan solve(GeodesicMatrix matrix, EdgeFilter allowed) {
-        return solve(matrix.nodes(), matrix::distance, allowed);
+        // 稀疏矩阵只枚举准入边，稳定排序继续按原 (from,to) 次序处理同权。
+        List<TopologyPlan.Edge> candidates = new ArrayList<>();
+        matrix.forEachFiniteEdge((from, to, weight) -> {
+            if (allowed.allows(from, to)) candidates.add(new TopologyPlan.Edge(from, to, weight));
+        });
+        return choose(matrix.nodes(), candidates);
     }
 
     @FunctionalInterface
@@ -70,6 +75,12 @@ public final class MinimumSpanningTree {
                 }
             }
         }
+        return choose(nodes, candidates);
+    }
+
+    // 不论稀疏或密集，树边选择由同一排序和并查集负责。
+    private static TopologyPlan choose(List<RoadNode> nodes, List<TopologyPlan.Edge> candidates) {
+        int n = nodes.size();
         candidates.sort(Comparator.comparingDouble(TopologyPlan.Edge::distance));
 
         UnionFind uf = new UnionFind(n);

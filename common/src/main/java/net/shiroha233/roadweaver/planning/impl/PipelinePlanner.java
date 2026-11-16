@@ -172,15 +172,19 @@ public final class PipelinePlanner implements NetworkPlanner {
         // 只是不再白算第二轮的几何，规划时间约减半。
         TopologyPlan topology;
         try {
-            // 原有上限按原始端点三维距离；把同一判据提前给 Kruskal，免得删树边后断网。
+            // 空间桶只剪掉水平距离必然超限的对；高度仍由原端点判据决定。
+            // 无上限时所有节点都合法，无需另外建候选掩码。
             var pipeline = new RoadPipeline(metric, null);
-            if (shadowSurface == null) {
-                topology = pipeline.planTopology(nodes, (from, to) ->
-                        withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks));
-            } else {
-                topology = pipeline.planTopologyWithShadow(nodes, (from, to) ->
-                        withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks),
+            if (shadowSurface != null) {
+                topology = pipeline.planTopologyWithShadow(nodes, maxEdgeLenBlocks,
+                        maxEdgeLenBlocks <= 0 ? null : (from, to) ->
+                                withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks),
                         shadowSurface::waterProxy);
+            } else if (maxEdgeLenBlocks <= 0) {
+                topology = pipeline.planTopology(nodes);
+            } else {
+                topology = pipeline.planTopologyWithin(nodes, maxEdgeLenBlocks, (from, to) ->
+                        withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks));
             }
         } catch (RuntimeException pipelineFailure) {
             // 2026-11-14 修复（审计 F）：同样原来是静默吞掉。

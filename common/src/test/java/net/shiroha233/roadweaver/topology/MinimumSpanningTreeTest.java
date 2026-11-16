@@ -5,14 +5,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import net.shiroha233.roadweaver.metric.FastMarchingSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.GridTerrainField;
 import net.shiroha233.roadweaver.metric.ObstacleField;
+import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -155,6 +158,91 @@ class MinimumSpanningTreeTest {
         assertEquals(List.of(new TopologyPlan.Edge(0, 1, 4), new TopologyPlan.Edge(1, 2, 9)), bounded.edges());
         assertTrue(bounded.fullyConnected());
         assertEquals(1, bounded.componentCount());
+    }
+
+    @Test
+    void sparseForestMatchesAllPairsAcrossNegativeBucketsAndUsesBothDirections() {
+        // 跨两轴桶边界 + XZ 很近但高度超限 + 孤立点，不能用同一命中掩码做自证。
+        List<RoadNode> nodes = List.of(new RoadNode("a", -9, -9), new RoadNode("b", 0, 0),
+                new RoadNode("high", -9, 0), new RoadNode("c", -1, 0), new RoadNode("d", 17, 16),
+                new RoadNode("e", 29, 16), new RoadNode("f", 19, 17), new RoadNode("isolated", 44, 44));
+        int[] height = {0, 0, 35, 0, 0, 0, 0, 0};
+        int radius = 13;
+        var metric = FinslerMetric.of(GridTerrainField.fromFunction(-12, -12, 62, 62,
+                (x, z) -> Math.floorMod(x * (z + 7) / 13, 7)), ObstacleField.NONE);
+        var solver = new FastMarchingSolver(metric);
+        MinimumSpanningTree.EdgeFilter allowed = (i, j) -> within(nodes, height, radius, i, j);
+        GeodesicMatrix dense = GeodesicMatrix.build(metric, nodes, allowed);
+        GeodesicMatrix sparse = GeodesicMatrix.buildWithin(metric, nodes, radius, allowed);
+        assertTrue(Double.isFinite(sparse.distance(0, 1)), "跨 X/Z 桶的合法边必须保留");
+        assertEquals(Double.POSITIVE_INFINITY, sparse.distance(0, 2), "同一水平范围不代表通过三维限长");
+        assertEquals(List.of(2, 7), MinimumSpanningTree.solve(sparse).isolatedNodes());
+
+        boolean hasAsymmetry = false;
+        int checked = 0;
+        for (int i = 0; i < nodes.size(); i++) {
+            assertEquals(0.0, sparse.distance(i, i));
+            for (int j = i + 1; j < nodes.size(); j++) {
+                assertEquals(dense.distance(i, j), sparse.distance(i, j));
+                assertEquals(dense.distance(j, i), sparse.distance(j, i));
+                if (!allowed.allows(i, j)) continue;
+                RoadNode a = nodes.get(i), b = nodes.get(j);
+                double forward = solver.solveReachingAll(a.x(), a.z(), new int[]{b.x()}, new int[]{b.z()}).at(b.x(), b.z());
+                double reverse = solver.solveReachingAll(b.x(), b.z(), new int[]{a.x()}, new int[]{a.z()}).at(a.x(), a.z());
+                hasAsymmetry |= forward > reverse;
+                assertEquals(Math.min(forward, reverse), sparse.distance(i, j));
+                checked++;
+            }
+        }
+        assertTrue(hasAsymmetry, "至少一条边只测正向会变重");
+        assertEquals(6, checked);
+        TopologyPlan expected = MinimumSpanningTree.solve(dense);
+        TopologyPlan actual = new RoadPipeline(metric, null).planTopologyWithin(nodes, radius, allowed);
+        assertEquals(4, expected.edgeCount());
+        assertEquals(4, actual.componentCount());
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void sparseCandidateCountMatchesExhaustiveAndDenseInputsKeepExactPath() {
+        List<RoadNode> nodes = new ArrayList<>();
+        int[] height = new int[900];
+        for (int x = -15; x < 15; x++) {
+            for (int z = -15; z < 15; z++) {
+                int i = nodes.size();
+                nodes.add(new RoadNode("p" + i, 48 * x, 48 * z));
+                height[i] = Math.floorMod(31 * x + 17 * z, 53) - 26;
+            }
+        }
+        int[] checks = {0};
+        int[][] sparse = TopologyCandidates.nearby(nodes, 76, (i, j) -> {
+            checks[0]++;
+            return within(nodes, height, 76, i, j);
+        });
+        assertEquals(8798, checks[0], "有限半径候选不能重新扫全图");
+        int accepted = 0;
+        for (int i = 0; i < nodes.size(); i++) {
+            for (int j = i + 1; j < nodes.size(); j++) {
+                boolean expected = within(nodes, height, 76, i, j);
+                assertEquals(expected, Arrays.binarySearch(sparse[i], j) >= 0);
+                assertEquals(expected, Arrays.binarySearch(sparse[j], i) >= 0);
+                if (expected) accepted++;
+            }
+        }
+        assertEquals(3119, accepted);
+
+        List<RoadNode> denseNodes = nodes.subList(0, 16);
+        assertNull(TopologyCandidates.nearby(denseNodes, 4096, (i, j) -> true),
+                "点全在相邻桶时不要另建大邻接表");
+        assertNull(TopologyCandidates.nearby(nodes, 0, (i, j) -> true),
+                "无限半径保留全量通路");
+    }
+
+    private static boolean within(List<RoadNode> nodes, int[] heights, int radius, int i, int j) {
+        long dx = (long) nodes.get(i).x() - nodes.get(j).x();
+        long dy = (long) heights[i] - heights[j];
+        long dz = (long) nodes.get(i).z() - nodes.get(j).z();
+        return dx * dx + dy * dy + dz * dz <= (long) radius * radius;
     }
 
     // ── 性质 5：距离矩阵自身 ───────────────────────────────────
