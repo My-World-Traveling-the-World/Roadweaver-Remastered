@@ -276,6 +276,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainTileSubmitIntervalBillingTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerCacheTest"),
+                        // 真实认领、取消和关闭必须能区分成功与丢失结果，不能只守缓存容量。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.AccurateChunkBatchTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlannerFindViolationTest"),
                         DiscoverySelectors.selectClass(

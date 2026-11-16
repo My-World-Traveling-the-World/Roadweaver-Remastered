@@ -87,6 +87,9 @@ final class AccurateChunkBatch {
                     if (ownedChunks.get().contains(key)) {
                         throw new IllegalStateException("recursive accurate chunk request on the same thread: " + key);
                     }
+                }
+                // 重入检查整批通过后才写入认领，避免前面的无冲突键成为无人完成的孤儿。
+                for (long key : unresolved) {
                     CompletableFuture<AccurateHeightChunk> existing = inFlight.get(key);
                     if (existing != null) {
                         waiting.put(key, existing);
@@ -113,7 +116,8 @@ final class AccurateChunkBatch {
             }
             if (!waiting.isEmpty()) {
                 joinWaiting(waiting, result);
-                unresolved.removeAll(waiting.keySet());
+                // 超时项尚未得到结果，必须留给下一轮接管，不能仅因等待过就宣告完成。
+                unresolved.removeAll(result.keySet());
                 resolveStoredChunks(unresolved, result);
             }
         }
@@ -164,7 +168,7 @@ final class AccurateChunkBatch {
             } catch (TimeoutException timedOut) {
                 inFlight.remove(entry.getKey(), entry.getValue());
             } catch (InterruptedException interrupted) {
-                entry.getValue().cancel(true);
+                // Future 属于共享求值；只取消当前等待者，否则其他道路也会收到取消。
                 Thread.currentThread().interrupt();
                 throw new CancellationException("interrupted while waiting for accurate height chunk");
             } catch (ExecutionException failure) {
