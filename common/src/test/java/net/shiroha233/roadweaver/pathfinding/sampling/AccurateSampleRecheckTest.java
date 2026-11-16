@@ -154,18 +154,76 @@ final class AccurateSampleRecheckTest {
         assertEquals(1, h.backend.columns.size(), "故障后的新请求应能重新认领并成功计算");
     }
 
+    @Test
+    void facadeGridReusesChunkPublishedDuringItsStoreRead() throws Exception { facadeChunkPublication(true); }
+
+    @Test
+    void facadeColumnsReuseChunkPublishedDuringTheirStoreRead() throws Exception { facadeChunkPublication(false); }
+
+    private static void facadeChunkPublication(boolean followerGrid) throws Exception {
+        Backend backend = new Backend(); Store store = new Store();
+        var sampler = new AccurateHeightSampler(null, backend, store);
+        try {
+            Object result = staleRead(store, () -> followerGrid ? sampler.sampleGrid(GRID) : sampler.samplePositions(points(GRID)),
+                    () -> assertEquals(1, sampler.sampleChunks(List.of(ChunkPos.asLong(-1, -1))).size()), () -> {});
+            if (followerGrid) assertGrid((AccurateHeightGrid) result);
+            else assertEquals(expected(points(GRID)), result);
+            assertEquals(1, backend.chunks.get());
+            assertEquals(0, backend.grids.get(), "真实门面的整块发布也应使旧网格未命中失效");
+            assertTrue(backend.columns.isEmpty(), "真实门面的整块发布应避免重复逐列生成");
+            assertEquals(1, store.saves.get());
+        } finally { sampler.clear(); }
+    }
+
+    @Test
+    void facadePartialGridAfterChunkPublicationOnlySamplesUncoveredColumn() throws Exception {
+        Backend backend = new Backend(); Store store = new Store();
+        var sampler = new AccurateHeightSampler(null, backend, store);
+        try {
+            var request = new AccurateHeightGridRequest(15, 0, 2, 1, 1);
+            assertGrid(staleRead(store, () -> sampler.sampleGrid(request),
+                    () -> sampler.sampleChunks(List.of(0L)), () -> {}));
+            assertEquals(0, backend.grids.get());
+            assertEquals(List.of(List.of(new BlockPos(16, 0, 0))), backend.columns);
+            assertEquals(1, backend.chunks.get());
+        } finally { sampler.clear(); }
+    }
+
+    @Test
+    void sparsePublicationNeverPretendsWholeChunkIsComplete() {
+        Backend backend = new Backend(); Store store = new Store();
+        var sampler = new AccurateHeightSampler(null, backend, store);
+        try {
+            assertEquals(expected(points(GRID)), sampler.samplePositions(points(GRID)));
+            var chunk = sampler.sampleChunks(List.of(ChunkPos.asLong(-1, -1))).get(ChunkPos.asLong(-1, -1));
+            assertNotNull(chunk);
+            assertEquals(1, backend.chunks.get());
+            for (int z = -16; z < 0; z++) for (int x = -16; x < 0; x++) {
+                var value = value(new BlockPos(x, 0, z));
+                assertEquals(value.worldSurfaceWg(), chunk.worldSurfaceWg(x, z));
+                assertEquals(value.oceanFloorWg(), chunk.oceanFloorWg(x, z));
+                assertEquals(value.motionBlockingNoLeaves(), chunk.motionBlockingNoLeaves(x, z));
+            }
+        } finally { sampler.clear(); }
+    }
+
     private static <T> T staleRead(Harness h, Callable<T> follower, Runnable producer, Runnable afterPublish)
             throws Exception {
-        h.store.pauseNext.set(true);
+        return staleRead(h.store, follower, producer, afterPublish);
+    }
+
+    private static <T> T staleRead(Store store, Callable<T> follower, Runnable producer, Runnable afterPublish)
+            throws Exception {
+        store.pauseNext.set(true);
         try (ExecutorService pool = Executors.newCachedThreadPool()) {
             Future<T> task = pool.submit(follower);
             try {
-                await(h.store.snapshotTaken);
+                await(store.snapshotTaken);
                 assertFalse(task.isDone(), "必须真正停在旧的存储快照，不能仅验证预热后命中");
                 producer.run();
                 afterPublish.run();
             } finally {
-                h.store.release.countDown();
+                store.release.countDown();
             }
             return task.get(5, TimeUnit.SECONDS);
         }
@@ -221,7 +279,7 @@ final class AccurateSampleRecheckTest {
     }
 
     private static final class Backend implements AccurateHeightBackend {
-        final AtomicInteger grids = new AtomicInteger();
+        final AtomicInteger grids = new AtomicInteger(), chunks = new AtomicInteger();
         final List<List<BlockPos>> columns = new CopyOnWriteArrayList<>();
         @Override
         public AccurateHeightGrid sampleGrid(AccurateHeightGridRequest request, AccurateSamplingProgress progress) {
@@ -233,6 +291,7 @@ final class AccurateSampleRecheckTest {
         }
         @Override
         public Map<Long, AccurateHeightChunk> sampleChunks(Collection<Long> keys) {
+            chunks.incrementAndGet();
             Map<Long, AccurateHeightChunk> result = new LinkedHashMap<>();
             for (long key : keys) {
                 var grid = makeGrid(new AccurateHeightGridRequest(ChunkPos.getX(key) * 16, ChunkPos.getZ(key) * 16, 16, 16, 1));

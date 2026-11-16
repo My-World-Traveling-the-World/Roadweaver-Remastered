@@ -76,6 +76,8 @@ public final class AccurateHeightSampler {
         }
         this.chunkShards = chunks;
         this.columnShards = columns;
+        // 每世界一份有界发布记录，避免整块已经发布后逐列或网格仍使用旧未命中快照。
+        AccurateSamplePublications publications = new AccurateSamplePublications();
         this.chunkBatch = new AccurateChunkBatch(this.backend, this.store, new AccurateChunkBatch.Cache() {
             @Override
             public AccurateHeightChunk get(long key) {
@@ -91,7 +93,7 @@ public final class AccurateHeightSampler {
             public void ensureOpen() {
                 AccurateHeightSampler.this.ensureOpen();
             }
-        }, SamplerStatics::inFlightTimeoutMs);
+        }, SamplerStatics::inFlightTimeoutMs, publications);
         this.columnBatch = new AccurateColumnBatch(this.backend, this.store, new AccurateColumnBatch.Cache() {
             @Override
             public AccurateHeightSample get(long key, int x, int z) {
@@ -107,7 +109,7 @@ public final class AccurateHeightSampler {
             public void ensureOpen() {
                 AccurateHeightSampler.this.ensureOpen();
             }
-        });
+        }, SamplerStatics::inFlightTimeoutMs, publications);
     }
 
     /** One independently locked LRU bucket of a shared sampler cache. */

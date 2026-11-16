@@ -33,6 +33,7 @@ final class AccurateChunkBatch {
     private final AccurateSampleStore store;
     private final Cache cache;
     private final LongSupplier timeoutMs;
+    private final AccurateSamplePublications publications;
     private final ConcurrentHashMap<Long, CompletableFuture<AccurateHeightChunk>> inFlight =
             new ConcurrentHashMap<>();
     // 同线程重入不能等待自己；与其他线程的正常合并分开处理。
@@ -40,6 +41,13 @@ final class AccurateChunkBatch {
 
     AccurateChunkBatch(AccurateHeightBackend backend, AccurateSampleStore store,
                        Cache cache, LongSupplier timeoutMs) {
+        this(backend, store, cache, timeoutMs, new AccurateSamplePublications());
+    }
+
+    /** 整块发布同样会解决逐列未命中，生产与列/网格调度器共用这一份版本。 */
+    AccurateChunkBatch(AccurateHeightBackend backend, AccurateSampleStore store,
+                       Cache cache, LongSupplier timeoutMs, AccurateSamplePublications publications) {
+        this.publications = publications;
         this.backend = backend;
         this.store = store;
         this.cache = cache;
@@ -152,8 +160,14 @@ final class AccurateChunkBatch {
                 AccurateHeightChunk chunk = verified.get(key);
                 cache.put(key, chunk);
                 result.put(key, chunk);
-                entry.getValue().complete(chunk);
             }
+            // 所有缓存先完整发布，再记录瓦片版本，最后唤醒共享结果的等待者。
+            LinkedHashSet<Long> tiles = new LinkedHashSet<>();
+            for (long key : owned.keySet()) {
+                tiles.add(ChunkPos.asLong(Math.floorDiv(ChunkPos.getX(key), 16), Math.floorDiv(ChunkPos.getZ(key), 16)));
+            }
+            publications.publishedTiles(tiles);
+            owned.forEach((key, future) -> future.complete(verified.get(key)));
         } catch (Throwable failure) {
             for (CompletableFuture<AccurateHeightChunk> future : owned.values()) {
                 future.completeExceptionally(failure);
