@@ -27,6 +27,27 @@
 - `AccurateStoreLifecycle` 为五个文件访问入口提供共享租约，`close` 独占排空后清理瓦片缓存及锁表。不同瓦片仍可并发；已进入的写入允许在关闭等待期间完成，关闭返回后拒绝全部新访问。同线程读锁内重入关闭明确报错，避免升级死锁。
 - 门面的只读查询在入口和读盘返回后检查关闭，包括空的迟到结果。内存桶的读写都在桶锁内检查关闭标志；关闭先置标志再清空各桶，迟到发布不能绕过清空。诊断计数仍允许在关闭后读取。
 
+## 跨模组资源协调
+
+负载协作继续复用 `roadweaver-api`，不在道路中再建整合包总调度器。API 注册表表达意见，各消费者约束自己的任务；这不是一张能自动限制所有线程的全局许可证表。
+
+| 相邻工程 | 已核实的职责与接线 | 道路侧的边界 |
+|---|---|---|
+| `plaincraft-autotune` | `PlainCraftAutoTune.onPreLaunch` 按硬件写配置；`GenerationHardwareCaps` 提供硬件档。 | 启动配置不等于游玩时并发准入；没有因此移除道路自己的执行预算。 |
+| `plaincraft-chunky-autogen` | `RoadWeaverLoadSignals` 注册 `chunky-autogen`，提供 worker/lane、交互及辅助生成保护；`ChunkyTeleportLoadSignals` 另注册 `chunky-teleport`。`ChunkyRoadAwareCoordinator` 通过 readiness API 交接独占。 | 保留原 owner 与专属所有权；preflight 不咨询外部压力，独占时 readiness lane 仍能前进。 |
+| `plaincraft-hyperspeed-lod-cruise` | `RoadWeaverLoadSignals` 注册 `hyperspeed`，`busy` 和 `cpuProtection` 均读原 `CruiseState` 的 CPU 保护。 | 保护按 CPU 信号消费，不把“高速飞行本身”另算一种保护。 |
+| `plaincraft-twilight-teleport-intent-filter` | 注册 `twilight-teleport`，`TELEPORT.busy` 合并目的地预热与流送优先状态。 | 当前只报告 busy，没有给道路显式暂停建议；不把该状态擅自解释为 Chunky 或停掉全部道路。 |
+| `streams-reflowing-src` | `PlainCraftRoadWeaverBridge` 注册生命周期监听及 `StreamsThreadControl`；`StreamsRuntimeLoadPolicy` 已遍历全部负载源，独立消费河流线程建议。 | 道路设置供应线程和独占；不直接改 Streams 内部线程池。供应值 0 表示交还策略，不等于停止河流。 |
+| `plaincraft-c2me-runtime-qos` | 注入式补丁的 `RuntimeLimiter.currentProfile` 仍用内部类反射，优先级是传送、Chunky、巡航、普通；普通档另叠前台活动上限。 | 当前不能声称 QoS 已消费 API。迁移前要保留无 API 安装场景，并补齐 Gateway 信号或保留对应兼容路径。道路现有三处有意兼容反射不属本次迁移范围。 |
+
+道路适配仍收在 `apiimpl.LoadSignalBridge`。`RuntimeSignals` 按或合并显式保护，按最小非负数合并带现场参数的 worker/lane 建议；负值弃权，0 lane 可暂停，worker 仍按原策略保留至少一条进展线程。保护来源失败只隔离该次查询并限频告警。既有预热、Chunky 所有权、玩家保护和配置上限的优先分支保持，普通协调器的显式暂停优先于另一来源的正数建议。`foregroundInteraction` 与 `foregroundActivity` 不合并，诊断 `snapshot()` 的未知参数不参与实际派发。
+
+道路启动诊断只读取 owner、kind、busy，不调用带未知参数的预算快照。当前 Chunky 的 worker 建议会推进并写回自适应状态，`-1` 经夹取后可把预算压成 1；只打印负载类别不应触发这种决策。API 中通用 `snapshot()` / `describeAll()` 的既有建议查询仍保留，其他消费者使用时须单独核查；本轮只移除了道路日志不需要的调用，并将适配包到 API 的 import 基线从 14 收紧为 13。
+
+相邻工程目前仍通过旧仓库的 named contract 编译。四份已核对的 `RoadLoadSignals`、注册表、`LoadKind`、`StreamsThreadControl` 在新旧源码中的差异仅为中文文件职责注释；本轮未改 `api/` 或外部工程。源码核对不能证明玩家已安装的 jar 一致；发布时仍须核实运行中只有预期的 API 提供件及这些适配器。
+
+**尚未闭合的执行边界：** CPU 精确采样的 `parallelStream`、粗路径子任务的 `INITIAL` 豁免，仍能绕过普通道路预算。已有 API 约束不等于这些内部工作已经受控。先在同一信号体系下补有界执行、单元让路及取消，再做整合包现场的帧时间/MSPT 验收；大范围采样/FMM 工作集另行治理。
+
 ## 新内核依赖边界
 
 `ArchitectureGuardTest` 按类型和包检查依赖，覆盖普通、静态、通配导入及源码中的全限定引用。下表是内核的出向规则；包内引用另计。`foundation-core` 是守卫使用的类型分组，并非源码目录。

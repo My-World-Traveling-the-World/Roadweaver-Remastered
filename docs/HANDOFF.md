@@ -772,3 +772,66 @@ NOSHARE_READ 不能冒充写失败，替换故障要单独用 NOSHARE_DELETE 并
 ### 六、我踩到但已解决的坑
 
 COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使用，直接改成 4096 会把无关游玩范围一起放大，因此必须分开常量。配置 setter 存得下并不代表加载后保留，需经过 GSON 旧键读回、sanitize 和 snapshot。新算法加稀疏候选不代表采样场与 FMM 工作数组也已稀疏；“外层最多两线程”和“所有内部计算最多两线程”不是同一契约。源码中的历史帧率注释不能代替新版现场数据。
+
+---
+
+## 第 30 轮 ｜ 2026-11-16 ｜ 调度模组 API 协作与诊断副作用 ｜ 源码 `d960f8a`、`4f1923a` ｜ `PASS tests=1201 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| LoadSignalBridge.RuntimeSignals；RuntimeLoadPolicy | 沿用现有 API 注册表，对预算建议取最小非负值，对显式保护按或合并；保留 worker/lane 参数、road 消费者重载、负值弃权和 0 lane。普通协调器显式暂停先于别的来源的正数建议。故障按查询隔离并限频告警。 | 行为变更；修复非旧 owner 的意见未被消费及暂停被建议短路 |
+| LoadSignalBridge.describeResolution | 只取日志需要的 owner/kind/busy，取消有状态的未知参数预算查询；保留最高忙碌类别和原日志字段。 | 行为变更；诊断不再推进 Chunky 自适应预算 |
+| RuntimeLoadSignalsTest；ApiLifecycleAndLoadBridgeTest；RoadJUnitRegressionSuite | 新类 14 项按 FQCN 登记；既有类加 1 项日志副作用测试，并清理原“some-other-mod”夹具注册。 | 测试基建，共增加 15 项 |
+| architecture/deps-baseline.txt | 不再依赖 RoadLoadSnapshot，将 apiimpl -> api 的 import 次数 14 收紧到 13；其他依赖基线不放宽。 | 行为等价的依赖收紧 |
+| ARCHITECTURE；STATUS；ROADMAP；VALIDATION | 合并记录六个调度相关工程的职责、现有 API 消费、诊断边界及下一步执行预算。没有另建一份当前状态文档。 | 文档同步 |
+
+先提交 d960f8a，再独立提交诊断修复 4f1923a。适配桥 317/223 行、RuntimeLoadPolicy 973/565 行（物理/有效）；生产文件仍 671 个，超过 1000 有效行 0、超过 800 行 2。新逻辑有中文原因注释。没有改 api/ 的签名、ownerId、持久化 schema、配置键、道路几何或外部工程，也没有新建总调度器；未打包或部署发布 jar。
+
+### 二、我验证了什么（附负控）
+
+开工 main / 5d2e2ca，git status --porcelain 为空。开工 pull 和 HTTP/1.1 重试、后续 fetch 曾因连接失败/超时未成功，未冒充拉取完成；稍后 GitHub 连接恢复，源码已经成功推送。基线 1186 和 Fabric 编译通过。
+
+先加入 11 项用例，实际复现 6 个生产入口行为失败；临时协作类还被依赖与死代码守卫拦住，随后把消费边界收回已有 apiimpl 适配器，没有增加跨层基线。补齐配置上限、零 worker 与 Chunky 身份三项后 1200 全绿。再加入日志副作用夹具，修复前实际把预算从 6 写成 1；取消预算查询后 1201 全绿。11 项变异全部恢复后，再执行完整回归与 Fabric 编译，仍为 1201、零跳过/中止/失败，BUILD SUCCESSFUL。
+
+| 故意改坏生产代码 | 目标测试（RuntimeLoadSignalsTest，另注明者除外） | 结果 |
+|---|---|---|
+| worker 包装器丢弃 API 建议 | nonLegacyWorkerVotesReachProductionWithRoadContext | 红 |
+| lane 包装器丢弃 API 建议 | nonLegacyLaneVotesReachProductionWithAllContextAndKeepZero | 红 |
+| 布尔保护退回只认旧 owner 的入口 | nonLegacyCpuProtectionControlsPhaseWorkersLanesAndPauseReason | 红 |
+| 多源预算取最小改成取最大 | nonLegacyWorkerVotesReachProductionWithRoadContext | 红 |
+| 把 0 lane 当成无建议丢弃 | nonLegacyLaneVotesReachProductionWithAllContextAndKeepZero | 红 |
+| 删除协调器显式暂停的优先判定 | explicitCoordinatorPauseWinsOverAnotherProvidersPositiveLaneVote | 红 |
+| 不调用 road 消费者重载 | nonLegacyWorkerVotesReachProductionWithRoadContext | 红 |
+| lane 上下文改传 -1/-1/-1 | nonLegacyLaneVotesReachProductionWithAllContextAndKeepZero | 红 |
+| 前台交互偷换为移动或交互 | movementSignalIsNotSilentlyReinterpretedAsInteraction | 红 |
+| 故障源直接打断预算聚合 | brokenProviderCannotSuppressOtherProvidersOrOtherQueries | 红 |
+| 启动诊断改回调用完整预算快照 | ApiLifecycleAndLoadBridgeTest:describeResolutionDoesNotAdvanceAdaptiveBudgets | 红 |
+
+每项唯一锚点替换，运行完整套件并确认目标 JUnit 方法真实失败；不把编译失败计入。finally 用 git checkout -- 精确文件恢复，逐字节核对。前 10 项在 d960f8a 验证，诊断项在 4f1923a 验证；最终两步合并状态重新跑全量。日志、逐项 JSON 在忽略目录 .analysis_tmp/round30-*，本表为持久变异记录。
+
+只读核对相邻六个干净工程：Chunky dceba77、HyperSpeed d793b5a、Twilight 55c0f5f、Streams 315a44f、C2ME QoS 0868288、AutoTune b91490a。核对了初始化注册、信号实现、实际消费者与构建依赖。四个相关 API 源文件在新旧仓库中的差异仅为中文职责注释，不把字节不同误报为接口不兼容。
+
+诊断链的源码证据：原 LoadSignalBridge.describeResolution 只使用快照的最高忙碌类别，却会经 RoadLoadSignalsRegistry.snapshot:92..93 询问未知预算；Chunky RoadWeaverLoadSignals:74..76 原样委托；AdaptiveChunkController:250..251 将 -1 夹为 1，:307..309 再夹取并写回 roadBackgroundBudget。当前道路日志已移除这条预算调用。测试复刻这一写回，不宣称实际启动时已经测得多少延迟。
+
+### 三、我没能验证什么
+
+- **需要真机的**：六个模组实际同装时的 FPS、帧时间 p95/p99、MSPT、GC、玩家移动/GUI/传送、Chunky readiness 交接与取消。没有测得本轮减少多少卡顿，不能把 1201 项全绿换算成帧率改善。
+- **需要真实安装件和存档的**：运行中 API 的唯一提供件、相邻 mod 是否为上述源码构建、4096 预热峰值内存/耗时、首次进入与重开、长期切换维度和停服。不把 compileOnly 指向旧 contract 的源码兼容当成安装件已验收；没有重编或部署外部 mod。
+- **已核实但本轮未修的执行旁路**：CpuAccurateHeightBackend 三处 parallelStream 及 CoarseCorridorPlanningAdapter 两轮 INITIAL 子任务仍未统一遵守普通游玩预算；改变 API 消费不能自动收住这些内部计算。全域采样/FMM 工作集也未改，4096 上限仍不代表安全规模。
+- **外部协作仍保留的边界**：C2ME QoS 的 RuntimeLimiter:311..319、:518..558 仍反射查询内部类，源码中的“已经迁到 API”描述不能当事实。其 Gateway 信号当前没有对应标准 provider，迁移不能直接删掉这条能力；也须保留无 API 安装场景。道路三处已拍板保留的兼容反射不动。TELEPORT.busy 本身没有提出道路全停要求，先验证预热依赖再决定政策。
+- **诊断未覆盖的公共入口**：API 的通用 snapshot()/describeAll() 仍会询问 -1 上下文的建议，本轮只删除道路启动日志不需要的调用。其他消费者若使用它们，仍须查提供方是否纯读/正确弃权，未把公共 API 整体称为无副作用。
+- **我怀疑但没有证据的**：现有多控制器在现场的振荡程度、故障源出现频率与 API 查询自身占比；不据此调阈值或宣称性能倍数。crossing 依用户要求保持现状，双平滑、跨度回写、QualityGate、旧区块重铺和废弃 GPU 精确采样都不改默认。
+
+### 四、遗留半截的东西
+
+没有临时生产变异残留；两步源码已提交并推送，生产文件与 4f1923a 一致。文档和本交接完成后按停止前流程再提交、pull --rebase、push，并确认工作区为空；最终提交及远端核对以交付记录为准。本轮闭合 API 消费和道路诊断两处边界，执行旁路、大范围工作集及外部 QoS 迁移未开工，不标成已完成。
+
+### 五、下一轮我会先做什么
+
+沿用本次核对的信号通道，先为 CPU 精确采样和粗路径子任务注入最小执行策略端口，用受控任务验最大并发、前台让路、取消和开局豁免；再换有界执行并对拍三通道、完整键集合与路径，防止父任务同步等待同池子任务。随后解决全域采样/FMM 工作集，再回到 READY 收敛。QoS API 迁移单独保留任务：先补齐 Gateway 与无 API 场景的守卫，保持传送/Chunky/巡航优先级，再替换读取边界；不再额外造一个总调度器。
+
+### 六、我踩到但已解决的坑
+
+注册表里有来源不等于生产策略真的消费它，必须直接走 RuntimeLoadPolicy 断言。诊断快照没有现场参数，不能拿近似推荐决定派发；更不能假定建议方法是纯 getter，当前 Chunky 的自适应调用会写状态。多源正数建议不能盖过显式暂停，0 lane 与负值弃权必须分开；worker 原进展下限与 preflight 豁免不能顺手改掉。把消费类直接放 runtime 会新增不必要的 API 依赖，现有 apiimpl 适配器足够容纳这一职责，最终跨层基线只减不增。

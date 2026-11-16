@@ -1,6 +1,8 @@
 # 开发现状
 
-源码基线 `fe48172`（2026-11-16），Windows / JDK 21 全量回归 `PASS tests=1186 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
+源码基线 `4f1923a`（2026-11-16），Windows / JDK 21 全量回归 `PASS tests=1201 skipped=0 aborted=0 failed=0`，Fabric 编译通过。更新记录和负控详见[交接台账](HANDOFF.md)。[发布台账](RELEASES.md)里的版本有独立的源码和验证边界。
+
+**跨模组负载协作。** 已只读核对 AutoTune、Chunky、HyperSpeed、Twilight 传送、Streams 和 C2ME QoS 六个相邻工程。道路普通预算与显式保护已从只认两个来源改为聚合现有 API 注册表，保留上下文、零 lane、故障隔离和预热/独占进展规则；没有新增总调度器或修改外部工程。C2ME QoS 当前源码仍走内部类反射，不能写成整组迁移已完成。道路启动诊断已停止询问有状态的线程建议，避免日志的未知参数把 Chunky 预算写回 1。API 接线的离线守卫不代表并行流、INITIAL 子任务或 4096 工作集已受控；职责和边界见[架构](../ARCHITECTURE.md#跨模组资源协调)。
 
 | 范围 | 默认生产行为 | 未完成或不能下结论 |
 |---|---|---|
