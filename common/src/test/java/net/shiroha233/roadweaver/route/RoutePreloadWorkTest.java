@@ -14,6 +14,59 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class RoutePreloadWorkTest {
     @Test
+    void readyBurstKeepsTicketsAndRefreshesHandlesWithoutSpendingAttempts() {
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L, 3L, 4L), 4, 1, 1);
+        var fake = new Fake();
+        work.tick(fake);
+        for (long key = 1; key <= 4; key++) fake.ready(key);
+        for (long key = 1; key <= 4; key++) {
+            // 模拟下一 tick 的 FULL 句柄变化，禁止跨 tick 缓存第一次确认的对象。
+            fake.loaded.put(key, new Full(key));
+            work.tick(fake);
+            assertEquals((int) key, fake.placed.size());
+            assertEquals((int) key, work.processed());
+            assertEquals(4 - (int) key, fake.tickets.size());
+        }
+        assertEquals(List.of(1L, 2L, 3L, 4L), fake.placed);
+        assertEquals(fake.placed, fake.requested, "预算等待不得重新请求或消耗重试");
+        assertEquals(0, work.failures());
+        assertTrue(work.done());
+    }
+
+    @Test
+    void stoppingAReadyBurstReleasesDeferredTicketsWithoutPlacingThem() {
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L, 3L), 3, 1, 1);
+        var fake = new Fake();
+        work.tick(fake);
+        for (long key = 1; key <= 3; key++) fake.ready(key);
+        work.tick(fake);
+        assertEquals(Set.of(2L, 3L), fake.tickets);
+        work.stop();
+        work.tick(fake);
+        assertTrue(fake.tickets.isEmpty());
+        assertEquals(List.of(1L), fake.placed);
+        assertEquals(1, work.processed());
+    }
+
+    @Test
+    void failedFutureBeyondPlacementBudgetIsReleasedImmediately() {
+        var work = new RoutePreloadWork<Full>(List.of(1L, 2L, 3L), 3, 1, 1);
+        var fake = new Fake();
+        work.tick(fake);
+        fake.ready(1L);
+        fake.ready(2L);
+        fake.futures.get(3L).completeExceptionally(new IllegalStateException("fixture"));
+        work.tick(fake);
+        assertEquals(List.of(1L), fake.placed);
+        assertEquals(Set.of(2L), fake.tickets);
+        assertEquals(List.of(3L), work.failureKeys());
+        fake.loaded.put(2L, new Full(2L));
+        work.tick(fake);
+        assertEquals(List.of(1L, 2L), fake.placed);
+        assertTrue(work.done());
+    }
+
+    @Test
     void slowNearestChunkDoesNotBlockReadyChunksOrRefillingTheWindow() {
         var work = new RoutePreloadWork<Full>(List.of(10L, 20L, 30L, 40L), 2, 3);
         var fake = new Fake();

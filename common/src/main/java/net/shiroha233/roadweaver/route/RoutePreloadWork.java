@@ -10,8 +10,13 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 final class RoutePreloadWork<C> {
+    /** 加载窗口与施工额度分离，避免同时就绪的请求一次占满服务端 tick。 */
+    static final int DEFAULT_PLACEMENT_BUDGET = 8;
+
+    /** 票据由本任务持有，Future 仍属于区块引擎，停止时只释放前者。 */
     record Request(CompletableFuture<?> future, Runnable release) {}
 
+    /** 隔离引擎请求和实际施工，使慢块、取消和预算可以离线验证。 */
     interface Access<C> {
         Request request(long key);
         C loaded(long key);
@@ -27,15 +32,22 @@ final class RoutePreloadWork<C> {
     private final int total;
     private final int window;
     private final int maxAttempts;
+    private final int placementBudget;
     private int processed;
     private int failures;
     private boolean stopped;
 
     RoutePreloadWork(List<Long> ordered, int window, int maxAttempts) {
+        this(ordered, window, maxAttempts, DEFAULT_PLACEMENT_BUDGET);
+    }
+
+    /** 每 tick 至少推进一块；等待施工额度不算失败，也不能重发加载请求。 */
+    RoutePreloadWork(List<Long> ordered, int window, int maxAttempts, int placementBudget) {
         for (long key : ordered) waiting.add(new Task(key, 1));
         total = ordered.size();
         this.window = window;
         this.maxAttempts = maxAttempts;
+        this.placementBudget = Math.max(1, placementBudget);
     }
 
     void tick(Access<C> access) {
@@ -52,6 +64,9 @@ final class RoutePreloadWork<C> {
             RuntimeException problem = null;
             try {
                 request.future().getNow(null);
+                // 超额成功请求留在原位和原票据下，下个 tick 再取当时的 FULL 句柄。
+                // 异常请求在此之前识别，不能被前面的就绪块长期挡住释放和重试。
+                if (ready.size() >= placementBudget) continue;
                 C loaded = access.loaded(task.key());
                 if (loaded != null) {
                     ready.add(task);
