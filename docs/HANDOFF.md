@@ -1191,3 +1191,82 @@ Windows Python默认CRLF被守卫抓到，改为write_bytes UTF-8/LF。普通Exe
 ### 六、我踩到但已解决的坑
 
 取消JDK内部包装不等于结束关联CF，取消QueueingFuture也不等于内层结果完成；两者必须分别建模。CF先回调再中断会让清理等计算互等。只检查锁外stopping挡不住等待管理锁的旧调用。池重建若先取消旧池再发布新引用，同步回调会重入旧池。初版持锁守卫夹具在中断后释放worker，worker可能抢先取消，使负控误绿；改用忽略中断且必须手动释放的占位任务后，该变异红。Future已取消不意味着实际线程退出，二者分别断言。
+
+## 第37轮 ｜ 2026-11-17 ｜ 大范围布局、FMM状态压缩与不可达常量场
+
+### 一、改了什么
+
+三笔源码提交：af5cc72（行为变更：非法布局提前拒绝、边界算术修正及载荷报告），b2e6a0a（正常规划结果等价：压缩状态及目标集合），726105c（行为等价：不可达常量快照）。新GridLayout 73行、DenseGridWorkload 22行、GridFlags 22行、FmmTargets 76行；FastMarchingSolver 420行、ArrivalTimeField 192行、采样桥接200行、PipelinePlanner 321行，均为物理行。687个生产Java文件，有效代码超过1000行的仍为0；新增注释说明中文原因。
+
+- 全局包围盒的加余量、采样尺寸和坐标乘积先用long验证。采样适配、函数网格、精确请求及FMM三个入口在读世界/面积分配前检查；跨零点的合法大偏移不能被中间int乘法误拒，快照半开边界不再回绕。
+- `[PLANNING-WORKSET]`在采样前报告采样三图、保留高度、固定求解数组和目标存储的原始载荷，明确排除前沿、对象、缓存、其他任务。只诊断，不根据剩余堆临时缩小核心或删候选。
+- 通行/冻结状态按64位字存一位；目标按单字段、稀疏整数哈希表或密集位图选型。公式、传播顺序、同权堆次序和回溯规则保留。全不可达快照保留布局与查询，免去整幅double数组。
+- 修复独立FMM探针漏掉当前拓扑类型和fastutil编译依赖，增加WorkingSetOnly模式。首版JDK BitSet探针耗时偏高，改成固定字数组后重新全量对拍和测量；没有凭分配下降宣称FPS提升。
+- bridge到metric新增两处既有方向的值对象引用，import基线10→12，提交说明原因；未引入逆向层依赖。只读核对河流82cc818、长城5ade8e9b，二者工作区干净，未把道路守卫放到外部模组。顺带修正架构和验证文档中已被河流结果门推翻的旧结论。
+- 未改存档schema、配置键、枚举名、长桥弯、村庄裁切、FMM/DP/BAND选线策略或有意废弃的GPU精确采样。
+
+### 二、我验证了什么（附负控）
+
+开工8e101c1，status空并执行pull --rebase；基线1336零跳过/中止/失败、Fabric通过（round37-baseline.log）。新增47项：GridLayoutTest 15项、FmmWorkingSetTest 32项，显式登记总套件。分步1351、1379、1383全绿；源码最终726105c，23组变异后再次全量回归与Fabric编译，收尾日志.analysis_tmp/round37-final-after-mutations.log。
+
+DenseFmmReference与git show af5cc72的原布尔数组实现做类型重命名后逐字相等。正常夹具包含8种地形/步长/软硬障碍、三个交替源、全场/单/多目标；比较全部临时及最终double位、回溯点序，再用独立权重/分量标记核对选树。空目标仍是原来的全场求解；重复目标按吸附格去重，源越界/硬禁/吸附禁行保持不可达。当前线程分配预算实际量到生产返回，不用“非负”断言代替收益守卫。
+
+23组均是目标JUnit失败，编译/命令失败不算红；每项finally精确git checkout单文件并比较原字节。最终脚本和结果为.analysis_tmp/round37_mutations.py、round37-mutations.json、round37-mutation-run-final.log，各项日志round37-mut-*.log。第一轮19组先全红，补上不可达优化后23组全部重跑、全红、恢复。
+
+| # | 故意破坏 | 指定守卫（metric包） | JUnit失败数 |
+|---|---|---|---|
+| 1 | `cell-product-overflows`，GridLayout.java | `GridLayoutTest#cellCountCannotWrapIntoAnAcceptedEmptyOrTinyHeightArray` | 1，红 |
+| 2 | `grid-coordinate-not-checked`，GridLayout.java | `GridLayoutTest#rejectsWorldCoordinateOverflowBeforeSamplingOrAllocating` | 1，红 |
+| 3 | `request-coordinate-not-checked`，AccurateHeightGridRequest.java | `GridLayoutTest#rejectsWorldCoordinateOverflowBeforeSamplingOrAllocating` | 1，红 |
+| 4 | `request-offset-int-overflow`，AccurateHeightGridRequest.java | `GridLayoutTest#negativeOriginAllowsLargeIntermediateProductsWhenFinalCoordinatesAreValid` | 1，红 |
+| 5 | `sampling-validates-after-world-read`，SampledTerrainField.java | `GridLayoutTest#cellCountCannotWrapIntoAnAcceptedEmptyOrTinyHeightArray` | 1，红 |
+| 6 | `factory-allocates-int-product`，GridTerrainField.java | `GridLayoutTest#cellCountCannotWrapIntoAnAcceptedEmptyOrTinyHeightArray` | 1，红 |
+| 7 | `solver-queries-before-validation`，FastMarchingSolver.java | `GridLayoutTest#allSolverEntrypointsRejectOversizedExternalFieldsBeforeQueryingTheMetric(int)` | 1，红 |
+| 8 | `snapshot-boundary-wraps`，ArrivalTimeField.java | `GridLayoutTest#smallExtremeCoordinateFieldsStillProduceReachableSnapshots` | 1，红 |
+| 9 | `sampling-estimate-truncated`，DenseGridWorkload.java | `GridLayoutTest#radius4096EstimateUsesLongBeforeMultiplicationWithoutAllocatingTheGrid` | 1，红 |
+| 10 | `target-budget-still-full-grid`，DenseGridWorkload.java | `GridLayoutTest#radius4096EstimateUsesLongBeforeMultiplicationWithoutAllocatingTheGrid` | 1，红 |
+| 11 | `early-stop-disabled`，FastMarchingSolver.java | `FmmWorkingSetTest#duplicateSourceAndSingleCellTargetsStopAtTheOriginalFrozenEvent` | 1，红 |
+| 12 | `duplicates-counted-more-than-once`，FmmTargets.java | `FmmWorkingSetTest#duplicateSourceAndSingleCellTargetsStopAtTheOriginalFrozenEvent` | 1，红 |
+| 13 | `sparse-zero-sentinel-lost`，FmmTargets.java | `FmmWorkingSetTest#hashCollisionsDuplicatesMissingCellsAndWordBoundariesMatchAnIndependentSet` | 1，红 |
+| 14 | `sparse-query-skips-collision-chain`，FmmTargets.java | `FmmWorkingSetTest#hashCollisionsDuplicatesMissingCellsAndWordBoundariesMatchAnIndependentSet` | 1，红 |
+| 15 | `dense-target-word-alias`，FmmTargets.java | `FmmWorkingSetTest#hashCollisionsDuplicatesMissingCellsAndWordBoundariesMatchAnIndependentSet` | 1，红 |
+| 16 | `word-boundaries-alias`，GridFlags.java | `FmmWorkingSetTest#fixedGridFlagsMatchIndependentBooleanStatesAcrossWordBoundaries(int)` | 3，红 |
+| 17 | `flags-still-byte-sized-allocation`，GridFlags.java | `FmmWorkingSetTest#hotNearTargetAllocatesArrivalValuesAndPackedFlagsWithoutAFullTargetMask` | 1，红 |
+| 18 | `hard-grid-cache-all-passable`，FastMarchingSolver.java | `FmmWorkingSetTest#outOfBoundsAndHardBlockedSourcesKeepTheUnreachableContract(int)` | 1，红 |
+| 19 | `freezes-an-extra-cell`，FastMarchingSolver.java | `FmmWorkingSetTest#compressedStateMatchesTheFrozenDenseSolverIncludingTemporaryValuesAndPaths(int)` | 8，红 |
+| 20 | `unreachable-still-allocates-dense-array`，ArrivalTimeField.java | `FmmWorkingSetTest#unreachableSnapshotsKeepTheirGeometryWithoutAllocatingArrivalArrays(int)` | 4，红 |
+| 21 | `unreachable-at-no-constant-guard`，ArrivalTimeField.java | `FmmWorkingSetTest#unreachableSnapshotsKeepTheirGeometryWithoutAllocatingArrivalArrays(int)` | 4，红 |
+| 22 | `unreachable-path-no-constant-guard`，ArrivalTimeField.java | `FmmWorkingSetTest#unreachableSnapshotsKeepTheirGeometryWithoutAllocatingArrivalArrays(int)` | 4，红 |
+| 23 | `unreachable-layout-no-validation`，ArrivalTimeField.java | `GridLayoutTest#allSolverEntrypointsRejectOversizedExternalFieldsBeforeQueryingTheMetric(int)` | 3，红 |
+
+固定512MiB JVM、1050625格、30目标的探针，全部场值和1025个回溯点相等；8对热身后11对交替测量。数据来自round37-workset-final-probe.log：
+
+| 场景 | 每次线程分配 p50（B） | 耗时 p50（ms） | 耗时 p95（ms） |
+|---|---|---|---|
+| workset-hot-near-single | 10506448 → 8536592 | 1.168 → 1.142 | 1.595 → 2.314 |
+| workset-hot-far-multi | 10506448 → 8536816 | 107.255 → 111.500 | 110.093 → 125.237 |
+| workset-cold-far-multi | 28441248 → 25552336 | 127.718 → 130.352 | 130.994 → 140.906 |
+
+探针命令和解释见VALIDATION。原DirectionOnly模式实际编译运行成功（round37-direction-probe.log）。这些是合成地形线程分配及核内耗时，不是服务器堆峰值、全流程耗时或帧率。
+
+### 三、我没能验证什么
+
+- 4096真实世界、真实存档、进档等待、MSPT/FPS、停服/跨世界的真实中断尾延迟和三模组最终Mixin时序未验证，未构建或部署新jar。
+- 数组估算不含对象头、前沿堆、采样缓存/缺列列表/Map和其他任务。AccurateColumnBatch仍有整场missingIndexes、missingKeys以及后续缺列产物；采样仍返回三张高度图，FMM仍有三张全场double数组。131072×131072格按step=8的三图原始载荷即3GiB；压缩状态后仍不能把4096当作安全范围。
+- 百万格固定堆远目标耗时略升：热p50 107.255→111.500 ms、冷127.718→130.352 ms；分配减少不等于吞吐提高。首版BitSet与最终固定字数组都留下独立日志，未只挑更好结果。线程计数器只量当前线程分配，不量存活峰值或全部采样线程。
+- 不可达常量场的合法范围、无穷查询及空路径已验；有道路的到达快照仍保留独立数组，尚未分页。越界布局提前拒绝是有意行为变更；PipelinePlanner既有失败回退未因本轮新增，不将其算作大范围解决方案。
+- crossing解耦缺用户真机召回数据，继续保留；双平滑最终裁决、跨度回写默认、QualityGate阈值和旧区块重铺仍未动。
+
+### 四、遗留半截的东西
+
+本轮分配前估算与状态压缩完成离线实现和守卫；全局包围盒及整场高度/双轴代价/到达数组没有解决。路线第8项仅推进一阶段，不能写成4096工作集已完成。源码分三次小步提交，文档同步更新。源码首次push无法连接github.com:443，约21秒后退出128（round37-code-push.log）；当时本地领先origin/main三项。恢复后最终回归PASS tests=1383 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL（round37-final-after-mutations.log）。文档提交后重试推送，结果另据实际记录；未把网络失败写成同步成功。
+
+### 五、下一轮我会先做什么
+
+1. 同一GridLayout上建立按需瓦片读口，保留原采样原点、步长、三通道及跨瓦片梯度邻域。先用Fake与原整场采样逐格对拍，不能把缓存未命中当零高度或改变核心。
+2. 再让FMM代价按访问格准备，并把到达值/冻结状态改为按需页；否则全场预计算仍会把瓦片全部拉满。保留快照寿命、全局绕行和跨分区连接，逐位/逐路径/逐候选权重/逐最终边对拍后才接生产。
+3. 用固定小堆覆盖稀疏到达、密集访问、封闭障碍和远端连接；继续记录分配与耗时的取舍，再做真实4096存档压力验收。READY增量/落盘等待计时证据，三模组现场次序并列待验。
+
+### 六、我踩到但已解决的坑
+
+Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后合法”的坐标，必须整条算式升long。只在数组构造时校验挡不住此前世界查询，测试同时让硬障碍回调在前置校验前调用时报错。BitSet的可变有效长度与每次查询检查不是固定网格所需，替换为小型固定字数组后重新测量；状态压缩依然有算术开销，耗时未据分配强行推断。不可达也分配全场数组会在错误返回路径制造大内存峰值，常量快照必须同时守住at和pathTo，不能只把数组设null。

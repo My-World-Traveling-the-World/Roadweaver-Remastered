@@ -31,11 +31,27 @@ CPU与粗路径执行回归见CpuAccurateHeightBackendTest、RuntimeCpuSamplingW
 
 预热门回归见 `PrewarmGateWorkTest`：两项直接调用公开生产入口确认无长城立即完成、已注册提供方仍等待；其余用受控时钟与拒绝调度器验证五秒宽限、首次/后续提交失败、取消、显式期限、进展刷新、无进度信号及持续进展下的绝对期限。默认仍是十分钟停滞和三十分钟绝对上限，不睡眠十分钟来验边界。7 项生产变异实际触发对应 JUnit 失败，恢复后 1212 项无跳过且 Fabric 编译通过，见交接第 31 轮。未启动整合包或验证最终 Mixin 顺序，未修改相邻模组和安装件。
 
-道路消费方回归见 `RoadStartupGateTest`：缺长城仍等河流，有长城则河流就绪后才等长城；两者完成保留同步快路径，长城超时但未 ready 不放行。另验 API 读回、停服取消、旧通知迟到、下一任务和完成回调探针异常；Fabric 自有源码接线另有静态守卫，不能等同真实 Mixin 运行测试。10 项新增、7 项变异恢复后全量 1222，Fabric 编译通过。测试只放道路仓库，河流预热/发布与长城订阅/自身发布的守卫留给对应仓库；本轮二者仅只读核查。已确认 Streams awaitStartup 吞 CompletionException 后外层仍 publishReady，尚未修复，不把 API ready 当成真实河流产物已验收。
+道路消费方回归见 `RoadStartupGateTest`：缺长城仍等河流，有长城则河流就绪后才等长城；两者完成保留同步快路径，长城超时但未 ready 不放行。另验 API 读回、停服取消、旧通知迟到、下一任务和完成回调探针异常；Fabric 自有源码接线另有静态守卫，不能等同真实 Mixin 运行测试。10 项新增、7 项变异恢复后全量 1222，Fabric 编译通过。测试只放道路仓库，河流预热/发布与长城订阅/自身发布的守卫留给对应仓库；本轮二者仅只读核查。该轮曾确认Streams异常后仍发布的旧路径；第37轮只读复核82cc818，已通过每世界结果门限制为成功或明确禁用才发布。三模组真实启动仍未验收。
 
 任务生命周期守卫见TaskLifecycleTest：62项新增（61行为、1项语法树），显式登记在总套件。先实际复现排队四种Future、前置闸门四种Future、取消回调反序、完成服务内层结果、六路懒创建、已graceful关闭池及重建回调问题，再修复。六个真实物理池、运行中不合作夹具、用户取消true/false、旧代次、invokeAny/invokeAll、异常原样传播、优先级/FIFO和追踪表释放均覆盖。七处完成链的语法树守卫只证明接线，不代替真实ServerLevel；JDK不透明完成任务明确拒收的行为须保留。
 
 第36轮28组生产变异（27行为、1静态）逐项触发指定JUnit失败，编译/命令失败不算红；finally精确git checkout恢复并逐字对照，再跑1336项零跳过/中止/失败和Fabric编译。锁内取消变异第一次仍绿，原因是worker抢先取消；夹具改为忽略中断并继续占位，确保取消调用方结案，修正后该变异红，最终28组全部重跑。脚本、JSON和日志位于.analysis_tmp/round36_mutations.py、round36-mutations.json和round36-mut-*.log；初始误绿记录另存round36-mutations-initial.json。结果取消不代表实际计算退出；最终Mixin、真实停止重开、外部任意嵌套Future和阻塞回调仍需独立验证。
+
+## 第37轮大范围工作集与复现
+
+新增GridLayoutTest 15项、FmmWorkingSetTest 32项，均已按FQCN登记；总计1383项、零跳过/中止/失败，Fabric编译通过。DenseFmmReference是af5cc72布尔数组求解器的类型重命名副本，逐字核对原实现；正常源的全场/单目标/多目标、重复吸附、空目标、硬禁行和跨边、源合法但吸附格受阻、多源快照、候选权重及Kruskal最终边序均对拍。另有JDK21当前线程真实分配预算，防止仅修改估算日志或反向扩大位图。
+
+23组生产变异逐项触发目标JUnit失败，不把编译或命令失败计入；finally精确checkout单文件并逐字恢复。覆盖乘积回绕、坐标检查、读世界顺序、估算截断、重复目标、哈希冲突、密集位图、跨字状态、真实分配、硬禁行、提前冻结，以及不可达快照的面积分配和查询语义。明细见HANDOFF第37轮；本机脚本/JSON/逐项日志为.analysis_tmp/round37_mutations.py、round37-mutations.json和round37-mut-*.log。
+
+可复现探针：`./scripts/benchmarks/Measure-Fmm.ps1 -JavaHome $env:JAVA_HOME -Baseline af5cc72 -WorkingSetOnly`。使用同一JVM、固定512MiB堆、1050625格、30目标；先核对全部场值和1025个回溯点，再热身8对、交替顺序测11对。热求解器和每次新建求解器分组；线程分配不是存活堆峰值，11次的p95接近最大样本，不作真机尾延迟结论。原DirectionOnly模式也已实际跑通；独立编译清单同步包含新网格类型、TopologyCandidates和已有fastutil依赖。
+
+| 场景 | 每次线程分配 p50（B） | 耗时 p50（ms） | 耗时 p95（ms） |
+|---|---|---|---|
+| workset-hot-near-single | 10506448 → 8536592 | 1.168 → 1.142 | 1.595 → 2.314 |
+| workset-hot-far-multi | 10506448 → 8536816 | 107.255 → 111.500 | 110.093 → 125.237 |
+| workset-cold-far-multi | 28441248 → 25552336 | 127.718 → 130.352 | 130.994 → 140.906 |
+
+上表来自.analysis_tmp/round37-workset-final-probe.log。远目标耗时略升，当前交付是减少分配，不宣称加载加速。`[PLANNING-WORKSET]`默认记录可复核载荷，并明确排除前沿、对象、采样缓存和其他任务；它是诊断，不是4096安全准入。全场高度/代价/到达数组和冷采样缺列工作区仍需按需化，之后再用存档副本逐档验收。
 
 ## 最新构建的真机对照
 
