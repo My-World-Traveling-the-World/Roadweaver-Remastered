@@ -451,7 +451,9 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetProfileSolverTest"),
                 // 村庄端点过滤必须保留外来道路、阈值边界及整轮撤销原因。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.VillageEndpointFilterTest"),
-                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"))
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"),
+                // 直接验证生产采样入口，避免只测执行器却漏掉实际三通道产物。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.sampling.CpuAccurateHeightBackendTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。
