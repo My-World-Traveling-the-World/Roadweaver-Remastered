@@ -40,7 +40,7 @@
 
 ## 最新进度
 
-第 31 轮交付道路预热门修复，源码 `59ac4f7`，回归 1212 项。下一步优先游玩期内部执行预算、4096 规划工作集，以及预热回调的停服/重开隔离；详见本文件末尾与 ROADMAP，不把这些标成已完成。
+第 32 轮按用户明确顺序补道路消费方前置条件：有长城河流→长城→道路，无长城河流→道路；源码 `bd61dd8`，回归 1222 项，7 项变异。只改道路及其测试，河流发布与长城订阅的测试归对应仓库。下一步包括河流发布方异常语义、三模组现场时序、内部执行预算与 4096 工作集；详见末尾及 ROADMAP。
 
 ## 已完成轮次记录
 
@@ -893,3 +893,60 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 ### 六、我踩到但已解决的坑
 
 旧 schedule 首次失败仅打日志而没有拿到 gate 去 complete，后续 trySchedule 有结案并不能补首次出口。无长城也走五秒宽限来自删除 fast path 后没有按“是否需要门”区分。已有提供方必须也算需要等待，不能只依赖 Fabric 安装清单。系统属性默认实际是十/三十分钟，旧注释写零默认已漂移；本轮保留实际行为。PowerShell Set-Content 最后会带 CRLF，Java 文件写后必须统一 LF，守卫确实会红。暂存索引可用作变异恢复源，但必须先确认其中是本轮已验证代码再 checkout。
+
+---
+
+## 第 32 轮 ｜ 2026-11-16 ｜ 道路显式等待河流及长城，明确测试归属 ｜ 源码 `bd61dd8` ｜ `PASS tests=1222 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 性质 |
+|---|---|---|
+| LoadSignalBridge | initialRiversReady 读取已有 RiverReadinessApi；仅未安装河流时略过。原 API 不变，不让道路代替河流发布 ready。 | 行为变更 |
+| RoadStartupGate | 道路消费方先等河流，再确认长城完成或缺席。两者完成同步返回；否则非阻塞轮询。长城旧门正常返回后再问 ready，超时但未 ready 结束为失败。停服可取消本次门及其创建的长城轮询。98 物理行，中文原因注释。 | 行为变更 |
+| Fabric MinecraftServerMixin；ServerPlanningHooks | 用上述前置门替换“只问长城”的入口，去掉单独后台等待线程；失败记 ROAD_INITIAL_GEN_NOT_STARTED；停服撤等待，服务端真正执行前查 stopped/取消/stopping。 | 行为变更 |
+| RoadStartupGateTest；RoadJUnitRegressionSuite | 10 项按 FQCN 登记。测试道路消费行为，Fake 不冒充河流或长城实现；Fabric 自有文件的静态接线守卫单列。 | 测试基建 |
+| ARCHITECTURE；STATUS；ROADMAP；VALIDATION；HANDOFF | 说明两种模组组合的顺序及发布/消费职责，移除已经失效的旧状态；保留待验边界。 | 文档 |
+
+用户明确：有长城时河流→长城→道路，没长城时河流→道路；测试必须在对应模组。本轮只修改道路仓库，道路自己读取前置条件的测试留在道路。未移动第 31 轮单门测试，因为它测的是道路如何等待长城，不是长城自己的预热。生产 Java 673 个，有效行超过 1000 为 0，超过 800 仍 2；未改配置键、持久化 schema、API 签名、几何及外部仓库。
+
+### 二、我验证了什么（附负控）
+
+开工 main/f78c6c0 干净，git pull --rebase Already up to date。基线完整 1212 + Fabric；新增前八项后 1220，补完成回调故障与 Fabric 接线后 1222。逐项变异并恢复后完整双模块仍 1222、0 跳过/中止/失败，BUILD SUCCESSFUL。
+
+| 故意改坏生产代码 | RoadStartupGateTest 目标 | 结果 |
+|---|---|---|
+| 不读河流，直接进入长城阶段 | withoutWallRoadStillWaitsForRivers | 红 |
+| 长城条件恒满足 | installedWallIsOnlyAwaitedAfterRiversAndRoadWaitsForBoth | 红 |
+| 长城旧门超时也当 ready | wallTimeoutReleaseCannotPretendTheWallIsReady | 红 |
+| 道路河流 API 适配恒 true | roadAdapterReadsTheSharedRiverApiAndOnlyBypassesAbsentMod | 红 |
+| 停服 cancelPending 不取消 | stopCancelsRiverWaitAndLateRiverReadinessCannotAdvance | 红 |
+| Fabric 启动入口把河流谓词改 true | fabricStartupActuallyUsesOrderedGateAndStopCancelsIt | 红：静态接线守卫 |
+| Fabric 停服去掉 cancelPending 调用 | fabricStartupActuallyUsesOrderedGateAndStopCancelsIt | 红：静态接线守卫 |
+
+每项断言唯一替换锚点；全套运行确认目标 JUnit 实际失败，finally git checkout -- 精确文件从本轮暂存索引恢复，并逐字节核对。两条 Fabric 检查是静态接线证据，不宣称运行了 Minecraft Mixin。日志/JSON/脚本在忽略目录 .analysis_tmp/round32-*。源码已提交，文档另提交。
+
+只读核查 Streams 315a44f 与长城 01408e65，未修改、未构建、未部署。长城确实 addListener 到 RiverReadinessApi；道路此前该 API 仅用于 LoadSignalBridge 日志，启动入口只问长城，现已补消费。河流广播契约目前由 roadweaver_api 承载，提供方是 Streams；名字和 Jar 宿主不改变职责归属。
+
+### 三、我没能验证什么（最重要）
+
+- **需要真机的**：三模组最终 Mixin 注入次序，新建和重开完整加载时序、无长城组合、真实退出与旧回调交错；静态接线守卫不能替代现场。没有 FPS/MSPT/进档时间结论。
+- **需要真实存档/安装件的**：API 唯一提供件、跨存档残留、4096 内存/耗时及部署后行为。本轮未打包或安装。
+- **已核实未修的河流发布方问题**：StreamsPrewarmService.awaitStartup:197 起捕获 CompletionException 后返回，而 StreamsServerLifecycleMixin 随后仍 publishReady；beginStartup 对禁用/上下文缺失/异常也有无 Future 出口。必须在 Streams 仓库补其生产出口测试并定义禁用、失败和真正完成的语义，不能在道路 Fake 中宣称修好。
+- **长城自己的测试未运行**：已确认订阅代码及 provider，尚未验证自身状态机异常、启动与重开；对应守卫应放长城仓库。若只依赖其现有 ready API，启动 request 之前暂时 ready 的竞态仍需真实时序核验。
+- **本轮政策边界**：道路入口不再因为长城门超时就提前开工；会记录明确失败并停止这轮初始生成，没有自动失败重试或错误 UI。河流 API 若永不 ready，会继续非阻塞等待直至停服取消，尚无提供方失败状态可消费；这不阻塞服务端线程，也不代表道路一定完成。
+- **已知待做**：CPU parallelStream/粗路径 INITIAL 的预算旁路、4096 全域采样/FMM 工作集、READY 收敛与写盘现场证据。crossing 按用户决定不改，其他几何和格式边界不改。
+
+### 四、遗留半截的东西
+
+本轮道路消费顺序与停服取消已接生产，10 项及7组变异完成；没有临时破坏。三模组整个流程未称为全部验收，发布方故障语义列为外部仓库后续。PENDING 在停止时取消未完成道路门，已完成但尚未执行的回调另靠原 server.isStopped 和 RoadLifecycle.isStopping 检查；真实并发停止交错未穷尽。
+
+### 五、下一轮我会先做什么
+
+优先在 Streams 仓库给启动成功/失败/禁用及广播的实际出口补可测端口和负控，明确哪些状态表示就绪；长城订阅与完成契约守卫放在长城仓库。然后用三模组的新建/重开/缺长城样本验证整条顺序。内部执行预算和大范围工作集仍按 ROADMAP 推进，不用另建总调度器。
+
+### 六、我踩到但已解决的坑
+
+没有长城只说明长城依赖满足，不代表河流已好；道路必须直接消费河流 API。既有长城门 complete(null) 包含成功与超时放弃，若不重查会把“结束等待”混成“已就绪”。whenComplete 回调中探针再抛错会只让衍生 Future 失败，原门仍悬挂，因此必须完成原门异常。Fabric 类只编译不进入 common 的 JUnit，故用行为端口测决策、单列静态接线守卫验入口，不能把后者叫运行时验证。
+
+交付同步记录：源码 bd61dd8、文档 b93f4e8 已本地提交，工作区干净。停止前 pull --rebase 成功；随后 push 及 HTTP/1.1 重试分别因 github.com:443 连接失败、连接重置未成功。当前 origin/main=f78c6c0，未声称已推送；网络恢复后执行 git push 并核对远端。

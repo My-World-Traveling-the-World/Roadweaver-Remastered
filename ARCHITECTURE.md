@@ -54,13 +54,15 @@
 
 1. Streams 的 `StreamsServerLifecycleMixin` 在新世界初始出生点生成前做 startup 预热，在 `prepareLevels HEAD` 也会等待并广播，因此重开世界同样有通知。`RiverReadinessBroadcast.publishReady` 才是开局河流就绪发布。
 2. 长城的 `RoadWeaverLifecycleBridge` 订阅 `RiverReadinessApi`，调用 `WorldServices.riversPrewarmed`；已就绪时的晚订阅会补发。`GreatWallReadinessProvider` 单独发布长城状态，未装河流时长城还有自己的启动路径。
-3. 道路的 Fabric `MinecraftServerMixin` 在长城门已开时同步进入初始规划；门未开时后台等待，再向服务端提交。`InitialPlanWaiter` 在逐路生成之前再次等长城，然后对选出的道路沿线做 Streams 板块补热和高度预取。后者不是第 1 步的开局河流完成通知。旧 `PlanningLifecycleListener.onRiversPrewarmed` 回调保留兼容，现行长城不靠它启动。
+3. 道路的 Fabric `MinecraftServerMixin` 通过 `RoadStartupGate` 显式先读河流 API，再确认长城完成或缺席；都满足才进入初始规划。前置条件未就绪则返回当前注入，异步等候后向服务端提交，避免挡住其他模组启动钩子。有长城是河流→长城→道路；无长城是河流→道路；未装河流才略过河流条件。`InitialPlanWaiter` 在逐路生成之前再次等长城，然后沿选定道路补热 Streams 板块及预取高度。沿线补热不是开局河流完成通知；旧 `PlanningLifecycleListener.onRiversPrewarmed` 回调保留兼容，现行长城不靠它启动。
 
 长城的 `prepareLevels HEAD` priority=950、Streams=900、道路=1000；源码注释声称最终是 Streams→长城→道路，但不能只按优先级数字或注释证明最终注入次序，须验转换后的字节码及新档/重开实测。道路内部的长城门也不代表此前的结构扫描、粗采样完全没有执行。
 
-`GreatWallPrewarmCompat` 只接安装状态、标准 API、时钟和轮询器；`PrewarmGateWork` 管等待与结案。无模组且无提供方不排队；有提供方保留五秒首次 ready 宽限。默认无进展十分钟、总等待三十分钟会以 STALLED/ABSOLUTE_CAP 告警放行，调用方正超时按 TIMEOUT 放行；系统属性置非正值仍可禁用相应上限。首次或后续调度失败按 POLLER_UNAVAILABLE 结案，不把故障伪装为 READY。取消的 Future 后续轮询不再查状态，但生产停服尚未主动取消所有门，也未给 Fabric 后台回调加世界代次校验。
+`GreatWallPrewarmCompat` 只接安装状态、标准 API、时钟和轮询器；`PrewarmGateWork` 管等待与结案。无长城且无提供方不排队；有提供方的等待保留五秒首次 ready 宽限。默认无进展十分钟、总等待三十分钟以 STALLED/ABSOLUTE_CAP 结束旧门，正超时按 TIMEOUT 结束；系统属性置非正值仍可禁用对应上限。首次或后续调度失败按 POLLER_UNAVAILABLE 结案。道路启动门结束等待后重新检查真实长城就绪，未就绪会失败并记录 ROAD_INITIAL_GEN_NOT_STARTED，不再把旧门超时当成允许提前生成。
 
-下一步补跨存档生命周期、最终 Mixin 顺序和 Streams 超时后就绪广播的行为证据，再决定是否改整组启动政策；单门修复不代表完整启动状态机已完成。
+停服取消道路启动门及其自建的长城轮询 Future；回调真正执行道路前再检查服务端已停止、门取消及 RoadLifecycle 停服标志。尚未验证完整跨存档交错或真实加载时序。测试归属：河流自己的预热/发布在 Streams 仓库，长城自己的订阅/发布在长城仓库，道路读取前置条件和等待顺序在道路仓库；API 总线自身语义属于契约模块。道路 Fake 用例仅模拟信号，不代表其他模组已通过行为验收。
+
+下一步补最终 Mixin 顺序与跨存档现场证据，并在 Streams 仓库验证异常与禁用预热时的就绪语义；单个消费方守卫不代表三模组启动均已验收。已确认 Streams.awaitStartup 会吞 CompletionException，而其 Mixin 仍调用 publishReady，本轮只读查证，未改发布方。
 
 ## 新内核依赖边界
 
