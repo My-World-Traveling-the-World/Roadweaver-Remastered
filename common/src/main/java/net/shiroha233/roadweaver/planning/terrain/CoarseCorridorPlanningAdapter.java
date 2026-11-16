@@ -12,7 +12,6 @@ import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.impl.CorridorAttract;
 import net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainRegion;
 import net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainRegionSampler;
-import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +65,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                     throw new java.util.concurrent.CancellationException("coarse planning interrupted");
                 }
                 final StructureConnection routeConnection = connection;
-                pathFutures.add(ThreadPoolManager.submit(
-                        ThreadPoolManager.TaskRole.INITIAL, () -> {
+                pathFutures.add(CoarsePathTasks.DEFAULT.submit(() -> {
                     List<BlockPos> path = RawPathSearch.find(
                             request.level(), routeConnection, request.pathfinding(), cache, finalTerrain);
                     if (path != null && !path.isEmpty()) {
@@ -174,8 +172,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
             // 的代码」，两条都给上，缺一条都会静默丢吸引。
             final PathfindingCostConfig routeConfig = request.pathfinding().snapshot();
             routeConfig.setCorridorAttract(routeAttract);
-            futures.add(ThreadPoolManager.submit(
-                    ThreadPoolManager.TaskRole.INITIAL, () -> {
+            futures.add(CoarsePathTasks.DEFAULT.submit(() -> {
                 List<BlockPos> path = CorridorAttract.withScoped(routeAttract, () -> RawPathSearch.find(
                         request.level(), routeConnection, routeConfig, cache, terrain));
                 if (path != null && !path.isEmpty()) {
