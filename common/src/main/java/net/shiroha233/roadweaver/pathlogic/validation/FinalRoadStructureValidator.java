@@ -62,9 +62,10 @@ public final class FinalRoadStructureValidator {
         PlanningSnapshot snapshot = connection == null
                 ? StructureAvoidanceService.requirePlanningSnapshot(level, road)
                 : StructureAvoidanceService.requirePlanningSnapshot(level, connection);
-        prefetchMissingValidationColumns(level, road, cache);
+        AccurateHeightSampler sampler = cache.getAccurateSampler(level);
+        Map<Long, AccurateHeightSample> prefetched = prefetchMissingValidationColumns(road, sampler);
         RoadConstructionVolumePlanner.Context context =
-                RoadConstructionVolumePlanner.Context.forWorld(level, cache, streams);
+                RoadConstructionVolumePlanner.Context.forWorld(level, sampler, streams, prefetched);
         if (!AUDIT_FINAL_FOOTPRINT) return validate(snapshot, road, context);
         // 巨树预留只有 X/Z，而且可能随新区块加载变化。先观察结果，不能把空中桥面或深洞当成已证实的撞树。
         var audit = new FootprintAudit((x, z) -> HugeTreeReservation.isReserved(level, x, z));
@@ -85,11 +86,9 @@ public final class FinalRoadStructureValidator {
      * are therefore fetched per chunk when a chunk is sufficiently covered,
      * and the sparse remainder is filled column-by-column.
      */
-    private static void prefetchMissingValidationColumns(ServerLevel level,
-                                                         RoadData road,
-                                                         TerrainSamplingCache cache) {
-        if (level == null || road == null || cache == null
-                || road.roadSegmentList() == null || road.roadSegmentList().isEmpty()) return;
+    private static Map<Long, AccurateHeightSample> prefetchMissingValidationColumns(
+            RoadData road, AccurateHeightSampler sampler) {
+        if (road.roadSegmentList() == null || road.roadSegmentList().isEmpty()) return Map.of();
         List<BlockPos> positions = new ArrayList<>();
         positions.addAll(RoadConstructionVolumePlanner.terrainSamplePositions(road));
         for (var segment : road.roadSegmentList()) {
@@ -97,9 +96,10 @@ public final class FinalRoadStructureValidator {
             if (segment.middlePos() != null) positions.add(segment.middlePos());
             if (segment.positions() != null) positions.addAll(segment.positions());
         }
-        if (positions.isEmpty()) return;
-        AccurateHeightSampler sampler = cache.getAccurateSampler(level);
-        Set<Long> known = sampler.cachedSamples(positions).keySet();
+        if (positions.isEmpty()) return Map.of();
+        // 批查询已经获得不可变的精确列值；直接交给同一次体积校验，避免丢掉后逐列再次查缓存。
+        Map<Long, AccurateHeightSample> cached = sampler.cachedSamples(positions);
+        Set<Long> known = cached.keySet();
         List<BlockPos> missing = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
         for (BlockPos position : positions) {
@@ -112,7 +112,7 @@ public final class FinalRoadStructureValidator {
                 DetailedRoadGenerationStats.routeTiming().addMissingColumns(positions.size(), 0);
                 DetailedRoadGenerationStats.routeTiming().addColumnSource(positions.size(), 0, 0);
             }
-            return;
+            return cached;
         }
         long roadId = roadId(road);
         LOGGER.info("RoadWeaver final validation filling missing terrain columns: roadId={} totalColumns={} missingColumns={} backend={} device={}",
@@ -173,6 +173,8 @@ public final class FinalRoadStructureValidator {
                     roadId, positions.size(), wholeChunks.size(), wholeChunkColumns, sparse.size(),
                     sampler.cachedChunkCount(), sampler.cachedColumnCount(), sampler.backendName());
         }
+        // 新取样仍由原精确缓存读回；只在本次读到时记住，不跨校验重试保存。
+        return cached;
     }
 
     static ValidationResult validate(PlanningSnapshot snapshot,

@@ -4,12 +4,14 @@ package net.shiroha233.roadweaver.pathlogic.construction;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathlogic.construction.RoadConstructionVolumePlanner.ColumnVolume;
 import net.shiroha233.roadweaver.pathlogic.construction.RoadConstructionVolumePlanner.Context;
 import net.shiroha233.roadweaver.pathlogic.construction.RoadConstructionVolumePlanner.Kind;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,6 +52,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 这里只测与地形无关的平坦地面主路径 —— 而它恰好就是路肩被删除的那条路径。</p>
  */
 class VolumePlannerVisitTest {
+    @Test
+    void exactSamplesAreReusedOnlyInsideOneValidationAndMissesCanRecover() {
+        var initial = new AccurateHeightSample(64, 57, 67);
+        var later = new AccurateHeightSample(70, 52, 76);
+        var known = Map.of(AccurateHeightSample.key(-1, 19), initial);
+        var reads = new ArrayList<BlockPos>();
+        RoadConstructionVolumePlanner.ExactColumnLookup shared = (x, z) -> {
+            reads.add(new BlockPos(x, 0, z));
+            return reads.size() == 1 ? null : later;
+        };
+
+        var first = new RoadConstructionVolumePlanner.ExactColumnReads(known, shared);
+        for (int i = 0; i < 80; i++) assertEquals(initial, first.get(-1, 19));
+        assertNull(first.get(19, -1));
+        for (int i = 0; i < 80; i++) assertEquals(later, first.get(19, -1));
+        assertEquals(List.of(new BlockPos(19, 0, -1), new BlockPos(19, 0, -1)), reads);
+
+        // 新校验必须重新读共享采样，不能借用上轮已经离开作用域的表。
+        var next = new RoadConstructionVolumePlanner.ExactColumnReads(Map.of(), shared);
+        assertEquals(later, next.get(-1, 19));
+        assertEquals(3, reads.size());
+    }
 
     /**
      * {@code new RoadData(...)} 会触发它的静态 CODEC 初始化，

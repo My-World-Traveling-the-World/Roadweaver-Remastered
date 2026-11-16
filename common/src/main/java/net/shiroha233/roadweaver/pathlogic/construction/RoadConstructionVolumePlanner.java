@@ -25,7 +25,7 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlannerNew;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadHeightInterpolator;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
-import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.util.Line;
 
@@ -141,23 +141,24 @@ public final class RoadConstructionVolumePlanner {
         }
 
         public static Context forWorld(ServerLevel level,
-                                       TerrainSamplingCache cache,
-                                       StreamsReflowingCompat.SamplingSession streams) {
-            AccurateHeightSampler sampler = cache.getAccurateSampler(level);
+                                       AccurateHeightSampler sampler,
+                                       StreamsReflowingCompat.SamplingSession streams,
+                                       Map<Long, AccurateHeightSample> prefetched) {
+            var samples = new ExactColumnReads(prefetched, sampler::cachedSample);
             StreamsReflowingCompat.SamplingSession session = streams == null
                     ? StreamsReflowingCompat.openSession(level) : streams;
             // 0.8.345：传**副本**而非全局单例 —— 见紧凑构造器上的说明。
             return new Context(
                     ConfigService.get().snapshot(),
-                    (x, z) -> cachedSurfaceHeight(level, sampler, x, z),
-                    (x, z) -> cachedOceanFloor(level, sampler, x, z),
+                    (x, z) -> cachedSurfaceHeight(level, sampler, samples, x, z),
+                    (x, z) -> cachedOceanFloor(level, samples, x, z),
                     (x, z) -> {
                         if (session.isAvailable()) {
                             StreamsReflowingCompat.RiverColumn column = session.sample(x, z);
                             if (column.isUnknown() || column.inChannel() || column.inCorridor()) return true;
                         }
                         return RoadConstructionSafety.hasSurfaceWaterNearby(x, z, (waterX, waterZ) -> {
-                            AccurateHeightSample sample = sampler.cachedSample(waterX, waterZ);
+                            AccurateHeightSample sample = samples.get(waterX, waterZ);
                             if (sample == null
                                     && level.getChunkSource().getChunkNow(waterX >> 4, waterZ >> 4) == null) {
                                 // This is an optional shoulder-water probe,
@@ -167,8 +168,8 @@ public final class RoadConstructionVolumePlanner {
                                 return true;
                             }
                             return RoadConstructionSafety.heightmapsContainSurfaceWater(
-                                    cachedWorldSurface(level, sampler, waterX, waterZ),
-                                    cachedOceanFloor(level, sampler, waterX, waterZ));
+                                    cachedWorldSurface(level, samples, waterX, waterZ),
+                                    cachedOceanFloor(level, samples, waterX, waterZ));
                         });
                     },
                     station -> {
@@ -179,8 +180,9 @@ public final class RoadConstructionVolumePlanner {
                      });
         }
 
-        private static int cachedSurfaceHeight(ServerLevel level, AccurateHeightSampler sampler, int x, int z) {
-            AccurateHeightSample sample = sampler.cachedSample(x, z);
+        private static int cachedSurfaceHeight(ServerLevel level, AccurateHeightSampler sampler,
+                                               ExactColumnReads samples, int x, int z) {
+            AccurateHeightSample sample = samples.get(x, z);
             if (sample != null) return sampler.surfaceHeight(sample);
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return RoadConstructionSafety.terrainHeight(level, x, z);
@@ -189,8 +191,8 @@ public final class RoadConstructionVolumePlanner {
                     "final validation accurate terrain sample is unavailable at " + x + "," + z);
         }
 
-        private static int cachedWorldSurface(ServerLevel level, AccurateHeightSampler sampler, int x, int z) {
-            AccurateHeightSample sample = sampler.cachedSample(x, z);
+        private static int cachedWorldSurface(ServerLevel level, ExactColumnReads samples, int x, int z) {
+            AccurateHeightSample sample = samples.get(x, z);
             if (sample != null) return sample.worldSurfaceWg();
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
@@ -199,14 +201,45 @@ public final class RoadConstructionVolumePlanner {
                     "final validation world-surface sample is unavailable at " + x + "," + z);
         }
 
-        private static int cachedOceanFloor(ServerLevel level, AccurateHeightSampler sampler, int x, int z) {
-            AccurateHeightSample sample = sampler.cachedSample(x, z);
+        private static int cachedOceanFloor(ServerLevel level, ExactColumnReads samples, int x, int z) {
+            AccurateHeightSample sample = samples.get(x, z);
             if (sample != null) return sample.oceanFloorWg();
             if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null) {
                 return level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG, x, z);
             }
             throw new PlanningSnapshotUnavailableException(
                     "final validation ocean-floor sample is unavailable at " + x + "," + z);
+        }
+    }
+
+    @FunctionalInterface
+    interface ExactColumnLookup {
+        AccurateHeightSample get(int x, int z);
+    }
+
+    /** 一次校验只复用精确采样；缓存缺失和实时区块高度仍交给原查询路径。 */
+    static final class ExactColumnReads {
+        private final Map<Long, AccurateHeightSample> prefetched;
+        private final ExactColumnLookup lookup;
+        private Long2ObjectOpenHashMap<AccurateHeightSample> acquired;
+
+        ExactColumnReads(Map<Long, AccurateHeightSample> prefetched, ExactColumnLookup lookup) {
+            this.prefetched = prefetched;
+            this.lookup = lookup;
+        }
+
+        AccurateHeightSample get(int x, int z) {
+            long key = AccurateHeightSample.key(x, z);
+            AccurateHeightSample sample = prefetched.get(key);
+            if (sample == null && acquired != null) sample = acquired.get(key);
+            if (sample != null) return sample;
+            sample = lookup.get(x, z);
+            // 缺失样本稍后可能可用；也不能把读活区块的替代高度当作精确采样缓存。
+            if (sample != null) {
+                if (acquired == null) acquired = new Long2ObjectOpenHashMap<>();
+                acquired.put(key, sample);
+            }
+            return sample;
         }
     }
 
