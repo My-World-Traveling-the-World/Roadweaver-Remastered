@@ -37,7 +37,12 @@ class TunnelBoreSealerTest {
         world.put(wet, Blocks.WATER.defaultBlockState());
         world.put(dry, Blocks.AIR.defaultBlockState());
         for (int[] side : SIDES) world.put(dry.offset(side[0], 0, side[1]), Blocks.WATER.defaultBlockState());
+        Fake previous = world.copy();
+        assertArrayEquals(new int[]{1, 4}, legacy(plan(false, BASE), 2, previous));
         assertArrayEquals(new int[]{1, 4}, TunnelBoreSealer.seal(plan(false, BASE), 2, world));
+        // 明确断言请求数，而不是把体素访问减少当作真机耗时倍数。
+        assertEquals(11, previous.reads);
+        assertEquals(6, world.reads);
         assertEquals(5, world.writes.size());
         assertEquals(new Write(wet, Blocks.AIR.defaultBlockState()), world.writes.get(0));
         for (int i = 0; i < SIDES.length; i++) {
@@ -105,6 +110,7 @@ class TunnelBoreSealerTest {
             assertEquals(expected.writes, actual.writes, "写入顺序必须一致 sample=" + sample);
             assertEquals(expected.blocks, actual.blocks, "最终方块必须一致 sample=" + sample);
             assertEquals(expected.protectionChecks, actual.protectionChecks);
+            assertTrue(actual.reads <= expected.reads, "不能通过跨访问预读制造额外世界查询");
             if (!actual.writes.isEmpty()) nonEmpty++;
         }
         assertTrue(nonEmpty > 200, "夹具必须实际产生足够多的非空施工结果，不能空转对拍");

@@ -34,7 +34,9 @@ final class TunnelBoreSealer {
             int terrain = port.terrain(interior);
             for (int dy = 1; dy <= roof; dy++) {
                 BlockPos inside = interior.above(dy);
-                if (port.water(port.block(inside))) {
+                // 同一次访问里没有写入前复用状态；不能跨循环缓存，否则会看不见刚封好的相邻墙体。
+                BlockState insideState = port.block(inside);
+                if (port.water(insideState)) {
                     if (!port.wallOwned(inside)) {
                         port.write(inside, air);
                         dried++;
@@ -42,11 +44,12 @@ final class TunnelBoreSealer {
                     continue;
                 }
                 if (!sealShell) continue;
-                if (!port.block(inside).isAir()) continue;
+                if (!insideState.isAir()) continue;
                 for (int[] side : SIDES) {
                     BlockPos shell = inside.offset(side[0], 0, side[1]);
-                    if (!port.water(port.block(shell))) continue;
-                    if (port.protectedVolume(shell, port.block(shell), terrain)
+                    BlockState shellState = port.block(shell);
+                    if (!port.water(shellState)) continue;
+                    if (port.protectedVolume(shell, shellState, terrain)
                             || port.wallOwned(shell)) continue;
                     port.write(shell, stone);
                     sealed++;
