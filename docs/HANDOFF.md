@@ -665,3 +665,60 @@ ArchitectureGuardTest 的千行规则本来就是有效代码口径，不能把 
 ### 六、我踩到但已解决的坑
 
 NOSHARE_READ 不能冒充写失败，替换故障要单独用 NOSHARE_DELETE 并证明原子替换实际被阻止。暖缓存比冷缓存更容易掩盖写失败：SparseTile 已被原地修改，catch 只告警会让本实例读到磁盘没有的数据，故失败须驱逐。空的迟到读盘结果没有 put，不会偶然经过桶内守卫，必须单独检查关闭。共享租约不能升级成关闭的独占锁，同线程重入要在等锁之前拒绝；真实关闭可以等待已进入的写入完成，不能把“关闭返回后无新 IO”写成“开始关闭即取消所有写入”。
+
+---
+
+## 第 28 轮 ｜ 2026-11-16 ｜ 精确采样过期未命中复用 ｜ 源码 `e296f04` ｜ `PASS tests=1178 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| AccurateSamplePublications；AccurateColumnBatch | 固定 1024 个原子版本槽，载荷 8 KiB；首次缓存扫描前观察，拿到瓦片认领后仅对相关发布重查。部分命中重新分组，全部命中不调用空后端；重查异常传给已登记等待者。发布组件 41/29 行，列/网格编排 405/355 行（物理/有效）。 | 高度、顺序及协议行为等价的复用优化；故障通知补守卫 |
+| AccurateChunkBatch；AccurateHeightSampler | 同一门面的整块、逐列和网格共享发布记录；整块先完整填充缓存，再记录版本并通知等待者。门面 503/389 行，整块编排 229/193 行；缓存容量及原后端不改。 | 高度和格式行为等价；批次完成通知集中到缓存发布之后 |
+| AccurateSampleRecheckTest；AccurateSamplePublicationsTest；RoadJUnitRegressionSuite | 新增 15+4 项，按 FQCN 登记。受控旧快照、实际门面跨路径、部分补缺、缓存驱逐、故障传播、槽碰撞和版本倒序均直接运行。 | 测试基建 |
+
+源码提交 `31fa620`、`e296f04`。独立统计 671 个生产 Java 文件，超过 1000 有效行 0、超过 800 有效行 2；新增/改动逻辑有中文原因注释。不调整初始规划半径、道路几何或持久化格式。
+
+### 二、我验证了什么（附负控）
+
+开工树干净，main / `96a9b59`，pull --rebase 为 Already up to date；基线 1159 和 Fabric 编译通过。先用锁存器暂停已经取得的存储空快照，待另一批发布并释放认领再继续：修复前 7 项列/网格用例实际失败；初步修复 1169，补故障和版本守卫后 1174。随后实际 AccurateHeightSampler 跨整块/列/网格又复现 3 项失败，共用发布记录后 1178 全过。全部变异恢复后再次执行完整回归与 Fabric 编译，仍为 1178、0 跳过/中止/失败。
+
+| 故意改坏生产代码 | 目标守卫（类:方法） | 结果 |
+|---|---|---|
+| 逐列完成后不记录发布 | AccurateSampleRecheckTest:columnsReuseColumnsPublishedDuringTheirStoreRead | 红 |
+| 整网格完成后不记录发布 | AccurateSampleRecheckTest:columnsReuseGridPublishedDuringTheirStoreRead | 红 |
+| 逐列认领后绕过相关版本重查 | AccurateSampleRecheckTest:columnsReuseGridPublishedDuringTheirStoreRead | 红 |
+| 整网格认领后绕过相关版本重查 | AccurateSampleRecheckTest:gridReusesGridPublishedDuringItsStoreRead | 红 |
+| 读盘返回后才观察网格版本，漏掉期间发布 | AccurateSampleRecheckTest:gridReusesGridPublishedDuringItsStoreRead | 红 |
+| 部分复用后不重新分组剩余列 | AccurateSampleRecheckTest:staleColumnsOnlySampleUnpublishedRemainderAcrossTiles | 红 |
+| 全量复用后仍调用空后端并保存 | AccurateSampleRecheckTest:columnsReuseGridPublishedDuringTheirStoreRead | 红 |
+| 重查异常只释放认领，不通知已登记等待者 | AccurateSampleRecheckTest:recheckReadFailureReachesRegisteredWaiterAndFreshRequestRetries | 红 |
+| 整块完成后不记录发布 | AccurateSampleRecheckTest:facadeGridReusesChunkPublishedDuringItsStoreRead | 红 |
+| 实际门面给列/网格另建发布上下文 | AccurateSampleRecheckTest:facadeGridReusesChunkPublishedDuringItsStoreRead | 红 |
+| 任何区域发布均按全局版本强制重查 | AccurateSampleRecheckTest:unrelatedPublicationDoesNotRescanColdGrid | 红 |
+| 槽内直接 set，允许迟到旧版本覆盖新版本 | AccurateSamplePublicationsTest:lateOlderPublicationCannotRegressStripeVersion | 红 |
+
+12 项逐项唯一锚点替换，独立运行完整回归并确认对应 JUnit 方法失败，不把编译失败计入；每项 finally 执行 git checkout -- 精确文件恢复，并核对字节相同。日志和逐项 JSON 留在忽略目录 .analysis_tmp/round28-*，本表为持久记录。
+
+工作量对照：同一覆盖范围的旧快照从两次后端采样降为一次，且不重复保存；网格 255..257 仅补未发布的 257 列；跨瓦片完全解决一侧时不重新带回已命中列。256 列无争用冷网格为 256 次缓存读取、1 次存储读取、1 次整网格生成；另一区域发布夹具含生产者共 257 次缓存读取、2 次存储读取，改为全局失效会增加一次整网格扫描并触发守卫。内存驱逐后可从存储复用；两级缓存确实丢失时允许重新生成。稀疏列发布不能替代完整区块，守卫逐列核对 256 列三通道。
+
+### 三、我没能验证什么
+
+- **需要真机的**：首次生成、重开、Chunky 同跑、真实卸载与停服时延。没有真实种子或 ServerLevel 现场样本，不把夹具减少的后端次数换算为 TPS、加载速度或倍数。
+- **需要真实存档的**：大范围缓存驱逐、跨世界/维度切换、整合包长期运行和文件后端吞错后的实际重采。未打包或部署发布 jar。
+- **怀疑但没有证据的**：1024 槽碰撞的现场比例、热点瓦片连续发布下的重查次数及版本记录自身的真实开销；当前仅有固定布局的工作量计数，不宣称已经测得耗时收益。
+- **已知仍保留的限制**：本轮记录成功后端批次发布，仅从磁盘加载或门面只读 API 填充缓存不单独记录，仍可能留下重复未命中。整块与逐列真正同时启动仍可并行重算；普通/加速两张在途表和超时接管策略保持。发布记录不是样本缓存或持久化确认，文件 IO 仍是最佳努力，跨瓦片非事务。未穷尽关闭、驱逐与发布的全部交错。
+- crossing 仍按用户要求保留现状；双平滑默认、跨度回写、QualityGate、旧区块重铺和所有 schema 不改，废弃 GPU 精确采样不开启。只补本轮代码的中文原因注释，历史全库注释未全部重写。
+
+### 四、遗留半截的东西
+
+无临时生产变异残留，两个源码步骤已分别提交。采样复用的离线边界已交代，不将其称为所有并发重复请求均已消除。READY 状态收敛尚未开工。STATUS、ROADMAP、ARCHITECTURE、VALIDATION 已同步；文档提交与最终推送以交付记录为准。
+
+### 五、下一轮我会先做什么
+
+按路线先收拢 RoadPlanningReadinessIndex 状态转换入口，钉住 READY、失败、取消、重试和持久化读取的行为，并与现有全量扫描对拍；确认版本和状态边界后再评估增量计数。文件锁表增长、查盘填充的重复未命中和驱逐压力另建定向夹具，不用无条件二次全扫描掩盖。异步写盘继续等实际计时与失败重试、停服封账证据。
+
+### 六、我踩到但已解决的坑
+
+观察版本必须早于首次缓存扫描，放到旧存储快照返回后会漏掉整个竞争窗口。全局任意发布都重查会让无关冷网格多扫一遍，因此只查所需瓦片对应槽。版本不是数据，即使记录显示发布过，也必须实际查到样本；碰撞只能多查，不能伪造命中。旧发布晚到会把直接 set 的槽版本写小，须按原子最大值推进。重查时持有新认领，异常若只走 close/remove 会把已登记等待者留成未完成 Future。真实门面必须共用整块与列/网格的发布记录，单独测小组件无法发现接线遗漏。

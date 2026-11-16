@@ -23,6 +23,8 @@ $gradle = 'C:/Users/18364/.gradle/wrapper/dists/gradle-8.8-bin/4u0rgm4geyrm56fyh
 真实文件缓存回归见 `AccurateSampleStoreFileTest`、`AccurateSampleStoreCloseTest`；门面只读生命周期见 `AccurateSamplerCacheLifecycleTest`。Windows / JDK 21 用 `NOSHARE_READ` 阻止读、`NOSHARE_DELETE` 阻止替换，先断言锁确实造成相应 IOException，再检查原文件逐字不变、写失败驱逐内存、解锁后同实例重试与新实例重开。没有使用跳过来掩盖平台不支持；这些故障夹具的当前验收平台仅为 Windows。另验三种写入口、负坐标跨瓦片三通道、损坏隔离和指纹 A→B→A。关闭夹具在实际文件入口的输入遍历暂停，确认独立访问可同时进入、关闭线程真实等待；已进入的写入可在关闭等待期间落盘，关闭返回后才是禁止新 IO 的边界，不承诺取消已开始的磁盘操作。第 27 轮 13 项生产变异均触发目标 JUnit 失败并逐字恢复，记录见 `HANDOFF.md`。
 
 
+过期未命中回归见 `AccurateSampleRecheckTest` 和 `AccurateSamplePublicationsTest`。先暂停已经取得的存储未命中快照，等另一批完整发布并释放认领后再返回，避免用普通预热命中冒充并发复现。四种列/网格组合、实际门面的整块发布、跨瓦片部分补缺均对照完整键集合和三通道高度；另验重查异常送达已登记等待者、内存驱逐后查盘、两级缓存确实丢失后正常重算、版本槽碰撞、旧版本迟到及实例隔离。256 列冷网格仍为 256 次缓存读取、1 次存储读取；无关瓦片发布夹具含生产者共 257 次缓存读取，相关版本检查不增加一次整网格扫描。这是确定性工作量，不代表真机耗时或 TPS。第 28 轮变异记录及恢复结果见 `HANDOFF.md`。
+
 ## 最新构建的真机对照
 
 1. 固定种子、模组版本、配置和选定连接。首次生成、存档副本重开、Chunky 并行三种情况分开跑。对照组和实验组只改变单项开关。
