@@ -58,6 +58,29 @@ class RoadConstructionLedgerTest {
     }
 
     @Test
+    void failedWriteRemainsDirtyAndCanBeRetriedAndReopened() throws Exception {
+        // 用普通文件堵住目录，确保原子写真实失败；只检查内存标记抓不到落盘退化。
+        Path closedParent = Files.writeString(directory.resolve("not-a-directory"), "occupied");
+        Path valid = directory.resolve("recovered.txt");
+        var state = RoadConstructionLedger.load(valid);
+        var first = new ChunkPos(-3, 1);
+        var second = new ChunkPos(2, -4);
+        state.markComplete(first, 51L);
+        state.markComplete(second, -79L);
+        var attempts = new ArrayList<RoadConstructionLedger.FlushTiming>();
+        RoadConstructionLedger.flush(state, () -> closedParent.resolve("ledger.txt"), attempts::add);
+        RoadConstructionLedger.flush(state, () -> valid, attempts::add);
+        RoadConstructionLedger.flush(state, () -> fail("成功重试后无变化不落盘"), attempts::add);
+
+        assertEquals(List.of(false, true), attempts.stream().map(RoadConstructionLedger.FlushTiming::written).toList());
+        assertEquals(List.of(2, 2), attempts.stream().map(RoadConstructionLedger.FlushTiming::entries).toList());
+        assertEquals(Files.size(valid), attempts.get(1).bytes());
+        var reopened = RoadConstructionLedger.load(valid);
+        assertTrue(reopened.isComplete(first, 51L));
+        assertTrue(reopened.isComplete(second, -79L));
+    }
+
+    @Test
     void 重开后同一身份的剖面跨度和占地变化仍可识别且旧台账不变() throws Exception {
         Path index = directory.resolve("roads");
         Path ledger = directory.resolve("constructed-chunks-v3.txt");

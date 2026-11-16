@@ -22,12 +22,19 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Persists which road fingerprints have already been constructed in each full chunk. */
 public final class RoadConstructionLedger {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int SCHEMA = 3;
+    private static final Consumer<FlushTiming> FLUSH_TIMING =
+            "on".equalsIgnoreCase(System.getProperty("roadweaver.constructionLedgerTimings", "off"))
+                    ? timing -> LOGGER.info("[CONSTRUCTION-LEDGER-TIMING] entries={} bytes={} written={} gatherUs={} sortUs={} serializeUs={} writeUs={}",
+                            timing.entries, timing.bytes, timing.written, timing.gatherNanos / 1000,
+                            timing.sortNanos / 1000, timing.serializeNanos / 1000, timing.writeNanos / 1000)
+                    : null;
     private static final String FILE_NAME = "constructed-chunks-v3.txt";
     private static final Map<ServerLevel, State> STATES = new ConcurrentHashMap<>();
 
@@ -56,7 +63,13 @@ public final class RoadConstructionLedger {
 
     // 保持路径按需解析：干净台账直接返回，写盘失败仍保留待写标记。
     static void flush(State state, Supplier<Path> path) {
+        flush(state, path, FLUSH_TIMING);
+    }
+
+    // 只给脏快照计时；不让收集、排序和原子替换混成一个无法归因的数字。
+    static void flush(State state, Supplier<Path> path, Consumer<FlushTiming> timing) {
         if (!state.dirty.compareAndSet(true, false)) return;
+        long started = timing == null ? 0L : System.nanoTime();
 
         List<Entry> entries = new ArrayList<>();
         for (Map.Entry<Long, Set<Long>> chunk : state.completed.entrySet()) {
@@ -64,8 +77,10 @@ public final class RoadConstructionLedger {
                 entries.add(new Entry(chunk.getKey(), roadFingerprint));
             }
         }
+        long gathered = timing == null ? 0L : System.nanoTime();
         entries.sort(Comparator.comparingLong(Entry::chunkKey)
                 .thenComparingLong(Entry::roadFingerprint));
+        long sorted = timing == null ? 0L : System.nanoTime();
 
         StringBuilder output = new StringBuilder("# RoadWeaver constructed road chunks\n");
         output.append("schema=").append(SCHEMA).append('\n');
@@ -75,12 +90,30 @@ public final class RoadConstructionLedger {
                     .append(ChunkPos.getZ(entry.chunkKey())).append(',')
                     .append(entry.roadFingerprint()).append('\n');
         }
+        Path target = path.get();
+        String contents = output.toString();
+        long writing = timing == null ? 0L : System.nanoTime();
+        IOException writeFailure = null;
         try {
-            FileStorageIO.writeStringAtomic(path.get(), output.toString());
+            FileStorageIO.writeStringAtomic(target, contents);
         } catch (IOException failure) {
+            // 写盘失败是待重试，不算干净快照；先标脏再报告。
             state.dirty.set(true);
-            LOGGER.warn("RoadWeaver could not persist constructed chunk ledger {}.", path.get(), failure);
+            writeFailure = failure;
         }
+        long finished = timing == null ? 0L : System.nanoTime();
+        if (writeFailure != null) {
+            LOGGER.warn("RoadWeaver could not persist constructed chunk ledger {}.", target, writeFailure);
+        }
+        if (timing != null) {
+            // schema 3 的标题和数值均为 ASCII，字符长度就是文件的 UTF-8 字节数。
+            timing.accept(new FlushTiming(entries.size(), contents.length(), writeFailure == null,
+                    gathered - started, sorted - gathered, writing - sorted, finished - writing));
+        }
+    }
+
+    record FlushTiming(int entries, int bytes, boolean written, long gatherNanos,
+                       long sortNanos, long serializeNanos, long writeNanos) {
     }
 
     public static void close(ServerLevel level) {

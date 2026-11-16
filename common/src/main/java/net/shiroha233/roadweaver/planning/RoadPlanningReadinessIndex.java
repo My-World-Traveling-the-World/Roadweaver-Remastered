@@ -51,6 +51,8 @@ public final class RoadPlanningReadinessIndex {
     public static final int REGION_CHUNKS = 32;
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final boolean READINESS_TIMINGS = "on".equalsIgnoreCase(
+            System.getProperty("roadweaver.chunkyReadinessTimings", "off"));
     private static final int READINESS_SCHEMA = 2;
     private static final int PLAN_MARGIN_CHUNKS = REGION_CHUNKS;
     private static final int FALLBACK_CORRIDOR_CHUNKS = 12;
@@ -296,11 +298,19 @@ public final class RoadPlanningReadinessIndex {
         // ★ 0.8.401：推进 tick 计数（让 backlogSaturated 的按-tick 缓存失效）。
         //   注意放在 runtimePausedForDimension 检查**之前** —— 暂停期同样要推进，
         //   否则恢复后会用过期的 (world, tick) 命中旧缓存。
-        CURRENT_TICK.incrementAndGet();
+        long tick = CURRENT_TICK.incrementAndGet();
         if (runtimePausedForDimension) return;
         worldState(level);
         WorldKey world = worldKey(level);
+        // 每 20 个 tick 取一份样本，避免计时期间的日志本身占满 tick。
+        boolean sampleScan = READINESS_TIMINGS && tick % 20L == 0L;
+        long scanStart = sampleScan ? System.nanoTime() : 0L;
         SupplySnapshot supply = supplySnapshot(world);
+        if (sampleScan) {
+            long scanUs = (System.nanoTime() - scanStart) / 1000;
+            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=scan tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
+                    tick, ENTRIES.size(), supply.queued(), supply.planning(), supply.readyAhead(), scanUs);
+        }
         int desiredLanes = RuntimeLoadPolicy.recommendedCoordinatorLanes(
                 supply.pending(), supply.readyAhead(), currentSupplyLanes);
         applySupplyCapacity(desiredLanes, supply);
@@ -731,6 +741,8 @@ public final class RoadPlanningReadinessIndex {
     }
 
     private static void persistReady(ServerLevel level, WorldState world) {
+        // 单列记录整表构造与原子写入，先确认瓶颈再考虑改 READY 写入节奏。
+        long buildStart = READINESS_TIMINGS ? System.nanoTime() : 0L;
         List<Long> ordered = new ArrayList<>(world.ready);
         ordered.sort(Long::compare);
         StringBuilder output = new StringBuilder("# RoadWeaver Chunky planning coverage\n");
@@ -743,10 +755,22 @@ public final class RoadPlanningReadinessIndex {
                     .append((int) packed)
                     .append('\n');
         }
+        Path file = readyPath(level);
+        String contents = output.toString();
+        long writing = READINESS_TIMINGS ? System.nanoTime() : 0L;
+        IOException writeFailure = null;
         try {
-            FileStorageIO.writeStringAtomic(readyPath(level), output.toString());
+            FileStorageIO.writeStringAtomic(file, contents);
         } catch (IOException failure) {
-            LOGGER.error("RoadWeaver could not persist Chunky readiness state.", failure);
+            writeFailure = failure;
+        }
+        long finished = READINESS_TIMINGS ? System.nanoTime() : 0L;
+        if (writeFailure != null) {
+            LOGGER.error("RoadWeaver could not persist Chunky readiness state.", writeFailure);
+        }
+        if (READINESS_TIMINGS) {
+            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
+                    ordered.size(), writeFailure == null, (writing - buildStart) / 1000, (finished - writing) / 1000);
         }
     }
 
