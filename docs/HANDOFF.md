@@ -609,3 +609,59 @@ ArchitectureGuardTest 的千行规则本来就是有效代码口径，不能把 
 ### 六、我踩到但已解决的坑
 
 端口抛错可重试不等于实际文件后端确认落盘：亲自读过 writeTile 的 catch(IOException) 后修正注释与文档。网格等待不能只测试缓存预热场景，夹具必须打点确认读到了在途 Future。超时只释放认领，不会停止旧计算，因此旧 finally 必须核对 Future 身份。保存前检查关闭也不够，保存返回后还要查；不过两次检查仍不能被描述为全部并发交错已经串行化。
+
+---
+
+## 第 27 轮 ｜ 2026-11-16 ｜ 真实文件缓存故障与关闭契约 ｜ 源码 `7884416` ｜ `PASS tests=1159 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| AccurateStoreLifecycle；FileBackedAccurateSampleStore | 独立生命周期组件 41/32 行，五个文件入口持共享租约；关闭独占排空后清缓存及锁表，同线程访问内重入关闭明确拒绝。文件入口 715/625 行（物理/有效）。写失败驱逐被原地修改的内存瓦片，下一次从磁盘旧版重读。 | 行为变更，文件格式不改 |
+| AccurateHeightSampler | 只读查询入口及读盘返回后检查关闭，包括空返回；分片桶在持锁时检查关闭，拒绝迟到发布及过期读取。门面 501/388 行。 | 行为变更，高度算法和容量不改 |
+| AccurateSampleStoreFileTest / AccurateSampleStoreCloseTest / AccurateSamplerCacheLifecycleTest；RoadJUnitRegressionSuite | 新增 17 项并按 FQCN 登记，真实临时文件读锁、替换锁、关闭并发与只读查询守卫。 | 测试基建 |
+
+提交 `5a163b0`、`7884416`。先确认干净并 pull --rebase，Already up to date；基线 1142 全绿，第一步文件后端 1152 全绿，门面修改后 1159 全绿且 Fabric 编译通过；全部变异恢复后再次执行全量及 Fabric。全库 670 个生产 Java，超过 1000 有效行 0，超过 800 有效行仍为 2。
+
+### 二、我验证了什么（附负控）
+
+| 故意改坏生产代码 | 目标测试（类:方法） | 结果 |
+|---|---|---|
+| 写失败不驱逐被原地修改的瓦片 | AccurateSampleStoreFileTest:failedWarmColumnWriteEvictsUnpersistedMutationAndCanRetry；同次整块/网格用例也红 | 红 |
+| 读写合并遇 IO 异常返回空瓦片继续写 | AccurateSampleStoreFileTest:unreadableTileIsNeverReplacedAndSameInstanceRetriesAfterUnlock | 红 |
+| loadChunks 撤掉访问租约 | AccurateSampleStoreFileTest:everyFileApiRejectsAfterCloseIncludingEmptyRequests | 红 |
+| loadSamples 撤掉访问租约 | 同上 | 红 |
+| saveChunks 撤掉访问租约 | 同上 | 红 |
+| saveSamples 撤掉访问租约 | 同上 | 红 |
+| saveGrid 撤掉访问租约 | 同上 | 红 |
+| close 不排空，直接置关闭并清缓存 | AccurateSampleStoreCloseTest:closeDrainsRealWriteAndDoesNotSerializeIndependentAccesses | 红 |
+| cachedSamples 撤掉入口关闭检查 | AccurateSamplerCacheLifecycleTest:closedCacheApisRejectBeforeReadingStoreIncludingEmptyBatch | 红 |
+| 单列只读查询撤掉读盘后关闭检查 | AccurateSamplerCacheLifecycleTest:singleStoredMissArrivingAfterCloseIsRejected | 红 |
+| 批量只读查询撤掉读盘后关闭检查 | AccurateSamplerCacheLifecycleTest:batchStoredMissArrivingAfterCloseIsRejected | 红 |
+| 桶内写入撤掉关闭检查 | AccurateSamplerCacheLifecycleTest:lateColumnAndChunkPublicationAreRejectedAtShardLock | 红 |
+| 桶内读取撤掉关闭检查 | 同上 | 红 |
+
+13 项均唯一锚点替换、独立执行完整回归，核对目标 JUnit 方法实际失败，不把编译错误计红；每项 finally 用 git checkout -- 精确文件恢复并核对原字节。日志及逐项 JSON 在忽略目录 .analysis_tmp/round27-*，本表是持久变异记录。
+
+真实锁先断言 Files.readAllBytes 或原子替换确实报 IOException，再检查原文件逐字不变。写失败覆盖预热后的列/块/网格三入口；解锁后重试并重开确认旧列和新列都在，失败无临时文件残留。另验负坐标跨九瓦片三通道、完整 256 列区块、损坏原字节隔离和指纹 A→B→A。关闭夹具在真实文件入口的输入遍历暂停两名访问者，确认同时进入和关闭线程实际等待；不是依赖随机交错或空集合空转。
+
+### 三、我没能验证什么
+
+- **需要真机的**：世界卸载或停服时排空文件访问的等待、首次生成/重开/Chunky 的尾延迟、帧时间和 TPS；本轮没有速度倍数或加载改善结论。关闭会等待已进入的同步文件操作，不承诺文件系统挂起时仍能立即结束。
+- **需要真实存档的**：真实整合包切换世界指纹、多个世界切换和停服压力；临时文件不是玩家存档验证。未构建或部署发布 jar。
+- **怀疑但没有证据的**：跨实例同目录并写、所有驱逐/关闭组合和网络文件系统的行为。本轮租约只协调单个文件后端实例，不提供跨实例事务或进程锁。
+- **已知仍保留的限制**：文件 IO 异常仍 WARN 后跳过，本次 save 正常返回不承诺落盘，未保存样本须由后续请求重采或重试；跨瓦片写入非整批事务。瓦片锁表仍随访问过的瓦片增长，直到关闭才释放，本轮没有改锁分配策略。
+- crossing、双平滑默认、跨度回写、QualityGate、旧区块重铺和所有持久化 schema 不变；废弃 GPU 精确采样不开启。只补本轮改动的中文原因注释，不宣称全库历史英文注释已改完。
+
+### 四、遗留半截的东西
+
+无临时变异残留，生产改动分别提交。文件入口和缓存桶的关闭契约已补齐离线守卫，不能据此宣称真实世界关闭的全部并发交错已经覆盖。重复未命中、驱逐压力与 READY 状态收敛仍待后续；STATUS、ROADMAP、ARCHITECTURE、VALIDATION 已同步范围。
+
+### 五、下一轮我会先做什么
+
+按路线评估批次完成版本能否减少“先读到未命中、别人完成后仍重算”的请求：先固定复现并核对三通道结果与后端调用集合，再比较版本检查和无条件二次扫描的工作量，不给所有冷网格平添全扫描。随后封装 READY 状态转换，与现有全量统计对拍；增量计数和异步落盘须各自验证版本顺序、失败重试与停服封账。
+
+### 六、我踩到但已解决的坑
+
+NOSHARE_READ 不能冒充写失败，替换故障要单独用 NOSHARE_DELETE 并证明原子替换实际被阻止。暖缓存比冷缓存更容易掩盖写失败：SparseTile 已被原地修改，catch 只告警会让本实例读到磁盘没有的数据，故失败须驱逐。空的迟到读盘结果没有 put，不会偶然经过桶内守卫，必须单独检查关闭。共享租约不能升级成关闭的独占锁，同线程重入要在等锁之前拒绝；真实关闭可以等待已进入的写入完成，不能把“关闭返回后无新 IO”写成“开始关闭即取消所有写入”。
