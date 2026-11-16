@@ -34,6 +34,8 @@ public final class RoadConstants {
     public static final int DEFAULT_KNN_DEGREE_CAP = 2;
     public static final int DEFAULT_COMPONENT_DEGREE_CAP = 3;
     public static final int DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS = 128;
+    // 开局可主动等待更大覆盖；单独设上限，避免连带放大游玩期规划窗口和地图 AOI。
+    public static final int INITIAL_PLAN_MAX_RADIUS_CHUNKS = 4096;
     public static final int DEFAULT_DYNAMIC_PLAN_RADIUS_CHUNKS = 128;
     public static final int DEFAULT_DYNAMIC_PLAN_STRIDE_CHUNKS = 64;
     public static final int COARSE_REGION_MAX_RADIUS_CHUNKS = 2048;

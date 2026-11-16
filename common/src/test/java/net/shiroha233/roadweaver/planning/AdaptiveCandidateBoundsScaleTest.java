@@ -9,24 +9,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 0.9.060（②③）：候选余量相对化 + 预热规模保护的四档回归。
+ * 候选余量相对化与范围保护的五档回归；4096 档只验几何，不冒充实际加载验收。
  *
  * <h2>为什么单独一个类</h2>
  * <p>0.9.059 的余量是<b>固定 256 格</b>，它只在「核心区 2048×2048」这一档上看起来是收窄；
- * 一旦预热范围变大（256 / 512 / 1024 / 2048 区块），核心区边长是 8192 / 16384 / 32768 / 65536，
+ * 一旦预热范围变大（256 / 512 / 1024 / 2048 / 4096 区块），核心区边长是 8192 / 16384 / 32768 / 65536 / 131072，
  * 固定余量要么可以忽略、要么（在候选范围层面）比 0.9.058 之前的固定 6144 还大。
  * {@link AdaptiveCandidateBoundsTest} 钉的是「扩张机制与 admission 等价」，本类钉的是
- * <b>四个预热档位下的余量取值、面积守卫、以及 core 永不裁剪这条红线</b>。</p>
+ * <b>五个预热档位下的余量取值、面积守卫、以及 core 永不裁剪这条红线</b>。</p>
  *
- * <h2>四档的 core 边长是估算值（必须如实标注）</h2>
+ * <h2>五档的 core 边长是估算值（必须如实标注）</h2>
  * <p>表里的「core 边长」= 2 × 预热半径（256 区块 ⇒ 半径 4096 格 ⇒ 边长 8192），即
  * <b>预热矩形满覆盖时的上界</b>；真实 coreBounds 可能更小（例如预热只填满一部分时）。
  * 它们<b>不是真机实测的 coreBounds</b> —— 真机实测只有下面
  * {@link #realMachine2048CoreMarginStaysBetween512And1024()} 里的 2048×2048 那一档。</p>
  *
- * <h2>为什么四档全都 tripped</h2>
- * <p>四档的 core 自身面积已经 ≥ {@link AdaptiveCandidateBounds#MAX_CANDIDATE_AREA_BLOCKS}
- * （8192² = cap；更大的档位是 cap 的 4/16/64 倍），所以<b>几何上不可能</b>把候选压进 cap。
+ * <h2>为什么五档全都 tripped</h2>
+ * <p>五档的 core 自身面积已经 ≥ {@link AdaptiveCandidateBounds#MAX_CANDIDATE_AREA_BLOCKS}
+ * （8192² = cap；更大的档位是 cap 的 4/16/64/256 倍），所以<b>几何上不可能</b>把候选压进 cap。
  * 此时 guard 只能把余量落到 {@link AdaptiveCandidateBounds#MARGIN_FLOOR}，候选面积仍然超 cap ——
  * 这是「core 必须完整枚举」这条红线的代价，不是缺陷。本类把它当成<b>已声明的边界</b>钉住：
  * 超 cap 可以，裁 core 不行。</p>
@@ -48,7 +48,8 @@ final class AdaptiveCandidateBoundsScaleTest {
             "256, 4096, 8192",
             "512, 8192, 16384",
             "1024, 16384, 32768",
-            "2048, 32768, 65536"
+            "2048, 32768, 65536",
+            "4096, 65536, 131072"
     })
     void tierMarginAndGuardKeepCoreEnumerationIntact(int prewarmChunks,
                                                     int prewarmRadiusBlocks,

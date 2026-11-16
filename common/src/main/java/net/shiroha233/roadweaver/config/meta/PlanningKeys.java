@@ -46,7 +46,8 @@ public final class PlanningKeys {
                     "开局预热之外，按玩家所在区块继续铺开新路网。关闭后只在开局规划一次",
                     ""),
 
-            ConfigKey.integer("initialPlanRadiusChunks", RoadConstants.DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS, 1, RoadConstants.COARSE_REGION_MAX_RADIUS_CHUNKS,
+            // UI 必须使用开局专用上限，否则保存到配置的 4096 会在界面上被再次缩小。
+            ConfigKey.integer("initialPlanRadiusChunks", RoadConstants.DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS, 1, RoadConstants.INITIAL_PLAN_MAX_RADIUS_CHUNKS,
                     ConfigCategory.PATHFIND, ConfigTier.BASIC, ConfigStatus.ACTIVE,
                     "初始规划半径", "Initial plan radius",
                     "开局一次性规划的区块半径。调大能一次规划更远，但预热量与耗时按面积增长",

@@ -327,7 +327,8 @@ public final class PlanningConfig implements SubConfig {
     @Override
     public void sanitize() {
         if (initialPlanRadiusChunks <= 0) initialPlanRadiusChunks = 64;
-        initialPlanRadiusChunks = Math.min(RoadConstants.COARSE_REGION_MAX_RADIUS_CHUNKS, initialPlanRadiusChunks);
+        // 开局预热与游玩期负载分开配置，不能为了扩大开局覆盖同步放宽动态范围。
+        initialPlanRadiusChunks = Math.min(RoadConstants.INITIAL_PLAN_MAX_RADIUS_CHUNKS, initialPlanRadiusChunks);
         if (dynamicPlanRadiusChunks <= 0) dynamicPlanRadiusChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_RADIUS_CHUNKS;
         dynamicPlanRadiusChunks = Math.min(RoadConstants.COARSE_REGION_MAX_RADIUS_CHUNKS, dynamicPlanRadiusChunks);
         if (dynamicPlanStrideChunks <= 0) {

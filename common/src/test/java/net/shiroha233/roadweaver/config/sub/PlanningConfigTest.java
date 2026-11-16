@@ -3,7 +3,10 @@ package net.shiroha233.roadweaver.config.sub;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
+import net.shiroha233.roadweaver.config.meta.PlanningKeys;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,6 +25,59 @@ final class PlanningConfigTest {
 
     private static JsonObject serialize(PlanningConfig config) {
         return GSON.toJsonTree(config).getAsJsonObject();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"2048,2048", "4096,4096", "4097,4096", "2147483647,4096"})
+    void initialRadiusAccepts4096AndClampsOnlyAboveItsOwnLimit(int configured, int expected) {
+        // 用独立字面量验边界，不能让测试与错误常量一起退回 2048 而仍全绿。
+        PlanningConfig config = new PlanningConfig();
+        config.setInitialPlanRadiusChunks(configured);
+        config.sanitize();
+        assertEquals(expected, config.initialPlanRadiusChunks());
+    }
+
+    @Test
+    void initialRadiusUiAllows4096WithoutIncreasingDynamicRadiusRange() {
+        var initial = PlanningKeys.ALL.stream().filter(k -> k.jsonKey().equals("initialPlanRadiusChunks"))
+                .findFirst().orElseThrow();
+        var dynamic = PlanningKeys.ALL.stream().filter(k -> k.jsonKey().equals("dynamicPlanRadiusChunks"))
+                .findFirst().orElseThrow();
+        assertEquals(4096, initial.max().intValue());
+        assertEquals(2048, dynamic.max().intValue());
+        PlanningConfig config = new PlanningConfig();
+        config.setInitialPlanRadiusChunks(4096);
+        config.setDynamicPlanRadiusChunks(4096);
+        config.sanitize();
+        // 放大开局范围不能改变游玩时的动态窗口预算。
+        assertEquals(4096, config.initialPlanRadiusChunks());
+        assertEquals(2048, config.dynamicPlanRadiusChunks());
+    }
+
+    @Test
+    void initialRadius4096SurvivesExistingJsonKeyAndSnapshot() {
+        PlanningConfig config = new PlanningConfig();
+        config.setInitialPlanRadiusChunks(4096);
+        JsonObject json = serialize(config);
+        assertEquals(4096, json.get("initialPlanRadiusChunks").getAsInt());
+        // 真正经过旧键名的读回和归一化，防止只验证 setter 而漏掉加载时被夹回。
+        PlanningConfig loaded = GSON.fromJson(json, PlanningConfig.class);
+        loaded.sanitize();
+        assertEquals(4096, loaded.initialPlanRadiusChunks());
+        assertEquals(4096, loaded.snapshot().initialPlanRadiusChunks());
+    }
+
+    @Test
+    void initialRadiusDefaultsAndInvalidValuesKeepPreviousBehavior() {
+        PlanningConfig config = new PlanningConfig();
+        config.sanitize();
+        assertEquals(128, config.initialPlanRadiusChunks());
+        config.setInitialPlanRadiusChunks(0);
+        config.sanitize();
+        assertEquals(64, config.initialPlanRadiusChunks());
+        config.setInitialPlanRadiusChunks(-1);
+        config.sanitize();
+        assertEquals(64, config.initialPlanRadiusChunks());
     }
 
     // ---------- 0.8.421：主连边长度上限 / 跨接缺口上限 ----------
