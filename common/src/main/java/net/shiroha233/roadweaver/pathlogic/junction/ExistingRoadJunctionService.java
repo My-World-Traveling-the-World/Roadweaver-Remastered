@@ -26,7 +26,6 @@ import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
-import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 
 import java.util.ArrayList;
@@ -41,7 +40,6 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareService;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
@@ -176,176 +174,9 @@ public final class ExistingRoadJunctionService {
         return connectPlannedBatchWithAccess(level == null ? null : new WorldBatchAccess(level), roads);
     }
 
+    /** 保留既有入口，批次顺序与提交责任交给专用编排器。 */
     static MergeBatchResult connectPlannedBatchWithAccess(BatchAccess access, List<RoadData> roads) {
-        if (roads == null || roads.isEmpty()) {
-            return new MergeBatchResult(roads == null ? List.of() : List.copyOf(roads), Set.of());
-        }
-        if (roads.size() < 2 && access == null) {
-            return new MergeBatchResult(List.copyOf(roads), Set.of());
-        }
-        List<RoadData> current = new ArrayList<>();
-        for (RoadData road : roads) {
-            if (road != null && road.roadSegmentList() != null && road.roadSegmentList().size() >= 5) {
-                current.add(road);
-            }
-        }
-        List<RoadData> persisted = access == null ? List.of() : loadNearbyPersisted(access, current);
-        BatchRefinement refinement = access == null ? null : access.openRefinement();
-        InitialGenerationProgressTracker.setConstructionChunkPlan(
-                Math.max(1, current.size()), "merging_final_network");
-        Set<Long> refinedRoadFingerprints = new HashSet<>();
-        long mergeStartedAt = System.nanoTime();
-        int mergedCount = 0;
-        try {
-            // 0.9.020（R-09）：改道的顺序改成「**先让它合并，合并不成的才改道**」。
-            //
-            // 0.9.018 把预检放在贪心选主之前 —— 那是反的：改道先把「能合并」的前提
-            // 拆掉了（本来可以并到走廊上的路被推远），于是能合并的机会被自己损失掉。
-            // 现在先跑完单向贪心选主，只对**没被合并**的路做并排重叠预检与改道。
-            // Junction ownership is order-dependent: select donors and update
-            // the in-memory route list sequentially first. No world sampling
-            // or expensive height A* is done in this phase.
-            // P0-post B3: grow one owner list instead of rebuilding
-            // persisted + subList(0, i) for every route.
-            List<MergeWork> work = new ArrayList<>();
-            List<RoadData> owners = new ArrayList<>(persisted.size() + current.size());
-            owners.addAll(persisted);
-            for (int secondaryIndex = 0; secondaryIndex < current.size(); secondaryIndex++) {
-                RoadData secondary = current.get(secondaryIndex);
-                JunctionSelection selection = selectSingleNetworkJunction(owners, secondary);
-                RoadData best = selection.road();
-                current.set(secondaryIndex, best);
-                owners.add(best);
-                if (best != secondary && refinement != null) {
-                    work.add(new MergeWork(secondaryIndex, secondary, selection));
-                }
-            }
-            long donorSelectMs = elapsedMs(mergeStartedAt);
-            mergedCount = work.size();
-
-            // 0.9.029（R-03 共享跨越）：规划完成后先把「离得近 + 重叠够 + 平行」的两座桥并成一座，
-            // 再跑并排预检 —— 顺序不能反，否则刚共享完又被 braid 判成并排。
-            // 内部有包围盒预筛（只精确扫邻近的桥）+ 过渡不下就放弃 + 校验不过就回滚。
-            BridgeShareService.Stats bridgeShare =
-                    BridgeShareService.applyInPlace(current,
-                            net.shiroha233.roadweaver.config.ConfigService.get().bridgeShareRadius());
-            // R-09 收窄（0.9.027）：只有「整条被 donor 完全吸收」的路才可以跳过并排重叠预检。
-            // 0.9.020 的写法是「凡是进了 work 的都跳过」（只要 donor 变了就记 true），但合并是
-            // 单向贪心，被合并的路常常还留着独立路段；把它整个排除在预检之外，一旦出现
-            // 「一条已合并 + 一条未合并」在河上并排，D2 的平行双桥就会漏检
-            // （真机 V-8，(205,66,-162) 两条并排木桥，而 braidPairs=0）。
-            // 判据用「合并结果就是 donor 本身」—— 那才叫整条被吃掉。
-            boolean[] mergedIndices = new boolean[current.size()];
-            int braidSkipAbsorbed = 0;
-            for (MergeWork item : work) {
-                if (item.index() < 0 || item.index() >= mergedIndices.length) continue;
-                JunctionSelection selection = item.selection();
-                if (selection != null && selection.donor() != null && selection.road() == selection.donor()) {
-                    mergedIndices[item.index()] = true;
-                    braidSkipAbsorbed++;
-                }
-            }
-            BraidPrecheck braid = access == null ? BraidPrecheck.none() : access.resolveOverlaps(current, persisted, mergedIndices);
-
-            // Expensive tunnel/profile/interface work is independent once the
-            // donor selection snapshot is fixed. Run it on the post-process
-            // pool with one private sampling cache per route.
-            long refineStartedAt = System.nanoTime();
-            List<CompletableFuture<MergeResult>> futures = new ArrayList<>(work.size());
-            for (MergeWork item : work) {
-                futures.add(refinement.refine(item));
-            }
-            List<MergeResult> results = new ArrayList<>(futures.size());
-            for (int i = 0; i < futures.size(); i++) {
-                MergeWork item = work.get(i);
-                try {
-                    // ★ 审计 P2-3：改为有界等待。
-                    //
-                    // 这里的子任务提交到 TaskRole.POSTPROCESS，而 POSTPROCESS 在
-                    // executorFor() 里落到 `default -> sharedExecutor()` ——
-                    // 与等待方**同一个池**。目前调用点只有 InitialGenManager
-                    // （开局期，暂停闸对所有 role 豁免）所以还没出事，
-                    // 但这是一条"一旦有人在运行期复用就自锁"的脆弱路径。
-                    //
-                    // 加超时把这个隐患彻底堵死：超时按既有语义「保留原 candidate」
-                    // （下面的 catch 分支已经是这么做的），不会引入新行为。
-                    results.add(futures.get(i).get(
-                            junctionRefineTimeoutMs(), java.util.concurrent.TimeUnit.MILLISECONDS));
-                } catch (java.util.concurrent.TimeoutException timedOut) {
-                    LOGGER.warn("RoadWeaver merged interface check 超时（{}ms）index={} owners={} -> {}; retaining original",
-                            junctionRefineTimeoutMs(), item.index(),
-                            item.secondary().ownerA2dKey(), item.secondary().ownerB2dKey());
-                    futures.get(i).cancel(true);
-                    results.add(new MergeResult(item.index(), item.secondary(), item.secondary(), item.selection().donor()));
-                } catch (Throwable failure) {
-                    LOGGER.warn("RoadWeaver parallel merged interface check failed index={} owners={} -> {}; retaining original",
-                            item.index(), item.secondary().ownerA2dKey(), item.secondary().ownerB2dKey(), failure);
-                    results.add(new MergeResult(item.index(), item.secondary(), item.secondary(), item.selection().donor()));
-                }
-            }
-            long refineMs = elapsedMs(refineStartedAt);
-            long commitStartedAt = System.nanoTime();
-            results.sort(Comparator.comparingInt(MergeResult::index));
-            for (MergeResult result : results) {
-                RoadData best = result.candidate();
-                RoadData secondary = result.secondary();
-                best = RoadDataValidator.repairFinalHeightSteps(best);
-                RoadDataValidator.ValidationResult dataValidation = RoadDataValidator.validateFinalRoad(best);
-                FinalRoadStructureValidator.ValidationResult structureValidation = dataValidation.valid()
-                        ? refinement.validate(best)
-                        : null;
-                if (!dataValidation.valid() || structureValidation == null || !structureValidation.safe()) {
-                    // 修 B-2（0.9.019）：这里原本一律退到 secondary，而 secondary 是
-                    // **改道之后**的路（work 是在预检之后才建的）。校验不过时最安全的
-                    // 兜底是改道**之前**那条已经成功生成过的路，不是改道产物本身。
-                    RoadData preReroute = braid.originalAt(result.index());
-                    RoadData fallback = preReroute != null ? preReroute : secondary;
-                    // 有些结构拒绝只有原因、没有碰撞坐标；记录两者才能分辨是哪一道守卫拒绝。
-                    LOGGER.warn("RoadWeaver discarded unsafe in-memory junction owners={} -> {} dataReason={} "
-                                    + "structureReason={} collision={} fallback={}",
-                            fallback.ownerA2dKey(), fallback.ownerB2dKey(), dataValidation.reason(),
-                            structureValidation == null ? null : structureValidation.reason(),
-                            structureValidation == null ? null : structureValidation.collision(),
-                            preReroute != null ? "pre-reroute" : "rerouted");
-                    best = fallback;
-                } else if (result.donor() != null) {
-                    RoadData loweredDonor = JunctionConnector.lowerPrimaryTunnelGradeAtJunction(result.donor(), best);
-                    if (loweredDonor != result.donor()) {
-                        for (int j = 0; j < result.index(); j++) {
-                            if (current.get(j) == result.donor() || current.get(j).equals(result.donor())) {
-                                current.set(j, loweredDonor);
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (best != secondary) {
-                    refinedRoadFingerprints.add(RoadShardStorage.computeFingerprint(best));
-                }
-                current.set(result.index(), best);
-            }
-            for (int secondaryIndex = 0; secondaryIndex < current.size(); secondaryIndex++) {
-                InitialGenerationProgressTracker.recordConstructionChunksDone(secondaryIndex + 1);
-            }
-            LOGGER.info("RoadWeaver network merge timing: routes={} persisted={} merged={} donorSelectMs={} "
-                            + "refineMs={} commitMs={} totalMs={} braidPairs={} braidRerouted={} "
-                            + "braidRejected={} braidScanMs={} braidRerouteMs={} "
-                            + "braidSkipAbsorbed={} braidSkipTotal={} "
-                            + "bridgeShareRoads={} bridgeShareBridges={} bridgeShareMissingEndpoints={} "
-                            + "bridgeShareRecoveredEndpoints={} "
-                            + "bridgeShareCandidates={} bridgeShared={} bridgeShareNoTransition={} bridgeShareInvalid={}",
-                    current.size(), persisted.size(), mergedCount, donorSelectMs,
-                    refineMs, elapsedMs(commitStartedAt), elapsedMs(mergeStartedAt),
-                    braid.pairs(), braid.rerouted(), braid.rejected(), braid.scanMs(), braid.rerouteMs(),
-                    braidSkipAbsorbed, mergedCount,
-                    bridgeShare.roads(), bridgeShare.bridges(), bridgeShare.spanEndpointsMissing(),
-                    bridgeShare.spanEndpointsRecovered(),
-                    bridgeShare.candidates(), bridgeShare.absorbed(),
-                    bridgeShare.skippedNoTransition(), bridgeShare.skippedInvalid());
-        } finally {
-            if (refinement != null) refinement.close();
-        }
-        return new MergeBatchResult(List.copyOf(current), refinedRoadFingerprints);
+        return JunctionBatchCoordinator.connect(access, roads);
     }
 
     /** 重叠段两侧各多禁几站，避免改道只是把重叠往后挪两站。 */
@@ -483,7 +314,7 @@ public final class ExistingRoadJunctionService {
         return new JunctionSelection(best, donor);
     }
 
-    private static List<RoadData> loadNearbyPersisted(RoadQuery query, List<RoadData> roads) {
+    static List<RoadData> loadNearbyPersisted(RoadQuery query, List<RoadData> roads) {
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
         for (RoadData road : roads) {

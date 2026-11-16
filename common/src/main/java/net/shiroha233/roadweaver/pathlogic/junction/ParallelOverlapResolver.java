@@ -4,7 +4,6 @@ package net.shiroha233.roadweaver.pathlogic.junction;
 import net.shiroha233.roadweaver.postprocess.JunctionConnector;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
@@ -22,7 +21,6 @@ import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
-import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,11 +33,8 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeShareService;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
-import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
-import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
 // 仍留在同包其它类里的常量与工具。
 import static net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService.*;
