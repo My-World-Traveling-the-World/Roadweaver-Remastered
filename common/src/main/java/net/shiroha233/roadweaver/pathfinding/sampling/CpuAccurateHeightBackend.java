@@ -26,8 +26,12 @@ public final class CpuAccurateHeightBackend implements AccurateHeightBackend {
     }
 
     public static CpuAccurateHeightBackend create(ServerLevel level) {
-        return new CpuAccurateHeightBackend(
-                new WorldCpuAccurateHeightSource(level), CpuSamplingWork.UNRESTRICTED);
+        return fromSource(new WorldCpuAccurateHeightSource(level));
+    }
+
+    // 公开工厂与离线测试共用这一出口，防止测试已限流而实际世界仍接无限制执行器。
+    static CpuAccurateHeightBackend fromSource(CpuAccurateHeightSource source) {
+        return new CpuAccurateHeightBackend(source, CpuSamplingWork.RUNTIME);
     }
 
     @Override

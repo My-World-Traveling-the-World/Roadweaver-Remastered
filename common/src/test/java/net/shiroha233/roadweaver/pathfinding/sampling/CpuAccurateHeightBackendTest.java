@@ -15,6 +15,26 @@ import java.util.function.IntConsumer;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CpuAccurateHeightBackendTest {
+    @Test void publicFactoryActuallyUsesTheBudgetedSourceFactory() throws Exception {
+        // 真正 ServerLevel 留给真机；语法树守卫防公开工厂悄悄绕过已测的 fromSource，注释不算证据。
+        var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+        assertNotNull(compiler);
+        try (var files = compiler.getStandardFileManager(null, null, java.nio.charset.StandardCharsets.UTF_8)) {
+            var inputs = files.getJavaFileObjects(java.nio.file.Path.of(
+                    "src/main/java/net/shiroha233/roadweaver/pathfinding/sampling/CpuAccurateHeightBackend.java"));
+            var task = (com.sun.source.util.JavacTask) compiler.getTask(null, files, null,
+                    List.of("-proc:none"), null, inputs);
+            var unit = task.parse().iterator().next();
+            var type = (com.sun.source.tree.ClassTree) unit.getTypeDecls().getFirst();
+            var factory = type.getMembers().stream().filter(member -> member instanceof com.sun.source.tree.MethodTree)
+                    .map(member -> (com.sun.source.tree.MethodTree) member)
+                    .filter(method -> method.getName().contentEquals("create")).findFirst().orElseThrow();
+            assertEquals(1, factory.getBody().getStatements().size());
+            var statement = assertInstanceOf(com.sun.source.tree.ReturnTree.class, factory.getBody().getStatements().getFirst());
+            assertEquals("fromSource(new WorldCpuAccurateHeightSource(level))", statement.getExpression().toString());
+        }
+    }
+
     @ParameterizedTest @ValueSource(booleans = {true, false})
     void fullChunksKeepAllKeysAndAllChannels(boolean columns) {
         Source source = new Source(columns);

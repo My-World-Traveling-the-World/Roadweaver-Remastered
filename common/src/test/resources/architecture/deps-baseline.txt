@@ -6,6 +6,7 @@
 #   （独立审计实测：core->postprocess 从 2 涨到 3，回归仍 689 全绿）。
 #   现在改为真计数 ratchet：current.get(edge) <= baseline.get(edge)。
 #
+# 2026-11-16：精确采样新增唯一 BackgroundCpuWork 执行端口；启动、代次和许可仍封装在 runtime。
 # 要消除某条边：改代码，然后把该行从本文件删掉。
 # 要合法地加一条 import：必须同时把这里的次数 +1 并说明理由。
 
@@ -80,7 +81,7 @@ pathfinding -> map                                4
 pathfinding -> pathlogic                          24
 pathfinding -> persistence                        3
 pathfinding -> pipeline                           1
-pathfinding -> runtime                            7
+pathfinding -> runtime                            8
 pathlogic -> compat                             17
 # ★ 2026-11-14：87 -> 89。原因是 S7「第 3 级前置 A」把 SurfaceGradeLimits
 #   从 RoadGradePlanner 抽成顶层类型 pathlogic/grade/SurfaceGradeLimits.java，

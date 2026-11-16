@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CancellationException;
+import static net.shiroha233.roadweaver.runtime.RuntimeSignalMethods.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -393,6 +394,11 @@ public final class RuntimeLoadPolicy {
         }
     }
 
+    // 执行层统一读取预热豁免，采样层不再直接依赖 InitialGenManager。
+    static boolean isCpuWarmup() {
+        return InitialGenManager.isActive() || chunkyPreflightActive;
+    }
+
     /**
      * Chunky preflight must use the same planning-quality path as initial
      * generation, but only before a real Chunky task has started.
@@ -426,25 +432,38 @@ public final class RuntimeLoadPolicy {
      * every bounded unit instead of only once when the outer task starts.
      */
     public static void beforeBackgroundUnit(boolean initialGeneration) {
+        beforeBackgroundUnit(initialGeneration, () -> false);
+    }
+
+    // 取消条件传到暂停循环内部，否则换世界后仍可能一直等前台保护结束。
+    private static void beforeBackgroundUnit(boolean initialGeneration,
+                                             java.util.function.BooleanSupplier cancelled) {
         cancelIfStopping();
         if (initialGeneration || InitialGenManager.isActive()) return;
         if (ThreadPoolManager.currentTaskRole() == ThreadPoolManager.TaskRole.MAP) {
-            beforeMapUnit();
+            beforeMapUnit(cancelled);
             return;
         }
         refreshRoadWorkerBudget();
         if (ThreadPoolManager.isCoordinatorTask()) {
             if (chunkyPreflightActive) return;
-            awaitCoordinatorPermit();
+            awaitCoordinatorPermit(cancelled);
             return;
         }
-        awaitRuntimePermit();
+        awaitRuntimePermit(cancelled);
     }
 
     public static boolean acquireCoarseUnit(boolean initialGeneration) {
+        return acquireCoarseUnit(initialGeneration, () -> false);
+    }
+
+    /** 共用已有粗采样计数，精确采样不能再另开一份预算绕过并发上限。 */
+    public static boolean acquireCoarseUnit(boolean initialGeneration,
+                                             java.util.function.BooleanSupplier cancelled) {
         if (initialGeneration) return true;
-        while (!Thread.currentThread().isInterrupted()) {
-            beforeBackgroundUnit(false);
+        while (!Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
+            beforeBackgroundUnit(false, cancelled);
+            if (Thread.currentThread().isInterrupted() || cancelled.getAsBoolean()) return false;
             int limit = Math.max(1, recommendedRoadWorkerThreads());
             int active = ACTIVE_COARSE_UNITS.get();
             if (active < limit && ACTIVE_COARSE_UNITS.compareAndSet(active, active + 1)) return true;
@@ -697,48 +716,64 @@ public final class RuntimeLoadPolicy {
     }
 
     private static void awaitCoordinatorPermit() {
+        awaitCoordinatorPermit(() -> false);
+    }
+
+    private static void awaitCoordinatorPermit(java.util.function.BooleanSupplier cancelled) {
         PauseReason current = coordinatorPauseReason();
-        while (current != PauseReason.NONE && !Thread.currentThread().isInterrupted()) {
+        while (current != PauseReason.NONE && !Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
+            cancelIfStopping();
             logPause(current);
             LockSupport.parkNanos(PAUSE_NANOS);
             current = coordinatorPauseReason();
         }
-        if (!Thread.currentThread().isInterrupted()) {
+        if (!Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
             ThreadPoolManager.throttle();
         }
     }
 
     private static void awaitRuntimePermit() {
+        awaitRuntimePermit(() -> false);
+    }
+
+    private static void awaitRuntimePermit(java.util.function.BooleanSupplier cancelled) {
         PauseReason current = pauseReason();
         // 0.8.360：地图读取（MAP_READ）豁免「界面让路」暂停。
         // 打开地图界面本身就会让 isScreenPauseActive() 为真，若不豁免，
         // 界面要读的 12 个瓦片会被自己触发的暂停永久挡住（实测卡在 0/12 三分钟）。
         // 只放行 PLAYER_INTERACTION；Chunky / 跑动 / 系统压力等仍照常让路。
         boolean mapReadLane = ThreadPoolManager.currentTaskRole() == ThreadPoolManager.TaskRole.MAP_READ;
-        while (current != PauseReason.NONE && !Thread.currentThread().isInterrupted()) {
+        while (current != PauseReason.NONE && !Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
             if (mapReadLane && current == PauseReason.PLAYER_INTERACTION) {
                 break;
             }
+            cancelIfStopping();
             logPause(current);
             LockSupport.parkNanos(PAUSE_NANOS);
             current = pauseReason();
         }
-        if (!Thread.currentThread().isInterrupted()) {
+        if (!Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
             ThreadPoolManager.throttle();
         }
     }
 
     private static void beforeMapUnit() {
+        beforeMapUnit(() -> false);
+    }
+
+    private static void beforeMapUnit(java.util.function.BooleanSupplier cancelled) {
         // Chunky pregeneration still needs road planning to produce ready-ahead
         // regions. Never park forever here: yield briefly instead of starving
         // the road coordinator that Chunky is waiting on.
         if (chunkyPreflightActive) return;
         if (chunkyExclusiveActive || CHUNKY_ACTIVE.invoke()) {
+            cancelIfStopping();
             logPause(PauseReason.CHUNKY);
             LockSupport.parkNanos(PAUSE_NANOS);
         }
         if (Thread.currentThread().isInterrupted()) return;
-        while (CRUISE_ACTIVE.invoke() && !Thread.currentThread().isInterrupted()) {
+        while (CRUISE_ACTIVE.invoke() && !Thread.currentThread().isInterrupted() && !cancelled.getAsBoolean()) {
+            cancelIfStopping();
             logPause(PauseReason.PLAYER_TRAVEL);
             LockSupport.parkNanos(PAUSE_NANOS);
         }
@@ -885,89 +920,4 @@ public final class RuntimeLoadPolicy {
         RECOVERY
     }
 
-    // ── 可选集成：只走标准 API，不再反射 ────────────────────────────────────
-    //
-    // 这五个包装器原先各带一个"注册表优先、反射兜底"的双路实现：
-    // 先问 LoadSignalBridge，问不到就 Class.forName 进对方的类取 Method。
-    // 兜底那条路就是"静默失效"的来源 —— 对方改个方法名，道路退回默认线程数，
-    // 表现为"超速飞行时道路还是很卡"这种无从排查的现象。
-    //
-    // 现在所有提供方都已迁到 roadweaver-api，兜底路径删除：
-    // 没有 provider 就返回"无意见"的默认值，调用方按自己的默认值走。
-    // className / methodName 仅保留调用键兼容：普通保护和预算聚合全部 API 来源，
-    // 只有 Chunky 所有权按 owner 匹配，避免其他模组的 busy 掩盖独占标志泄漏。
-
-    private static final class OptionalBooleanMethod {
-        private final String className;
-        private final String methodName;
-
-        OptionalBooleanMethod(String className, String methodName) {
-            this.className = className;
-            this.methodName = methodName;
-        }
-
-        boolean invoke() {
-            Boolean bridged = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.booleanSignal(className, methodName);
-            return Boolean.TRUE.equals(bridged);
-        }
-    }
-
-    private static final class OptionalBooleanOneArgMethod {
-        private final String className;
-        private final String methodName;
-
-        OptionalBooleanOneArgMethod(String className, String methodName) {
-            this.className = className;
-            this.methodName = methodName;
-        }
-
-        void invoke(boolean value) {
-            net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.booleanOneArgSignal(className, methodName, value);
-        }
-    }
-
-    private static final class OptionalIntMethod {
-        private final String className;
-        private final String methodName;
-
-        OptionalIntMethod(String className, String methodName) {
-            this.className = className;
-            this.methodName = methodName;
-        }
-
-        Integer invoke(int pendingRegions, int readyAheadRegions, int currentLanes) {
-            int value = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.recommendedLanes(
-                    pendingRegions, readyAheadRegions, currentLanes);
-            return value < 0 ? null : value;
-        }
-    }
-
-    private static final class OptionalIntOneArgMethod {
-        private final String className;
-        private final String methodName;
-
-        OptionalIntOneArgMethod(String className, String methodName) {
-            this.className = className;
-            this.methodName = methodName;
-        }
-
-        Integer invoke(int value) {
-            int recommendation = net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.RuntimeSignals.recommendedWorkers(value);
-            return recommendation < 0 ? null : recommendation;
-        }
-    }
-
-    private static final class OptionalVoidIntMethod {
-        private final String className;
-        private final String methodName;
-
-        OptionalVoidIntMethod(String className, String methodName) {
-            this.className = className;
-            this.methodName = methodName;
-        }
-
-        void invoke(int value) {
-            net.shiroha233.roadweaver.apiimpl.LoadSignalBridge.voidIntSignal(className, methodName, value);
-        }
-    }
 }
