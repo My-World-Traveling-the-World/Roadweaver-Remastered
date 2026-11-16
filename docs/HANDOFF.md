@@ -507,3 +507,53 @@ ArchitectureGuardTest 的千行规则本来就是有效代码口径，不能把 
 ### 六、我踩到但已解决的坑
 
 索引必须 putIfAbsent：旧扫描返回首条有效 ID，不能变成最后一条或任意匹配。村庄原点可能在聚合盒外，不能把所有待过滤连接当村内豁免。DP/回落的平地产物相同，不能证明生产接了 DP；只断言假端口也不能守住真实适配器。
+
+
+## 第 25 轮 ｜ 2026-11-16 ｜ 精确采样调度、并发修复与守卫 ｜ 源码 `e77c654` ｜ `PASS tests=1119 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+- 行为等价 `53265b1`：整块 sampleChunks 的认领、查盘、批量校验、等待和失败结案迁到 AccurateChunkBatch，经缓存小端口继续使用原分片与容量；没有修改高度计算。
+- 行为变更 `902c6be`：等待超时只释放认领，未得到结果的键保留在 unresolved，下一轮接管；等待线程中断不再 cancel 共享 Future；重入检测在整批写入认领前完成，防止前半批留下孤儿。
+- 行为变更/减少重复工作 `e77c654`：读盘后在认领锁内复查缓存，避免原所有者刚完成时重复计算；逐列瓦片取消同样只影响当前线程；关闭资源改用逆序资源关闭，存储失败也关闭后端，两次失败保留首错及 suppressed。
+- 新增并显式登记 11 项整块批次测试、3 项生命周期测试（共 +14）。改动处有中文原因注释。采样门面从 981/823 降到 829/699 行，新调度类 215/182 行（物理/有效）。独立统计 667 个生产 Java 文件，0 个超过 1000 有效行、2 个超过 800；依赖基线未放宽。
+
+### 二、我验证了什么（附负控）
+
+开工树干净，首次 pull --rebase 遇网络超时；本地基线 1105，Fabric 编译通过。后续网络恢复，pull --rebase 确认 main 无需变基，并已将上一轮积压及本轮代码推到远端。最终恢复负控后的 JDK 21 / 外置 Gradle 8.8 / daemon 全量为 1119，0 跳过/中止/失败，Fabric 编译通过。
+
+先将真实并发错误写成测试：第一批复现超时空返回、取消连带健康等待者失败和递归孤儿；第二批复现重复求值、瓦片共享取消及后端未关闭。修复后全绿。固定交错夹具中，后端调用从 2 次降到 1 次；这是避免同区块重复求值的计数证据，不代表真机耗时减半。
+
+| 故意破坏 | 目标守卫 | 结果 |
+|---|---|---|
+| 超时后仍从 unresolved 移除全部 waiting 键 | timeoutReclaimsChunkAndReturnsEveryRequestedKey | 红：预期完整键集，实际空 |
+| 整块等待者中断时 cancel 共用 Future | interruptedWaiterDoesNotCancelSharedOwnerOrHealthyWaiter | 红：健康等待者收到取消 |
+| 把重入检查放回逐键认领循环 | recursiveBatchDoesNotLeakEarlierPartialClaims | 红：下一次请求发现无人完成的认领 |
+| 撤掉认领锁内的内存复查 | rechecksMemoryAfterAnotherOwnerFinishesDuringStoredLookup | 红：预期 1，实际 2 次后端调用 |
+| 瓦片等待者中断时 cancel 共用 Future | tileWaiterInterruptionLeavesSharedFutureUsable | 红：共享 Future 被取消 |
+| 关闭恢复为 store.close 后才 backend.close | backendStillClosesWhenStoreCloseThrows | 红：后端未关闭且次错未保留 |
+| 关闭时不完成在途 Future | closingBatchImmediatelyFailsAnAlreadyRegisteredWaiter | 红：等待者未被及时唤醒 |
+| 接收后端结果时跳过开放性检查 | closingFacadeWakesWaiterAndRejectsLateBackendResult | 红：关闭后迟到结果仍成功发布 |
+
+8 个变异均断言替换锚点唯一命中，逐项独立运行全量；只有包含对应 JUnit 方法失败才算红，不把编译失败计入。每项 finally 执行 git checkout -- 精确恢复，并核对恢复字节与变异前相同。恢复后重新跑完整回归及 Fabric 编译。详细运行日志保留在忽略目录 .analysis_tmp/round25-*，变异表是持久交接记录。
+
+另外验证：去重与请求顺序、内存/持久化命中仅计算剩余项、重叠批次先处理无冲突子集、后端失败传播给所有者与等待者后可重试、缺块整批不发布、保存失败可重试、资源重复关闭仅一次、不同采样器实例不共享样本。
+
+### 三、我没能验证什么
+
+- 没有真机、真实 ServerLevel 卸载或存档副本；实例隔离夹具不能替代跨维度/重进世界测试，不声称 TPS、加载速度或 p95 改善。
+- 本轮关闭夹具覆盖后端尚未返回、已注册等待和资源关闭抛错；未验证关闭与已经进入持久化保存操作的全部竞争交错。
+- 逐列/网格认领仍用原整批瓦片策略；混合 sampleGrid/samplePositions 的重入、超时接管、进度回调取消及缓存驱逐交错尚未全面验收。未跨采样器、世界版本或后端语义扩大共享。
+- crossing、双平滑默认、跨度回写、QualityGate、旧区块重铺和存档协议未改；全库历史中文注释尚未补完。
+
+### 四、遗留半截的东西
+
+没有未提交的生产半成品。整块调度已独立，逐列/网格与缓存生命周期尚未全部拆完；不把本轮修复说成所有取消与关闭风险都已消除。同步 STATUS、ROADMAP、ARCHITECTURE、VALIDATION；本轮文档提交和最终推送结果以交付为准。
+
+### 五、下一轮我会先做什么
+
+先拆逐列/网格的共同认领生命周期，补混合请求、重入、取消及关闭交错；明确部分缓存命中和持久化失败的发布口径，再决定改整批瓦片策略。随后集中 READY 状态转换，与全量扫描对拍后再评估增量统计；异步写盘继续等现场计时和一致性夹具。
+
+### 六、我踩到但已解决的坑
+
+等待过不等于拿到结果：只按 waiting.keySet 结案会把超时漏项掩盖。Future 的 cancel 会影响所有共用者，不能把调用线程的取消等同于共享计算取消。重入检查要先遍历整批，否则报错前创建的认领没有所有者负责完成。仅用 facade 关闭用例可能在等待注册前就退出，因此另加超时供给器打点，确认真正持有共享 Future 的等待者会被主动唤醒。

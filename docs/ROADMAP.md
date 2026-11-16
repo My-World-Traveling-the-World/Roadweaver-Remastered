@@ -57,10 +57,10 @@ RW-01、02、04–08、12 已有离线实现和回归；RW-03 的外侧占地守
 | 2 | 合并共用桥的重复距离扫描（离线完成） | BridgeShareDetector 一次完整扫描求最近距离和重叠数，保留采样、舍入和闭区间半径；256 组曲线双向对拍旧规则。小夹具点列表访问 9→6，恢复第二次遍历会红；真实热点占比及耗时待测。 |
 | 3 | 路口查询上下文（离线完成） | JunctionSpanIndex 在一次裁切中共用站号索引，保留重复 X/Z 取最后站、桥头与硬缺口语义；不跨道路缓存。JunctionBatchCoordinator 接管批量编排；篡改选主或跳过结构校验会红。 |
 | 4 | 拆重职责类 | StructureAvoidanceService 已迁出 VillageEndpointFilter，入口 831/622 行；位点索引只遍历一次结构表，两道整批撤销阀有负控。快照准备与作用域仍待拆。TargetYComputation 已迁出 TargetProfileSolver，入口 613/421 行，不可行与异常路径有直接守卫；采样输入和旧模式编排仍待拆；PathPostProcessor 已迁出简化补点和限幅松弛（门面 660 物理行/481 有效行），样条与宽度栅格化仍待拆。路口门面已降至 672 物理行/516 有效行。先行为等价和产物对拍，不改变 crossing、双平滑或桥头规则。 |
-| 5 | 采样批次共享 | AccurateHeightSampler 的批量调度、缓存和求值生命周期先拆开；确认相同采样语义/世界版本后才复用只读样本或合并在途请求。缺失、异常、取消必须可重试；不启用已废弃 GPU 精确采样。 |
+| 5 | 采样批次共享（整块调度已拆分） | AccurateChunkBatch 已隔离整块认领、求值、等待及查盘，门面 829/699 行（物理/有效）；修复超时漏项、共享取消和递归遗留认领。读盘与所有者完成交错的夹具，后端调用 2→1。逐列/网格调度和缓存生命周期仍待拆；先验证世界卸载、混合网格/逐列请求及写盘竞争，再扩大共享。不启用已废弃 GPU 精确采样。 |
 | 6 | READY 扫描和持久化准备 | RoadPlanningReadinessIndex 仍多处扫描 ENTRIES；先封装状态转换并对拍全量统计，再评估增量计数。台账与 READY 全量排序写盘仍待计时证据；异步化必须先验证版本顺序、失败重试及停服封账。 |
 
-独立统计 666 个生产 Java 文件（api/common/fabric/neoforge/api-fabric），有效代码行超过 1000 的为 0，超过 800 的为 3。超过 800 的是 OpenCLAccurateProgram、AccurateHeightSampler、RoadMapScreen；前者属于有意废弃的 GPU 精确采样能力，不因行数高就优先改。行数达标不代替职责审查。
+独立统计 667 个生产 Java 文件（api/common/fabric/neoforge/api-fabric），有效代码行超过 1000 的为 0，超过 800 的为 2。超过 800 的是 OpenCLAccurateProgram、RoadMapScreen；前者属于有意废弃的 GPU 精确采样能力，不因行数高就优先改。行数达标不代替职责审查。
 
 ### 等真机或存档再决定的改动
 
