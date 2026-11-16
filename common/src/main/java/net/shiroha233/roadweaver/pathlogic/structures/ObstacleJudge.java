@@ -37,7 +37,6 @@ import net.shiroha233.roadweaver.generation.DetailedRoadGenerationStats;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationStage;
 import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
-import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import net.shiroha233.roadweaver.search.StructurePredictor;
 import org.slf4j.Logger;

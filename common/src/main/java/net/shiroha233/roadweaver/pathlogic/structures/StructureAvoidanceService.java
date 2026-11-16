@@ -25,14 +25,9 @@ import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement
 import net.minecraft.core.registries.Registries;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.core.model.StructureInfo;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
-import net.shiroha233.roadweaver.generation.DetailedRoadGenerationStats;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationStage;
 import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
@@ -262,26 +257,7 @@ public final class StructureAvoidanceService {
         }
     }
 
-    /**
-     * B 阶段：规划前过滤"村庄 V ↔ V 结构盒内的未知端点"。
-     *
-     * <p>判定（两条同时成立才过滤）：</p>
-     * <ol>
-     *   <li>连接某一端点是<b>未知端点</b>——既不在结构库的已核验结构位点里，
-     *       也无法从附近已核验村庄建筑推断出 owner；</li>
-     *   <li>该端点 XZ 落在<b>某个村庄 V 的结构聚合盒</b>内，且另一端点恰好就是
-     *       那个村庄 V。</li>
-     * </ol>
-     *
-     * <p>动作：该连接不进规划、不进施工、不进局部修复。</p>
-     *
-     * <p>安全阀：一轮过滤超过 {@value #UNKNOWN_ENDPOINT_FILTER_MAX_PER_ROUND} 条，
-     * 或过滤后某端点变成 0 连接，则整体放弃过滤（只告警），宁可不优化也不砍路。</p>
-     *
-     * <p>0.8.315：距离不是判据。早先复用 {@code ENDPOINT_REPLACEMENT_MATCH_BLOCKS}(24)
-     * 限制两端点距离，导致大村庄（聚合盒 60+ 格）的"村庄 ↔ 盒内未知端点"永远不触发。
-     * 现在只看"未知端点在该村庄聚合盒内 + 另一端点就是该村庄"，两条安全阀兜底。</p>
-     */
+    /** 世界与配置读取保留在入口；过滤器只接收同次规划的结构数据和路线快照。 */
     public static EndpointFilterOutcome filterUnknownEndpointInsideVillage(
             ServerLevel level, List<StructureConnection> connections) {
         if (level == null || connections == null || connections.isEmpty()) {
@@ -294,156 +270,11 @@ public final class StructureAvoidanceService {
         } catch (Throwable ignored) {
             return new EndpointFilterOutcome(connections, List.of(), false, "");
         }
-
-        StructureFileStorage.StructureSnapshot storageSnapshot = StructureFileStorage.getStructureSnapshot(level);
+        var storageSnapshot = StructureFileStorage.getStructureSnapshot(level);
         List<StructureInfo> knownInfos = storageSnapshot == null || storageSnapshot.locations() == null
-                ? List.of()
-                : storageSnapshot.locations().structureInfos();
-        List<StructureConnection> kept = new ArrayList<>(connections.size());
-        List<StructureConnection> filtered = new ArrayList<>();
-        // 0.8.331：两端点都在同一个村庄盒内的"村内连接"（真机 village_iberian
-        // (-864,752)↔(-813,716)，14 格）不算"这个村庄的路"，因此不参与安全阀二。
-        // 否则阀门会把它保下来，而它必然规划失败 → 每局固定 failed=1。
-        Set<StructureConnection> villageInternal = new HashSet<>();
-        for (StructureConnection connection : connections) {
-            if (connection == null) continue;
-            RouteKey key = routeKey(level, connection);
-            PlanningSnapshot snapshot = StructureAvoidanceCache.PLANNING_SNAPSHOTS.get(key);
-            if (snapshot == null || snapshot == PlanningSnapshot.EMPTY) {
-                kept.add(connection);
-                continue;
-            }
-            boolean fromUnknown = isUnknownEndpoint(level, connection.from(), storageSnapshot, snapshot);
-            boolean toUnknown = isUnknownEndpoint(level, connection.to(), storageSnapshot, snapshot);
-            StructureConnection matched = null;
-            // 0.8.315：不再要求两端点距离 ≤ ENDPOINT_REPLACEMENT_MATCH_BLOCKS(24)。
-            // villageOwnerAt(unknown) 已经证明未知端点落在该村庄的建筑聚合盒内；距离不提供
-            // 额外信息，而大村庄的盒子动辄 60+ 格（真机 village_iberian：(-864,752)↔(-813,716)
-            // 相距 62.4 格），24 格闸门会让这条过滤对大村庄永远失效。
-            //
-            // 0.8.317：另一端必须**确实就是那个村庄**。旧代码用 ownsEndpoint(village)，
-            // 而 endpointOwners 是两个端点 owner 的并集——未知端点自己也会被
-            // "从附近已核验建筑推断 owner"（真机日志 inferred endpoint owner ... (-813,716)
-            // owner=village_iberian）而进入该集合。于是**别的村庄**通往这个未知点的正常路
-            // （真机 (-1104,304)->(-813,716)、(-480,480)->(-813,716)，两条都是 COMPLETED）
-            // 也会被判为"村庄 V ↔ V 盒内未知点"而被过滤。现在改为按已核验结构位点核对
-            // 另一端点的区块与结构 id，必须与村庄 owner 完全一致。
-            if (fromUnknown && !toUnknown) {
-                StructureOwnerKey village = snapshot.villageOwnerAt(
-                        connection.from().getX(), connection.from().getZ());
-                if (village != null && endpointMatchesStructure(connection.to(), village, knownInfos)) {
-                    matched = connection;
-                    logFilteredVillageEndpoint(village, connection.from(), connection.to(), connection);
-                    if (village.equals(snapshot.villageOwnerAt(
-                            connection.to().getX(), connection.to().getZ()))) {
-                        villageInternal.add(connection);
-                    }
-                }
-            } else if (toUnknown && !fromUnknown) {
-                StructureOwnerKey village = snapshot.villageOwnerAt(
-                        connection.to().getX(), connection.to().getZ());
-                if (village != null && endpointMatchesStructure(connection.from(), village, knownInfos)) {
-                    matched = connection;
-                    logFilteredVillageEndpoint(village, connection.to(), connection.from(), connection);
-                    if (village.equals(snapshot.villageOwnerAt(
-                            connection.from().getX(), connection.from().getZ()))) {
-                        villageInternal.add(connection);
-                    }
-                }
-            }
-            if (matched == null) kept.add(connection);
-            else filtered.add(matched);
-        }
-        if (filtered.isEmpty()) {
-            return new EndpointFilterOutcome(kept, List.of(), false, "");
-        }
-        // 安全阀一：一轮过滤太多就整体放弃。
-        if (filtered.size() > UNKNOWN_ENDPOINT_FILTER_MAX_PER_ROUND) {
-            LOGGER.warn("RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=too_many_per_round",
-                    filtered.size(), kept.size());
-            return new EndpointFilterOutcome(connections, List.of(), true, "too_many_per_round");
-        }
-        // 安全阀二：过滤后某端点变成 0 连接就整体放弃。村内连接（两端同一村庄盒）
-        // 不参与该判定 —— 它本来就不是"这个村庄通往别处的路"。
-        if (leavesEndpointWithoutConnection(kept, filtered, villageInternal)) {
-            LOGGER.warn("RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=endpoint_left_without_connection",
-                    filtered.size(), kept.size());
-            return new EndpointFilterOutcome(connections, List.of(), true, "endpoint_left_without_connection");
-        }
-        return new EndpointFilterOutcome(kept, List.copyOf(filtered), false, "");
-    }
-
-    static void logFilteredVillageEndpoint(StructureOwnerKey village,
-                                                   BlockPos unknown,
-                                                   BlockPos villageEndpoint,
-                                                   StructureConnection connection) {
-        LOGGER.info("RoadWeaver route filtered: village {} owns endpoint, unknown endpoint inside its box "
-                        + "village={} unknown={} connection={}->{}",
-                village.structureId(), villageEndpoint, unknown, connection.from(), connection.to());
-    }
-
-    /**
-     * 端点是否"未知"：不在已核验结构位点。
-     *
-     * <p>0.8.312 修正：旧实现还要求 {@code villageOwnerAt(endpoint) == null}，于是
-     * "落在村庄盒内的未知端点"——正是本过滤要处理的那一类——被判成"已知"，
-     * 过滤器因此永不触发（真机 0.8.311 日志 {@code filtered=0}，失败路仍在）。
-     * 未知的判定只看它是不是已核验结构位点；是否落在村庄盒内由调用方单独判定。</p>
-     */
-    static boolean isUnknownEndpoint(ServerLevel level,
-                                              BlockPos endpoint,
-                                              StructureFileStorage.StructureSnapshot storageSnapshot,
-                                              PlanningSnapshot snapshot) {
-        if (endpoint == null) return false;
-        List<StructureInfo> infos = storageSnapshot == null || storageSnapshot.locations() == null
-                ? List.of()
-                : storageSnapshot.locations().structureInfos();
-        for (StructureInfo info : infos) {
-            if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
-            if (info.pos().getX() == endpoint.getX() && info.pos().getZ() == endpoint.getZ()) return false;
-        }
-        return true;
-    }
-
-    /**
-     * 0.8.317：端点是否**就是**该 owner 对应的已核验结构位点。
-     *
-     * <p>比 {@code snapshot.ownsEndpoint(owner)} 严格：后者是"两个端点 owner 的并集里
-     * 有它就返回 true"，而未知端点自己也会因为"从附近建筑推断 owner"而进入并集，于是
-     * 别的村庄通往同一个未知点的正常路会被误判。这里直接核对端点区块与结构 id。</p>
-     */
-    static boolean endpointMatchesStructure(BlockPos endpoint,
-                                                     StructureOwnerKey owner,
-                                                     List<StructureInfo> knownInfos) {
-        if (endpoint == null || owner == null || knownInfos == null || knownInfos.isEmpty()) return false;
-        if (ChunkPos.asLong(endpoint.getX() >> 4, endpoint.getZ() >> 4) != owner.startChunkKey()) return false;
-        for (StructureInfo info : knownInfos) {
-            if (info == null || info.pos() == null || !StructureInfo.isKnownId(info.structureId())) continue;
-            if (info.pos().getX() != endpoint.getX() || info.pos().getZ() != endpoint.getZ()) continue;
-            return owner.structureId().equals(info.structureId());
-        }
-        return false;
-    }
-
-    /** 过滤后是否有端点从"有连接"变成"0 连接"。 */
-    static boolean leavesEndpointWithoutConnection(List<StructureConnection> kept,
-                                                           List<StructureConnection> filtered,
-                                                           Set<StructureConnection> exempt) {
-        Map<Long, Integer> keptCounts = new HashMap<>();
-        for (StructureConnection connection : kept) {
-            if (connection == null) continue;
-            keptCounts.merge(PlanningUtils.pos2dKey(connection.from()), 1, Integer::sum);
-            keptCounts.merge(PlanningUtils.pos2dKey(connection.to()), 1, Integer::sum);
-        }
-        for (StructureConnection connection : filtered) {
-            if (connection == null) continue;
-            if (exempt != null && exempt.contains(connection)) continue;
-            for (BlockPos endpoint : List.of(connection.from(), connection.to())) {
-                if (endpoint == null) continue;
-                if (keptCounts.getOrDefault(PlanningUtils.pos2dKey(endpoint), 0) == 0) return true;
-            }
-        }
-        return false;
+                ? List.of() : storageSnapshot.locations().structureInfos();
+        return VillageEndpointFilter.filter(connections, knownInfos,
+                connection -> StructureAvoidanceCache.PLANNING_SNAPSHOTS.get(routeKey(level, connection)));
     }
 
     static CompletableFuture<Void> preparePlanningSnapshotsOnServerThread(
