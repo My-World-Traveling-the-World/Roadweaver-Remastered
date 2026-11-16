@@ -1345,7 +1345,9 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 | bridge/SampledTerrainField、planning/impl/PipelinePlanner | FMM已不必扫描全域，真实采样仍先整场 | 接同布局三通道瓦片，保留梯度邻域与影子水代理后接生产 |
 | pathfinding/sampling/AccurateColumnBatch | 单请求临时内存仍随请求面积增长 | 瓦片入口控制单请求面积，保留缓存/磁盘/认领/版本/预算；对拍冷、部分命中与失败 |
 | metric/FmmCostCache / FmmValues | 大域按需页已接，密集访问有额外CPU成本 | 用真实访问分布决定页布局或密度迁移，不凭分配减少宣称吞吐提升 |
-| 远端同步 | 源码已小步提交，文档后push并复核 | 实际结果补记本节，不能把网络失败说成成功 |
+
+
+同步结果：代码及五份文档已推送至3f97eab，远端main从03a77af推进，日志.analysis_tmp/round38-final-push.log。推送后status空，HEAD与origin/main均为3f97eab；最终回归于2026-11-17 01:54:09结束，PASS tests=1414 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL。河流82cc818及长城5ade8e9b另作只读状态复核，两仓均干净，未改源码。本条补记的首次push及三次重试分别连接失败、低速超时、连接失败、连接重置（round38-sync-note-push.log及retry/retry2/retry3.log），均未成功；代码和完整验收文档已在远端3f97eab。结束时仅本条同步补记有1笔本地提交尚未推送，工作区干净；下一轮网络恢复后先pull --rebase并push这笔补记。
 
 ### 五、下一轮我会先做什么
 
