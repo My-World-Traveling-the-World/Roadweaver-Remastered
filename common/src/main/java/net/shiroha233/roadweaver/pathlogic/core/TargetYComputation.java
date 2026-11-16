@@ -1,4 +1,4 @@
-/* 文件职责：目标高度（纵断面）计算 —— 纯函数，只吃参数、吐每站的目标 Y。 */
+/* 文件职责：协调地形采样、端点高度和跨度处理，产出逐站目标高程。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
@@ -10,18 +10,11 @@ import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
-import net.shiroha233.roadweaver.config.ConfigService;
-import net.shiroha233.roadweaver.config.PresetService;
-import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
-import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.core.model.StructureInfo;
-import net.shiroha233.roadweaver.config.PathFeatureConfig;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator.PathCalculationResult;
 import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
@@ -74,32 +67,14 @@ import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
 import static net.shiroha233.roadweaver.pathlogic.core.Road.*;
 
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileAbObserver;
-import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
-import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
-import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
 import net.shiroha233.roadweaver.pathlogic.profile.ExistingRoadProbe;
 import net.shiroha233.roadweaver.pathlogic.profile.GroundBanSources;
 import net.shiroha233.roadweaver.pathlogic.profile.ModeDpBridge;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileTerrainRecorder;
 
 /**
- * 目标高度（纵断面）计算。
- *
- * <h2>它算什么</h2>
- * <p>给定沿线的地形采样、跨度划分与坡度配置，算出**每一站的目标 Y**。
- * 这是整条路的纵断面骨架 —— 后面所有「填/挖/桥/隧道」都读这张表。</p>
- *
- * <h2>★ 为什么能做成纯函数</h2>
- * <p>它原来的签名就已经把所有输入都收齐了（level / segments / spans / cache /
- * terrain / cfg / streams），**方法体里一处 this 都没有**。唯一的例外是一次
- * {@code routeBridgeMinWaterDepth()} 调用 —— 那是单个配置值，本轮改成显式参数
- * {@code bridgeMinWaterDepth} 传入，语义完全不变。</p>
- *
- * <p>这条「先把隐式依赖摊成参数、再搬」的顺序很关键：先搬再补参数会变成
- * 边搬边改逻辑，就不是等价的纯搬迁了。</p>
- *
- * <p>本类是从 1110 行的 {@code Road} 里<b>搬出来</b>的，方法体一字未改
- * （除了把一次配置调用换成同名参数），含缩进。</p>
+ * 目标高度编排：读取本次地形与结构输入，协调跨度和剖面处理。
+ * 本类会访问世界，并非纯函数；DP 硬约束与回落编排由 TargetProfileSolver 独立承担。
  */
 public final class TargetYComputation {
     /** 剖面 AB 实验窗口：允许挖多深。实验参数，非生产值。 */
@@ -331,7 +306,7 @@ public final class TargetYComputation {
         // 改动后：DP 拿到全部输入（含上移的 tunnelMask / gradeLimits）后立刻求解；
         // 成功 ⇒ 旧 pass 一行不跑。不可行 / 不适用 ⇒ empty ⇒ 照旧跑旧 pass，
         // 与改动前逐行相同，只在外面多了一层 if。
-        java.util.Optional<int[]> dpProfile = applyProfileSolver(level, centers, smoothed,
+        java.util.Optional<int[]> dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
                 terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary, endBoundary,
                 cfg, gradeLimits, connection);
         final int[] legacySnapshot;
@@ -633,193 +608,6 @@ public final class TargetYComputation {
                 connection == null ? "?" : connection.from() + "->" + connection.to(),
                 terrainY, isCrossing);
         return out;
-    }
-
-    /**
-     * 按 {@link ProfileSolverMode} 决定是否用全局 DP 替换旧流水线的剖面。
-     *
-     * <h2>三条安全约束</h2>
-     * <ol>
-     *   <li><b>默认路径零改动</b>：{@code LEGACY} 时立刻返回入参，不构造任何对象；</li>
-     *   <li><b>DP 失败必须回落</b>：不可行 / 异常一律返回旧剖面并记警告 ——
-     *       绝不因为实验性的求解器让一条路算不出来；</li>
-     *   <li><b>硬契约必须传进去</b>：结构边界锁定（村庄/出生点/命名结构）钉在
-     *       {@code startBoundary}/{@code endBoundary}，隧道段的覆土用
-     *       {@code SurfaceGradeLimits.tunnelCoreOverburden()}。
-     *       少传任何一条都会让入口高度偏离实测地表 —— 那正是玩家一眼能看出来的错误。</li>
-     * </ol>
-     *
-     * <p>窗口与坡度口径<b>必须与生产一致</b>：窗口用 {@link SurfaceGradeLimits}
-     * 的实时上限（施工端同一套），坡度用配置原值传给二阶约束。
-     * 曾经用「AB 实验窗口 24/12 + ceil(N/2) 每站步长」，两者都让 DP 比生产允许的更激进 ——
-     * 2026-11-13 独立审计发现并修正。</p>
-     *
-     * @param isCrossing 每站是否跨水/桥。这是 {@link ProfileDpSource} 的「桥段钉成直线」输入，
-     *                   <b>不是</b> tunnelMask —— 曾经传错，导致桥面甲板高度被整条覆盖掉
-     * @param gradeLimits 本趟规划的施工上限快照（挖/填/覆土同源）
-     */
-    /**
-     * 已钉住的站数（{@code pin} 用 {@code -1} 表示「不钉」）。
-     *
-     * <p>注意它与 {@link #countDeckFloors(int[])} 的哨兵值<b>不同</b>：
-     * 两个数组语义不一样，混用一个统计函数会把日志写错 —— 而说谎的日志
-     * 比没有日志更糟（本项目已因「静默降级 + 日志不实」吃过多次亏）。</p>
-     */
-    private static int countPinned(int[] pin) {
-        if (pin == null) return 0;
-        int c = 0;
-        for (int v : pin) {
-            if (v >= 0) c++;
-        }
-        return c;
-    }
-
-    /** 已给定桥面下界的站数（{@code deckFloor} 用 {@link Integer#MIN_VALUE} 表示「无」）。 */
-    private static int countDeckFloors(int[] deckFloor) {
-        if (deckFloor == null) return 0;
-        int c = 0;
-        for (int v : deckFloor) {
-            if (v != Integer.MIN_VALUE) c++;
-        }
-        return c;
-    }
-
-    /**
-     * 尝试用全局 DP 求解剖面。
-     *
-     * <p><b>2026-11-14（缺陷 C 第二步）</b>：返回值从 {@code int[]} 改成
-     * {@link java.util.Optional}，为了让调用方能区分两件事：</p>
-     * <ul>
-     *   <li><b>empty</b> —— 「本模式不适用」或「不可行」。调用方<b>应当</b>照旧跑
-     *       旧 pass 流水线（这正是改动前的行为，零风险）；</li>
-     *   <li><b>present</b> —— 已经算出完整剖面。调用方<b>可以跳过</b>旧 pass，
-     *       这是「去双跑」的全部意义。</li>
-     * </ul>
-     *
-     * <p>注意「不可行 → empty」是有意选择：那种情况下旧 pass 的结果仍然比
-     * {@code ProfileFallback} 好（旧 pass 会做隧道/边界等语义处理），
-     * 所以让它回落旧链路而不是回落几何投影。</p>
-     */
-    private static java.util.Optional<int[]> applyProfileSolver(
-            ServerLevel level, List<BlockPos> centers,
-            int[] smoothed, int[] terrainY, boolean[] isCrossing,
-            boolean[] tunnelMask, boolean[] pinnedMask,
-            int startBoundary, int endBoundary,
-            RoadGenerationConfig cfg,
-            SurfaceGradeLimits gradeLimits,
-            StructureConnection connection) {
-        if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
-            return java.util.Optional.empty();
-        }
-        // 用户关掉坡度限制时，旧流水线也不夹坡。DP 若仍强制 |Δ|≤N 就是两套语义打架。
-        if (!cfg.slopeLimitEnabled()) {
-            return java.util.Optional.empty();
-        }
-        int n = smoothed.length;
-        // ★ 2026-11-15（独立复核修复）：三条硬约束在 try **之前**构造。
-        //
-        // 原来 pin / minCover / deckFloor 全在 try 内，DP 一旦抛异常，catch 只能传
-        // null ⇒ 回落解丢掉「结构端点钉高」和「桥面水位下界」这两条硬契约，
-        // 而它们正是本方法最重要的保证。现在移出去，两条回落路径参数一致。
-        int[] pin = new int[n];
-        java.util.Arrays.fill(pin, -1);
-        if (pinnedMask != null) {
-            if (pinnedMask.length > 0 && pinnedMask[0]) pin[0] = startBoundary;
-            if (pinnedMask.length > n - 1 && pinnedMask[n - 1]) pin[n - 1] = endBoundary;
-        }
-        int minCover = Math.max(1, gradeLimits.tunnelCoreOverburden());
-        // mustBeCovered 用隧道掩码（覆土是隧道的要求）；crossing 用桥掩码（桥面钉直线）。
-        // 这两个是不同的事实，曾经被同一个 tunnelMask 顶替 —— 后果是隧道被当成桥钉直、
-        // 而真正的桥面甲板高度被 DP 整条覆盖掉。
-        // ★ 桥面水位下界 —— 这是「重构」而不是「补丁」的关键点。
-        //
-        // 旧版：computeTargetY 算完剖面之后，由 applyFixedRange 把桥面整段抬到
-        //       「最高水位 + bridgeDeckClearance」。那是事后修正，抬完之后
-        //       坡度约束、1-2-1 平滑、相邻桥连续性全部失效，只能再贴一轮补丁。
-        //
-        // 新版：在求解**之前**就把这个下界算出来喂给 DP。DP 在满足坡度上限的
-        //       前提下自己找最优过渡 —— 桥面该平的段落自然平（同一水位下界相同），
-        //       过渡段由 DP 统一安排，不需要事后贴坡。
-        //
-        // 下界来源是旧版的权威算法 RoadConstructionSafety.bridgeDeckSurfaceY：
-        // 逐站查最高水位，并向两侧 WATERCOURSE_HALF_WIDTH(=3) 取样取最高，
-        // 再加 clearance。水位不可用时它返回 fallback，这里传 Integer.MIN_VALUE
-        // 表示「无下界」。
-        int[] deckFloor = new int[n];
-        java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
-        // deckFloor 要读世界水位，这一步本身可能抛；单独兜一层 ——
-        // 采样失败时退化成「无下界」，而不是让整条 DP 路径失败。
-        try {
-            if (isCrossing != null && centers != null && centers.size() == n) {
-                int clearance = Math.max(1, cfg.bridgeDeckClearance());
-                for (int i = 0; i < n; i++) {
-                    if (!isCrossing[i]) continue;
-                    deckFloor[i] = RoadConstructionSafety.bridgeDeckSurfaceY(
-                            level, centers, i, clearance, Integer.MIN_VALUE);
-                }
-            }
-        } catch (Throwable deckFailure) {
-            java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
-            LOGGER.warn("RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
-                    deckFailure.toString());
-        }
-        try {
-            var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor);
-            int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
-            // 一阶上限 = 把「每两站 N 格」折算成每站（向上取整）。它只是兜底，
-            // 真正绑定的是二阶约束 |d_i + d_{i−1}| ≤ perTwo。
-            int maxStep = Math.max(1, (perTwo + 1) / 2);
-            // 窗口取施工端的实时上限 —— 与旧流水线同一套，DP 才不会挖出施工端拒收的深度。
-            int maxCut = Math.max(0, gradeLimits.plainCut());
-            int maxFill = Math.max(0, gradeLimits.plainFill());
-
-            var solved = ProfileDpSource.solve(terrainY, isCrossing,
-                    maxCut, maxFill, maxStep, perTwo, constraints);
-            if (solved.isEmpty()) {
-                // 2026-11-14（缺陷 C 收尾）：DP 不可行 ⇒ 用无状态回落解，
-                // **不再跑旧 15 道 pass**。
-                //
-                // 这是「旧 pass 退出生产路径」的关键一步：改动前 DP 不可行会
-                // 返回 empty，调用方就去跑旧 pass；现在它返回 ProfileFallback 的解，
-                // 调用方直接采用。于是 empty 只剩两种「DP 不适用」的情形：
-                //   · profileSolver 不是 DP（显式 -Droadweaver.profileSolver=legacy）
-                //   · 玩家关掉了坡度限制（旧 pass 也不夹坡，DP 的硬约束会打架）
-                // 那两种情形本来就该走旧链路，语义没问题。
-                //
-                // 回落解取的是同一套硬约束（窗口 / 一阶二阶坡度 / 站钉 / 桥面下界 /
-                // 隧道覆土），所以结果一定合规 —— 它只是不做全局最优，不像旧 pass
-                // 那样有一堆互相打架的事后修正。
-                LOGGER.warn("RoadWeaver profile solver=dp infeasible, using constraint fallback"
-                                + " stations={} cut={} fill={} perTwo={} pins={} decks={}"
-                                + " connection={}->{}",
-                        n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
-                        connection == null ? "?" : connection.from(),
-                        connection == null ? "?" : connection.to());
-                return java.util.Optional.of(ProfileFallback.terrainFollowing(
-                        terrainY, maxCut, maxFill, maxStep, perTwo,
-                        pin, tunnelMask, minCover, deckFloor));
-            }
-            LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
-                    n, perTwo, maxStep, maxCut, maxFill, minCover,
-                    connection == null ? "?" : connection.from(),
-                    connection == null ? "?" : connection.to());
-            return java.util.Optional.of(solved.get());
-        } catch (Throwable t) {
-            // 实验性求解器绝不能让一条路算不出来。
-            // 2026-11-15（独立复核修复）：回落参数与「不可行」分支**完全一致** ——
-            // pin / tunnelMask / minCover / deckFloor 都在 try 外构造好了，
-            // 不再像原来那样在异常路径把 pin 与 deckFloor 传 null（那会丢掉
-            // 结构端点钉高与桥面水位下界，而它们正是硬契约）。
-            LOGGER.warn("RoadWeaver profile solver=dp failed, using constraint fallback"
-                            + " stations={} pins={} decks={}: {}",
-                    n, countPinned(pin), countDeckFloors(deckFloor), t.toString());
-            return java.util.Optional.of(ProfileFallback.terrainFollowing(
-                    terrainY, Math.max(0, gradeLimits.plainCut()),
-                    Math.max(0, gradeLimits.plainFill()),
-                    Math.max(1, (Math.max(1, cfg.maxSlopeStepPerTwoSegments()) + 1) / 2),
-                    Math.max(1, cfg.maxSlopeStepPerTwoSegments()),
-                    pin, tunnelMask, minCover, deckFloor));
-        }
     }
 
 }
