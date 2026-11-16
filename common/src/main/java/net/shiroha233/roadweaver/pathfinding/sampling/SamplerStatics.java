@@ -79,7 +79,12 @@ public final class SamplerStatics {
 
     public static void joinWaitingTiles(Map<Long, CompletableFuture<Void>> waiting,
                                          ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer) {
-        long timeoutMs = inFlightTimeoutMs();
+        joinWaitingTiles(waiting, coalescer, inFlightTimeoutMs());
+    }
+
+    /** 超时作为参数传入，离线测试可控制接管时机，不修改全局配置。 */
+    static void joinWaitingTiles(Map<Long, CompletableFuture<Void>> waiting,
+                                 ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer, long timeoutMs) {
         for (Map.Entry<Long, CompletableFuture<Void>> entry : waiting.entrySet()) {
             try {
                 entry.getValue().get(timeoutMs, TimeUnit.MILLISECONDS);

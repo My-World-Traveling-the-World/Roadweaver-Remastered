@@ -29,6 +29,7 @@ final class AccurateColumnBatch {
     private final AccurateHeightBackend backend;
     private final AccurateSampleStore store;
     private final Cache cache;
+    private final java.util.function.LongSupplier timeoutMs;
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> tileInFlight = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, CompletableFuture<Void>> acceleratedTileInFlight = new ConcurrentHashMap<>();
     // 同线程已经持有的瓦片不能再等待自己；沿用原逐列递归保护。
@@ -36,9 +37,21 @@ final class AccurateColumnBatch {
             ThreadLocal.withInitial(java.util.HashSet::new);
 
     AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache) {
+        this(backend, store, cache, SamplerStatics::inFlightTimeoutMs);
+    }
+
+    /** 只注入等待预算，生产仍读取同一配置，不更换任何高度计算实现。 */
+    AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache,
+                        java.util.function.LongSupplier timeoutMs) {
         this.backend = backend;
         this.store = store;
         this.cache = cache;
+        this.timeoutMs = timeoutMs;
+    }
+
+    private void awaitTiles(Map<Long, CompletableFuture<Void>> waiting,
+                            ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer) {
+        if (!waiting.isEmpty()) joinWaitingTiles(waiting, coalescer, timeoutMs.getAsLong());
     }
 
     /** 先唤醒共享结果的等待者，资源真正关闭仍由门面统一负责。 */
@@ -69,6 +82,7 @@ final class AccurateColumnBatch {
         }
         if (!missingIndexes.isEmpty()) {
             Map<Long, AccurateHeightSample> stored = store.loadSamples(missingIndexes.keySet());
+            cache.ensureOpen();
             for (Map.Entry<Long, Integer> entry : missingIndexes.entrySet()) {
                 AccurateHeightSample sample = stored.get(entry.getKey());
                 if (sample == null) return Optional.empty();
@@ -80,8 +94,16 @@ final class AccurateColumnBatch {
     }
 
     AccurateHeightGrid sampleGridInternal(AccurateHeightGridRequest request,
-                                                   AccurateSamplingProgress progress,
-                                                   boolean acceleratedOnly) {
+                                          AccurateSamplingProgress progress, boolean acceleratedOnly) {
+        // 等待他人后重新检查缓存，冲突次数不能变成递归深度。
+        for (;;) {
+            AccurateHeightGrid resolved = sampleGridOnce(request, progress, acceleratedOnly);
+            if (resolved != null) return resolved;
+        }
+    }
+
+    private AccurateHeightGrid sampleGridOnce(AccurateHeightGridRequest request,
+                                              AccurateSamplingProgress progress, boolean acceleratedOnly) {
         cache.ensureOpen();
         AccurateSamplingProgress sink = progress == null ? AccurateSamplingProgress.NONE : progress;
         int sampleCount = request.sampleCount();
@@ -121,6 +143,8 @@ final class AccurateColumnBatch {
             missingKeys.add(AccurateHeightSample.key(request.blockX(index), request.blockZ(index)));
         }
         Map<Long, AccurateHeightSample> stored = store.loadSamples(missingKeys);
+        // 关闭可能发生在读盘期间，不能再发布这份迟到快照。
+        cache.ensureOpen();
         if (stored.isEmpty() && resolvedCount == 0 && missingIndexes.size() == sampleCount) {
             return sampleWholeGridWithTileLease(request, sink, acceleratedOnly);
         }
@@ -240,7 +264,7 @@ final class AccurateColumnBatch {
                     ownedTiles.get().removeAll(owned.keySet());
                 }
             }
-            joinWaitingTiles(waiting, coalescer);
+            awaitTiles(waiting, coalescer);
             resolveCachedColumns(unresolved, result);
             resolveStoredColumns(unresolved, result);
         }
@@ -311,6 +335,9 @@ final class AccurateColumnBatch {
         LinkedHashMap<Long, CompletableFuture<Void>> waiting = new LinkedHashMap<>();
         synchronized (coalescer) {
             for (long tileKey : tileKeys) {
+                if (ownedTiles.get().contains(tileKey)) {
+                    throw new IllegalStateException("recursive accurate tile request on the same thread: " + tileKey);
+                }
                 CompletableFuture<Void> existing = coalescer.get(tileKey);
                 if (existing != null) waiting.put(tileKey, existing);
             }
@@ -323,22 +350,31 @@ final class AccurateColumnBatch {
             }
         }
         if (!waiting.isEmpty()) {
-            joinWaitingTiles(waiting, coalescer);
-            return sampleGridInternal(request, progress, acceleratedOnly);
+            awaitTiles(waiting, coalescer);
+            // null 仅表示已等待、需重新查缓存；所有求值和保存异常仍直接抛出。
+            return null;
         }
+        // 网格求值期间必须登记全部瓦片，进度回调和后端重入才不会等待自己。
+        ownedTiles.get().addAll(owned.keySet());
         try {
             AccurateHeightGrid sampled = acceleratedOnly
                     ? backend.sampleAcceleratedGrid(request, progress)
                     : backend.sampleGrid(request, progress);
+            if (sampled == null || !request.equals(sampled.request())) {
+                throw new IllegalStateException("Accurate height backend returned a different grid request");
+            }
+            cache.ensureOpen();
+            // 与逐列批次一致，保存成功后才发布；否则缓存命中会掩盖失败、吞掉重试。
+            store.saveGrid(sampled);
             cache.ensureOpen();
             cacheGridColumns(sampled);
-            store.saveGrid(sampled);
             owned.values().forEach(future -> future.complete(null));
             return sampled;
         } catch (Throwable failure) {
             owned.values().forEach(future -> future.completeExceptionally(failure));
             throw failure;
         } finally {
+            ownedTiles.get().removeAll(owned.keySet());
             synchronized (coalescer) {
                 for (Map.Entry<Long, CompletableFuture<Void>> entry : owned.entrySet()) {
                     coalescer.remove(entry.getKey(), entry.getValue());

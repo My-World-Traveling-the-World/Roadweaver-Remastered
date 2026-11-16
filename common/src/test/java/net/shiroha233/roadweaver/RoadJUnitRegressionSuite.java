@@ -279,6 +279,9 @@ public final class RoadJUnitRegressionSuite {
                         // 真实认领、取消和关闭必须能区分成功与丢失结果，不能只守缓存容量。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateChunkBatchTest"),
+                        // 网格与逐列必须用混合请求验证，单独测两种缓存会漏掉共享认领错误。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.AccurateColumnBatchTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerLifecycleTest"),
                         DiscoverySelectors.selectClass(
