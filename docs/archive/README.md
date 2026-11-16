@@ -4,6 +4,7 @@
 
 | 查什么 | 历史资料 |
 |---|---|
+| 第 0～12 轮交接、守卫和性能证据 | [交接历史](HANDOFF-ROUNDS-00-12.md) |
 | 两个 P0 的复现、修复与负控 | [P0 修复](P0-FIX-20261115.md) |
 | 桥隧跨度试验与涵洞阈值 | [跨度回写设计](DESIGN-SPAN-WRITEBACK.md) · [涵洞阈值分析](CULVERT-THRESHOLD-ANALYSIS-20261115.md) |
 | 守卫自审与客户端依赖 | [守卫有效性](GUARD-EFFECTIVENESS-AUDIT-20261115.md) · [客户端耦合审计](UI-COUPLING-AUDIT-20261115.md) |
