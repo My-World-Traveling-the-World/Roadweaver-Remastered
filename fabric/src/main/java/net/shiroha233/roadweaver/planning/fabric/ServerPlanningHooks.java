@@ -8,6 +8,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.util.Unit;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.shiroha233.roadweaver.config.structure.StructureDiscoveryService;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
@@ -24,9 +28,11 @@ import net.shiroha233.roadweaver.network.fabric.MapNetworkFabric;
 import net.shiroha233.roadweaver.persistence.WorldDataProvider;
 import net.shiroha233.roadweaver.planning.RoadPlanningService;
 import net.shiroha233.roadweaver.planning.RoadPlanningReadinessIndex;
+import net.shiroha233.roadweaver.route.RouteChunkPreloader;
 import net.shiroha233.roadweaver.runtime.CacheManager;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import net.shiroha233.roadweaver.runtime.RoadLifecycle;
+import net.shiroha233.roadweaver.runtime.NonBlockingChunkFutureAccess;
 import net.shiroha233.roadweaver.runtime.RuntimePlayerActivity;
 import net.shiroha233.roadweaver.runtime.RuntimeLoadPolicy;
 
@@ -40,10 +46,32 @@ public final class ServerPlanningHooks {
 
     private static int tick;
 
+    private static final TicketType<Unit> ROUTE_PRELOAD_TICKET =
+            TicketType.create("roadweaver_route_preload", (left, right) -> 0);
+
+    private static RouteChunkPreloader.ChunkRequest requestHandDrawnChunk(ServerLevel level, ChunkPos pos) {
+        var source = level.getChunkSource();
+        // 公共 getChunkFuture 在服务端线程会等待；复用已有 Mixin 端口直接提交请求。
+        if (!(source instanceof NonBlockingChunkFutureAccess nonBlocking)) {
+            throw new IllegalStateException("Nonblocking ServerChunkCache port unavailable");
+        }
+        source.addRegionTicket(ROUTE_PRELOAD_TICKET, pos, 0, Unit.INSTANCE);
+        Runnable release = () -> source.removeRegionTicket(ROUTE_PRELOAD_TICKET, pos, 0, Unit.INSTANCE);
+        try {
+            return new RouteChunkPreloader.ChunkRequest(nonBlocking.roadweaver$invokeGetChunkFutureMainThread(
+                    pos.x, pos.z, ChunkStatus.FULL, true), release);
+        } catch (RuntimeException | LinkageError failure) {
+            release.run();
+            throw failure;
+        }
+    }
+
     /** 0.8.346：Chunky 独占转正时是否已释放过缓存（上升沿检测，避免每 tick 重复清理）。 */
     private static boolean chunkyCacheReleased;
 
     public static void register() {
+        // 只有手绘路线走这个主动加载端口，延迟施工保持只消费已加载区块。
+        RouteChunkPreloader.installChunkRequester(ServerPlanningHooks::requestHandDrawnChunk);
         // 玩家和预生成均可唤醒待施工区块；实际施工仍交给服务端 Tick 的预算。
         ServerChunkEvents.CHUNK_LOAD.register((level, chunk) ->
                 DeferredInitialRoadConstructionService.onChunkLoaded(level, chunk.getPos().toLong()));
@@ -159,6 +187,8 @@ public final class ServerPlanningHooks {
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             RoadLifecycle.beginStopping();
+            // 服务端关停前释放手绘预加载票据，迟到 Future 不再持有施工状态。
+            net.shiroha233.roadweaver.route.RouteBuildService.clearPreloadState(server.overworld());
             StreamsReflowingCompat.clearPrewarmState();
             MapNetworkFabric.clearRuntime();
             MapStructureSearchService.clearRuntime();
@@ -177,6 +207,8 @@ public final class ServerPlanningHooks {
         });
 
         ServerWorldEvents.UNLOAD.register((server, level) -> {
+            // 世界卸载时不能留下持有该区块源的手绘加载任务。
+            net.shiroha233.roadweaver.route.RouteBuildService.clearPreloadState(level);
             DeferredInitialRoadConstructionService.clear(level);
             CacheManager.onDimensionUnload(level);
         });

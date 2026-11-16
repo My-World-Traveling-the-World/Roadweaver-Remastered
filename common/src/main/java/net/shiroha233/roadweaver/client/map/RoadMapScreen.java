@@ -861,7 +861,8 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
      * 经 {@code server.execute(...)} 投递 —— 与施工提交同一模式。</p>
      */
     private void retryFailedPreloads() {
-        MapPreloadRetry.retryFailed(this.minecraft, routeEditor.state().route());
+        // 重试以服务器上的失败记录为准，当前编辑器通常已是另一条路线。
+        MapPreloadRetry.retryFailed(this.minecraft);
     }
 
     @Override

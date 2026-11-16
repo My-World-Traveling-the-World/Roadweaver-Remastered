@@ -2,101 +2,30 @@
  *
  * ⚠ 这是对「不做强制加载」策略的**显式例外**：只为玩家自己画的路线强制加载，
  * 且严格限定在路线经过的区块（仅扩 1 圈以覆盖路宽边界溢出）。
- * 代价是服务端停顿 —— 玩家已知情并接受，详见下方类注释。
+ * 请求在服务端发出，分 tick 消费，避免同步等待区块生成。
  */
 package net.shiroha233.roadweaver.route;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.shiroha233.roadweaver.generation.LoadedChunkRoadBackfill;
-import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * 手绘路线提交施工后，**强制加载该路线经过的区块并立即施工**。
- *
- * <h2>用户需求（2026-09-25）</h2>
- * <blockquote>
- * 「提交施工时立即拉；不设置超时；必须全部加载完成；但是不要多拉区块，
- *   道路没有经过的不要拉。」
- * </blockquote>
- *
- * <h2>要解决什么问题</h2>
- * 原先手绘路线提交后，施工完全依赖 {@code LoadedChunkRoadBackfill} 的
- * **被动回填** —— 它只捡「当前恰好已加载」的区块，而且每次上限
- * {@code MAX_BACKFILL_CHUNKS_PER_INVOCATION = 8}。实测日志：
- * <pre>
- *   loaded-chunk construction backfill: candidates=361 loaded=289 processed=8 placed=8
- * </pre>
- * 361 个候选区块、每次只吃 8 个 ⇒ 要几十次回填才清完。
- * 玩家看到的现象是「地图上已标蓝（连接 COMPLETED），但世界里走过去仍是空地」。
- *
- * <h2>与开局预热那条路径的关系</h2>
- * 开局预热侧原本另有一个 {@code InitialRoadConstructionService} 做「强制加载到 FULL 再铺」，
- * 但它当时就已经是死代码（生产与测试都零引用），<b>2026-11-15 已物理删除</b>。
- * 本类现在是把「强制加载到 FULL 再铺」接上手绘路线的那一份实现 ——
- * 逻辑刻意保持一致（分批 / 重试 / 验证），
- * 区别只有一个：**候选区块来自玩家画的路线**，而不是全局规划结果。
- *
- * <h2>⚠️ 为什么这是一次「策略变更」</h2>
- * {@code LoadedChunkRoadBackfill.placeLoadedRoad} 的注释明确写着：
- * <blockquote>
- *   This is deliberately exact: it never expands the set and never asks the
- *   chunk source to load anything, so <b>manual routes do not defeat the
- *   no-force-load policy</b>.
- * </blockquote>
- * 也就是说「手绘路线不强加载区块」**原本是刻意的设计**。这里按用户 2026-09-25
- * 的要求**显式改变了该策略**：只为**玩家自己画的路线**强制加载，
- * 且**严格限定在路线经过的区块**内（不做半径正方形扫描；仅对路线区块扩 1 圈，
- * 见 {@link #collectRouteChunks} 的说明 —— 那是为覆盖道路宽度的边界溢出）。
- *
- * <h2>线程与「会不会卡住服务器」</h2>
- * 必须在**服务端线程**上调用（{@code server.managedBlock} 等）。
- *
- * <p>⚠️ <b>2026-09-25 更正（Codex 用 1.21.1 字节码核对）</b>：
- * 本类注释原先写「{@code managedBlock} 会让服务端等待但 <b>ticks 继续跑</b>」——
- * 这个说法<b>不准确</b>。{@code managedBlock} 的循环只做两件事：
- * 处理事件循环/区块任务队列（{@code pollTask()} + {@code waitForTasks()}），
- * <b>不会进入 {@code MinecraftServer.tickServer()}</b>。
- * 也就是说：等待期间**普通游戏 tick（实体、红石、计分板等）是暂停的**，
- * 只有区块相关任务在推进。</p>
- *
- * <p>实际影响：本等待发生在**服务端线程**上，所以长路线/未探索区块会表现为
- * <b>服务器停顿时长</b>（而不是"ticks 照跑、只是生成变忙"）。
- * 用户已知情并接受（「等待 10 来秒都可以接受」、要求「不设超时、必须全部完成」）。</p>
- *
- * <p>缓解事实：用户指出手绘路线画在**已生成过**的区块上 ⇒ 绝大多数是磁盘二次加载，
- * 停顿远小于真世界生成。但**若路线含未探索区域**，停顿会明显变长。</p>
- */
+/** 服务端手绘路线的提交、预加载和施工调度。 */
 public final class RouteChunkPreloader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
 
-    /** 每批至少这么多区块（与开局预热保持一致）。 */
-    /**
-     * 每批处理的区块数（★ 用户 2026-09-25 明确要求 **32**）。
-     *
-     * <h2>为什么可以这么大</h2>
-     * 用户指出关键点：**手绘路线画在「已经生成过」的区块上** ——
-     * 玩家是看着地图上已有的地形画的线，所以这些区块早就在 region 文件里。
-     * 因此这里的 {@code getChunkFuture(FULL, true)} 绝大多数是
-     * **从磁盘二次加载**，而不是真跑世界生成 ⇒ 单批开销远小于"生成新地形"，
-     * 32 一批不会造成开局预热那种级别的卡顿。
-     *
-     * <p>（仍保留真正的世界生成路径：万一路线端点落在未探索区域，
-     * {@code forceLoad=true} 会正常生成它，不会漏。）</p>
-     */
+    /** 保留原来 32 块的上限；跨 tick 也不能无限堆积区块票据。 */
     private static final int BATCH_SIZE = 32;
     /** 单块最多重试几次（与开局预热一致）。 */
     private static final int MAX_CHUNK_ATTEMPTS = 3;
@@ -226,7 +155,7 @@ public final class RouteChunkPreloader {
      * <p>幂等：同一 routeId 重复登记不会重置已累计的尝试次数与冷却。</p>
      */
     public static void enqueuePending(ServerLevel level, java.util.UUID routeId) {
-        if (level == null || routeId == null) {
+        if (level == null || routeId == null || !level.getServer().isRunning()) {
             return;
         }
         pending(level).computeIfAbsent(routeId, k -> new PendingState(level.getGameTime()));
@@ -250,371 +179,220 @@ public final class RouteChunkPreloader {
         if (map != null) {
             map.remove(routeId);
         }
+        // 删除、重提都撤销旧任务，等同 UUID 的新任务会另建状态。
+        ActivePreload active = ACTIVE.get(level);
+        if (active != null && routeId.equals(active.route().id())) {
+            finish(level, active, true, true, false);
+        }
+        RoutePreloadStatus.forget(level, routeId);
     }
 
     /**
-     * **每 tick 排空待办队列**（★ 0.8.400 的核心兜底）。
-     *
-     * <p>必须在服务端线程调用（{@code preloadAndConstruct} 会 {@code managedBlock}）。</p>
-     *
-     * <p>语义：对每条待办路线</p>
-     * <ol>
-     *   <li>路线对象没了 ⇒ 丢弃（无意义）</li>
-     *   <li>连接还没登记（{@code total == 0}）⇒ 等，超过宽容期就丢弃</li>
-     *   <li>连接**尚未全部结算**（还有 PLANNED / GENERATING）⇒ 等下一个 tick</li>
-     *   <li>已全部结算 ⇒ **强制执行预加载**；成功（进入 PRELOADED 去重集）
-     *       就出队，否则按冷却重试，用尽次数后告警出队</li>
-     * </ol>
-     *
-     * <p>「成功」以 {@link #preloaded} 去重集为准 —— 那是
-     * {@code preloadAndConstruct} 在**全部区块都铺成功**时才保留的标记；
-     * 有失败块时它会主动释放该标记以便重试，两者语义天然一致。</p>
-     *
-     * @return 本次真正执行了强制预加载的路线数
+     * 每 tick 推进至多一条正在加载的路线。仅待办的连接结算检测沿用 10 tick 节流，
+     * 因为已发请求的票据、取消和施工不该跟着低频状态扫描等。
      */
-    public static int drainPending(ServerLevel level) {
-        if (level == null) {
+    public static int drainPending(ServerLevel level, boolean dimensionPaused) {
+        if (level == null) return 0;
+        if (dimensionPaused) {
+            pauseActive(level);
             return 0;
         }
-        java.util.Map<java.util.UUID, PendingState> map = PENDING.get(level);
-        // ★ 快路径：没有待办时零开销（绝大多数 tick 走这里）
-        if (map == null || map.isEmpty()) {
+        ActivePreload active = ACTIVE.get(level);
+        if (active != null) {
+            // UUID 在重新提交时可复用，因此还要核对实际登记的路线对象。
+            boolean obsolete = !active.route().equals(RouteBuildRegistry.getRoute(level, active.route().id()));
+            if (obsolete || RoutePreloadStatus.isStopRequested(level, active.route().id())) {
+                finish(level, active, true, obsolete, true);
+            } else {
+                advance(level, active);
+            }
             return 0;
         }
 
+        Map<UUID, PendingState> map = PENDING.get(level);
+        if (map == null || map.isEmpty()) return 0;
         long now = level.getGameTime();
-
-        // ★ 0.5 秒节流（用户要求：不要给太多性能压力）。
-        //   注意顺序：**先判空再判节流** —— 没有待办时不消耗节流配额，
-        //   这样"提交后立刻检测"不会被上一轮的空闲节流挡住。
         Long next = NEXT_DRAIN.get(level);
-        if (next != null && now < next) {
-            return 0;
-        }
+        if (next != null && now < next) return 0;
         NEXT_DRAIN.put(level, now + DRAIN_INTERVAL_TICKS);
 
-        int ran = 0;
-
-        for (java.util.Map.Entry<java.util.UUID, PendingState> entry : map.entrySet()) {
-            java.util.UUID routeId = entry.getKey();
+        for (var entry : map.entrySet()) {
+            UUID routeId = entry.getKey();
             PendingState state = entry.getValue();
-            if (routeId == null || state == null) {
-                map.remove(routeId);
-                continue;
-            }
-            // 已经铺完了（去重集里有）⇒ 出队
             if (preloaded(level).contains(routeId)) {
-                map.remove(routeId);
+                map.remove(routeId, state);
                 continue;
             }
-            if (now < state.nextAttemptAt) {
-                continue;   // 冷却中
-            }
-
-            PlayerRoute route = net.shiroha233.roadweaver.route.RouteBuildRegistry
-                    .getRoute(level, routeId);
+            PlayerRoute route = RouteBuildRegistry.getRoute(level, routeId);
             if (route == null) {
-                // 路线对象丢了（世界重进且未重建登记）——留着也无法加载，丢弃
-                LOGGER.debug("RouteWeaver 预加载待办丢弃（路线对象不存在）route={}", routeId);
-                map.remove(routeId);
+                map.remove(routeId, state);
                 continue;
             }
-
-            net.shiroha233.roadweaver.route.RouteBuildProgress.Snapshot snap =
-                    net.shiroha233.roadweaver.route.RouteBuildProgress.snapshot(level, routeId);
-            if (snap.total() == 0) {
-                // 连接登记还没出现 —— 提交后通常立刻就有；迟迟没有就放弃
+            if (now < state.nextAttemptAt) continue;
+            var progress = RouteBuildProgress.snapshot(level, routeId);
+            if (progress.total() == 0) {
                 if (now - state.enqueuedAt > REGISTRATION_GRACE_TICKS) {
-                    LOGGER.warn("RouteWeaver 预加载待办丢弃（连接登记在 {} tick 内未出现）route={}",
-                            REGISTRATION_GRACE_TICKS, routeId);
-                    map.remove(routeId);
+                    LOGGER.warn("RouteWeaver 预加载待办超出登记宽容期 route={}", routeId);
+                    map.remove(routeId, state);
                 }
                 continue;
             }
-            if (!snap.isSettled()) {
-                // 还在生成/排队 —— 等它结算。这是正常的等待路径，不消耗尝试次数。
-                continue;
-            }
+            // 连接仍在生成时，区块计划可能为空；提前回填会把将来的道路当成无需施工。
+            if (!progress.isSettled()) continue;
 
-            // ── 已全部结算 ⇒ 强制执行 ──
             state.attempts++;
-            ran++;
             try {
-                LOGGER.info("RouteWeaver 预加载兜底触发（连接已全部结算）route={} chunks 加载开始 attempts={}",
-                        routeId, state.attempts);
-                preloadAndConstruct(level, route);
-            } catch (Throwable t) {
-                // 失败不能让 tick 崩掉；交给下面的重试逻辑
-                LOGGER.warn("RouteWeaver 预加载兜底执行异常 route={}", routeId, t);
-            }
-
-            if (preloaded(level).contains(routeId)) {
-                // 全部区块铺设成功 ⇒ 出队
-                LOGGER.info("RouteWeaver 预加载兜底完成 route={} attempts={}", routeId, state.attempts);
-                map.remove(routeId);
-            } else if (state.attempts >= MAX_PRELOAD_ATTEMPTS) {
-                LOGGER.warn("RouteWeaver 预加载兜底放弃（尝试 {} 次仍有区块未加载）route={} "
-                                + "—— 剩余区块转交被动回填",
-                        state.attempts, routeId);
-                map.remove(routeId);
-            } else {
-                state.nextAttemptAt = now + RETRY_COOLDOWN_TICKS;
+                Set<Long> chunks = collectRouteChunks(level, route);
+                if (chunks.isEmpty()) {
+                    map.remove(routeId, state);
+                    continue;
+                }
+                ChunkPos origin = originChunk(level, route);
+                List<Long> ordered = new ArrayList<>(chunks);
+                ordered.sort(Comparator.comparingLong(key -> distanceSquared(origin, key)));
+                ActivePreload created = new ActivePreload(route, state,
+                        new RoutePreloadWork(ordered, BATCH_SIZE, MAX_CHUNK_ATTEMPTS),
+                        countNotInMemory(level, ordered), System.nanoTime());
+                ACTIVE.put(level, created);
+                RoutePreloadStatus.begin(level, routeId, ordered.size(), created.notInMemory());
+                if (RoutePreloadStatus.isStopRequested(level, routeId)) {
+                    finish(level, created, true, false, true);
+                } else {
+                    advance(level, created);
+                }
+                return 1;
+            } catch (RuntimeException | LinkageError failure) {
+                LOGGER.warn("RouteWeaver 无法开始手绘预加载 route={}", routeId, failure);
+                retryRoute(level, routeId, state);
+                return 0;
             }
         }
-
-        return ran;
+        return 0;
     }
 
-    /**
-     * 强制加载并施工这条手绘路线经过的**全部**区块。
-     *
-     * <p>阻塞式：本方法返回时，该路线的区块都已被铺过（或已判定无需施工）。
-     * 用户明确要求「不设置超时、必须全部加载完成」，所以这里**不设超时**，
-     * 只在单块重试用尽后**记录并跳过**（不抛异常中断整条路线 ——
-     * 一块失败不该让玩家画了一小时的路线整体作废）。</p>
-     *
-     * @param level 服务端主世界
-     * @param route 已提交（READY）的手绘路线
-     * @return 实际处理的区块数
-     */
-    public static int preloadAndConstruct(ServerLevel level, PlayerRoute route) {
-        if (level == null || route == null) {
-            return 0;
-        }
-        MinecraftServer server = level.getServer();
-        if (server == null) {
-            return 0;
-        }
-        if (!server.isSameThread()) {
-            // 本方法会 managedBlock，必须在服务端线程调用
-            LOGGER.warn("RouteChunkPreloader 被非服务端线程调用，已跳过 route={}", route.id());
-            return 0;
-        }
+    private record ActivePreload(PlayerRoute route, PendingState attempt, RoutePreloadWork work,
+                                 int notInMemory, long startedAt) {}
 
-        // ── ⓪ 路线级屏障（★ 2026-09-25 修 R-1，**关键正确性修复**）──
-        //
-        // ❌ 原实现（有严重 bug）：直接拿**整条路线**的区块去 placeLoadedChunks。
-        //    但本方法是被「**任意一条**连接完成」触发的 —— 第一条连接完成时，
-        //    后面几条连接的 RoadData **还没落盘**。那些区块查到的是**空计划**，
-        //    于是被 LoadedChunkRoadBackfill 当成"无需施工"，
-        //    进而调 DeferredInitialRoadConstructionService.markNoConstructionRequired，
-        //    其注释写明是「**永久**移出 pending」⇒ 这些区块**永久跳过施工**，
-        //    且因 routeId 去重不会重试 ⇒ 玩家看到"路断了一截"。
-        //
-        // ✅ 修法：**等到这条路线所有区块的计划都非空**（= 所有连接的 RoadData
-        //    都已落盘）再预加载。没就绪就**直接返回不做事**，由**下一条连接完成**
-        //    时再进本方法 —— 最后一条连接完成时必然全部就绪。
-        //
-        //    这不需要额外的计数/注册表：`RoadWorldgenPlanCache.get` 的"空计划"
-        //    本来就能反映"这条连接还没落盘"。判据自洽且无新增状态。
-        Set<Long> chunks = collectRouteChunks(level, route);
-        if (chunks.isEmpty()) {
-            return 0;
-        }
-        if (!allChunksHavePlan(level, chunks)) {
-            // ★ 2026-09-26 修 Codex/WorkBuddy R-1：**改判据，不再用轮数上限**。
-            //
-            // ❌ 原实现用 `waits < route.segmentCount()` 作上限，假设
-            //    「每条连接成功或失败都会触发一次本方法」——**这个假设是错的**：
-            //    本方法的唯一自动触发点在 RoadGenerationService 的
-            //    `if (attempt.outcome().road() != null)` 分支里，也就是
-            //    **只有成功**的连接才触发。失败连接走的是另一条
-            //    （`updateConnectionStatus(FAILED)`）不触发。
-            //    ⇒ N 段路线失败 1 段，最多触发 N−1 次 < N ⇒ 上限**永不可达**
-            //      ⇒ 整条路线（含成功段的区块）永远不预加载，静默退回被动回填。
-            //      （这是 0.8.391 核心承诺在"有连接失败"时完全失效。）
-            //
-            // ✅ 现在改用**连接状态机**作判据（见 decideReadiness）：
-            //    不再依赖"触发了几次" —— 那个量本身不可靠。
-            int stillActive = remainingActiveConnections(level, route);
-            if (decideReadiness(false, stillActive) == Readiness.WAIT) {
-                LOGGER.info("RouteWeaver 手绘路线预加载等待：尚有 {} 条连接在生成中 route={} chunks={}",
-                        stillActive, route.id(), chunks.size());
-                return 0;
-            }
-            LOGGER.warn("RouteWeaver 手绘路线预加载放行（连接已全部结算，但部分区块无计划 "
-                            + "⇒ 对应连接可能已失败）route={} chunks={} —— "
-                            + "有计划的区块照常铺设，其余交给被动回填",
-                    route.id(), chunks.size());
-        }
-        // ★ 2026-09-26 修 I-10/W-9：**删掉 `forgetWait` 调用**。
-        //   原先就在这里清等待计数 —— 但那套「等待轮数」机制在 0.8.395
-        //   改用 decideReadiness（连接状态机）之后就已经**完全没人读了**，
-        //   属于死代码。留着它会造成"对不存在机制的维护错觉"（下一个 R-10）。
+    private static final Map<ServerLevel, ActivePreload> ACTIVE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
-        // ── ① 去重：路线**就绪后**只预加载一次 ──
-        //
-        // 放在就绪判定**之后**：否则第一条连接完成时就占了位，
-        // 后面全被跳过（这正是 R-1 的成因之一）。
-        //
-        // ★ 2026-09-25 修 R-4：占位后**所有**退出路径都必须负责清理 ——
-        //   见下面的 try/finally。原实现只在"正常走到 failed>0"时清标记，
-        //   若中途抛异常（placeLoadedChunks / 日志 / 存储），标记会残留，
-        //   后续连接被永久跳过。
-        boolean claimed = false;
-        if (route.id() != null) {
-            java.util.Set<java.util.UUID> done = preloaded(level);
-            if (!done.add(route.id())) {
-                LOGGER.debug("RouteWeaver 手绘路线预加载已做过，跳过 route={}", route.id());
-                return 0;
-            }
-            claimed = true;
-        }
+    public record ChunkRequest(CompletableFuture<?> future, Runnable release) {}
 
-        int handled;
+    @FunctionalInterface
+    public interface ChunkRequester {
+        ChunkRequest request(ServerLevel level, ChunkPos pos);
+    }
+
+    private static volatile ChunkRequester chunkRequester = (level, pos) -> {
+        throw new IllegalStateException("Nonblocking hand-drawn chunk requester is not installed");
+    };
+
+    /** 平台提供非阻塞请求与撤票，普通回填的入口仍然只消费已经加载的区块。 */
+    public static void installChunkRequester(ChunkRequester requester) {
+        chunkRequester = java.util.Objects.requireNonNull(requester);
+    }
+
+    private static void pauseActive(ServerLevel level) {
+        ActivePreload active = ACTIVE.get(level);
+        if (active == null) return;
+        // 主世界无人时仍尊重维度暂停，撤票而不丢掉已持久化的完工进度。
+        if (RoutePreloadStatus.isStopRequested(level, active.route().id())) {
+            finish(level, active, true, false, true);
+        } else {
+            active.work().pause();
+        }
+    }
+
+    private static void advance(ServerLevel level, ActivePreload active) {
+        RoutePreloadWork work = active.work();
+        int processedBefore = work.processed();
+        int failuresBefore = work.failures();
+        UUID id = active.route().id();
         try {
-            Result r = runPreload(level, server, route, chunks);
-            handled = r.handled();
-            // 有失败 ⇒ 释放占位，让后续连接能再试（成功则保留，避免重复劳动）
-            if (claimed && r.failed() > 0) {
-                forgetPreloaded(level, route.id());
-                LOGGER.info("RouteWeaver 手绘路线预加载有 {} 块失败，已清除去重标记以便重试 route={}",
-                        r.failed(), route.id());
-            }
-        } catch (Throwable t) {
-            // ★ 修 R-4：抛异常时也要释放占位，否则后续连接被永久跳过
-            if (claimed) {
-                forgetPreloaded(level, route.id());
-            }
-            throw t;
+            work.tick(new WorldAccess(level, id));
+        } catch (RuntimeException | LinkageError failure) {
+            LOGGER.warn("RouteWeaver 手绘路线施工异常，重试时由台账跳过已完工区块 route={}", id, failure);
+            finish(level, active, false, false, false);
+            return;
         }
-        return handled;
+        if (work.done()) {
+            finish(level, active, false, false, work.failures() == 0);
+        } else if (processedBefore != work.processed() || failuresBefore != work.failures()) {
+            RoutePreloadStatus.update(level, id, work.total(), work.processed(), work.failures(),
+                    active.notInMemory(), "加载并铺设中", failedPositions(work));
+        }
     }
 
-    /**
-     * 预加载结果。
-     *
-     * @param handled 实际交给回填器处理的区块数
-     * @param failed  重试用尽仍失败的区块数（&gt;0 时调用方会释放去重占位以便重试）
-     */
-    private record Result(int handled, int failed) {
-    }
-
-    /** 真正执行预加载（占位与释放由调用方负责）。 */
-    private static Result runPreload(ServerLevel level, MinecraftServer server,
-                                  PlayerRoute route, Set<Long> chunks) {
-        // 从玩家当前位置（或路线起点）由近到远 —— 玩家先看到身边的路建起来
-        ChunkPos origin = originChunk(level, route);
-        List<Long> ordered = new ArrayList<>(chunks);
-        ordered.sort(Comparator.comparingLong(key -> distanceSquared(origin, key)));
-
-        int batchSize = BATCH_SIZE;
-
-        int done = 0;
-        int failed = 0;
-        // ★ UX-11：是否被玩家中止
-        boolean stopped = false;
-        long startedAt = System.nanoTime();
-        // ★ UX-2/3/5/11：把进度暴露给 UI（不在内存的区块数在下面单独统计）
-        int notInMemory = countNotInMemory(level, ordered);
-        List<ChunkPos> failedChunks = new ArrayList<>();
-        RoutePreloadStatus.begin(level, route.id(), ordered.size(), notInMemory);
-        LOGGER.info("RouteWeaver 手绘路线预加载开始 route={} chunks={} batch={} notInMemory={}",
-                route.id(), ordered.size(), batchSize, notInMemory);
-
-        for (int offset = 0; offset < ordered.size(); offset += batchSize) {
-            int end = Math.min(ordered.size(), offset + batchSize);
-            List<Long> batch = ordered.subList(offset, end);
-
-            Set<Long> ready = new LinkedHashSet<>();
-            Set<Long> pending = new LinkedHashSet<>(batch);
-            Map<Long, RuntimeException> failures = new LinkedHashMap<>();
-
-            for (int attempt = 1; attempt <= MAX_CHUNK_ATTEMPTS && !pending.isEmpty(); attempt++) {
-                Map<Long, CompletableFuture<?>> futures = new LinkedHashMap<>();
-                for (long key : pending) {
-                    // forceLoad = true ⇒ 走区块源的生成管线（C2ME 环境下即其多线程生成）
-                    futures.put(key, level.getChunkSource().getChunkFuture(
-                            ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, true));
-                }
-                CompletableFuture<?> all = CompletableFuture.allOf(
-                        futures.values().toArray(CompletableFuture[]::new));
-                // 等服务端把这一批区块生成/加载好。
-                // ⚠️ managedBlock 只推进区块任务队列，**不跑普通 tickServer**
-                //    （见类 javadoc 的更正说明）—— 所以等待期间游戏 tick 是暂停的。
-                server.managedBlock(all::isDone);
-
-                Set<Long> nextPending = new LinkedHashSet<>();
-                for (Map.Entry<Long, CompletableFuture<?>> entry : futures.entrySet()) {
-                    long key = entry.getKey();
-                    int cx = ChunkPos.getX(key);
-                    int cz = ChunkPos.getZ(key);
-                    try {
-                        entry.getValue().join();
-                        if (level.getChunkSource().getChunkNow(cx, cz) != null) {
-                            ready.add(key);
-                            failures.remove(key);
-                        } else {
-                            nextPending.add(key);
-                            failures.put(key, new IllegalStateException(
-                                    "FULL chunk was not available after completion"));
-                        }
-                    } catch (RuntimeException failure) {
-                        nextPending.add(key);
-                        failures.put(key, failure);
-                        LOGGER.warn("RouteWeaver 手绘路线预加载失败 attempt={}/{} chunk={},{}",
-                                attempt, MAX_CHUNK_ATTEMPTS, cx, cz, failure);
-                    }
-                }
-                pending = nextPending;
-            }
-
-            if (!pending.isEmpty()) {
-                // ★ 不抛异常中断：一块失败不该让整条路线作废。
-                //   失败的块会被计入日志，交由原有回填兜底（玩家走过去时再补）。
-                failed += pending.size();
-                for (long key : pending) {
-                    RuntimeException f = failures.get(key);
-                    failedChunks.add(new ChunkPos(key));   // ★ UX-5：记录坐标供地图标记
-                    LOGGER.warn("RouteWeaver 手绘路线预加载放弃 chunk={},{} （重试 {} 次仍失败，转交后台回填兜底）",
-                            ChunkPos.getX(key), ChunkPos.getZ(key), MAX_CHUNK_ATTEMPTS,
-                            f == null ? null : f.getMessage());
-                }
-            }
-
-            if (!ready.isEmpty()) {
-                // 加载好了立刻铺。
-                //
-                // ★ 必须传 budget=BATCH_SIZE：{@code placeLoadedChunks} 内部原来
-                //   硬编码每次最多处理 8 个区块 —— 区块已被我们强制加载到内存，
-                //   再按 8 个切就纯属浪费（等于白分批，361 个仍要走 46 轮）。
-                //   传 32 与本类自己的分批一致。
-                LoadedChunkRoadBackfill.placeLoadedChunks(level, ready, false, BATCH_SIZE);
-                done += ready.size();
-                RoadConstructionLedger.flush(level);
-            }
-
-            // ★ UX-2：每批更新进度；★ UX-11：每批检查中止请求
-            RoutePreloadStatus.update(level, route.id(), ordered.size(), done, failed,
-                    notInMemory, "加载并铺设中", failedChunks);
-            if (RoutePreloadStatus.isStopRequested(level, route.id())) {
-                stopped = true;
-                LOGGER.info("RouteWeaver 手绘路线预加载被玩家中止 route={} 已完成 {}/{}",
-                        route.id(), done, ordered.size());
-                break;
-            }
+    private record WorldAccess(ServerLevel level, UUID routeId) implements RoutePreloadWork.Access {
+        @Override
+        public RoutePreloadWork.Request request(long key) {
+            var request = chunkRequester.request(level, new ChunkPos(key));
+            return new RoutePreloadWork.Request(request.future(), request.release());
         }
 
-        LOGGER.info("RouteWeaver 手绘路线预加载完成 route={} chunks={}/{} failed={} stopped={} elapsedMs={}",
-                route.id(), done, ordered.size(), failed, stopped,
-                (System.nanoTime() - startedAt) / 1_000_000L);
-        // ★ UX-2/5/11：落终态（保留失败坐标供地图标记）
-        RoutePreloadStatus.finish(level, route.id(), ordered.size(), done, failed,
-                notInMemory, failedChunks, stopped);
-        // 中止后清掉标志 —— 否则下次重新提交会被立刻中止
-        if (stopped) {
-            RoutePreloadStatus.clearStop(level, route.id());
+        @Override
+        public boolean loaded(long key) {
+            return level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) != null;
         }
-        return new Result(done, failed);
+
+        @Override
+        public void place(List<Long> ready) {
+            // 铺路仍在常规服务端 tick，不能从区块完成回调写世界。
+            LoadedChunkRoadBackfill.placeLoadedChunks(level, ready, false, BATCH_SIZE);
+        }
+
+        @Override
+        public void failed(long key, RuntimeException failure, boolean finalAttempt) {
+            if (finalAttempt) {
+                LOGGER.warn("RouteWeaver 手绘预加载区块重试用尽 route={} chunk={}", routeId, new ChunkPos(key), failure);
+            } else {
+                LOGGER.debug("RouteWeaver 手绘预加载区块稍后重试 route={} chunk={}", routeId, new ChunkPos(key), failure);
+            }
+        }
     }
 
-    /**
-     * 统计其中有多少区块**尚未生成**（★ UX-3：提交前警告依据）。
-     *
-     * <p>判据：区块不在内存里（{@code getChunkNow == null}）**且**磁盘上也没有 ——
-     * 后者难以廉价判断，所以这里用「不在内存」作近似上界（偏保守：
-     * 已生成但恰好没加载的也会被算进来，但那些加载很快，警告不误导）。</p>
-     */
+    private static void finish(ServerLevel level, ActivePreload active, boolean stopped,
+                               boolean obsolete, boolean success) {
+        UUID id = active.route().id();
+        if (!ACTIVE.remove(level, active)) return;
+        RoutePreloadWork work = active.work();
+        work.stop();
+        Map<UUID, PendingState> map = PENDING.get(level);
+        if (obsolete) {
+            if (map != null) map.remove(id, active.attempt());
+            RoutePreloadStatus.forget(level, id);
+            return;
+        }
+        int failures = stopped ? work.failures() : success ? 0
+                : Math.max(work.failures(), work.total() - work.processed());
+        RoutePreloadStatus.finish(level, id, work.total(), work.processed(), failures,
+                active.notInMemory(), failedPositions(work), stopped);
+        LOGGER.info("RouteWeaver 手绘预加载结束 route={} chunks={}/{} failed={} stopped={} elapsedMs={}",
+                id, work.processed(), work.total(), failures, stopped, (System.nanoTime() - active.startedAt()) / 1_000_000L);
+        if (stopped || success) {
+            if (stopped) RoutePreloadStatus.clearStop(level, id);
+            // 取消也占终态，直到用户明确点重试或重新提交，旧连接的晚回调不能重启任务。
+            preloaded(level).add(id);
+            if (map != null) map.remove(id, active.attempt());
+        } else {
+            retryRoute(level, id, active.attempt());
+        }
+    }
+
+    private static void retryRoute(ServerLevel level, UUID id, PendingState state) {
+        if (state.attempts < MAX_PRELOAD_ATTEMPTS) {
+            state.nextAttemptAt = level.getGameTime() + RETRY_COOLDOWN_TICKS;
+        } else {
+            Map<UUID, PendingState> map = PENDING.get(level);
+            if (map != null) map.remove(id, state);
+            LOGGER.warn("RouteWeaver 手绘路线预加载用尽重试，未处理区块转交被动回填 route={}", id);
+        }
+    }
+
+    private static List<ChunkPos> failedPositions(RoutePreloadWork work) {
+        return work.failureKeys().stream().map(ChunkPos::new).toList();
+    }
+
     /**
      * 统计其中有多少区块**当前不在内存里**（★ UX-3 警告依据）。
      *
@@ -738,6 +516,15 @@ public final class RouteChunkPreloader {
         if (level == null) {
             return;
         }
+        // 客户端断开也会调用清理；票据只能在其所属服务端线程撤销。
+        var server = level.getServer();
+        if (!server.isSameThread()) {
+            if (server.isRunning()) server.execute(() -> clearRuntime(level));
+            return;
+        }
+        ActivePreload active = ACTIVE.remove(level);
+        if (active != null) active.work().stop();
+        RoutePreloadStatus.onWorldLeave(level);
         PRELOADED.remove(level);
         // ★ 0.8.400：待办队列一并清掉 —— 否则重进世界后会拿旧 routeId
         //   反复尝试加载（路线登记已被 RouteBuildRegistry.onWorldLeave 清空）。
@@ -826,84 +613,4 @@ public final class RouteChunkPreloader {
         return activeConnections > 0 ? Readiness.WAIT : Readiness.PROCEED_PARTIAL;
     }
 
-    /**
-     * **这条路线还有多少条连接没有结论**（★ 2026-09-26 修 R-1 的核心判据）。
-     *
-     * <p>复用 {@link RouteBuildProgress#snapshot} 的汇总 —— 它本来就是
-     * 「按连接状态机数 PLANNED / GENERATING / COMPLETED / FAILED」，
-     * 而 {@code active()} = planned + generating 正好是"还没结论"的数量。</p>
-     *
-     * <p>⚠️ 为什么不用"等了几轮"：预加载的自动触发点只在连接**成功**回调里
-     * （见 {@code RoadGenerationService} 的 {@code road != null} 分支），
-     * 失败连接**不触发**。所以"触发次数"这个量本身就不可靠 ——
-     * 用它做上限会导致永不满足。状态机判据与触发次数无关，因此稳健。</p>
-     *
-     * @return 仍未结算的连接数；查不到时返回 0（保守放行，不卡住流程）
-     */
-    private static int remainingActiveConnections(ServerLevel level, PlayerRoute route) {
-        try {
-            if (route.id() == null) {
-                return 0;
-            }
-            var snap = net.shiroha233.roadweaver.route.RouteBuildProgress
-                    .snapshot(level, route.id());
-            return snap == null ? 0 : snap.active();
-        } catch (RuntimeException | LinkageError e) {
-            // 查不到就放行 —— 宁可多跑一次预加载，也不要卡在等待
-            LOGGER.warn("手绘路线预加载：连接状态查询失败，按已结算处理", e);
-            return 0;
-        }
-    }
-
-    /**
-     * **路线级就绪判定**（★ 修 R-1 的核心）。
-     *
-     * <h2>为什么必须存在</h2>
-     * 本方法由「**任意一条**连接完成」触发，而一条路线会拆成 N 条连接。
-     * 第一条完成时，其余连接的 {@code RoadData} **还没落盘** ——
-     * 那些区块查 {@code RoadWorldgenPlanCache} 会得到**空计划**，
-     * 被回填器误判为「无需施工」并**永久**移除（见
-     * {@code DeferredInitialRoadConstructionService.markNoConstructionRequired} 的注释）。
-     *
-     * <p>所以预加载必须等「**所有**区块的计划都非空」。判据直接复用
-     * {@code RoadWorldgenPlanCache.get} 的"空计划"语义 —— 它本来就能反映
-     * 「这条连接还没落盘」，无需额外维护计数。</p>
-     *
-     * <h2>为什么可以安全地"不做事就返回"</h2>
-     * 每次有连接完成都会再进 {@link #preloadAndConstruct}。
-     * 只要还有连接没完成，就继续返回；**最后一条**连接完成时必然全部就绪。
-     * 所以不需要队列/重试调度，天然收敛。
-     *
-     * <h2>⚠️ 有界等待（避免死等）</h2>
-     * 若某条连接**永久失败**（RoadData 永远不会有），"等所有区块就绪"会永不满足。
-     * 所以按 {@code route.segmentCount()} 设等待上限 —— 每条连接至多贡献一次触发，
-     * 超过就放行。放行时无计划的区块会被回填器判为"无需施工"，
-     * 但那本来就是**失败的连接**对应的区块（没有任何可铺的数据），
-     * 语义上与"永久跳过"一致，不是新引入的损失。
-     *
-     * @return true 表示所有区块都已能编译出非空计划（= 该路线所有连接都已落盘）
-     */
-    private static boolean allChunksHavePlan(ServerLevel level, Set<Long> chunks) {
-        try {
-            net.shiroha233.roadweaver.config.ModConfig config =
-                    net.shiroha233.roadweaver.config.ConfigService.get();
-            if (config == null) {
-                // 配置读不到就别卡住 —— 按"就绪"处理，交给后续流程自然失败
-                return true;
-            }
-            for (long key : chunks) {
-                ChunkPos pos = new ChunkPos(key);
-                var plan = net.shiroha233.roadweaver.worldgen.road.RoadWorldgenPlanCache
-                        .get(level, pos, config);
-                if (plan == null || plan.slices().isEmpty()) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (RuntimeException | LinkageError e) {
-            // 判定本身失败时保守放行（宁可多跑一次预加载，也不要永远卡在等待）
-            LOGGER.warn("手绘路线预加载就绪判定失败，按就绪处理", e);
-            return true;
-        }
-    }
 }

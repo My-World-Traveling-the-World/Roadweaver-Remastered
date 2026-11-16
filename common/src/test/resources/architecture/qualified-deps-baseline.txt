@@ -34,8 +34,7 @@ postprocess -> compat                        2
 postprocess -> config                        1
 postprocess -> core                          3
 postprocess -> pathlogic                     8
-route -> config                              9
+route -> config                              7
 route -> planning                            3
-route -> worldgen                            1
 runtime -> apiimpl                           5
 runtime -> compat                            1

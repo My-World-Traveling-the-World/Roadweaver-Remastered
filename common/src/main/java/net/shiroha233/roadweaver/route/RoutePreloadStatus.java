@@ -77,7 +77,7 @@ public final class RoutePreloadStatus {
     /**
      * **中止标志**（★ UX-11：预加载紧急停止）。
      *
-     * <p>预加载循环每处理一批就检查一次；置位后**停止拉新的批次**，
+     * <p>预加载每 tick 检查；置位后停止领取和铺设其他区块，
      * 已加载的保留。不设超时是用户的要求，但玩家仍该有"我不想等了"的出口。</p>
      */
     private static final Map<ServerLevel, java.util.Set<UUID>> STOP_REQUESTED =
@@ -211,6 +211,13 @@ public final class RoutePreloadStatus {
     }
 
     // ─────────────────── 清理 ───────────────────
+
+    /** 删除旧路线状态，避免同 UUID 重新提交时继承旧进度或中止标志。 */
+    static void forget(ServerLevel level, UUID routeId) {
+        var snapshots = BY_LEVEL.get(level);
+        if (snapshots != null) snapshots.remove(routeId);
+        clearStop(level, routeId);
+    }
 
     /** 离开世界时全清（与 RouteBuildRegistry.onWorldLeave 配套）。 */
     public static void onWorldLeave(ServerLevel level) {

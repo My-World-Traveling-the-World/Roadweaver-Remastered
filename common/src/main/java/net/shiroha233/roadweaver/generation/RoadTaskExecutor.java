@@ -79,7 +79,13 @@ import static net.shiroha233.roadweaver.generation.RoadQueueOps.*;
  */
 public final class RoadTaskExecutor {
     public static void tick(ServerLevel level) {
-        if (level == null || !Level.OVERWORLD.equals(level.dimension())) return;
+        if (level == null || !Level.OVERWORLD.equals(level.dimension()) || RoadLifecycle.isStopping()) return;
+        // 主世界无人时撤销在途票据、保留续跑状态；地图暂停自动规划时仍推进手绘。
+        try {
+            net.shiroha233.roadweaver.route.RouteChunkPreloader.drainPending(level, runtimePausedForDimension);
+        } catch (Throwable failure) {
+            LOGGER.warn("RoadWeaver 手绘预加载异常（不影响施工调度）", failure);
+        }
         if (runtimePausedForDimension) return;
         CURRENT_TICK++;
         if (PLANNED_PATH_PREWARM_STARTED.compareAndSet(false, true)) {
@@ -143,23 +149,6 @@ public final class RoadTaskExecutor {
         //   **不含 SYSTEM_PRESSURE**（真实 Tick/FPS/内存压力）。
         final boolean exemptPause = playerRoutePriority && !overLimit
                 && isPauseExemptForPlayerRoute();
-
-        // ★ 0.8.400：**预加载兜底必须在暂停 return 之前跑**。
-        //
-        //   ⚠️ 这里的顺序是有意的，别往下挪。
-        //   `RouteChunkPreloader.drainPending` 负责「路线连接全部结算后强制加载区块」，
-        //   它自身有 0.5 秒节流 + 无待办时零成本快路径，开销可忽略。
-        //
-        //   为什么不能放在 return 之后：玩家点完施工常常开着地图盯进度，
-        //   此时 `pauseScheduling()` 为真 —— 若兜底在 return 之后，
-        //   它就永远不执行，正是 W-1「鸡生蛋」死锁的同一形状
-        //   （用暂停状态挡住了本该在暂停期也要推进的玩家操作）。
-        try {
-            net.shiroha233.roadweaver.route.RouteChunkPreloader.drainPending(level);
-        } catch (Throwable t) {
-            // 预加载兜底失败绝不能让整个调度 tick 中断
-            LOGGER.warn("RoadWeaver 预加载兜底检测异常（不影响施工调度）", t);
-        }
 
         if (RuntimeLoadPolicy.pauseScheduling() && !exemptPause) {
             return;

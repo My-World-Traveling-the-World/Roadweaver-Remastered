@@ -33,7 +33,7 @@ client -> network                            2
 client -> pathlogic                          3
 client -> persistence                        3
 client -> planning                           14
-client -> route                              3
+client -> route                              2
 client -> util                               1
 client -> worldgen                           1
 command -> map                                3
@@ -156,7 +156,7 @@ route -> core                               10
 route -> generation                         1
 route -> pathfinding                        2
 route -> pathlogic                          5
-route -> persistence                        4
+route -> persistence                        3
 route -> planning                           2
 runtime -> compat                             1
 runtime -> config                             3

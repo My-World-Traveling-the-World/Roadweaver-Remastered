@@ -122,6 +122,7 @@ public final class RouteBuildService {
         //
         // 所以每次提交都清掉该路线的标记 —— 让下一轮预加载重新走一遍。
         // （预加载本身还会经过"就绪判定"，不会重复劳动。）
+        RouteChunkPreloader.forgetPending(level, route.id());
         RouteChunkPreloader.forgetPreloaded(level, route.id());
 
         // ★ 0.8.400：**同时登记 tick 兜底**（关键修复）。
@@ -146,47 +147,13 @@ public final class RouteBuildService {
         return added;
     }
 
-    /**
-     * ★ 2026-09-25 用户要求：提交施工时**立即强制加载该路线经过的区块并施工**。
-     *
-     * <h2>为什么需要它</h2>
-     * 原先提交后完全依赖 {@code LoadedChunkRoadBackfill} 的被动回填 ——
-     * 只捡「当前恰好已加载」的区块、每次上限 8 个。实测日志：
-     * <pre>
-     *   candidates=361 loaded=289 processed=8 placed=8
-     * </pre>
-     * ⇒ 玩家看到「地图已标蓝但世界里走过去仍是空地」。
-     *
-     * <h2>为什么放在这里而不是 submit() 内部</h2>
-     * {@code submit()} 只写「连接清单」（PLANNED），**道路数据还没生成** ——
-     * 强制加载后也没有 RoadData 可铺。所以本方法的调用时机是
-     * **在 submit 之后、由服务端线程再跑一轮生成**，让连接先走完生成管线
-     * （产出 RoadData 并落盘），此时再强加载 + 铺路才有意义。
-     *
-     * <p>调用方：{@code RouteEditorSession.submitForBuild} 的 lambda ——
-     * 它在 submit 之后立即调本方法。此时 {@code added} 个连接已入队，
-     * 生成由 {@code RoadGenerationService.tick} 推进；本方法**主动等一下**，
-     * 让区块先加载好，玩家就不必走过去才看到路。</p>
-     *
-     * <p>⚠️ 本方法会 {@code managedBlock} —— 必须在服务端线程调用，
-     * 且**不设超时**（用户明确要求「必须全部加载完成」）。</p>
-     *
-     * @return 实际处理的区块数
-     */
-    public static int preloadRouteChunks(ServerLevel level, PlayerRoute route) {
-        if (level == null || route == null) {
-            return 0;
-        }
-        try {
-            return RouteChunkPreloader.preloadAndConstruct(level, route);
-        } catch (Throwable t) {
-            // 预加载失败不能影响已提交的连接 —— 后台回填仍会兜底
-            LOGGER.warn("手绘路线预加载失败（已提交的连接不受影响，转交后台回填）route={}",
-                    route.id(), t);
-            return 0;
+    /** 成功回调也确保路线入队；只登记意图，不能在区块回调里等待或铺路。 */
+    public static void preloadRouteChunks(ServerLevel level, PlayerRoute route) {
+        if (level != null && route != null
+                && route.equals(RouteBuildRegistry.getRoute(level, route.id()))) {
+            RouteChunkPreloader.enqueuePending(level, route.id());
         }
     }
-
     /**
      * 世界退出 / 重置时清掉预加载去重标记。
      *
@@ -197,42 +164,20 @@ public final class RouteBuildService {
         RouteChunkPreloader.clearRuntime(level);
     }
 
-    /**
-     * **重试预加载失败的区块**（★ UX-5 的「重新尝试」按钮）。
-     *
-     * <h2>为什么按 level 而不是按"当前路线"</h2>
-     * 0.8.388 起施工成功后编辑对象会切到**新的空路线**，失败其实属于
-     * 刚提交的那条 —— 用"当前编辑对象"会找不到要重试的东西。
-     * 所以这里遍历 {@link RoutePreloadStatus#retryable} 列出的所有路线。
-     *
-     * <p>做法：清掉这些路线的去重占位 + 中止标志，然后重新跑一次预加载。
-     * 预加载内部本身有"就绪判定"，不会做多余的活。</p>
-     *
-     * @return 触发重试的路线数
-     */
-    public static int retryFailedPreloads(ServerLevel level, PlayerRoute currentOrNull) {
-        if (level == null || level.getServer() == null) {
-            return 0;
-        }
-        int n = 0;
-        // ① 当前编辑中的路线（若它自己就是失败的那条）
-        if (currentOrNull != null && currentOrNull.id() != null) {
-            RouteChunkPreloader.forgetPreloaded(level, currentOrNull.id());
-            RoutePreloadStatus.clearStop(level, currentOrNull.id());
-        }
-        // ② 所有"有失败且已结束"的路线
+    /** 手动重试要真正登记新任务；只清标志不会唤醒已经出队的路线。 */
+    public static int retryFailedPreloads(ServerLevel level) {
+        if (level == null || level.getServer() == null) return 0;
+        int queued = 0;
         for (RoutePreloadStatus.Snapshot snap : RoutePreloadStatus.retryable(level)) {
-            if (snap.routeId() == null) {
-                continue;
-            }
-            RouteChunkPreloader.forgetPreloaded(level, snap.routeId());
-            RoutePreloadStatus.clearStop(level, snap.routeId());
-            n++;
+            var id = snap.routeId();
+            if (id == null || RouteBuildRegistry.getRoute(level, id) == null) continue;
+            RouteChunkPreloader.forgetPending(level, id);
+            RouteChunkPreloader.forgetPreloaded(level, id);
+            RouteChunkPreloader.enqueuePending(level, id);
+            queued++;
         }
-        LOGGER.info("手绘路线预加载重试：触发 {} 条路线（已清去重占位与中止标志）", n);
-        return n;
+        return queued;
     }
-
     /**
      * 预置平滑路径到 {@code PlannedPathCache}，使 {@code Road.generateRoad}
      * 命中缓存、走 {@code calculateFromPlannedPath}（不跑 A*）。
@@ -346,6 +291,8 @@ public final class RouteBuildService {
         if (level == null || route == null) {
             return 0;
         }
+        // 即使连接列表已清空，也要撤销这条路线尚在等待的票据和施工状态。
+        RouteChunkPreloader.forgetPending(level, route.id());
         WorldDataProvider provider = WorldDataProvider.getInstance();
         List<StructureConnection> existing = provider.getStructureConnections(level);
         if (existing == null || existing.isEmpty()) {
