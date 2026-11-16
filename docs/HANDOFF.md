@@ -1270,3 +1270,89 @@ DenseFmmReference与git show af5cc72的原布尔数组实现做类型重命名�
 ### 六、我踩到但已解决的坑
 
 Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后合法”的坐标，必须整条算式升long。只在数组构造时校验挡不住此前世界查询，测试同时让硬障碍回调在前置校验前调用时报错。BitSet的可变有效长度与每次查询检查不是固定网格所需，替换为小型固定字数组后重新测量；状态压缩依然有算术开销，耗时未据分配强行推断。不可达也分配全场数组会在错误返回路径制造大内存峰值，常量快照必须同时守住at和pathTo，不能只把数组设null。
+
+## 第38轮 ｜ 2026-11-17 ｜ FMM大域惰性代价与分页工作区 ｜ 源码 `ad22c93` ｜ `PASS tests=1414 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+源码三笔提交：833c09b（测试行为等价，粗路径夹具显式安排预算等待线程），90992e6（行为等价，大网格分页代价和传播工作区），ad22c93（行为等价，按密集实测调整公共存储阈值并保留强制分页探针）。同一FMM公式、队列同权顺序、吸附、候选和全局域保留，没有新增配置、持久化键、旧算法回退或缩小核心。
+
+| 文件 | 改动摘要 | 类型 |
+|---|---|---|
+| metric/FmmPages.java，39物理/30有效行 | 1024格页、两级目录，缺页读取不分配；顶层每项覆盖262144格，尾页只分配实际长度 | 行为等价 |
+| metric/FmmValues.java，75/60行（伴随FmmWorkspace） | 到达页缺省无穷；冻结位只属于当次工作区，快照仅接管独占到达值 | 行为等价 |
+| metric/FmmCostCache.java，150/129行 | 原稠密预计算迁入；分页按遇到的格准备通行/轴代价，规范东/南方向只查一次无向边，成功后才标已知 | 行为等价 |
+| metric/FastMarchingSolver.java，375/209行 | 同一传播循环接两种存储；小于4194304格用顺序数组，大网格按需页，多源复用同布局缓存 | 行为等价 |
+| ArrivalTimeField.java，203/108行 | 只读API读取独占到达存储；下一源不清空旧页，常量不可达保留 | 行为等价 |
+| DenseGridWorkload / PipelinePlanner | 日志区分solverDenseReferenceBytes与solverPagedFullVisitBytes，明确排除目录等成本 | 诊断口径变更，规划产物等价 |
+| FmmPagedWorkspaceTest / 总套件 / 原状态与布局测试 | 新31项显式登记，原one-bit实际存储守卫跟随搬迁；新增全访问分页载荷断言 | 测试基建 |
+| Measure-Fmm.ps1 / FmmProbe / FmmPagingProbe | 固定小堆、强制分页独立对照，旧入口保留 | 测试基建 |
+
+生产Java文件690，有效代码超过1000仍为0、超过800为2，公共模块文件职责头100%。均加中文原因注释；不修改桥弯、村庄包围盒、crossing、双平滑、存档schema或GPU弃用决策。只写道路仓库，未修改河流/长城。
+
+### 二、我验证了什么（附负控）
+
+开工HEAD03a77af且status空；首次pull连接重置失败、第二次443连接失败，基线1383全绿；源码分步提交后再次pull --rebase成功，Current branch main is up to date。原1383项首先保持通过；新增后1410、1413、最终1414全绿，Fabric通过。24组变异恢复后再次完整回归（round38-final-after-mutations.log）。
+
+新增31项涵盖：10组地形/步长/软硬障碍/规范边/单行单列，三源交替与全/单/多/空/重复目标；全部最终及早停临时值double位、跨页回溯；百万格公共与强制分页两模式；两级目录/位字/最大int尾页；缺页纯读不分配；真实公共阈值的分配和远端查询；2.68亿格近目标、全域16383格走廊、封闭分量；实际测地矩阵、有限候选、独立Kruskal最终边与分量；失败重试与多源代价/边只准备一次。比较集合前有非空/可达断言。
+
+完整回归中CoarsePathTasksTest曾因固定threads.get(1)失败（round38-before-mutations.log）。确认创建顺序不决定许可持有方后，用锁存器让另一个线程确定先拿许可，再释放已占线程成为预算等待方；没有延时放宽或只重跑掩盖。复原旧索引现能确定性失败，绕过实际许可也失败。
+
+23组生产变异+1组夹具变异都出现指定JUnit失败，命令/编译错误不算红。每次finally精确git checkout单文件并比较原字节；结束status空。脚本.analysis_tmp/round38_mutations.py，结果round38-mutations.json，日志round38-mutation-run-final.log及round38-mut-*.log。首次脚本目标包名重复metric，无JUnit结果，已拒绝计数并恢复；修正后全部24组重跑。
+
+| # | 故意破坏 | 文件（common下） | 指定守卫 | JUnit失败数 |
+|---|---|---|---|---|
+| 1 | `public-threshold-keeps-eager-costs` | `metric/FastMarchingSolver.java` | `metric.FmmPagedWorkspaceTest#publicThresholdAvoidsEagerCostsArrivalArraysAndDistantTerrainQueries` | 1，红 |
+| 2 | `arrival-still-dense-when-paged` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#publicThresholdAvoidsEagerCostsArrivalArraysAndDistantTerrainQueries` | 1，红 |
+| 3 | `missing-page-free-source` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 4 | `new-page-not-filled-with-infinity` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 5 | `directory-groups-alias` | `metric/FmmPages.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 6 | `pages-in-group-alias` | `metric/FmmPages.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 7 | `frozen-words-alias` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 8 | `frozen-write-no-op` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 9 | `hard-cells-all-passable` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#pagedPropagationMatchesDenseBitsAndPathsIncludingEarlyStopAndSourceReuse(int)` | 6，红 |
+| 10 | `costs-not-retained` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#cachedCellCostsAndUndirectedEdgesArePreparedOnceAcrossSourceChanges` | 1，红 |
+| 11 | `cache-rebuilt-for-every-source` | `metric/FastMarchingSolver.java` | `metric.FmmPagedWorkspaceTest#cachedCellCostsAndUndirectedEdgesArePreparedOnceAcrossSourceChanges` | 1，红 |
+| 12 | `undirected-edge-read-backwards` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#cachedCellCostsAndUndirectedEdgesArePreparedOnceAcrossSourceChanges` | 1，红 |
+| 13 | `edge-mask-disabled` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#pagedPropagationMatchesDenseBitsAndPathsIncludingEarlyStopAndSourceReuse(int)` | 4，红 |
+| 14 | `cost-failure-marked-ready` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#callbackFailuresRemainFailuresAndRetryDoesNotCacheThemAsSuccess(int)` | 1，红 |
+| 15 | `passability-failure-marked-known` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#callbackFailuresRemainFailuresAndRetryDoesNotCacheThemAsSuccess(int)` | 1，红 |
+| 16 | `edge-failure-marked-known` | `metric/FmmCostCache.java` | `metric.FmmPagedWorkspaceTest#callbackFailuresRemainFailuresAndRetryDoesNotCacheThemAsSuccess(int)` | 1，红 |
+| 17 | `target-early-stop-disabled` | `metric/FastMarchingSolver.java` | `metric.FmmPagedWorkspaceTest#sourceTargetsAndDuplicatesStopBeforePreparingNeighborPages` | 1，红 |
+| 18 | `snapshot-discards-reached-pages` | `metric/ArrivalTimeField.java` | `metric.FmmPagedWorkspaceTest#pagedPropagationMatchesDenseBitsAndPathsIncludingEarlyStopAndSourceReuse(int)` | 10，红 |
+| 19 | `arrival-offset-aliases-zero` | `metric/FmmValues.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+| 20 | `paged-payload-omits-cell-state` | `metric/DenseGridWorkload.java` | `metric.GridLayoutTest#radius4096EstimateUsesLongBeforeMultiplicationWithoutAllocatingTheGrid` | 1，红 |
+| 21 | `coarse-path-bypasses-permit` | `planning/terrain/CoarsePathTasks.java` | `planning.terrain.CoarsePathTasksTest#queuedPathsRespectOneSharedWorkerAndAllResultsSurvive` | 1，红 |
+| 22 | `fixture-restores-creation-order-assumption` | `planning/terrain/CoarsePathTasksTest.java` | `planning.terrain.CoarsePathTasksTest#queuedPathsRespectOneSharedWorkerAndAllResultsSurvive` | 1，红 |
+| 23 | `propagation-clips-the-global-domain` | `metric/FastMarchingSolver.java` | `metric.FmmPagedWorkspaceTest#aFarEndCorridorStillCrossesTheWholeGlobalDomain` | 1，红 |
+| 24 | `last-page-loses-final-cell` | `metric/FmmPages.java` | `metric.FmmPagedWorkspaceTest#pagesAndFrozenBitsCannotAliasAcrossWordsPagesDirectoriesOrTheLastIntIndex` | 1，红 |
+
+固定堆对照、命令与数据见VALIDATION第38轮。最终公共百万格远目标116.705→117.894 ms、冷136.845→138.991 ms；强制分页分别128.431→222.893、147.983→247.157 ms，明确记录密集CPU代价，没有只选近目标收益。固定64MiB解析大域近目标线程分配p50=171752 B；全域走廊、封闭分量、百万格强制分页逐格/逐路径通过。没有真实世界采样，也没有宣称加载/FPS提升。
+
+### 三、我没能验证什么
+
+- **需要真机的**：4096完整开局、加载耗时、FPS/MSPT、实际搜索访问密度、跨模组最终Mixin启动次序和停止/重开尾延迟均未测，未打包或部署jar。
+- **需要真实存档的**：高度缓存命中/驱逐、缺列工作区峰值、文件锁/磁盘尾延迟、旧存档重开及大范围全部访问峰值。64MiB夹具是解析高度和稀疏连通，不含真实三通道采样器。
+- **我怀疑但没有证据的**：后续瓦片缓存合适上限、驱逐重采样比例和对玩家帧时的净收益尚无分布数据，不将其当成已确认缺陷或收益。
+- **我知道尚未修的**：SampledTerrainField.sampleSurface仍请求全场；AccurateColumnBatch仍按sampleCount建missingIndexes、missingKeys及后续缺列产物，三图在131072格边长/step8时仅原始载荷3GiB。4096不能写成安全。大范围密集访问会拉满分页，单纯数组载荷6744440832 B高于稠密参考6509559808 B，目录/对象另计。
+- 多源代价页和前沿数组保留到求解器结束，热近目标44080 B不是总占用；没有跨规划逐出或新FMM协作中断协议，取消尾延迟沿用现有边界，不能强停不合作计算。
+- crossing解耦仍缺用户召回数据；双平滑最终裁决、跨度回写默认、QualityGate标定及旧区块重铺不动。
+
+### 四、遗留半截的东西
+
+| 文件 | 什么状态 | 怎么补 |
+|---|---|---|
+| bridge/SampledTerrainField、planning/impl/PipelinePlanner | FMM已不必扫描全域，真实采样仍先整场 | 接同布局三通道瓦片，保留梯度邻域与影子水代理后接生产 |
+| pathfinding/sampling/AccurateColumnBatch | 单请求临时内存仍随请求面积增长 | 瓦片入口控制单请求面积，保留缓存/磁盘/认领/版本/预算；对拍冷、部分命中与失败 |
+| metric/FmmCostCache / FmmValues | 大域按需页已接，密集访问有额外CPU成本 | 用真实访问分布决定页布局或密度迁移，不凭分配减少宣称吞吐提升 |
+| 远端同步 | 源码已小步提交，文档后push并复核 | 实际结果补记本节，不能把网络失败说成成功 |
+
+### 五、下一轮我会先做什么
+
+1. bridge层建立可注入三通道瓦片读口，复用GridLayout的原点、步长及点数；跨瓦片梯度取真正邻点，边缘仍单侧差分，未知/失败不填零。先与整场GridTerrainField逐高度、梯度和水代理对拍。
+2. 接SampledTerrainField与PipelinePlanner生产入口，小范围保留整场批次，较大域按需请求有限瓦片；同一FMM、路径、双向权重及最终边端到端对拍，保留跨瓦片全局绕行和影子模式。沿用CPU预算、关闭/取消及在途认领，禁止生命周期旁路。
+3. 固定堆覆盖近/远/封闭/密集、驱逐重算和失败重试，再做真实4096存档压力。READY计数、落盘计时与三模组最终次序依路线等待证据，不无测量异步化。
+
+### 六、我踩到但已解决的坑
+
+分页缺省零会制造免费源点，缺页读和新页都必须为无穷；冻结位同时守住字、页和目录边界。边缓存必须保持旧预计算西/北→东/南规范方向，单列网格delta=1仍是南边。已知位在回调成功后发布，防止一次故障被永久缓存成正常值。源之间共享代价、不共享到达工作区，防后续源污染旧快照。小堆解析夹具不能代表真实采样器，密集分页退化也不能藏在近目标收益后，因此保留两种独立对照并调整公共切换点。

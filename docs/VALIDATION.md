@@ -85,3 +85,36 @@ CPU与粗路径执行回归见CpuAccurateHeightBackendTest、RuntimeCpuSamplingW
 - 需要打包时用同一 Gradle 运行 `:fabric:embedApiJar`。从 `fabric/build/final/` 取件；`fabric/build/libs/` 的同名中间件不含 API。
 - 确认 ZIP 条目有 5 个内嵌 jar，包含 `META-INF/jars/roadweaver-api.jar`。与上一版核对类、资源、Mixin/模组描述和公开签名；记录文件字节数与完整 SHA-256，确认构建件和部署件哈希一致。
 - 装入测试环境时只保留一个启用的道路 jar，上一版保留为 `.jar.bak` 供整包回滚。只在本次确实构建可部署 jar 时追加[发布台账](RELEASES.md)，记录 commit、版本、回归、大小、哈希、实测与回退方式。
+
+## 第38轮分页工作区与固定小堆
+
+FmmPagedWorkspaceTest新增31项且显式登记，总计1414项、零跳过/中止/失败，Fabric通过。小场强制分页覆盖多源、单/多/空/重复目标、负原点、step=1/8、软硬障碍、非对称边回调及单行/单列，逐格比较double位并逐点比较回溯。百万格公共稠密与强制分页两种存储均逐格对拍；大域实际GeodesicMatrix与独立稠密权重/Kruskal分量及最终边对拍，含有限候选和不连通分量。独立Map守住两级目录、位字和最大int尾下标，真实线程分配守住生产阈值的按需代价和到达工作区。
+
+23处生产实现及1处旧夹具假设故意改坏，24组指定JUnit均红，编译/命令错误不计；每次finally精确checkout并逐字验证。详表见HANDOFF第38轮；本机记录.analysis_tmp/round38_mutations.py、round38-mutations.json、round38-mutation-run-final.log和round38-mut-*.log。首次命令错误把包名拼成metric.metric，没有目标JUnit结果，已拒绝计数、恢复并修正脚本，随后24组完整重跑。
+
+CoarsePathTasksTest的创建顺序假设已复现：等待第二个创建线程会把实际许可持有方认成预算等待方。新夹具先占用一个工作线程，让另一个确定获得许可，再释放前者成为实际预算等待方；“绕过BackgroundCpuWork”和“复原按创建顺序猜测”两组变异均红。没有增加超时或放宽线程栈判据。
+
+独立探针同一JVM交替测量，基线03a77af、JDK21、512MiB堆；1050625格、30目标、8对预热后11对测量。各组分别运行，不把不同进程数字混作同一组：
+
+| 存储 / 场景 | 每次线程分配p50（B，旧→新） | p50（ms，旧→新） | p95（ms，旧→新） |
+|---|---|---|---|
+| 公共自动 / 热近目标 | 8536592 → 8536640 | 1.064 → 1.176 | 2.545 → 3.067 |
+| 公共自动 / 热远多目标 | 8536816 → 8536840 | 116.705 → 117.894 | 127.247 → 125.834 |
+| 公共自动 / 冷远多目标 | 25552336 → 25552392 | 136.845 → 138.991 | 140.066 → 149.358 |
+| 强制分页 / 热近目标 | 8536592 → 44080 | 1.888 → 0.074 | 2.265 → 0.096 |
+| 强制分页 / 热远多目标 | 8536816 → 8580200 | 128.431 → 222.893 | 138.381 → 252.053 |
+| 强制分页 / 冷远多目标 | 25552336 → 26594192 | 147.983 → 247.157 | 154.914 → 264.571 |
+
+日志round38-workset-final-auto.log / round38-workset-final-forced-paged.log。首版百万格即分页，密集访问明显变慢，因此公共切换点改为4194304格，并保留强制分页探针。分页是稀疏访问的分配治理，密集访问有CPU和载荷代价；热近目标44080 B只计本次线程分配，求解器还保留此前触及的代价页及前沿数组，不等于总占用。
+
+固定64MiB堆的解析地形：268435456格近目标单次分配p50=171752 B、p50=0.111 ms、p95=0.235 ms；16383格远端走廊产生16384点，封闭分量内部可达/远目标不可达，百万格强制分页与旧场全部double位及1025个回溯点相同。日志round38-paging-smallheap-final.log。此处没有真实世界、三图采样、文件缓存或其他模组；大域夹具只访问稀疏分量，不能证明全场2.68亿格都访问时能在64MiB运行。分页全访问单纯数组载荷6744440832 B，稠密参考6509559808 B，均不含目录/对象/前沿。
+
+复现（先设JAVA_HOME）：
+
+```powershell
+& ./scripts/benchmarks/Measure-Fmm.ps1 -WorkingSetOnly -Baseline 03a77af
+& ./scripts/benchmarks/Measure-Fmm.ps1 -WorkingSetOnly -ForcePaging -Baseline 03a77af
+& ./scripts/benchmarks/Measure-Fmm.ps1 -PagingOnly -HeapMiB 64 -Baseline 03a77af
+```
+
+普通83521格探针也逐位/逐路径通过（round38-normal-grid.log）。其clustered-topology对照直接比较当前GeodesicMatrix的先全量后过滤与先过滤后求解，不是本轮新旧源码对照，不能计成本轮收益。源码恢复后再次全量回归与Fabric编译，日志round38-final-after-mutations.log。真实采样仍有整场三图及缺列集合，4096存档、FPS/MSPT和加载时间未验收。
