@@ -11,12 +11,10 @@ import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
-import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathfinding.impl.CorridorBan;
 import net.shiroha233.roadweaver.generation.RoadGenerationService;
 import net.minecraft.core.BlockPos;
@@ -533,8 +531,10 @@ public final class ExistingRoadJunctionService {
 
         Map<Long, Integer> primaryHeights = new HashMap<>();
         Set<Long> primaryFootprint = new HashSet<>();
-        boolean[] primarySpecial = lateralJunctionBlockedMask(primary);
-        boolean[] primarySearchExcluded = lateralIntersectionSearchExcludedMask(primary);
+        // 两种端点语义共用同一道路快照的站号表，避免重复扫描主路。
+        JunctionSpanIndex primaryIndex = new JunctionSpanIndex(primary);
+        boolean[] primarySpecial = primaryIndex.blocked();
+        boolean[] primarySearchExcluded = primaryIndex.searchExcluded();
         for (int i = 0; i < primarySegments.size(); i++) {
             if (primarySearchExcluded[i] || primarySpecial[i]) continue;
             RoadSegmentPlacement segment = primarySegments.get(i);
@@ -778,94 +778,23 @@ public final class ExistingRoadJunctionService {
         return existingY != null && Math.abs(existingY - y) <= 1;
     }
 
+    /** 特殊跨度采用完整闭区间，保留原入口供已有调用方使用。 */
     static boolean[] specialSpanMask(RoadData road) {
-        return specialSpanMaskForSegments(road.roadSegmentList(), road.spans());
+        return new JunctionSpanIndex(road).special();
     }
 
-    /** Bridges, water crossings, and tunnel sidewalls cannot accept a lateral junction. */
+    /** 侧向接路规则由纯查询对象维护，编排层不再重复实现跨度解释。 */
     static boolean[] lateralJunctionBlockedMask(RoadData road) {
-        List<RoadSegmentPlacement> segments = road.roadSegmentList();
-        boolean[] blocked = new boolean[segments.size()];
-        boolean[] physicalCrossing = new boolean[segments.size()];
-        boolean[] explicitTunnelJunction = new boolean[segments.size()];
-        if (road.spans() == null || road.spans().isEmpty()) return blocked;
-        Map<Long, Integer> index = new HashMap<>();
-        for (int i = 0; i < segments.size(); i++) {
-            RoadSegmentPlacement segment = segments.get(i);
-            if (segment != null && segment.middlePos() != null) index.put(xzKey(segment.middlePos()), i);
-        }
-        for (RoadSpan span : road.spans()) {
-            if (span == null || span.start() == null || span.end() == null) continue;
-            Integer start = index.get(xzKey(span.start()));
-            Integer end = index.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
-            int from = Math.min(start, end);
-            int to = Math.max(start, end);
-            if (span.type() == SpanType.BRIDGE || span.type() == SpanType.ROAD_CROSSING
-                    || span.type() == SpanType.PROTECTED_GAP) {
-                // Keep the bridge/crossing interior isolated, but leave both
-                // stable shore endpoints available for another road to join.
-                // This lets two routes sharing a beach endpoint reuse one
-                // bridge head instead of producing intersecting bridges.
-                int blockedFrom = span.type() == SpanType.PROTECTED_GAP ? from : from + 1;
-                int blockedTo = span.type() == SpanType.PROTECTED_GAP ? to : to - 1;
-                for (int i = blockedFrom; i <= blockedTo; i++) {
-                    blocked[i] = true;
-                    physicalCrossing[i] = true;
-                }
-            } else if (span.type() == SpanType.TUNNEL) {
-                for (int i = from + 1; i < to; i++) blocked[i] = true;
-            } else if (span.type() == SpanType.TUNNEL_JUNCTION) {
-                for (int i = from; i <= to; i++) explicitTunnelJunction[i] = true;
-            }
-        }
-        for (int i = 0; i < blocked.length; i++) {
-            if (explicitTunnelJunction[i] && !physicalCrossing[i]) blocked[i] = false;
-        }
-        return blocked;
+        return new JunctionSpanIndex(road).blocked();
     }
 
+    /** 交点搜索与接路禁区的端点规则不同，不能合并成一个掩码。 */
     static boolean[] lateralIntersectionSearchExcludedMask(RoadData road) {
-        List<RoadSegmentPlacement> segments = road.roadSegmentList();
-        boolean[] blocked = new boolean[segments.size()];
-        if (road.spans() == null || road.spans().isEmpty()) return blocked;
-        Map<Long, Integer> index = new HashMap<>();
-        for (int i = 0; i < segments.size(); i++) {
-            RoadSegmentPlacement segment = segments.get(i);
-            if (segment != null && segment.middlePos() != null) index.put(xzKey(segment.middlePos()), i);
-        }
-        for (RoadSpan span : road.spans()) {
-            if (span == null || span.type() == SpanType.TUNNEL || span.type() == SpanType.TUNNEL_JUNCTION) continue;
-            if (span.type() != SpanType.BRIDGE && span.type() != SpanType.ROAD_CROSSING) continue;
-            Integer start = index.get(xzKey(span.start()));
-            Integer end = index.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
-            int from = Math.min(start, end) + 1;
-            int to = Math.max(start, end) - 1;
-            for (int i = from; i <= to; i++) blocked[i] = true;
-        }
-        return blocked;
+        return new JunctionSpanIndex(road).searchExcluded();
     }
 
-    static boolean[] specialSpanMaskForSegments(
-            List<RoadSegmentPlacement> segments, List<RoadSpan> spans) {
-        boolean[] special = new boolean[segments.size()];
-        if (spans == null || spans.isEmpty()) return special;
-        Map<Long, Integer> index = new HashMap<>();
-        for (int i = 0; i < segments.size(); i++) {
-            RoadSegmentPlacement segment = segments.get(i);
-            if (segment != null && segment.middlePos() != null) index.put(xzKey(segment.middlePos()), i);
-        }
-        for (RoadSpan span : spans) {
-            if (span == null || (span.type() != SpanType.BRIDGE
-                    && span.type() != SpanType.ROAD_CROSSING && span.type() != SpanType.TUNNEL
-                    && span.type() != SpanType.PROTECTED_GAP)) continue;
-            Integer start = index.get(xzKey(span.start()));
-            Integer end = index.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
-            for (int i = Math.min(start, end); i <= Math.max(start, end); i++) special[i] = true;
-        }
-        return special;
+    static boolean[] specialSpanMaskForSegments(List<RoadSegmentPlacement> segments, List<RoadSpan> spans) {
+        return new JunctionSpanIndex(segments, spans).special();
     }
 
     static long key(int x, int z) {

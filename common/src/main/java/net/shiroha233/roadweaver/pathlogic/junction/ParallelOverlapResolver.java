@@ -10,8 +10,6 @@ import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathfinding.impl.CorridorBan;
 import net.shiroha233.roadweaver.generation.RoadGenerationService;

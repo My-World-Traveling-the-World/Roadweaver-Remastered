@@ -154,6 +154,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionBatchEntryTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.JunctionOrchestrationTest"),
+                        // 纯查询从路口编排拆出后仍保留跨度优先级，并且只建立一次站号索引。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.junction.JunctionSpanIndexTest"),
                         // 批 4 补覆盖：路口合并核心判据（单 junction 选择 / 代价口径 / 候选预筛）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.junction.JunctionSelectionCoreTest"),
