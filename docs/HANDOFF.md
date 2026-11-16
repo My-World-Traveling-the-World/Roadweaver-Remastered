@@ -1259,7 +1259,7 @@ DenseFmmReference与git show af5cc72的原布尔数组实现做类型重命名�
 
 ### 四、遗留半截的东西
 
-本轮分配前估算与状态压缩完成离线实现和守卫；全局包围盒及整场高度/双轴代价/到达数组没有解决。路线第8项仅推进一阶段，不能写成4096工作集已完成。源码分三次小步提交，文档同步更新。源码首次push无法连接github.com:443，约21秒后退出128（round37-code-push.log）；当时本地领先origin/main三项。恢复后最终回归PASS tests=1383 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL（round37-final-after-mutations.log）。文档提交后重试推送，结果另据实际记录；未把网络失败写成同步成功。
+本轮分配前估算与状态压缩完成离线实现和守卫；全局包围盒及整场高度/双轴代价/到达数组没有解决。路线第8项仅推进一阶段，不能写成4096工作集已完成。源码分三次小步提交，文档同步更新。源码首次push无法连接github.com:443，约21秒后退出128（round37-code-push.log）；当时本地领先origin/main三项。恢复后最终回归PASS tests=1383 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL（round37-final-after-mutations.log）。文档提交c7a0cc8后重试push成功，远端main从8e101c1推进到c7a0cc8（round37-final-push.log）；随后pull --rebase显示Already up to date，本地HEAD与origin/main均为c7a0cc8，status空。本条同步结果单独提交后再次推送并核对。
 
 ### 五、下一轮我会先做什么
 
