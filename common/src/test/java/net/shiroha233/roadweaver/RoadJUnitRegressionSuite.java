@@ -362,6 +362,9 @@ public final class RoadJUnitRegressionSuite {
                         // 预热门必须在首次调度失败时结案，离线时钟直接运行生产入口。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.compat.PrewarmGateWorkTest"),
+                        // 归属道路：缺长城仍等河流，有长城则按河流、长城顺序消费。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.compat.RoadStartupGateTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.tunnel.RoadDeckAndTunnelGeometryTest"),
                         DiscoverySelectors.selectClass(

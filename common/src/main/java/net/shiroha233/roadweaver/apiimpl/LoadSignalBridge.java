@@ -157,6 +157,11 @@ public final class LoadSignalBridge {
 
     // ── 诊断 ─────────────────────────────────────────────────────────────
 
+    /** 没装河流无需等待；装了则必须读提供方发布的状态，不能由道路自行推定成功。 */
+    public static boolean initialRiversReady(boolean riversInstalled) {
+        return !riversInstalled || RiverReadinessApi.isReady();
+    }
+
     /**
      * 一行日志列出 API 注册情况；注册存在不等于外部模组已经采用所有信号。
      *

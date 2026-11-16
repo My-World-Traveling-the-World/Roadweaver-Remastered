@@ -187,6 +187,8 @@ public final class ServerPlanningHooks {
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             RoadLifecycle.beginStopping();
+            // 等待只属于当前服务端，退出后不再消费旧河流或长城的迟到完成。
+            net.shiroha233.roadweaver.compat.RoadStartupGate.cancelPending();
             // 服务端关停前释放手绘预加载票据，迟到 Future 不再持有施工状态。
             net.shiroha233.roadweaver.route.RouteBuildService.clearPreloadState(server.overworld());
             StreamsReflowingCompat.clearPrewarmState();
