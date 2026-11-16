@@ -38,6 +38,10 @@
 
 ---
 
+## 最新进度
+
+第 31 轮交付道路预热门修复，源码 `59ac4f7`，回归 1212 项。下一步优先游玩期内部执行预算、4096 规划工作集，以及预热回调的停服/重开隔离；详见本文件末尾与 ROADMAP，不把这些标成已完成。
+
 ## 已完成轮次记录
 
 > 第 0～12 轮已完整迁到[交接历史](archive/HANDOFF-ROUNDS-00-12.md)，包含 P0 修复、守卫补齐和首批性能对照；以下保留近期记录。
@@ -835,3 +839,57 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 ### 六、我踩到但已解决的坑
 
 注册表里有来源不等于生产策略真的消费它，必须直接走 RuntimeLoadPolicy 断言。诊断快照没有现场参数，不能拿近似推荐决定派发；更不能假定建议方法是纯 getter，当前 Chunky 的自适应调用会写状态。多源正数建议不能盖过显式暂停，0 lane 与负值弃权必须分开；worker 原进展下限与 preflight 豁免不能顺手改掉。把消费类直接放 runtime 会新增不必要的 API 依赖，现有 apiimpl 适配器足够容纳这一职责，最终跨层基线只减不增。
+
+---
+
+## 第 31 轮 ｜ 2026-11-16 ｜ 预热门故障结案与三模组流程复核 ｜ 源码 `59ac4f7` ｜ `PASS tests=1212 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| GreatWallPrewarmCompat | 无模组且无 API 提供方立即通过；首次/后续调度失败统一结案并区分原因。默认五秒启动宽限、十分钟停滞、三十分钟上限及系统属性保留。清理与实际默认值相反的旧注释。 | 行为变更：修复空等和首次调度失败时 Future 永不完成 |
+| PrewarmGateWork | 拆出时钟、探针和调度边界，取消后不再轮询；非正常放行有原因。期限使用经过时间比较，避免相加溢出。117 物理行，新增逻辑有中文原因注释。 | 编排等价搬迁与故障修复同属上述小提交 |
+| PrewarmGateWorkTest；RoadJUnitRegressionSuite | 新增 11 项，按 FQCN 登记。直接调用公开生产入口与注入入口，断言非空调度及具体结案原因，不以编译失败算负控。 | 测试基建 |
+| ARCHITECTURE；STATUS；ROADMAP；VALIDATION；HANDOFF | 记录三模组真实信号归属、正常依赖链和未完成边界；同步当前回归与后续清单。 | 文档 |
+
+源码已独立提交。生产 Java 文件 672 个，超过 1000 有效行 0、超过 800 有效行仍 2；本轮未改几何、配置键、API 签名或持久化格式。没有打包、安装和部署。
+
+### 二、我验证了什么（附负控）
+
+开工 main / ee4b9c8、工作区干净。第一次 pull 因连接重置失败，HTTP/1.1 重试成功 Already up to date。先跑完整回归及 Fabric，基线 1201。首次改动的功能用例通过，但文件行尾守卫抓住 Set-Content 留下的一个 CRLF；归一 LF 后 1212 全过。7 组变异全部恢复后再次全回归及 Fabric 编译，仍为 1212，零跳过、中止、失败，BUILD SUCCESSFUL。
+
+| 故意改坏生产代码 | 目标 PrewarmGateWorkTest 方法 | 结果 |
+|---|---|---|
+| 删无长城直接通过分支 | publicEntryWithoutInstalledWallReturnsAlreadyCompletedFuture | 红 |
+| 首次调度失败不结案、只对后续失败结案 | firstSubmissionFailureAlwaysCompletesReturnedFuture | 红 |
+| required 只看安装状态、忽略已注册 API | registeredProviderStillRequiresWaitingWithoutFabricModInventory | 红 |
+| 五秒首次 ready 宽限改为 0 | installedWallKeepsStartupGraceAndWaitsForRealCompletion | 红 |
+| 取消后仍执行探针查询 | cancelStopsQueuedPollBeforeQueryingOrRearming | 红 |
+| 有真实进展也不刷新停滞计时 | actualProgressResetsDefaultTenMinuteStallWindow | 红 |
+| 删除绝对期限 | movingProgressCannotBypassDefaultThirtyMinuteCap | 红 |
+
+每项唯一锚点、独立执行全回归并确认目标 JUnit 方法失败；finally 用 git checkout -- 精确文件从暂存索引恢复并逐字节核对。脚本、日志和 JSON 保留在忽略目录 .analysis_tmp/round31-*。新代码先精确暂存作为恢复源，完成全部变异及正向复验后提交；未覆盖任何用户未提交改动。
+
+只读核对相邻 Streams 315a44f、长城 01408e65，二者工作区干净、没有修改。StreamsServerLifecycleMixin 在新档 createLevels 初始出生点前和 prepareLevels HEAD 等预热并广播 RiverReadinessBroadcast；长城 RoadWeaverLifecycleBridge 订阅 RiverReadinessApi，GreatWallReadinessProvider 另提供长城门。道路 InitialPlanWaiter 的沿线板块补热及旧 fireRiversPrewarmed 回调更晚，现行长城不靠该旧回调启动。
+
+### 三、我没能验证什么（最重要）
+
+- **需要真机的**：新建/重开最终 Mixin 注入次序、完整三模组流程、长城实际发布与失败/超时、C2ME/Chunky 同跑、帧时/MSPT 和首次加载尾延迟；源码 priority 不等于已证明最终执行顺序。
+- **需要真实存档/安装件的**：停服和重开、跨维度旧回调、4096 档内存/耗时、各模组 jar 与 API 唯一提供件。未部署本轮代码。
+- **我怀疑但没有证据的**：现有 Fabric 门已开快路径在启动 ready 窗口里的实际竞态；没有最终变换字节码或现场日志，本轮保留并单列后续验证，不能称为已复现穿越。Streams awaitStartup 故障出口与广播成功是否一致尚未穷尽。
+- **已核实未修的生命周期边界**：Fabric MinecraftServerMixin 的后台线程仍捕获 server/level，等待后直接 server.execute；停服没有主动取消所有门，也没有旧世界代次校验。单组件取消能力已测，不等于生产停服接线已完成。
+- **已核实未修的负载与工作集**：CPU 精确采样三处 parallelStream、粗路径 INITIAL 子任务仍有游玩预算旁路；全域采样/FMM 工作数组未治理，4096 仍不能宣称安全。没有任何新性能倍数或“后台已不卡”的结论。
+- crossing 按用户决定保留；双平滑默认、跨度回写、QualityGate、旧区块重铺和废弃 GPU 精确采样均不改。改动代码有中文注释，本轮未给历史全库补写注释。
+
+### 四、遗留半截的东西
+
+本轮单门修复与测试完整；临时变异全部恢复。生产停止生命周期、三模组最终时序、河流超时语义仍待做，不用单门测试代替整组验收。文档提交后执行 pull --rebase、push 和空工作区检查，最终远端核对以交付为准。
+
+### 五、下一轮我会先做什么
+
+先为 CPU 采样和粗路径子任务接可测执行端口，确认最大并发、前台让路、取消及开局豁免，再上线有界执行，防父子同池等待。并行的下一小项是预热门会话代次与停服取消，用 Fake 验旧 Future 迟到不会启动旧世界道路；再验证最终 Mixin 顺序。大范围工作集随后按分配前估算、按需瓦片和等价求解逐步推进，保留完整核心和合法连边。READY 入口收敛、文件锁表及写盘优化继续按 ROADMAP，不无实测直接异步化。
+
+### 六、我踩到但已解决的坑
+
+旧 schedule 首次失败仅打日志而没有拿到 gate 去 complete，后续 trySchedule 有结案并不能补首次出口。无长城也走五秒宽限来自删除 fast path 后没有按“是否需要门”区分。已有提供方必须也算需要等待，不能只依赖 Fabric 安装清单。系统属性默认实际是十/三十分钟，旧注释写零默认已漂移；本轮保留实际行为。PowerShell Set-Content 最后会带 CRLF，Java 文件写后必须统一 LF，守卫确实会红。暂存索引可用作变异恢复源，但必须先确认其中是本轮已验证代码再 checkout。

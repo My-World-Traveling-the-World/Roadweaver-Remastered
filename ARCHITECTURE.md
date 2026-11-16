@@ -48,6 +48,20 @@
 
 **尚未闭合的执行边界：** CPU 精确采样的 `parallelStream`、粗路径子任务的 `INITIAL` 豁免，仍能绕过普通道路预算。已有 API 约束不等于这些内部工作已经受控。先在同一信号体系下补有界执行、单元让路及取消，再做整合包现场的帧时间/MSPT 验收；大范围采样/FMM 工作集另行治理。
 
+## 开局河流、长城、道路流程
+
+2026-11-16 只读核对 Streams `315a44f`、长城 `01408e65` 与道路 `59ac4f7`。正常依赖顺序是：
+
+1. Streams 的 `StreamsServerLifecycleMixin` 在新世界初始出生点生成前做 startup 预热，在 `prepareLevels HEAD` 也会等待并广播，因此重开世界同样有通知。`RiverReadinessBroadcast.publishReady` 才是开局河流就绪发布。
+2. 长城的 `RoadWeaverLifecycleBridge` 订阅 `RiverReadinessApi`，调用 `WorldServices.riversPrewarmed`；已就绪时的晚订阅会补发。`GreatWallReadinessProvider` 单独发布长城状态，未装河流时长城还有自己的启动路径。
+3. 道路的 Fabric `MinecraftServerMixin` 在长城门已开时同步进入初始规划；门未开时后台等待，再向服务端提交。`InitialPlanWaiter` 在逐路生成之前再次等长城，然后对选出的道路沿线做 Streams 板块补热和高度预取。后者不是第 1 步的开局河流完成通知。旧 `PlanningLifecycleListener.onRiversPrewarmed` 回调保留兼容，现行长城不靠它启动。
+
+长城的 `prepareLevels HEAD` priority=950、Streams=900、道路=1000；源码注释声称最终是 Streams→长城→道路，但不能只按优先级数字或注释证明最终注入次序，须验转换后的字节码及新档/重开实测。道路内部的长城门也不代表此前的结构扫描、粗采样完全没有执行。
+
+`GreatWallPrewarmCompat` 只接安装状态、标准 API、时钟和轮询器；`PrewarmGateWork` 管等待与结案。无模组且无提供方不排队；有提供方保留五秒首次 ready 宽限。默认无进展十分钟、总等待三十分钟会以 STALLED/ABSOLUTE_CAP 告警放行，调用方正超时按 TIMEOUT 放行；系统属性置非正值仍可禁用相应上限。首次或后续调度失败按 POLLER_UNAVAILABLE 结案，不把故障伪装为 READY。取消的 Future 后续轮询不再查状态，但生产停服尚未主动取消所有门，也未给 Fabric 后台回调加世界代次校验。
+
+下一步补跨存档生命周期、最终 Mixin 顺序和 Streams 超时后就绪广播的行为证据，再决定是否改整组启动政策；单门修复不代表完整启动状态机已完成。
+
 ## 新内核依赖边界
 
 `ArchitectureGuardTest` 按类型和包检查依赖，覆盖普通、静态、通配导入及源码中的全限定引用。下表是内核的出向规则；包内引用另计。`foundation-core` 是守卫使用的类型分组，并非源码目录。
