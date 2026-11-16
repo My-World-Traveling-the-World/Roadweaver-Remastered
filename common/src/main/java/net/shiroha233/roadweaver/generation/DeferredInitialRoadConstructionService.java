@@ -4,6 +4,7 @@ package net.shiroha233.roadweaver.generation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
 import net.shiroha233.roadweaver.persistence.chunk.RoadFootprint;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
@@ -11,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -92,9 +94,12 @@ public final class DeferredInitialRoadConstructionService {
             return 0;
         }
         long startedAt = TIMINGS ? System.nanoTime() : 0;
+        // 按选中顺序保留本次服务端线程已拿到的 FULL 区块，回填不再重查加载状态。
+        var loadedForThisDrain = new LinkedHashMap<Long, LevelChunk>();
         var selection = state.pending.select(key -> {
             // 事件与施工之间可能卸载；只有当前可取的区块才查台账或施工。
-            if (level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) == null) {
+            LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (loaded == null) {
                 return DeferredChunkQueue.Probe.WAITING;
             }
             if (isMarkedNoConstructionRequired(level, key) || isComplete(level, key)) {
@@ -104,6 +109,7 @@ public final class DeferredInitialRoadConstructionService {
                 }
                 return DeferredChunkQueue.Probe.WAITING;
             }
+            loadedForThisDrain.put(key, loaded);
             return DeferredChunkQueue.Probe.BUILDABLE;
         });
         var sample = selection.build();
@@ -119,7 +125,7 @@ public final class DeferredInitialRoadConstructionService {
             logDrainedIfIdle(level, state, 0, settled);
             return 0;
         }
-        int placed = LoadedChunkRoadBackfill.placeLoadedChunksExact(level, sample);
+        int placed = LoadedChunkRoadBackfill.placeSelectedLoadedChunks(level, loadedForThisDrain);
         int settledNow = 0;
         int abandoned = 0;
         for (long key : sample) {

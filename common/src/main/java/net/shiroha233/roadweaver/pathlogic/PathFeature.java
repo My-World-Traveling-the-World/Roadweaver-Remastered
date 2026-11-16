@@ -48,6 +48,8 @@ import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.*;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * 道路世界生成 Feature
@@ -93,11 +95,31 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                 || !Level.OVERWORLD.equals(server.dimension())) return false;
 
         ModConfig cfg = ConfigService.get();
-        if (!cfg.roadAppearance().roadsEnabled())
-            return false;
+        if (!cfg.roadAppearance().roadsEnabled()) return false;
+        return placeChunk(world, server, currentChunk, random, cfg, null);
+    }
 
+    public enum LoadedPlacement { PLACED, EMPTY_PLAN, NO_PLACEMENT }
+
+    /** 回填先看当前计划再直接消费同一版本，不在两层各查一次 LRU。 */
+    public static LoadedPlacement replayLoadedChunk(ServerLevel server, ChunkPos chunk, long randomSeed) {
+        ModConfig cfg = ConfigService.get();
+        return replayPlan(() -> RoadWorldgenPlanCache.get(server, chunk, cfg),
+                plan -> placeChunk(server, server, chunk, RandomSource.create(randomSeed), cfg, plan));
+    }
+
+    static LoadedPlacement replayPlan(Supplier<RoadChunkPlan> load, Predicate<RoadChunkPlan> place) {
+        RoadChunkPlan plan = load.get();
+        // 空计划不用进入施工，也不能提前释放仍供世界生成使用的预留。
+        if (plan.slices().isEmpty()) return LoadedPlacement.EMPTY_PLAN;
+        return place.test(plan) ? LoadedPlacement.PLACED : LoadedPlacement.NO_PLACEMENT;
+    }
+
+    private static boolean placeChunk(WorldGenLevel world, ServerLevel server, ChunkPos currentChunk,
+                                      RandomSource random, ModConfig cfg, RoadChunkPlan checkedPlan) {
         try {
-            RoadChunkPlan plan = RoadWorldgenPlanCache.get(server, currentChunk, cfg);
+            RoadChunkPlan plan = checkedPlan == null
+                    ? RoadWorldgenPlanCache.get(server, currentChunk, cfg) : checkedPlan;
             if (plan.slices().isEmpty()) {
                 // A chunk that still lists road shards but compiles to an empty
                 // plan means the worldgen plan cache is stale or the compiler
@@ -165,6 +187,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             boolean gapRepairApplied = false;
             if (!refusals.isEmpty() && persistConstructionRefusalGaps(server, refusals)) {
                 gapRepairApplied = true;
+                // 原位写回保护缺口会改版本；此处必须重新读，不能沿用回填预检得到的计划。
                 RoadChunkPlan refreshedPlan = RoadWorldgenPlanCache.get(server, currentChunk, cfg);
                 if (!refreshedPlan.slices().isEmpty()) {
                     refusals = new LinkedHashMap<>();

@@ -1,10 +1,12 @@
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.pathlogic.PathFeature.LoadedPlacement;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.LongFunction;
 
@@ -107,6 +109,31 @@ class DeferredChunkQueueTest {
         assertTrue(selection.build().isEmpty());
         assertEquals(1_000, queue.size());
         assertEquals(List.of(532L), queue.select(key -> key == 532L ? BUILDABLE : WAITING).build());
+    }
+
+    @Test
+    void backfillUsesSelectedFullChunksButRetestsEligibilityBeforeEachWrite() {
+        Map<Long, String> selected = Map.of(10L, "full-10", 20L, "full-20",
+                30L, "full-30", 40L, "full-40");
+        var writes = new ArrayList<String>();
+        var eligibility = new ArrayList<Long>();
+        var pass = LoadedChunkRoadBackfill.runBackfill(List.of(10L, 20L, 30L, 40L, 50L), 3, selected,
+                key -> { throw new AssertionError("本轮已查 FULL，不应重复读世界：" + key); },
+                key -> {
+                    eligibility.add(key);
+                    // 第一块写完后另一块已结案。仅复用区块存在性，不能跳过即时台账判据。
+                    return key == 20L && writes.contains("full-10");
+                },
+                (key, chunk) -> {
+                    if (key == 10L) {
+                        writes.add(chunk);
+                        return LoadedPlacement.PLACED;
+                    }
+                    return key == 30L ? LoadedPlacement.EMPTY_PLAN : LoadedPlacement.NO_PLACEMENT;
+                });
+        assertEquals(List.of(10L, 20L, 30L, 40L), eligibility);
+        assertEquals(List.of("full-10"), writes);
+        assertEquals(new LoadedChunkRoadBackfill.BackfillPass(4, 3, 1, List.of(30L), 0), pass);
     }
 
     private static DeferredChunkQueue pending(int count) {

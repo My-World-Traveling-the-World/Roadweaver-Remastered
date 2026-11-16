@@ -48,7 +48,7 @@ decoration -> core                               10
 decoration -> pathlogic                          3
 decoration -> persistence                        2
 generation -> compat                             10
-generation -> config                             30
+generation -> config                             28
 generation -> core                               48
 generation -> map                                10
 generation -> pathfinding                        17
@@ -58,7 +58,6 @@ generation -> planning                           85
 generation -> postprocess                        3
 generation -> runtime                            17
 generation -> structures                         15
-generation -> worldgen                           2
 map -> client                             1
 map -> config                             4
 map -> core                               12

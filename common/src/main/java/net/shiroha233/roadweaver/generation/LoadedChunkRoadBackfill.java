@@ -5,9 +5,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.RandomSource;
-import net.shiroha233.roadweaver.config.ConfigService;
-import net.shiroha233.roadweaver.config.ModConfig;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.generation.DeferredInitialRoadConstructionService;
@@ -15,8 +13,6 @@ import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.pathlogic.PathFeature;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
-import net.shiroha233.roadweaver.worldgen.road.RoadChunkPlan;
-import net.shiroha233.roadweaver.worldgen.road.RoadWorldgenPlanCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +24,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongFunction;
+import java.util.function.LongPredicate;
 
 /** Replays road construction only for chunks that are already loaded at FULL status. */
 public final class LoadedChunkRoadBackfill {
@@ -49,9 +47,14 @@ public final class LoadedChunkRoadBackfill {
         return placeLoadedChunks(level, candidateChunkKeys, true);
     }
 
-    /** Places only the supplied loaded chunks; used by the non-blocking player queue. */
+    /** 只考虑给出的键，仍然必须确认已有 FULL 区块。 */
     public static int placeLoadedChunksExact(ServerLevel level, Collection<Long> candidateChunkKeys) {
         return placeLoadedChunks(level, candidateChunkKeys, false);
+    }
+
+    // 只接受当前同步 drain 的结果，不能跨 tick 保留作为已加载证明。
+    static int placeSelectedLoadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded) {
+        return placeLoadedChunks(level, knownLoaded.keySet(), false, MAX_BACKFILL_CHUNKS_PER_INVOCATION, knownLoaded);
     }
 
     /**
@@ -123,6 +126,11 @@ public final class LoadedChunkRoadBackfill {
                                          Collection<Long> candidateChunkKeys,
                                          boolean expandNeighbors,
                                          int budget) {
+        return placeLoadedChunks(level, candidateChunkKeys, expandNeighbors, budget, null);
+    }
+
+    private static int placeLoadedChunks(ServerLevel level, Collection<Long> candidateChunkKeys,
+                                         boolean expandNeighbors, int budget, Map<Long, LevelChunk> knownLoaded) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())
                 || candidateChunkKeys == null || candidateChunkKeys.isEmpty()) return 0;
         if (!level.getServer().isSameThread()) {
@@ -130,45 +138,53 @@ public final class LoadedChunkRoadBackfill {
         }
         long backfillStartedAt = System.nanoTime();
         Set<Long> expanded = expandNeighbors ? expand(candidateChunkKeys) : new LinkedHashSet<>(candidateChunkKeys);
-        ModConfig config = ConfigService.get();
-        int loaded = 0;
-        int placed = 0;
-        int processed = 0;
+        BackfillPass pass = runBackfill(expanded, budget, knownLoaded,
+                key -> level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)),
+                key -> DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, key)
+                        || DeferredInitialRoadConstructionService.isConstructionComplete(level, new ChunkPos(key)),
+                (key, chunk) -> PathFeature.replayLoadedChunk(level, chunk.getPos(),
+                        level.getSeed() ^ key ^ RANDOM_SALT));
+        if (!pass.noConstruction().isEmpty()) {
+            DeferredInitialRoadConstructionService.markNoConstructionRequired(level, pass.noConstruction());
+        }
+        if (pass.placed() > 0 || !pass.noConstruction().isEmpty()) {
+            RoadConstructionLedger.flush(level);
+            LOGGER.info("RoadWeaver loaded-chunk construction backfill: candidates={} loaded={} processed={} "
+                            + "placed={} noConstruction={} fullLookups={} elapsedMs={}",
+                    expanded.size(), pass.loaded(), pass.processed(), pass.placed(), pass.noConstruction().size(),
+                    pass.fullLookups(), (System.nanoTime() - backfillStartedAt) / 1_000_000L);
+        }
+        return pass.placed();
+    }
+
+    record BackfillPass(int loaded, int processed, int placed, List<Long> noConstruction, int fullLookups) {}
+
+    @FunctionalInterface
+    interface Replay<T> {
+        PathFeature.LoadedPlacement place(long key, T loaded);
+    }
+
+    static <T> BackfillPass runBackfill(Collection<Long> keys, int budget, Map<Long, T> knownLoaded,
+                                         LongFunction<T> loadedNow, LongPredicate settled, Replay<T> replay) {
+        int loaded = 0, processed = 0, placed = 0, fullLookups = 0;
         int limit = Math.max(1, budget);
         List<Long> noConstruction = new ArrayList<>();
-        for (long chunkKey : expanded) {
+        for (long key : keys) {
             if (processed >= limit) break;
-            int chunkX = ChunkPos.getX(chunkKey);
-            int chunkZ = ChunkPos.getZ(chunkKey);
-            if (level.getChunkSource().getChunkNow(chunkX, chunkZ) == null) continue;
+            if (knownLoaded == null) fullLookups++;
+            T chunk = knownLoaded == null ? loadedNow.apply(key) : knownLoaded.get(key);
+            if (chunk == null) continue;
             loaded++;
-            ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-            // 终态:已确认无需施工的 chunk 廉价跳过,不占本次预算。
-            if (DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, chunkKey)) continue;
-            // 台账已完成:无需重铺,廉价跳过,不占预算。
-            if (DeferredInitialRoadConstructionService.isConstructionComplete(level, chunkPos)) continue;
-            // 只编译一次(会话级 LRU 缓存):空计划 = 道路 disc 仅擦边或路线已
-            // 迁移,标记为无需施工终态并永久退出 pending/回填候选。
-            RoadChunkPlan plan = RoadWorldgenPlanCache.get(level, chunkPos, config);
-            if (plan.slices().isEmpty()) {
-                noConstruction.add(chunkKey);
-                processed++;
-                continue;
+            // 前一块可能写台账或保护缺口；只能复用 FULL 句柄，不能复用排队时的施工资格。
+            if (settled.test(key)) continue;
+            switch (replay.place(key, chunk)) {
+                case PLACED -> placed++;
+                case EMPTY_PLAN -> noConstruction.add(key);
+                case NO_PLACEMENT -> { /* 保留重试资格，不能把失败记成空计划。 */ }
             }
-            RandomSource random = RandomSource.create(level.getSeed() ^ chunkKey ^ RANDOM_SALT);
-            if (PathFeature.placeChunk(level, level, chunkPos, random)) placed++;
             processed++;
         }
-        if (!noConstruction.isEmpty()) {
-            DeferredInitialRoadConstructionService.markNoConstructionRequired(level, noConstruction);
-        }
-        if (placed > 0 || !noConstruction.isEmpty()) {
-            RoadConstructionLedger.flush(level);
-            LOGGER.info("RoadWeaver loaded-chunk construction backfill: candidates={} loaded={} processed={} placed={} noConstruction={} elapsedMs={}",
-                    expanded.size(), loaded, processed, placed, noConstruction.size(),
-                    (System.nanoTime() - backfillStartedAt) / 1_000_000L);
-        }
-        return placed;
+        return new BackfillPass(loaded, processed, placed, List.copyOf(noConstruction), fullLookups);
     }
 
     public static int placeLoadedSpawnChunks(ServerLevel level, int radiusChunks) {
