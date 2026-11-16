@@ -21,8 +21,7 @@ import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
  *
  * <p>三条安全约束（用户 2026-11-08 反复确认的）：
  * <ol>
- *   <li>只花 <b>O(候选对)</b>：先用 {@link BridgeShareDetector#mayOverlap} 的包围盒预筛，
- *       只有地理邻近的桥才进入精确判定 —— **不扫全部道路**</li>
+ *   <li>预先缓存每座桥的包围盒；全部桥对只做常数次比较，只有地理邻近的桥才扫描站点精判</li>
  *   <li><b>改不动就放弃</b>：{@link BridgeShareAbsorber#blendToDeckY} 返回 null 时原样保留两座桥</li>
  *   <li><b>校验不过就回滚</b>：改完必须过 {@code RoadDataValidator.validateFinalRoad}，
  *       不过就把这条路整体还原 ⇒ 不会让任何一条路变成失败状态</li>
@@ -88,13 +87,14 @@ public final class BridgeShareService {
         int absorbed = 0;
         int skippedNoTransition = 0;
         int skippedInvalid = 0;
-// 0.9.055：先把自己收进了哪几座桥打出来（真机 candidates=0 时第一件要确认的事）。
-        for (BridgeRef ref : bridges) {
-            LOGGER.info("[BRIDGE-SHARE] collected road{}#{} st{}..{} n={} head={} tail={}",
-                    ref.roadIndex(), ref.spanIndex(), ref.fromStation(), ref.toStation(),
-                    ref.stations().size(),
-                    ref.stations().isEmpty() ? null : ref.stations().get(0),
-                    ref.stations().isEmpty() ? null : ref.stations().get(ref.stations().size() - 1));
+        // 诊断开启才读逐桥细节；正式合并仍由调用方记录候选、吸收和各类失败汇总。
+        boolean logPairs = LOGGER.isDebugEnabled();
+        if (logPairs) {
+            for (BridgeRef ref : bridges) {
+                LOGGER.debug("[BRIDGE-SHARE] collected road{}#{} st{}..{} n={} head={} tail={}",
+                        ref.roadIndex(), ref.spanIndex(), ref.fromStation(), ref.toStation(),
+                        ref.stations().size(), ref.stations().getFirst(), ref.stations().getLast());
+            }
         }
         Set<Integer> alreadyAbsorbed = new HashSet<>();
 
@@ -103,23 +103,21 @@ public final class BridgeShareService {
                 BridgeRef a = bridges.get(i);
                 BridgeRef b = bridges.get(j);
                 if (a.roadIndex() == b.roadIndex()) continue;
-                // ① 廉价预筛：只对可能挨着的桥做精确判定
-                // 0.9.055：把每一对的三道门都打出来 —— 真机 (236,-170) 的两座桥
-                // （st299..368 deckY=48 / st296..371 deckY=65）明明 XZ 差 2 格、
-                // 航向一致、重叠 60+ 站，却 candidates=0，光看计数分不出是哪道门卡的。
-                boolean overlapBox = BridgeShareDetector.mayOverlap(a.stations(), b.stations(), radius);
+                // 维持原桥对遍历顺序；并列选主和每路只吸收一次都依赖这个顺序。
+                boolean overlapBox = BridgeShareDetector.overlapsPrepared(a.bounds(), b.bounds(), radius);
                 BridgeShareDetector.Report pairReport = overlapBox
-                        ? BridgeShareDetector.detect(a.stations(), b.stations(), radius,
+                        ? BridgeShareDetector.detectOverlapping(a.stations(), b.stations(), radius,
                                 BridgeShareDetector.DEFAULT_MIN_OVERLAP_STATIONS)
                         : BridgeShareDetector.Report.none();
-                LOGGER.info("[BRIDGE-SHARE-PAIR] a=road{}#{} st{}..{} n={} b=road{}#{} st{}..{} n={} "
-                                + "bbox={} minDist={} overlap={} dot={} shares={}",
-                        a.roadIndex(), a.spanIndex(), a.fromStation(), a.toStation(), a.stations().size(),
-                        b.roadIndex(), b.spanIndex(), b.fromStation(), b.toStation(), b.stations().size(),
-                        overlapBox, pairReport.minDistance(), pairReport.overlapStations(),
-                        String.format("%.3f", BridgeShareDetector.parallelDot(a.stations(), b.stations())),
-                        pairReport.shares());
-                if (!overlapBox) continue;
+                if (logPairs) {
+                    // 精确航向只为排查关卡失败才额外扫描，平时不为被预筛掉的桥对扫描站点。
+                    LOGGER.debug("[BRIDGE-SHARE-PAIR] a=road{}#{} st{}..{} n={} b=road{}#{} st{}..{} n={} "
+                                    + "bbox={} minDist={} overlap={} dot={} shares={}",
+                            a.roadIndex(), a.spanIndex(), a.fromStation(), a.toStation(), a.stations().size(),
+                            b.roadIndex(), b.spanIndex(), b.fromStation(), b.toStation(), b.stations().size(),
+                            overlapBox, pairReport.minDistance(), pairReport.overlapStations(),
+                            BridgeShareDetector.parallelDot(a.stations(), b.stations()), pairReport.shares());
+                }
                 if (!pairReport.shares()) {
                     continue;
                 }
@@ -163,7 +161,7 @@ public final class BridgeShareService {
 
     /** 一条路上的一个 BRIDGE span，连同它的站区间（-1 表示端点没在站序列里找到，直接排除）。 */
     private record BridgeRef(int roadIndex, int spanIndex, int fromStation, int toStation,
-                             List<BlockPos> stations) {}
+                             List<BlockPos> stations, BridgeShareDetector.Bounds bounds) {}
 
     private static List<BridgeRef> collectBridges(List<RoadData> roads, int[] endpointCountersOut) {
         List<BridgeRef> out = new ArrayList<>();
@@ -208,7 +206,8 @@ public final class BridgeShareService {
                     if (pos != null) slice.add(pos);
                 }
                 if (slice.size() < 3) continue;
-                out.add(new BridgeRef(r, s, lo, hi, slice));
+                // 包围盒只依赖本轮原始站序；吸收改高度和跨度，不改这些 XZ 坐标。
+                out.add(new BridgeRef(r, s, lo, hi, slice, BridgeShareDetector.bbox(slice)));
             }
         }
         return out;

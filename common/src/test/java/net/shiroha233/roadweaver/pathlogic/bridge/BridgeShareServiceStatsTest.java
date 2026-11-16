@@ -1,12 +1,20 @@
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
+import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.core.model.RoadSpan;
+import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 0.9.035：{@link BridgeShareService.Stats} 的计数口径回归。
@@ -44,6 +52,42 @@ final class BridgeShareServiceStatsTest {
         BridgeShareService.Stats stats = BridgeShareService.applyInPlace(List.of(), 24);
         assertEquals(0, stats.roads());
         assertEquals(0, stats.candidates());
+    }
+
+    @Test
+    void sharesAtExactRadiusAndPreservesFirstOwnerAndDistantBridge() {
+        // 只相差半径的等长桥必须进入精判；远桥仍保持原对象。
+        RoadData owner = bridgeRoad(-24, 66);
+        RoadData victim = bridgeRoad(0, 64);
+        RoadData distant = bridgeRoad(25, 65);
+        for (RoadData road : List.of(owner, victim, distant)) {
+            assertTrue(RoadDataValidator.isValidFinalRoad(road), "夹具必须先通过生产校验");
+        }
+        List<RoadData> roads = new ArrayList<>(List.of(owner, victim, distant));
+
+        assertEquals(new BridgeShareService.Stats(3, 3, 0, 0, 1, 1, 0, 0),
+                BridgeShareService.applyInPlace(roads, 24));
+        assertSame(owner, roads.get(0));
+        assertSame(distant, roads.get(2));
+        RoadData replacement = roads.get(1);
+        RoadSpan span = victim.spans().getFirst();
+        assertEquals(List.of(new RoadSpan(span.start(), span.end(), SpanType.NETWORK_REUSE)), replacement.spans());
+        assertEquals(victim.roadSegmentList(), replacement.roadSegmentList());
+        assertEquals(66, replacement.targetY().get(18));
+        assertEquals(64, replacement.targetY().getFirst());
+    }
+
+    private static RoadData bridgeRoad(int z, int y) {
+        List<RoadSegmentPlacement> stations = new ArrayList<>();
+        List<Integer> targetY = new ArrayList<>();
+        for (int x = 0; x < 40; x++) {
+            BlockPos center = new BlockPos(x, y, z);
+            stations.add(new RoadSegmentPlacement(center, List.of(center)));
+            targetY.add(y);
+        }
+        return new RoadData(1, 0, List.of(), List.of(), stations,
+                List.of(new RoadSpan(stations.get(12).middlePos(), stations.get(25).middlePos(), SpanType.BRIDGE)),
+                targetY, 11L, 13L);
     }
 
     @Test

@@ -59,6 +59,11 @@ public final class BridgeShareDetector {
     public static Report detect(List<BlockPos> a, List<BlockPos> b, int radius, int minOverlapStations) {
         if (a == null || b == null || a.size() < 2 || b.size() < 2) return Report.none();
         if (!mayOverlap(a, b, radius)) return Report.none();
+        return detectOverlapping(a, b, radius, minOverlapStations);
+    }
+
+    // 批合并已经用缓存的包围盒预筛；这里直接精判，避免再次扫描桥站。
+    static Report detectOverlapping(List<BlockPos> a, List<BlockPos> b, int radius, int minOverlapStations) {
         int limit = Math.max(1, radius);
         List<BlockPos> bSamples = sample(b, MAX_SAMPLES);
         List<BlockPos> aSamples = sample(a, MAX_SAMPLES);
@@ -111,22 +116,24 @@ public final class BridgeShareDetector {
     /**
      * **廉价预筛**（用户 2026-11-08：「规划完成了后扫描只扫描桥梁离的近的，不要全部扫描」）。
      *
-     * <p>两个 span 的 XZ 包围盒各向外扩 {@code radius} 格后若**没有交集**，
-     * 则两者的最短距离必然 &gt; radius ⇒ 直接排除，不必进入 {@link #detect} 的全站点扫描。
-     * 每对只花 O(1)（包围盒已按 span 预算），
-     * 于是「规划完成后一遍检查」实际只对**地理上邻近**的桥做精确判定。
+     * <p>两盒在任一轴上的间隔大于半径时，精判必然不通过。独立调用计算两盒；
+     * 批合并先按跨度计算，再对每对执行常数次比较。
      */
     public static boolean mayOverlap(List<BlockPos> a, List<BlockPos> b, int radius) {
         if (a == null || b == null || a.isEmpty() || b.isEmpty()) return false;
-        int expand = Math.max(0, radius);
-        int[] ba = bbox(a);
-        int[] bb = bbox(b);
-        return ba[0] - expand <= bb[2] && bb[0] - expand <= ba[2]
-                && ba[1] - expand <= bb[3] && bb[1] - expand <= ba[3];
+        return overlapsPrepared(bbox(a), bbox(b), radius);
     }
 
-    /** {@code {minX, minZ, maxX, maxZ}}。 */
-    static int[] bbox(List<BlockPos> stations) {
+    // 半径边界也参与精判，不能因改用包围盒缓存漏掉刚好相隔半径的桥。
+    static boolean overlapsPrepared(Bounds a, Bounds b, int radius) {
+        int expand = Math.max(0, radius);
+        return a.minX() - expand <= b.maxX() && b.minX() - expand <= a.maxX()
+                && a.minZ() - expand <= b.maxZ() && b.minZ() - expand <= a.maxZ();
+    }
+
+    record Bounds(int minX, int minZ, int maxX, int maxZ) {}
+
+    static Bounds bbox(List<BlockPos> stations) {
         int minX = Integer.MAX_VALUE;
         int minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE;
@@ -140,8 +147,8 @@ public final class BridgeShareDetector {
             if (x > maxX) maxX = x;
             if (z > maxZ) maxZ = z;
         }
-        if (minX == Integer.MAX_VALUE) return new int[]{0, 0, -1, -1};
-        return new int[]{minX, minZ, maxX, maxZ};
+        if (minX == Integer.MAX_VALUE) return new Bounds(0, 0, -1, -1);
+        return new Bounds(minX, minZ, maxX, maxZ);
     }
 
     /** 等间隔取至多 {@code max} 个点，首末必取。 */
