@@ -618,6 +618,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             if (centerOwned && !directCrossing[i] && !isBridge[i]
                     && !(tunnelMask != null && i >= 0 && i < tunnelMask.length && tunnelMask[i])
                     && !(constructionRefused != null && i < constructionRefused.length && constructionRefused[i])) {
+                // 里程按全路站序共享；仍只给本站读取当前配置，以保持装饰和拒绝分支的顺序。
+                int lampInterval = Math.max(1, cfg.lampInterval());
                 DecorationPlanner.addDecoration(
                         world,
                         decorations,
@@ -628,7 +630,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                         middlePositions,
                         roadWidth,
                         random,
-                        cfg,
+                        buildFrame.stationSpacing().nearestToMultiple(segmentIndex, lampInterval),
+                        lampInterval,
                         (roadType == 0 ? DecorationPlanner.Mode.ARTIFICIAL : DecorationPlanner.Mode.NATURAL));
             }
         }

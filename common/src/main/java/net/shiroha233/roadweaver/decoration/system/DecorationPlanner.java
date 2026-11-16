@@ -63,7 +63,8 @@ public final class DecorationPlanner {
                                      List<BlockPos> middlePositions,
                                      int roadWidth,
                                      RandomSource random,
-                                     ModConfig cfg,
+                                     boolean distanceIntervalStation,
+                                     int lampInterval,
                                      Mode mode) {
         int dx = nextPos.getX() - prevPos.getX();
         int dz = nextPos.getZ() - prevPos.getZ();
@@ -87,8 +88,8 @@ public final class DecorationPlanner {
             return;
         }
 
-        int interval = Math.max(1, cfg.lampInterval());
-        if (isDistanceIntervalStation(middlePositions, segmentIndex, interval)) {
+        // 里程只决定候选，不提前取随机数或检查世界，避免改变施工时的装饰落点。
+        if (distanceIntervalStation) {
             boolean left = random.nextBoolean();
             BlockPos shifted = findRoadsideLampBase(world, placePos, ortho, sideOffset, left);
             // A roadside lamp must be supported beside the road at the road
@@ -106,7 +107,7 @@ public final class DecorationPlanner {
                         mode,
                         shifted.getX(), shifted.getZ(), shifted.getY(),
                         Math.floorDiv(shifted.getX(), 16), Math.floorDiv(shifted.getZ(), 16),
-                        segmentIndex, interval);
+                        segmentIndex, lampInterval);
             }
             if (mode == Mode.ARTIFICIAL) {
                 out.add(new LamppostDecoration(shifted, ortho, world));
@@ -114,37 +115,6 @@ public final class DecorationPlanner {
                 out.add(new LanternPostDecoration(shifted, ortho, world));
             }
         }
-    }
-
-    /**
-     * Selects the route station nearest to each distance multiple.  The old
-     * implementation used the station index, which made spacing depend on
-     * how densely a route happened to be sampled and caused clusters where
-     * multiple routes shared a chunk.
-     */
-    static boolean isDistanceIntervalStation(List<BlockPos> positions, int index, int interval) {
-        if (positions == null || positions.size() < 3 || index <= 0 || index >= positions.size() - 1) {
-            return false;
-        }
-        int spacing = Math.max(1, interval);
-        double current = 0.0D;
-        for (int i = 1; i <= index; i++) {
-            current += horizontalDistance(positions.get(i - 1), positions.get(i));
-        }
-        double previous = current - horizontalDistance(positions.get(index - 1), positions.get(index));
-        double next = current + horizontalDistance(positions.get(index), positions.get(index + 1));
-        long bucket = Math.round(current / spacing);
-        if (bucket <= 0L) return false;
-        double target = bucket * (double) spacing;
-        return Math.abs(current - target) <= Math.abs(previous - target)
-                && Math.abs(current - target) <= Math.abs(next - target);
-    }
-
-    private static double horizontalDistance(BlockPos a, BlockPos b) {
-        if (a == null || b == null) return 0.0D;
-        long dx = (long) b.getX() - a.getX();
-        long dz = (long) b.getZ() - a.getZ();
-        return Math.sqrt((double) dx * dx + (double) dz * dz);
     }
 
     /**

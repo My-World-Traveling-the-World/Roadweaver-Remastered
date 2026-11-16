@@ -60,6 +60,66 @@ final class BuildFrameTest {
     }
 
     @Test
+    void cachedLampSpacingPreservesLegacyChoicesForIrregularStationOrder() {
+        // 斜线、逆序和重合站能区分水平里程、站号、Y 差与取整后的长度。
+        List<BlockPos> points = new ArrayList<>();
+        int x = -230, z = -17;
+        for (int i = 0; i < 257; i++) {
+            x += (i % 5 == 0 ? -2 : i % 2);
+            z += (i % 7 == 0 ? 0 : i % 3);
+            points.add(new BlockPos(x, 40 + i % 31, z));
+        }
+        for (List<BlockPos> ordered : List.of(points, points.reversed())) {
+            var road = ordered.stream().map(p -> new RoadSegmentPlacement(p, List.of(p))).toList();
+            var metrics = BuildFrame.of(703L, road, List.of(), null).stationSpacing();
+            for (int spacing : new int[]{0, 4, 13, 39, 256}) {
+                int lamps = 0;
+                for (int i = 0; i < ordered.size(); i++) {
+                    boolean isLamp = metrics.nearestToMultiple(i, spacing);
+                    assertEquals(legacyLampChoice(ordered, i, spacing), isLamp,
+                            "spacing=" + spacing + " station=" + i);
+                    if (isLamp) lamps++;
+                }
+                assertTrue(lamps > 0, "每档间距都必须产生候选");
+                // 一格间距会选中所有内点；大间距才需要证明对照也包含普通站。
+                if (spacing > 1) assertTrue(lamps < ordered.size() - 2, "必须也有普通站");
+            }
+        }
+
+        // 目标 5 两边的 4 / 6 站原来都可以放灯，不能改成只选其一。
+        var tiedRoad = List.of(0, 4, 6, 10).stream().map(at -> {
+            BlockPos p = new BlockPos(at, 64, 0);
+            return new RoadSegmentPlacement(p, List.of(p));
+        }).toList();
+        var tied = BuildFrame.of(704L, tiedRoad, List.of(), null).stationSpacing();
+        assertTrue(tied.nearestToMultiple(1, 5));
+        assertTrue(tied.nearestToMultiple(2, 5));
+    }
+
+    /** 重放迁移前每个候选从路头重新累加的判定，作为独立对照。 */
+    private static boolean legacyLampChoice(List<BlockPos> positions, int index, int interval) {
+        if (index <= 0 || index >= positions.size() - 1) return false;
+        int spacing = Math.max(1, interval);
+        double current = 0.0D;
+        for (int i = 1; i <= index; i++) {
+            current += fixtureDistance(positions.get(i - 1), positions.get(i));
+        }
+        double previous = current - fixtureDistance(positions.get(index - 1), positions.get(index));
+        double next = current + fixtureDistance(positions.get(index), positions.get(index + 1));
+        long bucket = Math.round(current / spacing);
+        if (bucket <= 0L) return false;
+        double target = bucket * (double) spacing;
+        return Math.abs(current - target) <= Math.abs(previous - target)
+                && Math.abs(current - target) <= Math.abs(next - target);
+    }
+
+    private static double fixtureDistance(BlockPos a, BlockPos b) {
+        double dx = b.getX() - a.getX();
+        double dz = b.getZ() - a.getZ();
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    @Test
     void 发出去的副本可以随便改且不影响缓存() {
         BuildFrame.Frames frames = BuildFrame.of(77L, stations(8), List.of(), null);
 

@@ -99,11 +99,13 @@ public final class BuildFrame {
      * @param isBridge        规划期的桥掩码
      * @param mergedRanges    合并后的桥区间
      * @param skipSegments    规划期的跳过掩码
+     * @param stationSpacing 不可变的水平里程，用于各区块按同一站序布灯
      */
     public record Frames(List<BlockPos> middlePositions,
                          boolean[] isBridge,
                          List<int[]> mergedRanges,
-                         boolean[] skipSegments) {
+                         boolean[] skipSegments,
+                         StationSpacing stationSpacing) {
 
         /**
          * 发一份可以随便改的副本给调用方。
@@ -118,6 +120,41 @@ public final class BuildFrame {
                 ranges.add(r == null ? null : r.clone());
             }
             return new BridgeRangeCalculator.RangeResult(isBridge.clone(), ranges, skipSegments.clone());
+        }
+    }
+
+    /** 同一路的里程只累加一次，避免每个候选灯位重新从路头开始扫描。 */
+    public static final class StationSpacing {
+        private final List<BlockPos> stations;
+        private final double[] distanceFromStart;
+
+        private StationSpacing(List<BlockPos> stations) {
+            this.stations = stations;
+            this.distanceFromStart = new double[stations.size()];
+            for (int i = 1; i < stations.size(); i++) {
+                distanceFromStart[i] = distanceFromStart[i - 1]
+                        + horizontalDistance(stations.get(i - 1), stations.get(i));
+            }
+        }
+
+        public boolean nearestToMultiple(int index, int interval) {
+            if (index <= 0 || index >= stations.size() - 1) return false;
+            int spacing = Math.max(1, interval);
+            double current = distanceFromStart[index];
+            long bucket = Math.round(current / spacing);
+            if (bucket <= 0L) return false;
+            double target = bucket * (double) spacing;
+            // 保留旧判定的减法和并列规则，避免浮点舍入改变路灯位置和随机序列。
+            double previous = current - horizontalDistance(stations.get(index - 1), stations.get(index));
+            double next = distanceFromStart[index + 1];
+            return Math.abs(current - target) <= Math.abs(previous - target)
+                    && Math.abs(current - target) <= Math.abs(next - target);
+        }
+
+        private static double horizontalDistance(BlockPos a, BlockPos b) {
+            long dx = (long) b.getX() - a.getX();
+            long dz = (long) b.getZ() - a.getZ();
+            return Math.sqrt((double) dx * dx + (double) dz * dz);
         }
     }
 
@@ -153,8 +190,9 @@ public final class BuildFrame {
             middlePositions.add(s.middlePos());
         }
         BridgeRangeCalculator.RangeResult r = BridgeRangeCalculator.compute(settings, middlePositions, spans);
-        return new Frames(List.copyOf(middlePositions), r.isBridge().clone(),
-                List.copyOf(r.mergedRanges()), r.skipSegments().clone());
+        List<BlockPos> centers = List.copyOf(middlePositions);
+        return new Frames(centers, r.isBridge().clone(),
+                List.copyOf(r.mergedRanges()), r.skipSegments().clone(), new StationSpacing(centers));
     }
 
     /** 清空缓存（配置热重载、测试用）。 */
