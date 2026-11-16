@@ -986,3 +986,58 @@ COARSE_REGION_MAX_RADIUS_CHUNKS 同时被开局、动态配置和地图 AOI 使�
 河流Gradle9.4.1测试worker ClassNotFound源自本机JDK把含中文路径的UTF-8参数文件按GBK读取，独立java @args同classpath对照已复现：UTF-8失败、GBK LOAD_OK。该仓命令需GRADLE_OPTS和Gradle参数同时指定-Dfile.encoding=GBK（源码编译仍UTF-8），再执行test compileJava --offline --daemon；道路8.8命令不变。原源码实际LF，保留行尾避免整文件diff。await返回不表示完成，失败记录必须在同步初始化和异步回调两处覆盖。
 
 本轮同步结果：文档提交后再次 pull --rebase、push 均因 github.com 低速超时失败，origin/main 仍 f78c6c0，本地领先3个提交；未声称推送成功。河流82cc818及道路文档已本地提交，两个工作区git status --porcelain为空。
+
+
+---
+
+## 第34轮 ｜ 2026-11-16 ｜ 长城订阅与严格就绪守卫 ｜ 长城928d3302 ｜ 道路PASS tests=1222 skipped=0 aborted=0 failed=0
+
+### 一、改了什么
+
+本轮代码与测试均在plaincraft-great-wall，原分支refactor/planning-frozen-feature-paint，不改main。先提交行为等价端口搬迁92720388：订阅回调和就绪读口可注入，公开默认仍接WorldServices；再提交行为变更928d3302：
+
+- 严格等待被clear唤醒后须确认仍属同一闩锁，旧世界退出不再被当成发布成功。
+- clear清除旧阶段、子进度及阶段计时，防止新档读取旧COMPILE快照。
+- RetainedRiverSignal同锁交接早到河流信号与会话注册，移除构造器先检查、再SESSIONS入表的漏信号窗口；停服先detach，STOPPED清保留状态。重复通知仍由生产会话幂等。
+- 订阅回调失败新增可辨识WARN；失败不连累河流发布者。未改API签名、配置键、存档、几何或Mixin优先级。
+- 新增24项测试：10契约、6严格门、6保留信号、2静态接线；都留在长城。新协作类32行，改动生产文件物理行均小于1000（最大858）。原依赖锁只补本地API开发件testRuntimeClasspath坐标一条。
+
+道路本轮只更新STATUS、ROADMAP、HANDOFF。河流82cc818只读，工作区干净。长城完整交接及16组变异表见相邻仓库HANDOFF.md。
+
+### 二、我验证了什么（附负控）
+
+开工长城01408e65干净。默认pull因无upstream未执行，随后显式pull --rebase origin refactor/planning-frozen-feature-paint确认无需更新。基线测试先因本地API重映射坐标未锁失败，补一条锁记录后全量745项通过；端口迁移后既有Prewarm系列与compileJava通过。新回归先复现旧严格等待误报ready和旧阶段残留，16项里2项失败，修后转绿。
+
+最终长城test compileJava为769项（745+24），failures/errors/skipped均0，BUILD SUCCESSFUL；日志build-round34-full-final.log。道路完整双模块回归1222、0跳过/中止/失败，Fabric编译通过，日志.analysis_tmp/round34-road-final.log。
+
+| 生产变异分组 | 结果 |
+|---|---|
+| 漏通知长城、回调Error逃逸、isReady恒true、等待单位错误、进度签名含时钟 | 5组目标行为测试红 |
+| clear旧闩锁当成功、旧阶段不清、旧子进度不清、失败打开世界门 | 4组目标行为测试红 |
+| 早到信号不重放、不保留ready、detach不注销、clear不清会话表 | 4组目标行为测试红 |
+| WorldServices实际出口改非严格门、忽略Showcase等待 | 2组经真实注册提供方的行为测试红 |
+| 实际启动漏attach | 1组静态接线守卫红 |
+
+16组逐条唯一锚点，编译成功且指定JUnit目标实际失败才算红；finally git checkout -- 精确文件从本轮暂存索引恢复，内容与原行尾字节核对。完整JSON/脚本/日志在长城忽略目录build/round34-*，临时变异全部还原。使用真实RiverReadinessApi和GreatWallReadinessRegistry；Fake只替换内部端口，不能替代真实Minecraft生命周期。
+
+### 三、我没能验证什么（最重要）
+
+- **需真机**：新建、重开、缺长城/缺河流的实际最终Mixin时序与真实停服。未部署，没有FPS/MSPT/加载耗时结论。
+- **真实事件未运行**：长城会话attach/detach有静态接线；同锁组件有行为和128轮并发交接，但未构造完整ProductionSession或运行SERVER_STARTING/STOPPING。不能称真实存档验收。
+- **已核实仍有全局边界**：旧ProductionSession异步任务仍可写静态PrewarmProgress。本轮解决旧严格等待的误成功和河流通知的会话注销，不代表所有异步写入都带世界令牌；根治需所有进度发布回调接令牌。
+- **既有失败政策保持**：长城失败不开放门；河流只有bool就绪，失败传播、重试UI仍未新增。道路不会把超时结案当ready，但可能不再启动本轮初始生成。
+- CPU三处parallelStream、粗路径两轮INITIAL子任务、4096工作集和READY状态收敛仍待做。crossing按用户决定保留，其他需真机裁决项未改。
+
+### 四、遗留半截的东西
+
+本轮长城守卫和三处边界修复已完整提交并push到现有E盘备份origin的原分支，文档后续提交5ade8e9b也已push；工作区干净。未合并长城main。道路本轮开工pull已成功，文档提交后push并核对远端，结果追加在末尾。河流没有remote的状态未改。
+
+### 五、下一轮我会先做什么
+
+三模组完整顺序排为现场验收，继续推进无需现场数据的道路执行预算：先给CPU精确采样与粗路径内部子任务接可测执行端口，验证总并发、前台让路、取消及父子等待，再替换并行流/INITIAL预算旁路。保留开局豁免和全部样本、路径产物。随后做4096分配前估算与按需工作集，不缩用户核心或丢候选。
+
+### 六、我踩到但已解决的坑
+
+负控发现本轮一条测试先detach再clear，使“clear不清会话表”仍绿；已新增不先detach的独立用例，原变异确实转红。旧测试保留，继续守卫detach本身。Windows新文件checkout会把LF转CRLF；先核对内容再恢复原始行尾字节，修正脚本后完整重跑16组。定向锁更新会移除未解析配置的锁归属，只合入新坐标。严格门的清理唤醒与成功发布必须区分，不能靠“等到了”推断“成功了”。
+
+本轮同步结果：道路pull成功；普通push与HTTP/1.1重试均因GitHub低速超时失败，origin/main仍f78c6c0，本地领先4个提交。长城HEAD及其远端均为5ade8e9b，已同步。河流仍无remote。本条并入道路文档提交后保持工作区干净，未声称道路push成功。
