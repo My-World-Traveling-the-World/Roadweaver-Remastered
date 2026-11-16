@@ -12,8 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static net.shiroha233.roadweaver.pathfinding.sampling.SamplerStatics.*;
 
@@ -29,12 +27,7 @@ final class AccurateColumnBatch {
     private final AccurateHeightBackend backend;
     private final AccurateSampleStore store;
     private final Cache cache;
-    private final java.util.function.LongSupplier timeoutMs;
-    private final ConcurrentHashMap<Long, CompletableFuture<Void>> tileInFlight = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Long, CompletableFuture<Void>> acceleratedTileInFlight = new ConcurrentHashMap<>();
-    // 同线程已经持有的瓦片不能再等待自己；沿用原逐列递归保护。
-    private final ThreadLocal<java.util.Set<Long>> ownedTiles =
-            ThreadLocal.withInitial(java.util.HashSet::new);
+    private final AccurateTileClaims claims;
 
     AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache) {
         this(backend, store, cache, SamplerStatics::inFlightTimeoutMs);
@@ -46,20 +39,12 @@ final class AccurateColumnBatch {
         this.backend = backend;
         this.store = store;
         this.cache = cache;
-        this.timeoutMs = timeoutMs;
+        this.claims = new AccurateTileClaims(cache::ensureOpen, timeoutMs);
     }
 
-    private void awaitTiles(Map<Long, CompletableFuture<Void>> waiting,
-                            ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer) {
-        if (!waiting.isEmpty()) joinWaitingTiles(waiting, coalescer, timeoutMs.getAsLong());
-    }
-
-    /** 先唤醒共享结果的等待者，资源真正关闭仍由门面统一负责。 */
+    /** 先结案认领，存储和后端资源仍由门面统一关闭。 */
     void close(IllegalStateException failure) {
-        tileInFlight.values().forEach(future -> future.completeExceptionally(failure));
-        tileInFlight.clear();
-        acceleratedTileInFlight.values().forEach(future -> future.completeExceptionally(failure));
-        acceleratedTileInFlight.clear();
+        claims.close(failure);
     }
 
     Optional<AccurateHeightGrid> loadStoredGrid(AccurateHeightGridRequest request) {
@@ -227,44 +212,15 @@ final class AccurateColumnBatch {
         }
 
         resolveStoredColumns(unresolved, result);
-        ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer = acceleratedOnly
-                ? acceleratedTileInFlight
-                : tileInFlight;
         while (!unresolved.isEmpty()) {
             LinkedHashMap<Long, LinkedHashMap<Long, BlockPos>> byTile = groupColumnsByTile(unresolved);
-            LinkedHashMap<Long, CompletableFuture<Void>> owned = new LinkedHashMap<>();
-            LinkedHashMap<Long, CompletableFuture<Void>> waiting = new LinkedHashMap<>();
-            synchronized (coalescer) {
-                boolean conflict = false;
-                for (long tileKey : byTile.keySet()) {
-                    if (ownedTiles.get().contains(tileKey)) {
-                        throw new IllegalStateException("recursive accurate tile request on the same thread: " + tileKey);
-                    }
-                    if (coalescer.containsKey(tileKey)) conflict = true;
-                }
-                if (conflict) {
-                    for (long tileKey : byTile.keySet()) {
-                        CompletableFuture<Void> existing = coalescer.get(tileKey);
-                        if (existing != null) waiting.put(tileKey, existing);
-                    }
+            try (AccurateTileClaims.Lease lease = claims.claim(byTile.keySet(), acceleratedOnly)) {
+                if (lease.isOwner()) {
+                    completeOwnedColumnTiles(lease, byTile, unresolved, result, progress, acceleratedOnly);
                 } else {
-                    for (long tileKey : byTile.keySet()) {
-                        CompletableFuture<Void> future = new CompletableFuture<>();
-                        coalescer.put(tileKey, future);
-                        owned.put(tileKey, future);
-                    }
+                    lease.await();
                 }
             }
-            if (!owned.isEmpty()) {
-                ownedTiles.get().addAll(owned.keySet());
-                try {
-                    completeOwnedColumnTiles(
-                            owned, byTile, unresolved, result, progress, acceleratedOnly, coalescer);
-                } finally {
-                    ownedTiles.get().removeAll(owned.keySet());
-                }
-            }
-            awaitTiles(waiting, coalescer);
             resolveCachedColumns(unresolved, result);
             resolveStoredColumns(unresolved, result);
         }
@@ -272,16 +228,15 @@ final class AccurateColumnBatch {
     }
 
     void completeOwnedColumnTiles(
-            Map<Long, CompletableFuture<Void>> owned,
+            AccurateTileClaims.Lease lease,
             Map<Long, LinkedHashMap<Long, BlockPos>> positionsByTile,
             Map<Long, BlockPos> unresolved,
             Map<Long, AccurateHeightSample> result,
             AccurateSamplingProgress progress,
-            boolean acceleratedOnly,
-            ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer) {
+            boolean acceleratedOnly) {
         try {
             LinkedHashMap<Long, BlockPos> requestedByKey = new LinkedHashMap<>();
-            for (long tileKey : owned.keySet()) {
+            for (long tileKey : lease.keys()) {
                 requestedByKey.putAll(positionsByTile.get(tileKey));
             }
             AccurateSamplingProgress sink = progress == null ? AccurateSamplingProgress.NONE : progress;
@@ -307,16 +262,10 @@ final class AccurateColumnBatch {
                 result.put(key, sample);
                 unresolved.remove(key);
             }
-            owned.values().forEach(future -> future.complete(null));
+            lease.succeed();
         } catch (Throwable failure) {
-            for (CompletableFuture<Void> future : owned.values()) {
-                future.completeExceptionally(failure);
-            }
+            lease.fail(failure);
             throw failure;
-        } finally {
-            for (Map.Entry<Long, CompletableFuture<Void>> entry : owned.entrySet()) {
-                coalescer.remove(entry.getKey(), entry.getValue());
-            }
         }
     }
 
@@ -324,61 +273,33 @@ final class AccurateColumnBatch {
     AccurateHeightGrid sampleWholeGridWithTileLease(AccurateHeightGridRequest request,
                                                             AccurateSamplingProgress progress,
                                                             boolean acceleratedOnly) {
-        ConcurrentHashMap<Long, CompletableFuture<Void>> coalescer = acceleratedOnly
-                ? acceleratedTileInFlight
-                : tileInFlight;
         LinkedHashSet<Long> tileKeys = new LinkedHashSet<>();
         for (int index = 0; index < request.sampleCount(); index++) {
             tileKeys.add(tileKey(request.blockX(index), request.blockZ(index)));
         }
-        LinkedHashMap<Long, CompletableFuture<Void>> owned = new LinkedHashMap<>();
-        LinkedHashMap<Long, CompletableFuture<Void>> waiting = new LinkedHashMap<>();
-        synchronized (coalescer) {
-            for (long tileKey : tileKeys) {
-                if (ownedTiles.get().contains(tileKey)) {
-                    throw new IllegalStateException("recursive accurate tile request on the same thread: " + tileKey);
-                }
-                CompletableFuture<Void> existing = coalescer.get(tileKey);
-                if (existing != null) waiting.put(tileKey, existing);
+        try (AccurateTileClaims.Lease lease = claims.claim(tileKeys, acceleratedOnly)) {
+            if (!lease.isOwner()) {
+                lease.await();
+                // 已等待后迭代重查缓存，不把争用次数累计成递归深度。
+                return null;
             }
-            if (waiting.isEmpty()) {
-                for (long tileKey : tileKeys) {
-                    CompletableFuture<Void> future = new CompletableFuture<>();
-                    coalescer.put(tileKey, future);
-                    owned.put(tileKey, future);
+            try {
+                AccurateHeightGrid sampled = acceleratedOnly
+                        ? backend.sampleAcceleratedGrid(request, progress)
+                        : backend.sampleGrid(request, progress);
+                if (sampled == null || !request.equals(sampled.request())) {
+                    throw new IllegalStateException("Accurate height backend returned a different grid request");
                 }
-            }
-        }
-        if (!waiting.isEmpty()) {
-            awaitTiles(waiting, coalescer);
-            // null 仅表示已等待、需重新查缓存；所有求值和保存异常仍直接抛出。
-            return null;
-        }
-        // 网格求值期间必须登记全部瓦片，进度回调和后端重入才不会等待自己。
-        ownedTiles.get().addAll(owned.keySet());
-        try {
-            AccurateHeightGrid sampled = acceleratedOnly
-                    ? backend.sampleAcceleratedGrid(request, progress)
-                    : backend.sampleGrid(request, progress);
-            if (sampled == null || !request.equals(sampled.request())) {
-                throw new IllegalStateException("Accurate height backend returned a different grid request");
-            }
-            cache.ensureOpen();
-            // 与逐列批次一致，保存成功后才发布；否则缓存命中会掩盖失败、吞掉重试。
-            store.saveGrid(sampled);
-            cache.ensureOpen();
-            cacheGridColumns(sampled);
-            owned.values().forEach(future -> future.complete(null));
-            return sampled;
-        } catch (Throwable failure) {
-            owned.values().forEach(future -> future.completeExceptionally(failure));
-            throw failure;
-        } finally {
-            ownedTiles.get().removeAll(owned.keySet());
-            synchronized (coalescer) {
-                for (Map.Entry<Long, CompletableFuture<Void>> entry : owned.entrySet()) {
-                    coalescer.remove(entry.getKey(), entry.getValue());
-                }
+                cache.ensureOpen();
+                // 与逐列批次一致，保存成功后才发布；否则缓存命中会掩盖失败、吞掉重试。
+                store.saveGrid(sampled);
+                cache.ensureOpen();
+                cacheGridColumns(sampled);
+                lease.succeed();
+                return sampled;
+            } catch (Throwable failure) {
+                lease.fail(failure);
+                throw failure;
             }
         }
     }

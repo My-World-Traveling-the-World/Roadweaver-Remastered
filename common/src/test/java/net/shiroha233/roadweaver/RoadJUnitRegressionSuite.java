@@ -283,6 +283,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateColumnBatchTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathfinding.sampling.AccurateTileClaimsTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSamplerLifecycleTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlannerFindViolationTest"),
