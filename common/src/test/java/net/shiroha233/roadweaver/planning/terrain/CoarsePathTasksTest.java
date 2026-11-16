@@ -68,6 +68,14 @@ class CoarsePathTasksTest {
 
     @Test void queuedPathsRespectOneSharedWorkerAndAllResultsSurvive() throws Exception {
         var tasks = new CoarsePathTasks(workers);
+        CountDownLatch occupied = new CountDownLatch(1), letWaiterRun = new CountDownLatch(1);
+        AtomicReference<Thread> waiter = new AtomicReference<>();
+        // 创建顺序不决定谁先拿许可：先占住一个线程，让另一个确定成为实际执行方，
+        // 再释放被占线程去等预算；避免把执行方的夹具等待误当成预算等待。
+        var occupant = workers.submit(() -> {
+            waiter.set(Thread.currentThread()); occupied.countDown(); await(letWaiterRun);
+        });
+        assertTrue(occupied.await(3, TimeUnit.SECONDS));
         CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
         AtomicInteger running = new AtomicInteger(), peak = new AtomicInteger(), calls = new AtomicInteger();
         List<Future<List<BlockPos>>> results = new ArrayList<>();
@@ -76,7 +84,8 @@ class CoarsePathTasksTest {
             try { await(release); return PATH; } finally { running.decrementAndGet(); }
         }));
         assertTrue(entered.await(3, TimeUnit.SECONDS));
-        awaitPark(threads.get(1));
+        letWaiterRun.countDown(); occupant.get(3, TimeUnit.SECONDS);
+        awaitPark(waiter.get());
         assertEquals(1, calls.get()); assertEquals(1, peak.get());
         release.countDown();
         for (var result : results) assertSame(PATH, result.get(3, TimeUnit.SECONDS));
