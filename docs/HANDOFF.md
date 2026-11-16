@@ -557,3 +557,55 @@ ArchitectureGuardTest 的千行规则本来就是有效代码口径，不能把 
 ### 六、我踩到但已解决的坑
 
 等待过不等于拿到结果：只按 waiting.keySet 结案会把超时漏项掩盖。Future 的 cancel 会影响所有共用者，不能把调用线程的取消等同于共享计算取消。重入检查要先遍历整批，否则报错前创建的认领没有所有者负责完成。仅用 facade 关闭用例可能在等待注册前就退出，因此另加超时供给器打点，确认真正持有共享 Future 的等待者会被主动唤醒。
+
+
+## 第 26 轮 ｜ 2026-11-16 ｜ 列/网格采样与瓦片生命周期 ｜ 源码 `a7e9871` ｜ `PASS tests=1142 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+- 行为等价 `625d917`：逐列、规则网格、查盘与补缺迁到 AccurateColumnBatch；仍使用原门面的分片缓存、容量和高度后端，迁移提交单独验证 1119 全过。
+- 行为变更 `e1e329e`：网格也登记并检查线程持有的瓦片；三种混合重入及时报错。保存调用返回后才发布网格缓存，失败不会靠内存命中吞掉重试；拒绝后端返回不同坐标/步长的请求；两条网格读盘路径返回后检查关闭。等待重试改循环，避免冲突次数成为递归深度。
+- 行为变更 `8a8359c`：AccurateTileClaims 集中整批认领、同线程重入、等待、异常结案和条件释放；普通/加速两表沿用。关闭标志及认领表锁阻止清表后又登记新 Future；超时后的旧所有者不能误删新所有者。
+- 行为变更 `a7e9871`：补逐列保存返回后的关闭检查，防止保存过程中已关闭却继续填缓存；追加整网格、逐列保存交错及原故障传播测试。新增/改动逻辑有中文原因注释。
+- 新增并按 FQCN 登记 18 项 AccurateColumnBatchTest、5 项 AccurateTileClaimsTest，共 +23。门面 829/699→489/380 行，新列/网格类 367/325、瓦片认领类 106/85 行（物理/有效）；独立统计 669 个生产 Java 文件，0 个超过 1000 有效行、2 个超过 800。依赖基线未放宽。
+
+### 二、我验证了什么（附负控）
+
+开工工作区干净，HEAD bacb3f8；pull --rebase 网络超时，本地基线 1119、Fabric 编译通过。修复前先跑夹具，确认 7 个用例失败（三种混合重入、网格保存失败、错误请求、两条读盘关闭），另一次补测确认逐列保存中关闭会复活缓存。修复后 1142，0 跳过/中止/失败，Fabric 编译通过。
+
+| 故意破坏 | 目标守卫 | 结果 |
+|---|---|---|
+| 恢复网格先缓存、后保存 | gridSaveFailurePublishesNothingAndNextRequestRetriesPersistence | 红 |
+| 撤掉网格请求坐标校验 | mismatchedBackendGridIsRejectedBeforeSavingOrPublishing | 红 |
+| 不登记线程已持有瓦片 | gridToGridReentryFailsBeforeWaitingAndLeavesNoClaim 等 | 红 |
+| 撤掉 loadStoredGrid 读盘后的关闭检查 | storedGridReadRejectsDataArrivingAfterClose | 红 |
+| 撤掉 sampleGrid 读盘后的关闭检查 | samplingGridRejectsStoredDataArrivingAfterClose | 红 |
+| 撤掉逐列保存后的关闭检查 | closingDuringColumnSaveCannotRepublishCache | 红 |
+| 旧认领按 key 无条件删除 | lateOwnerReleaseCannotEraseReplacementAfterTimeout | 红 |
+| 忽略认领组件自身关闭标志 | closeWakesRegisteredWaiterAndRejectsClaimsEvenIfCacheStillLooksOpen | 红 |
+| 异常不完成共享 Future | gridFailureReachesWaitingColumnsAndFreshRequestRetries | 红 |
+| 普通/加速请求误用同一张在途表 | modeLanesAreIndependentButSameThreadCannotReenterAcrossModes | 红 |
+
+10 项唯一锚点替换、逐项独立跑完整回归，核对目标 JUnit 方法实际失败，不把编译失败计红；finally 逐文件 git checkout -- 恢复，并核对原字节。恢复后全量及 Fabric 再跑一次。日志与逐项 JSON 在忽略目录 .analysis_tmp/round26-*；本表是持久记录。
+
+另外对拍：负坐标且跨四瓦片的三通道高度；混合请求两个方向都真实等待、仅补剩余列；缓存/存储部分命中；缺列整批拒绝后重试；进度回调取消后重试；真实门面网格产物被逐列缓存复用；真实超时接管；已登记等待者关闭唤醒；冲突不占空闲瓦片、认领顺序不变及跨模式重入。未启用真实 GPU。
+
+### 三、我没能验证什么
+
+- 无真机、真实 ServerLevel 卸载、存档副本或现场性能样本；不把少一次递归/职责拆分说成 TPS、进档或尾延迟改善。
+- 实际 FileBackedAccurateSampleStore 的 loadTileForWrite 与 writeTile 会告警并吞掉部分 IO 错误，save 正常返回不是落盘确认；本轮保持其可再生成缓存的最佳努力语义，没有把 Fake 抛错守卫冒充真实 IO 故障恢复。跨瓦片写入也不是整批事务。
+- 保存中关闭的夹具覆盖“保存已进入，返回前发生关闭”；读写返回后加检查不等于用单一锁串行化所有关闭与缓存发布交错。缓存驱逐、门面只读 API 与关闭、世界/版本切换仍待进一步验证。
+- 混合请求守住原有的等待后补缺，不声称已优化所有“先未命中、随后别人完成”的重复请求；整批瓦片策略未改。两模式表隔离只做 Fake 验收，废弃 GPU 精确采样开关不改。
+- crossing、双平滑默认、跨度回写、QualityGate、旧区块重铺和持久化 schema 均未改；未把全库历史注释宣称为已补齐中文。
+
+### 四、遗留半截的东西
+
+生产修改均独立提交，没有临时变异残留。首次及中途同步 GitHub 443 失败；收尾继续重试，最终推送结果以交付为准。缓存仍在门面，原只读查询、文件缓存的故障/关闭协议没有整体重写；不能宣称所有缓存生命周期已解决。STATUS、ROADMAP、ARCHITECTURE、VALIDATION 同步本轮边界。
+
+### 五、下一轮我会先做什么
+
+先用真实文件后端厘清“可再生成缓存”读写失败、重试与关闭的契约，并覆盖门面只读查询；再看是否值得用批次完成版本避免重复未命中，不能为省一次高度生成给所有冷网格增加无条件二次全扫描。随后集中 READY 状态转换并与全量扫描对拍；增量计数和异步落盘仍分别验版本、失败与停服。
+
+### 六、我踩到但已解决的坑
+
+端口抛错可重试不等于实际文件后端确认落盘：亲自读过 writeTile 的 catch(IOException) 后修正注释与文档。网格等待不能只测试缓存预热场景，夹具必须打点确认读到了在途 Future。超时只释放认领，不会停止旧计算，因此旧 finally 必须核对 Future 身份。保存前检查关闭也不够，保存返回后还要查；不过两次检查仍不能被描述为全部并发交错已经串行化。
