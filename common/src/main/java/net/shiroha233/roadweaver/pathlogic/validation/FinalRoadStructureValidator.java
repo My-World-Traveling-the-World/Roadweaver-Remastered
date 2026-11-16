@@ -33,10 +33,13 @@ import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.construction.SegmentPaver;
 import net.shiroha233.roadweaver.pathlogic.construction.RoadConstructionVolumePlanner;
+import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
 
 /** Save-time gate that validates the final, span-aware three-dimensional road volume. */
 public final class FinalRoadStructureValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    private static final boolean AUDIT_FINAL_FOOTPRINT = "on".equalsIgnoreCase(
+            System.getProperty("roadweaver.finalFootprintAudit", "off"));
     private FinalRoadStructureValidator() {
     }
 
@@ -62,7 +65,15 @@ public final class FinalRoadStructureValidator {
         prefetchMissingValidationColumns(level, road, cache);
         RoadConstructionVolumePlanner.Context context =
                 RoadConstructionVolumePlanner.Context.forWorld(level, cache, streams);
-        return validate(snapshot, road, context);
+        if (!AUDIT_FINAL_FOOTPRINT) return validate(snapshot, road, context);
+        // 巨树预留只有 X/Z，而且可能随新区块加载变化。先观察结果，不能把空中桥面或深洞当成已证实的撞树。
+        var audit = new FootprintAudit((x, z) -> HugeTreeReservation.isReserved(level, x, z));
+        ValidationResult result = validate(snapshot, road, context, audit);
+        var hit = audit.firstHit();
+        LOGGER.info("[FINAL-FOOTPRINT-AUDIT] roadId={} complete={} reservationOverlap={} segment={} kind={} pos={}",
+                roadId(road), result.safe(), hit != null, hit == null ? -1 : hit.segmentIndex(),
+                hit == null ? "-" : hit.kind(), hit == null ? "-" : hit.representativePos());
+        return result;
     }
 
     /**
@@ -103,7 +114,7 @@ public final class FinalRoadStructureValidator {
             }
             return;
         }
-        long roadId = net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage.computeFingerprint(road);
+        long roadId = roadId(road);
         LOGGER.info("RoadWeaver final validation filling missing terrain columns: roadId={} totalColumns={} missingColumns={} backend={} device={}",
                 roadId, positions.size(), missing.size(), sampler.backendName(), sampler.deviceName());
         if (DetailedRoadGenerationStats.routeTiming() != null) {
@@ -167,6 +178,11 @@ public final class FinalRoadStructureValidator {
     static ValidationResult validate(PlanningSnapshot snapshot,
                                      RoadData road,
                                      RoadConstructionVolumePlanner.Context context) {
+        return validate(snapshot, road, context, null);
+    }
+
+    static ValidationResult validate(PlanningSnapshot snapshot, RoadData road,
+                                     RoadConstructionVolumePlanner.Context context, FootprintAudit audit) {
         if (snapshot == null || snapshot == PlanningSnapshot.EMPTY) {
             throw new PlanningSnapshotUnavailableException(
                     "Final road validation requires a complete structure snapshot");
@@ -178,6 +194,7 @@ public final class FinalRoadStructureValidator {
             // must not turn a passable five-block road into a rejection. Real
             // bridge/template/support volumes remain protected.
             if (!isRoadBodyVolume(volume.kind())) return true;
+            if (audit != null) audit.visit(volume);
             OwnedStructureBox owned = switch (volume.kind()) {
                 case ROAD_FALLING_CAP, BRIDGE_FALLING_CAP -> snapshot.findFallingCapCollision(
                         volume.x(), volume.z(), volume.minY(), volume.maxY());
@@ -199,6 +216,34 @@ public final class FinalRoadStructureValidator {
         return collision.get() == null
                 ? ValidationResult.success()
                 : ValidationResult.failure("protected-structure-intersection", collision.get());
+    }
+
+    private static long roadId(RoadData road) {
+        // 与缺列预取日志使用同一标识，便于串联一条路的前后阶段。
+        return net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage.computeFingerprint(road);
+    }
+
+    @FunctionalInterface
+    interface ReservationLookup {
+        boolean contains(int x, int z);
+    }
+
+    static final class FootprintAudit {
+        private final ReservationLookup reservation;
+        private RoadConstructionVolumePlanner.ColumnVolume firstHit;
+
+        FootprintAudit(ReservationLookup reservation) {
+            this.reservation = reservation;
+        }
+
+        void visit(RoadConstructionVolumePlanner.ColumnVolume volume) {
+            // 只记录首次命中即可确认非空交集，并让未施工缺口沿用同一个体积遍历规则。
+            if (firstHit == null && reservation.contains(volume.x(), volume.z())) firstHit = volume;
+        }
+
+        RoadConstructionVolumePlanner.ColumnVolume firstHit() {
+            return firstHit;
+        }
     }
 
     /**

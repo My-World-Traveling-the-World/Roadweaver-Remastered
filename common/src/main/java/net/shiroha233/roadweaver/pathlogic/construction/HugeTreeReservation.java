@@ -50,9 +50,14 @@ public final class HugeTreeReservation {
     }
 
     public static boolean isReserved(ServerLevel level, BlockPos pos) {
-        if (level == null || pos == null) return false;
+        return pos != null && isReserved(level, pos.getX(), pos.getZ());
+    }
+
+    /** 预留按 X/Z；终态体积已具备列坐标，查询不用再构造方块坐标。 */
+    public static boolean isReserved(ServerLevel level, int x, int z) {
+        if (level == null) return false;
         LevelReservations reservations = RESERVATIONS.get(level);
-        return reservations != null && reservations.contains(pos.getX(), pos.getZ());
+        return reservations != null && reservations.contains(x, z);
     }
 
     /** 只在一次寻路开始时取视图，避免在格点、跨边和弹性带热循环中查全局锁。 */
