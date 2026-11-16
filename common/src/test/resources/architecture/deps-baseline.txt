@@ -9,7 +9,7 @@
 # 要消除某条边：改代码，然后把该行从本文件删掉。
 # 要合法地加一条 import：必须同时把这里的次数 +1 并说明理由。
 
-apiimpl -> api                                14
+apiimpl -> api                                13
 apiimpl -> core                               4
 apiimpl -> generation                         3
 apiimpl -> map                                1

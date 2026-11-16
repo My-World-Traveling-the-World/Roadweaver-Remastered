@@ -4,7 +4,6 @@ package net.shiroha233.roadweaver.apiimpl;
 import net.shiroha233.roadweaver.api.outgoing.LoadKind;
 import net.shiroha233.roadweaver.api.outgoing.RoadLoadSignals;
 import net.shiroha233.roadweaver.api.outgoing.RoadLoadSignalsRegistry;
-import net.shiroha233.roadweaver.api.outgoing.RoadLoadSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.concurrent.TimeUnit;
@@ -164,15 +163,32 @@ public final class LoadSignalBridge {
      * <p>接入一个 mod 之后看这行就知道有没有生效 —— 不用去猜。</p>
      */
     public static String describeResolution() {
-        RoadLoadSnapshot snapshot = RoadLoadSignalsRegistry.snapshot();
-        return "api-signals: load-signals=" + ownerIds(RoadLoadSignalsRegistry.sources())
-                + " kind-busy=" + snapshot.highestBusyKind()
+        java.util.List<RoadLoadSignals> all = RoadLoadSignalsRegistry.sources();
+        // 启动日志不需要线程建议；完整快照会把 -1 交给有状态的自适应控制器并改写预算。
+        LoadKind highest = highestBusyKind(all);
+        return "api-signals: load-signals=" + ownerIds(all)
+                + " kind-busy=" + highest
                 + " streams-control=" + (RoadLoadSignalsRegistry.streamsThreadControl() != null)
                 + " chunky-runtime=" + ChunkyRuntimeRegistry.providers()
                 + " cruise-signals=" + CruiseSignalsRegistry.providers()
                 + " great-wall-readiness=" + GreatWallReadinessRegistry.providers()
                 + " river-ready=" + RiverReadinessApi.isReady()
                 + " river-listeners=" + RiverReadinessApi.listenerCount();
+    }
+
+    /** 只读取日志确实需要的状态，避免“看一眼诊断”反过来改变控制器。 */
+    private static LoadKind highestBusyKind(java.util.List<RoadLoadSignals> sources) {
+        LoadKind highest = null;
+        for (RoadLoadSignals source : sources) {
+            try {
+                if (!source.busy()) continue;
+                LoadKind kind = source.kind();
+                if (kind != null && (highest == null || kind.priority() > highest.priority())) highest = kind;
+            } catch (RuntimeException | LinkageError failure) {
+                RuntimeSignals.reportFailure(source, failure);
+            }
+        }
+        return highest;
     }
 
     /**

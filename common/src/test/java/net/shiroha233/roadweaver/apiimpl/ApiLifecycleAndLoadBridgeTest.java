@@ -276,6 +276,35 @@ class ApiLifecycleAndLoadBridgeTest {
         assertEquals(List.of(true), exclusive);
     }
 
+    /** 启动日志只需要类别，不应借诊断触发外部控制器有状态的预算推进。 */
+    @Test
+    void describeResolutionDoesNotAdvanceAdaptiveBudgets() {
+        int[] budget = {6};
+        int[] queries = {0};
+        RoadLoadSignalsRegistry.register(new RoadLoadSignals() {
+            @Override public String ownerId() { return LoadSignalBridge.OWNER_CHUNKY; }
+            @Override public LoadKind kind() { return LoadKind.PREGENERATION; }
+            @Override public boolean busy() { return true; }
+            @Override public int recommendedRoadWorkerThreads(int current) {
+                // 复刻当前 Chunky 的未知参数夹取及写回，避免用完全无副作用的 Fake 掩盖接线。
+                queries[0]++;
+                budget[0] = Math.max(1, current);
+                return budget[0];
+            }
+            @Override public int recommendedRoadPlanningLanes(int pending, int ahead, int current) {
+                queries[0]++;
+                return 3;
+            }
+        });
+
+        String diagnostics = LoadSignalBridge.describeResolution();
+
+        assertTrue(diagnostics.contains("chunky-autogen"));
+        assertTrue(diagnostics.contains("kind-busy=PREGENERATION"));
+        assertEquals(6, budget[0], "打印诊断不能把自适应预算改成未知参数对应的 1");
+        assertEquals(0, queries[0], "worker 和 lane 决策都不应为打印身份而被调用");
+    }
+
     @Test
     void describeResolutionTellsWhichSideIsOnTheApi() {
         // 只断言"这一行把每个注册表都报出来了"，不断言具体为空 ——
