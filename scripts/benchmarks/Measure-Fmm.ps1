@@ -5,6 +5,7 @@ param(
     [switch]$DirectionOnly,
     [switch]$WorkingSetOnly,
     [switch]$PagingOnly,
+    [switch]$ForcePaging,
     [ValidateRange(32, 4096)][int]$HeapMiB = 512,
     [string]$FastutilJar = ''
 )
@@ -27,6 +28,7 @@ if (!$FastutilJar) {
 }
 if (!$FastutilJar -or !(Test-Path -LiteralPath $FastutilJar -PathType Leaf)) { throw 'Pass a cached fastutil JAR with -FastutilJar.' }
 if (@($WorkingSetOnly, $DirectionOnly, $PagingOnly).Where({ $_ }).Count -gt 1) { throw 'Choose one probe mode.' }
+if ($ForcePaging -and !$WorkingSetOnly) { throw 'ForcePaging requires WorkingSetOnly.' }
 $probeClasspath = "$Slf4jJar;$FastutilJar"
 $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('roadweaver-fmm-' + [Guid]::NewGuid().ToString('N'))
 [void][System.IO.Directory]::CreateDirectory($scratch)
@@ -46,7 +48,7 @@ try {
     & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp $probeClasspath -d $scratch @current @topology @before (Join-Path $PSScriptRoot 'FmmProbe.java') (Join-Path $PSScriptRoot 'FmmPagingProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
     # 方向夹具只读现有 FMM 的结果，无需重复做耗时统计。
-    $probeArgs = @(if ($DirectionOnly) { 'direction' } elseif ($WorkingSetOnly) { 'working-set' })
+    $probeArgs = @(if ($DirectionOnly) { 'direction' } elseif ($WorkingSetOnly) { if ($ForcePaging) { 'working-set-paged' } else { 'working-set' } })
     $probeClass = if ($PagingOnly) { 'FmmPagingProbe' } else { 'FmmProbe' }
     # 堆上限由调用显式指定，固定小堆只能证明当前夹具，不能外推整个游戏或采样缓存。
     & (Join-Path $JavaHome 'bin/java.exe') "-Xms$($HeapMiB)m" "-Xmx$($HeapMiB)m" -cp "$scratch;$probeClasspath" "net.shiroha233.roadweaver.metric.$probeClass" @probeArgs

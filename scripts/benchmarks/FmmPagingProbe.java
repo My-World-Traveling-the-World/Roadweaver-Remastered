@@ -50,7 +50,7 @@ public final class FmmPagingProbe {
     private static void denseCase() {
         // 参考求解器只在这个方法内暂存，完成后仅保留到达数组，避免同时保留两套无关缓存。
         var expected = denseReference();
-        var actual = new FastMarchingSolver(FinslerMetric.of(terrain(1025, 1025), ObstacleField.NONE))
+        var actual = new FastMarchingSolver(FinslerMetric.of(terrain(1025, 1025), ObstacleField.NONE), 0)
                 .solve(0, 0, 1024, 1024);
         for (int z = 0; z < 1025; z++) for (int x = 0; x < 1025; x++) same(expected.at(x, z), actual.at(x, z));
         var a = expected.pathTo(1024, 1024); var b = actual.pathTo(1024, 1024);

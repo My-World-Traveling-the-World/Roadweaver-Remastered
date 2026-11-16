@@ -52,8 +52,8 @@ public final class FmmProbe {
     };
 
     public static void main(String[] args) {
-        if (args.length == 1 && "working-set".equals(args[0])) {
-            compareWorkingSet();
+        if (args.length == 1 && ("working-set".equals(args[0]) || "working-set-paged".equals(args[0]))) {
+            compareWorkingSet("working-set-paged".equals(args[0]));
             return;
         }
         if (args.length == 1 && "direction".equals(args[0])) {
@@ -84,14 +84,15 @@ public final class FmmProbe {
         compareDirections();
     }
 
-    private static void compareWorkingSet() {
+    private static void compareWorkingSet(boolean forcePaged) {
         int side = 1025, step = 8, origin = -4096, max = origin + (side - 1) * step;
         int[] heights = new int[side * side];
         for (int i = 0; i < heights.length; i++) heights[i] = 64 + (i % side) / 47 + (i / side) / 61;
         TerrainField grid = new GridTerrainField(origin, origin, side, side, step, heights);
         var currentMetric = FinslerMetric.of(grid, ObstacleField.NONE);
         var baselineMetric = BaselineFinslerMetric.of(grid, ObstacleField.NONE);
-        var current = new FastMarchingSolver(currentMetric);
+        var current = forcePaged ? new FastMarchingSolver(currentMetric, 0) : new FastMarchingSolver(currentMetric);
+        System.out.println("WORKSET_STORAGE mode=" + (forcePaged ? "forced-paged" : "public-auto"));
         var baseline = new BaselineFastMarchingSolver(baselineMetric);
         int[] xs = new int[30], zs = new int[30];
         for (int i = 0; i < xs.length; i++) {
@@ -121,7 +122,8 @@ public final class FmmProbe {
                 () -> sink = current.solveReachingAll(origin, origin, xs, zs).at(max, max));
         compareWorkingSetRuns("workset-cold-far-multi",
                 () -> sink = new BaselineFastMarchingSolver(baselineMetric).solveReachingAll(origin, origin, xs, zs).at(max, max),
-                () -> sink = new FastMarchingSolver(currentMetric).solveReachingAll(origin, origin, xs, zs).at(max, max));
+                () -> sink = (forcePaged ? new FastMarchingSolver(currentMetric, 0) : new FastMarchingSolver(currentMetric))
+                        .solveReachingAll(origin, origin, xs, zs).at(max, max));
     }
 
     private static void compareWorkingSetRuns(String label, Runnable baseline, Runnable current) {

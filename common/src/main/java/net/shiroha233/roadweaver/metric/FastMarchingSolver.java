@@ -45,8 +45,9 @@ public final class FastMarchingSolver {
     // 同一求解器的多源传播是串行的，和慢度数组一样复用存储，避免每个入队项新建对象。
     private final Frontier queue = new Frontier();
 
-    // 小网格保留顺序数组，避免把分页查表成本加到日常短路线；大网格不再先分配整场。
-    static final int PAGED_THRESHOLD = 1 << 20;
+    // 密集访问探针确认查页有额外 CPU 成本，约四百万格以下保留顺序数组；
+    // 更大网格避免先支付约百 MiB 的固定载荷。阈值只选存储，绝不裁剪传播范围。
+    static final int PAGED_THRESHOLD = 1 << 22;
     private final int pagedThreshold;
     private GridLayout cachedGrid;
     private FmmCostCache cachedCosts;

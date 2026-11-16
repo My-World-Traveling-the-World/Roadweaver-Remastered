@@ -105,7 +105,7 @@ class FmmPagedWorkspaceTest {
 
     @Test
     void publicThresholdAvoidsEagerCostsArrivalArraysAndDistantTerrainQueries() {
-        var terrain = analytic(1024, 1024, (x, z) -> {
+        var terrain = analytic(2048, 2048, (x, z) -> {
             assertTrue(x <= 16 && z <= 16, "生产阈值必须接入按需准备");
             return 64;
         });
@@ -194,10 +194,12 @@ class FmmPagedWorkspaceTest {
         assertFalse(field.pathTo(11, 11).isEmpty(), "真正传播过的分量不能被整体丢弃");
     }
 
-    @Test
-    void denseVisitsThroughThePublicThresholdKeepEveryCellAndPathBitwiseEqual() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void denseVisitsThroughBothStorageModesKeepEveryCellAndPathBitwiseEqual(boolean forcePaged) {
         var metric = FinslerMetric.of(analytic(1025, 1025, (x, z) -> 64 + x / 71 + z / 53), ObstacleField.NONE);
-        var actual = new FastMarchingSolver(metric).solve(0, 0, 1024, 1024);
+        var actual = (forcePaged ? new FastMarchingSolver(metric, 0) : new FastMarchingSolver(metric))
+                .solve(0, 0, 1024, 1024);
         var expected = new DenseFmmReference(metric).solve(0, 0, 1024, 1024);
         assertSameField(expected, actual);
         assertTrue(actual.reachable(1024, 1024));
