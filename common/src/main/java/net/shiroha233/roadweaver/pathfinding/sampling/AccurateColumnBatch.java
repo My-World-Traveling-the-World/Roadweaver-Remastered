@@ -28,6 +28,7 @@ final class AccurateColumnBatch {
     private final AccurateSampleStore store;
     private final Cache cache;
     private final AccurateTileClaims claims;
+    private final AccurateSamplePublications publications;
 
     AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache) {
         this(backend, store, cache, SamplerStatics::inFlightTimeoutMs);
@@ -36,6 +37,13 @@ final class AccurateColumnBatch {
     /** 只注入等待预算，生产仍读取同一配置，不更换任何高度计算实现。 */
     AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache,
                         java.util.function.LongSupplier timeoutMs) {
+        this(backend, store, cache, timeoutMs, new AccurateSamplePublications());
+    }
+
+    /** 生产可让整块与列/网格共用版本，独立夹具仍默认拥有自己的上下文。 */
+    AccurateColumnBatch(AccurateHeightBackend backend, AccurateSampleStore store, Cache cache,
+                        java.util.function.LongSupplier timeoutMs, AccurateSamplePublications publications) {
+        this.publications = publications;
         this.backend = backend;
         this.store = store;
         this.cache = cache;
@@ -90,6 +98,8 @@ final class AccurateColumnBatch {
     private AccurateHeightGrid sampleGridOnce(AccurateHeightGridRequest request,
                                               AccurateSamplingProgress progress, boolean acceleratedOnly) {
         cache.ensureOpen();
+        // 必须早于首次缓存扫描；磁盘未命中快照可能在返回前已被其他批次的发布淘汰。
+        long observedVersion = publications.version();
         AccurateSamplingProgress sink = progress == null ? AccurateSamplingProgress.NONE : progress;
         int sampleCount = request.sampleCount();
         int[] worldSurface = null;
@@ -131,7 +141,7 @@ final class AccurateColumnBatch {
         // 关闭可能发生在读盘期间，不能再发布这份迟到快照。
         cache.ensureOpen();
         if (stored.isEmpty() && resolvedCount == 0 && missingIndexes.size() == sampleCount) {
-            return sampleWholeGridWithTileLease(request, sink, acceleratedOnly);
+            return sampleWholeGridWithTileLease(request, sink, acceleratedOnly, observedVersion);
         }
 
         if (worldSurface == null) {
@@ -185,6 +195,7 @@ final class AccurateColumnBatch {
             return Map.of();
         }
         cache.ensureOpen();
+        long observedVersion = publications.version();
 
         LinkedHashMap<Long, BlockPos> unique = uniquePositions(positions);
         if (unique.isEmpty()) {
@@ -216,11 +227,25 @@ final class AccurateColumnBatch {
             LinkedHashMap<Long, LinkedHashMap<Long, BlockPos>> byTile = groupColumnsByTile(unresolved);
             try (AccurateTileClaims.Lease lease = claims.claim(byTile.keySet(), acceleratedOnly)) {
                 if (lease.isOwner()) {
-                    completeOwnedColumnTiles(lease, byTile, unresolved, result, progress, acceleratedOnly);
+                    try {
+                        // 只重查本次认领涉及的发布槽，冷批次不会无条件二次扫描全部列。
+                        if (publications.changedSince(lease.keys(), observedVersion)) {
+                            resolveCachedColumns(unresolved, result);
+                            resolveStoredColumns(unresolved, result);
+                            byTile = groupColumnsByTile(unresolved);
+                        }
+                        completeOwnedColumnTiles(lease, byTile, unresolved, result, progress, acceleratedOnly);
+                    } catch (Throwable failure) {
+                        // 新增重查也在持有认领期间；异常必须通知等待者，不能只移除未完成 Future。
+                        lease.fail(failure);
+                        throw failure;
+                    }
                 } else {
                     lease.await();
                 }
             }
+            // 下一轮的观察点仍须早于缓存和磁盘重查，否则会漏掉重查期间的新发布。
+            observedVersion = publications.version();
             resolveCachedColumns(unresolved, result);
             resolveStoredColumns(unresolved, result);
         }
@@ -237,7 +262,13 @@ final class AccurateColumnBatch {
         try {
             LinkedHashMap<Long, BlockPos> requestedByKey = new LinkedHashMap<>();
             for (long tileKey : lease.keys()) {
-                requestedByKey.putAll(positionsByTile.get(tileKey));
+                Map<Long, BlockPos> remaining = positionsByTile.get(tileKey);
+                if (remaining != null) requestedByKey.putAll(remaining);
+            }
+            if (requestedByKey.isEmpty()) {
+                // 相关发布已经解决全部列，只结案认领，不调用空后端或虚增发布版本。
+                lease.succeed();
+                return;
             }
             AccurateSamplingProgress sink = progress == null ? AccurateSamplingProgress.NONE : progress;
             Map<Long, AccurateHeightSample> sampled = acceleratedOnly
@@ -264,6 +295,7 @@ final class AccurateColumnBatch {
                 result.put(key, sample);
                 unresolved.remove(key);
             }
+            publications.publishedTiles(positionsByTile.keySet());
             lease.succeed();
         } catch (Throwable failure) {
             lease.fail(failure);
@@ -274,7 +306,7 @@ final class AccurateColumnBatch {
     /** 整网格与逐列请求共用瓦片认领，避免两类请求无约束地重复计算。 */
     AccurateHeightGrid sampleWholeGridWithTileLease(AccurateHeightGridRequest request,
                                                             AccurateSamplingProgress progress,
-                                                            boolean acceleratedOnly) {
+                                                            boolean acceleratedOnly, long observedVersion) {
         LinkedHashSet<Long> tileKeys = new LinkedHashSet<>();
         for (int index = 0; index < request.sampleCount(); index++) {
             tileKeys.add(tileKey(request.blockX(index), request.blockZ(index)));
@@ -283,6 +315,11 @@ final class AccurateColumnBatch {
             if (!lease.isOwner()) {
                 lease.await();
                 // 已等待后迭代重查缓存，不把争用次数累计成递归深度。
+                return null;
+            }
+            // 新版本只要求重查，不当作高度结果；释放临时认领后沿原网格路径补缺。
+            if (publications.changedSince(tileKeys, observedVersion)) {
+                lease.succeed();
                 return null;
             }
             try {
@@ -298,6 +335,7 @@ final class AccurateColumnBatch {
                 store.saveGrid(sampled);
                 cache.ensureOpen();
                 cacheGridColumns(sampled);
+                publications.publishedTiles(tileKeys);
                 lease.succeed();
                 return sampled;
             } catch (Throwable failure) {
