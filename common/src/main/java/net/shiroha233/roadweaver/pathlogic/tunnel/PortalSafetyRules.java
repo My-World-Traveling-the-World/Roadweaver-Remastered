@@ -81,7 +81,6 @@ final class PortalSafetyRules {
     static final AtomicLong DRIED_BORE_CELLS = new AtomicLong();
     /** Water cells in the shell that the lining replaced. */
     static final AtomicLong SEALED_SHELL_CELLS = new AtomicLong();
-    static final int[][] BORE_SIDES = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     /**
      * Keeps the bore of a sealed tunnel dry.
@@ -97,35 +96,26 @@ final class PortalSafetyRules {
      */
     static int[] sealBore(WorldGenLevel world, TunnelPlan plan) {
         if (world == null || plan == null || plan.interior().isEmpty()) return new int[]{0, 0};
-        BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
-        BlockState air = Blocks.AIR.defaultBlockState();
-        boolean sealShell = !plan.portal();
-        int roof = roofOffset();
-        int dried = 0;
-        int sealed = 0;
-        for (BlockPos interior : plan.interior()) {
-            int terrain = TunnelReadTiming.terrain(world, interior.getX(), interior.getZ());
-            for (int dy = 1; dy <= roof; dy++) {
-                BlockPos inside = interior.above(dy);
-                if (isWaterCell(world, inside)) {
-                    if (!isWallOwned(inside)) {
-                        world.setBlock(inside, air, 3);
-                        dried++;
-                    }
-                    continue;
-                }
-                if (!sealShell) continue;
-                if (!TunnelReadTiming.block(world, inside).isAir()) continue;
-                for (int[] side : BORE_SIDES) {
-                    BlockPos shell = inside.offset(side[0], 0, side[1]);
-                    if (!isWaterCell(world, shell)) continue;
-                    if (RoadConstructionSafety.isProtectedTunnelVolume(world, shell, plan.road(),
-                            TunnelReadTiming.block(world, shell), terrain) || isWallOwned(shell)) continue;
-                    world.setBlock(shell, stone, 3);
-                    sealed++;
-                }
+        // 集中世界边界，使离线夹具能验证封水的真实写入顺序和保护判断。
+        int[] counts = TunnelBoreSealer.seal(plan, roofOffset(), new TunnelBoreSealer.Port() {
+            @Override public BlockState block(BlockPos position) {
+                return TunnelReadTiming.block(world, position);
             }
-        }
+            @Override public int terrain(BlockPos column) {
+                return TunnelReadTiming.terrain(world, column.getX(), column.getZ());
+            }
+            @Override public boolean protectedVolume(BlockPos position, BlockState state, int terrain) {
+                return RoadConstructionSafety.isProtectedTunnelVolume(world, position, plan.road(), state, terrain);
+            }
+            @Override public boolean wallOwned(BlockPos position) {
+                return isWallOwned(position);
+            }
+            @Override public void write(BlockPos position, BlockState state) {
+                world.setBlock(position, state, 3);
+            }
+        });
+        int dried = counts[0];
+        int sealed = counts[1];
         if (dried > 0 || sealed > 0) {
             long total = DRIED_BORE_CELLS.addAndGet(dried) + SEALED_SHELL_CELLS.addAndGet(sealed);
             if (total <= 64 || total % 512 == 0) {

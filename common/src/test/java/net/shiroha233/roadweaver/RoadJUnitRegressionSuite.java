@@ -397,6 +397,9 @@ public final class RoadJUnitRegressionSuite {
                         // 0.9.065：洞身站禁止向上清空（洞身 / 普通路段 / 洞口明挖段三档 + [TUNNEL-CLEAR] 台账）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.tunnel.TunnelBodyClearScopeTest"),
+                        // 封水实际落块与旧循环对拍，避免保护或洞口策略在优化中漂移。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.pathlogic.tunnel.TunnelBoreSealerTest"),
                         // 0.9.066：相邻 BRIDGE 跨度甲板连续性（两段桥之间的台阶）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.bridge.BridgeSpanContinuityTest"),
