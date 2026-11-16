@@ -1182,7 +1182,7 @@ Windows Python默认CRLF被守卫抓到，改为write_bytes UTF-8/LF。普通Exe
 
 ### 四、遗留半截的东西
 
-通用任务生命周期这一项完成离线实现和守卫。源码/测试基线d5f417c，本节与架构、现状、验证和路线同步提交。源码push两次均无法连接github.com:443，约21秒后退出128，日志round36-code-push.log、round36-code-push-retry.log；当时origin/main仍为41701c9，本地领先3项提交。文档提交后再尝试，未成功前不称远端已同步。河流与长城本轮只读，测试放道路。
+通用任务生命周期这一项完成离线实现和守卫。源码/测试基线d5f417c，本节与架构、现状、验证和路线同步提交。源码push两次均无法连接github.com:443，约21秒后退出128，日志round36-code-push.log、round36-code-push-retry.log；当时origin/main仍为41701c9，本地领先3项提交。随后第三次推送成功，远端main从41701c9推进至670bd83（含源码、守卫和五份文档）；本条同步结果单独补记，停下前核对最终HEAD与origin/main一致及工作区干净。河流与长城本轮只读，测试放道路。
 
 ### 五、下一轮我会先做什么
 
