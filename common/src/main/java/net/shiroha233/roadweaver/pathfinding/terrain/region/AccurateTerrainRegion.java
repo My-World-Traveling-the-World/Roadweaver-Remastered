@@ -151,6 +151,12 @@ public final class AccurateTerrainRegion implements PathTerrainField {
     }
 
     @Override
+    public boolean isRoutingWater(int x, int z) {
+        // 保持精确窗口的圆形边界，同时只对两种水域标记做一次索引。
+        return contains(x, z) && hasFlag(bounds.indexOfNearest(x, z), (byte) (FLAG_COLUMN_WATER | FLAG_WATER_BIOME));
+    }
+
+    @Override
     public SampleBundle sampleBundle(int x, int z) {
         if (!contains(x, z)) {
             return new SampleBundle(seaLevel, seaLevel, false, false, 0);

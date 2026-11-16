@@ -63,7 +63,12 @@ public interface PathTerrainField {
      * 非水一律归 {@link BiomeCategory#OTHER}；合成地形与精确地形可覆写为更细粒度。
      */
     default BiomeCategory biomeCategory(int x, int z) {
-        return (isColumnWater(x, z) || isWaterBiome(x, z)) ? BiomeCategory.WATER : BiomeCategory.OTHER;
+        return isRoutingWater(x, z) ? BiomeCategory.WATER : BiomeCategory.OTHER;
+    }
+
+    /** 复用水列和河海标记；带标记的地形允许单次读取，不必重新查世界群系。 */
+    default boolean isRoutingWater(int x, int z) {
+        return isColumnWater(x, z) || isWaterBiome(x, z);
     }
 
     default int waterDepth(int x, int z) {

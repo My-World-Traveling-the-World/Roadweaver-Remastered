@@ -106,6 +106,11 @@ public final class CoarseTerrainTile {
         return hasFlag(indexOfNearest(x, z), FLAG_WATER_BIOME);
     }
 
+    // 选线只需要水列或河海任一标记，一次吸附即可。
+    boolean isRoutingWater(int x, int z) {
+        return hasFlag(indexOfNearest(x, z), (byte) (FLAG_COLUMN_WATER | FLAG_WATER_BIOME));
+    }
+
     public boolean isNearWater(int x, int z) {
         return hasFlag(indexOfNearest(x, z), FLAG_NEAR_WATER);
     }

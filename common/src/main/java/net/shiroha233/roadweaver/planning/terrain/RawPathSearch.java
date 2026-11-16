@@ -489,6 +489,8 @@ final class RawPathSearch {
         @Override public int step() { return step; }
         @Override public boolean hasAccurateSample(int x, int z) { return delegate.hasAccurateSample(x, z); }
         @Override public boolean isWaterBiome(int x, int z) { return delegate.isWaterBiome(x, z); }
+        // 覆土提示只改高度，不绕开地形既有的合并水标记读取。
+        @Override public boolean isRoutingWater(int x, int z) { return delegate.isRoutingWater(x, z); }
 
         @Override public SampleBundle sampleBundle(int x, int z) {
             SampleBundle base = delegate.sampleBundle(x, z);

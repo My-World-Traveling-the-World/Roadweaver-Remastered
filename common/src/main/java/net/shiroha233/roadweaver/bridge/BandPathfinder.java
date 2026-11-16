@@ -15,7 +15,6 @@ import net.shiroha233.roadweaver.metric.FastMarchingSolver;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.ObstaclePotential;
-import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.PathResult;
 import net.shiroha233.roadweaver.pathfinding.Pathfinder;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
@@ -178,22 +177,27 @@ public final class BandPathfinder implements Pathfinder {
         var trees = treeMasks.snapshot(level, minX, minZ, maxX, maxZ,
                 Math.max(clearance, (int) Math.ceil(width / 2.0)));
         boolean hasTrees = !trees.isEmpty();
+        var waterCost = WaterCost.from(config);
 
         // ① 采地形（越界列用 0，并被下面标成不可通行）
         int[] heights = new int[columns * rows];
         boolean[] outOfTerrain = new boolean[columns * rows];
+        // 沿用当前粗/精地形标记；关权重时不分配数组、不查水域。
+        boolean[] wet = waterCost.active() ? new boolean[heights.length] : null;
         for (int iz = 0; iz < rows; iz++) {
             for (int ix = 0; ix < columns; ix++) {
                 int x = minX + ix * step;
                 int z = minZ + iz * step;
+                int index = ix + iz * columns;
                 if (terrain.contains(x, z)) {
-                    heights[ix + iz * columns] = terrain.height(x, z);
+                    heights[index] = terrain.height(x, z);
+                    if (wet != null) wet[index] = terrain.isRoutingWater(x, z);
                 } else {
-                    outOfTerrain[ix + iz * columns] = true;
+                    outOfTerrain[index] = true;
                 }
             }
         }
-        TerrainField terrainField = StridedTerrainField.of(
+        StridedTerrainField terrainField = StridedTerrainField.of(
                 minX, minZ, columns, rows, step, heights);
 
         // ② 采避让（判据一字不改；调用方已在 PlanningScope 内）
@@ -294,11 +298,17 @@ public final class BandPathfinder implements Pathfinder {
                 ? (hasBan ? (x0, z0, x1, z1) -> ban.intersectsSegment(x0, z0, x1, z1)
                         || trees.intersects(x0, z0, x1, z1) : trees::intersects)
                 : (hasBan ? ban::intersectsSegment : null);
+        FinslerMetric.CostScale costScale = hasAttract ? attract::factorAt : null;
+        if (wet != null) {
+            // 共享桥位优惠仍生效，水域价只改变过水与陆地的相对吸引力。
+            costScale = (x, z) -> waterCost.scale(wet[terrainField.indexAt(x, z)])
+                    * (hasAttract ? attract.factorAt(x, z) : 1.0);
+        }
         FinslerMetric metric = new FinslerMetric(
                 terrainField, obstacles,
                 FinslerMetric.DEFAULT_GRADE_WEIGHT,
                 FinslerMetric.DEFAULT_OBSTACLE_WEIGHT,
-                hasAttract ? attract::factorAt : null, edgeBlock);
+                costScale, edgeBlock);
 
         // 委托给 BandRouteSolver —— 它是「单条路线」的唯一实现。
         //
@@ -325,6 +335,24 @@ public final class BandPathfinder implements Pathfinder {
             path.add(new BlockPos(point[0], terrain.height(point[0], point[1]), point[1]));
         }
         return PathResult.raw(path);
+    }
+
+    private record WaterCost(double wet, double dry) {
+        // 旧默认差价 36 × 权重 2；用它做半饱和点，避免将旧 A* 的绝对价当 FMM 单位代价。
+        private static final double HALF_SCALE_COST = 72.0;
+
+        static WaterCost from(PathfindingCostConfig config) {
+            double delta = config.biomeCostWater() - config.biomeCostOther();
+            int weight = config.biomeWeight();
+            if (weight <= 0 || delta == 0.0 || Double.isNaN(delta)) return new WaterCost(1.0, 1.0);
+            double amount = Math.abs(delta) * weight;
+            // 倍率保持在 [1, 2]，极端配置也不能把唯一过水通路变成硬障碍。
+            double expensive = 1.0 + 1.0 / (1.0 + HALF_SCALE_COST / amount);
+            return delta > 0 ? new WaterCost(expensive, 1.0) : new WaterCost(1.0, expensive);
+        }
+
+        boolean active() { return wet != dry; }
+        double scale(boolean isWater) { return isWater ? wet : dry; }
     }
 
     /**

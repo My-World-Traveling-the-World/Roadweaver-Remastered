@@ -112,6 +112,17 @@ public final class CoarseTerrainRegion implements PathTerrainField {
     }
 
     @Override
+    public boolean isRoutingWater(int x, int z) {
+        if (!contains(x, z)) return false;
+        if (tiles != null) {
+            CoarseTerrainTile tile = tileAt(x, z);
+            // 两类标记来自同一瓦片，不为河海标记再查一遍瓦片表。
+            return tile != null && tile.isRoutingWater(x, z);
+        }
+        return hasFlag(bounds.indexOfNearest(x, z), (byte) (FLAG_COLUMN_WATER | FLAG_WATER_BIOME));
+    }
+
+    @Override
     public boolean isNearWater(int x, int z, int neighborDistance) {
         if (!contains(x, z)) return false;
         if (tiles != null) {

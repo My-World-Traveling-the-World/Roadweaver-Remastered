@@ -184,10 +184,11 @@ public final class PathfindingCostKeys {
                     "跨悬崖的惩罚权重，通常极大以阻止直接翻越",
                     "权重", ""),
 
+            // BAND 只消费水/陆差价；保留原键，让旧配置和缓存身份继续使用同一组值。
             ConfigKey.integer("biomeWeight", RoadConstants.DEFAULT_BIOME_WEIGHT, 0, 1000,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "群系权重", "Biome weight",
-                    "群系代价在总代价里的权重",
+                    "水陆代价权重", "Water/land cost weight",
+                    "放大水域与非水域的差价；0 关闭这一项",
                     "权重", ""),
 
             ConfigKey.integer("stabilityWeight", RoadConstants.DEFAULT_STABILITY_WEIGHT, 0, 1000,
@@ -237,17 +238,17 @@ public final class PathfindingCostKeys {
                     "代价",
                     "★ 已实证未接线：PathTerrainField.biomeCategory() 全仓只有默认实现、0 处覆写，默认实现只返回 WATER 与 OTHER ⇒ 本类别永远不会被产生。全仓对本键的引用只出现在 PlannedPathFingerprintService（算指纹用），路径代价里从未使用"),
 
-            ConfigKey.decimal("biomeCostWater", RoadConstants.DEFAULT_BIOME_COST_WATER, 0.0, 100000.0D,
+            ConfigKey.decimal("biomeCostWater", RoadConstants.DEFAULT_BIOME_COST_WATER, -100000.0D, 100000.0D,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "水域群系代价", "Water biome cost",
-                    "跨水域的群系代价",
-                    "代价", "默认 biomeCategory 只有 WATER 与 OTHER 两档真正可达，本键是其中之一 —— 但这也意味着陆地一律走 biomeCostOther，群系区分实际上不生效"),
+                    "水域选线代价", "Water routing cost",
+                    "比非水域代价高时优先绕水或缩短过水路段；不会禁止过水",
+                    "代价", "选线只看水陆价差；森林等细分群系不参与"),
 
-            ConfigKey.decimal("biomeCostOther", RoadConstants.DEFAULT_BIOME_COST_OTHER, 0.0, 100000.0D,
+            ConfigKey.decimal("biomeCostOther", RoadConstants.DEFAULT_BIOME_COST_OTHER, -100000.0D, 100000.0D,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "其它群系代价", "Other biome cost",
-                    "非水域的兜底群系代价",
-                    "代价", "★ 所有陆地列都会归到这一档（因为 biomeCategory 无覆写），所以它对所有陆地是一个均匀附加代价 —— 会改变总量但几乎不改变路线形状"),
+                    "非水域选线代价", "Land routing cost",
+                    "和水域代价比较；两者相同则不对选线加价",
+                    "代价", "按水列和河海标记分档，价差只用于粗选线"),
 
             ConfigKey.integer("nearWaterCost", RoadConstants.DEFAULT_NEAR_WATER_COST, 0, 100000,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

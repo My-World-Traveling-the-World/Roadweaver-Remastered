@@ -199,6 +199,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservationTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.bridge.BandPathfinderWaterCostTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.AbObservingPathfinderTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.loading.LoadingOverlayTextTest"),

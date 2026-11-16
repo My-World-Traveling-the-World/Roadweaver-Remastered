@@ -127,7 +127,12 @@ public final class StridedTerrainField implements TerrainField {
                     "点 (" + x + "," + z + ") 不在区域内 [" + minX + ".." + maxX()
                             + "] x [" + minZ + ".." + maxZ() + "]");
         }
-        return heights[snapX(x) + snapZ(z) * columns];
+        return heights[indexAt(x, z)];
+    }
+
+    // 伴随的水域数组与高度必须吸附到同一格，尤其是负坐标和半步位置。
+    int indexAt(int x, int z) {
+        return snapX(x) + snapZ(z) * columns;
     }
 
     /**
