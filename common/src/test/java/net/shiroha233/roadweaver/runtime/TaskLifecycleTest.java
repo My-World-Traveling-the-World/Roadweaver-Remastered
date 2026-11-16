@@ -224,7 +224,7 @@ class TaskLifecycleTest {
     }
 
     @Test void stoppingCompletesCleanupChainOutsideTheManagerMonitor() throws Exception {
-        var release = blockInitial();
+        var release = blockInitialWhileIgnoringInterrupts();
         var result = ThreadPoolManager.supplyAsync(ThreadPoolManager.TaskRole.INITIAL, () -> "never"); results.add(result);
         var heldMonitor = new AtomicReference<Boolean>(); var callbacks = new AtomicInteger();
         var cleanup = result.whenComplete((value, failure) -> {
@@ -314,6 +314,20 @@ class TaskLifecycleTest {
             assertEquals(role, ThreadPoolManager.currentTaskRole()); order.add(label); done.countDown(); return null;
         });
         pool.execute(new PrioritizedTask(role, result, (ignored, expired) -> {}));
+    }
+
+    private CountDownLatch blockInitialWhileIgnoringInterrupts() throws Exception {
+        ThreadPoolManager.resizeInitialPool(1); pools.add(pool("INITIAL_WORKERS"));
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        results.add(ThreadPoolManager.submit(ThreadPoolManager.TaskRole.INITIAL, () -> {
+            entered.countDown(); boolean interrupted = false;
+            while (release.getCount() != 0) {
+                try { release.await(); } catch (InterruptedException expected) { interrupted = true; }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
+        }));
+        // 中断不能释放该夹具：保证排队结果由取消调用方结案，才能观察其真实持锁状态。
+        assertTrue(entered.await(3, TimeUnit.SECONDS)); return release;
     }
 
     private CountDownLatch blockInitial() throws Exception {
@@ -499,7 +513,7 @@ class TaskLifecycleTest {
     }
 
     @Test void rebuildingPublishesTheNewPoolBeforeCompletingOldResultsOutsideTheMonitor() throws Exception {
-        var release = blockInitial(); var held = new AtomicReference<Boolean>();
+        var release = blockInitialWhileIgnoringInterrupts(); var held = new AtomicReference<Boolean>();
         var fresh = new AtomicReference<Future<String>>();
         var old = ThreadPoolManager.supplyAsync(ThreadPoolManager.TaskRole.INITIAL, () -> "never"); results.add(old);
         old.whenComplete((value, failure) -> {
