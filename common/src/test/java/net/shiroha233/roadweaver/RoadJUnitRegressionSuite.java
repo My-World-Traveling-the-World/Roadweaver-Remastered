@@ -415,6 +415,8 @@ public final class RoadJUnitRegressionSuite {
                         // 0.9.068：急弯段用直线代替 Catmull-Rom（发卡弯不被样条外冲）
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.SharpTurnSplineTest"),
+                // 村庄端点过滤必须保留外来道路、阈值边界及整轮撤销原因。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.VillageEndpointFilterTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
