@@ -84,5 +84,23 @@ class PathWidthRasterizerContractTest {
         assertDoesNotThrow(() -> product.add(new net.shiroha233.roadweaver.core.model.RoadSegmentPlacement(p(0, 60), new ArrayList<>())));
     }
 
+    @Test
+    void longRoadAboveIntegerCachePreservesEveryOrderedStationProduct() {
+        List<BlockPos> centers = new ArrayList<>();
+        List<SplineHelper.Vec2d> points = new ArrayList<>();
+        List<Double> distances = new ArrayList<>();
+        for (int i = 0; i < 512; i++) {
+            centers.add(p(i - 256, 64 + i % 7));
+            points.add(new SplineHelper.Vec2d(i - 256, 0));
+            distances.add((double)i);
+        }
+        var expected = LegacyCurveRasterReference.rasterizeSegments(points, centers, distances, 5);
+        var actual = PathWidthRasterizer.rasterizeSegments(points, centers, distances, 5);
+        // 短随机路线不会跨过127号站；性能改动必须在真正长路线逐站、按顺序对拍。
+        assertEquals(512, expected.size());
+        assertEquals(expected, actual);
+        assertFalse(actual.get(511).positions().isEmpty());
+    }
+
     private static BlockPos p(int x, int y) { return new BlockPos(x, y, 0); }
 }

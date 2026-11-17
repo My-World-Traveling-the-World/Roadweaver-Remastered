@@ -26,9 +26,7 @@ final class TargetTerrainInputs {
             throwIfInterrupted();
             if (segment != null && segment.positions() != null) footprintPositions.addAll(segment.positions());
         }
-        // Structure connections keep endpoint Y flattened to zero. Include
-        // the actual center columns in the same accurate sampling batch so
-        // the grade planner can anchor the profile to terrain at both ends.
+        // 连接端点Y按身份扁平化为零，中心列必须与铺装列同批采样，才能锚定真实地形。
         footprintPositions.addAll(centers);
         throwIfInterrupted();
         Map<Long, AccurateHeightSample> footprintSamples = samples.apply(footprintPositions);
@@ -40,13 +38,7 @@ final class TargetTerrainInputs {
                     : footprintSamples.get(AccurateHeightSample.key(center.getX(), center.getZ()));
             RoadSegmentPlacement segment = segments.get(i);
             List<BlockPos> positions = segment == null ? List.of() : segment.positions();
-            // The world read is this station's last-resort fallback, only reached when the accurate backend
-            // missed the centre sample or the segment carries no positions at all. It used to run for every
-            // station unconditionally, which put a live block read (up to 129 getBlockState calls, see
-            // RoadConstructionSafety.terrainHeight) inside the planning loop - while the gate parks the
-            // server thread without pumping the chunk queue, that read can wait on a chunk nobody generates.
-            // Guarding it changes no value: both consumers below are already conditional on exactly these
-            // two cases.
+            // 实时世界读只作中心缺样或空占地的回落；完整样本时不能等待无人推进的区块任务。
             boolean needsWorldTerrain = centerSample == null || positions == null || positions.isEmpty();
             int worldCenterTerrain = !needsWorldTerrain ? 0 : worldTerrain.applyAsInt(center);
             int[] stationTerrain = new int[positions == null ? 0 : positions.size()];
@@ -59,9 +51,7 @@ final class TargetTerrainInputs {
                         ? (centerSample == null ? worldCenterTerrain : surfaceHeight.applyAsInt(centerSample))
                         : surfaceHeight.applyAsInt(sample);
             }
-            // Never use the flattened connection Y as a terrain fallback. A
-            // width-support sample is safer than treating the terrain as Y=0
-            // when a backend temporarily misses one center sample.
+            // 中心暂缺时优先宽度支撑样本，不能把身份端点的Y=0当成地形高度。
             int widthSupport = stationTerrain.length == 0
                     ? worldCenterTerrain
                     : RoadGradePlanner.robustFootprintSupport(stationTerrain);
