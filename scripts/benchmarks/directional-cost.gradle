@@ -1,0 +1,18 @@
+// 只编译离线探针；候选类位于测试目录，生产包不会包含候选算法。
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.project(':common')
+    def out = p.layout.buildDirectory.dir('directional-cost-probe')
+    def compile = p.tasks.register('compileDirectionalCostProbe', JavaCompile) {
+        dependsOn p.tasks.named('testClasses')
+        source p.rootProject.file('scripts/benchmarks/DirectionalCostProbe.java')
+        classpath = p.sourceSets.test.runtimeClasspath
+        destinationDirectory.set(out)
+        options.encoding = 'UTF-8'
+    }
+    p.tasks.register('directionalCostProbe', JavaExec) {
+        dependsOn compile
+        classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
+        mainClass = 'net.shiroha233.roadweaver.metric.DirectionalCostProbe'
+        jvmArgs '-Xms512m', '-Xmx512m'
+    }
+}

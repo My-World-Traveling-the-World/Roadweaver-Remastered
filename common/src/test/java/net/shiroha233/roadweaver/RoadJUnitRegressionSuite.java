@@ -480,6 +480,7 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.GridLayoutTest"),
                 // 压缩状态必须与冻结的整场版本对拍场值和终态拓扑。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmWorkingSetTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.DirectionalUpwindCandidateTest"),
                 // 分页场必须同时证明近目标少分配、远端不断路和稠密访问数值不漂移。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmPagedWorkspaceTest"))
                 .build();
