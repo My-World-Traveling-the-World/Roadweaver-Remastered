@@ -60,6 +60,15 @@ class ConstructionStationWorkTest {
         assertEquals(prefix,fixture.events);assertEquals(ConstructionStationCursor.State.FAILED,fixture.state.cursor().state());
         assertFalse(fixture.state.completed());
     }
+    @Test void successfulProductionSliceCompletesOnlyAfterLastStation() {
+        var old=new Fixture(0);var now=new Fixture(0);old.allowSuccess=true;now.allowSuccess=true;
+        assertTrue(FrozenConstructionStationWork.run(old.inputs,old.state,old.access,
+                old::claim,old.decorations,old.random,old.refusals));
+        var work=now.work();now.state.cursor().advance(23,()->true,work);assertFalse(now.state.completed());
+        now.state.cursor().runAll(work);assertTrue(now.state.completed());
+        assertEquals(old.events,now.events);assertTrue(now.refusals.isEmpty());
+        assertEquals(old.random.nextLong(),now.random.nextLong());
+    }
     private static final class Fixture {
         final List<String> events=new ArrayList<>();
         final Map<Integer,String> refusals=new TreeMap<>();
@@ -70,6 +79,7 @@ class ConstructionStationWorkTest {
         final ConstructionStationWork.Inputs inputs;
         final ConstructionStationAccess access;
         boolean throwAfterPave;
+        boolean allowSuccess;
         Fixture(int mode) {
             var segments=new ArrayList<RoadSegmentPlacement>();var ys=new ArrayList<Integer>();
             for(int i=0;i<24;i++){var p=new BlockPos(i,64,0);segments.add(new RoadSegmentPlacement(p,List.of(p,p.offset(0,0,1))));ys.add(64+i%3);}
@@ -99,7 +109,7 @@ class ConstructionStationWorkTest {
                     case "templateBridge": {
                         int i=((BlockPos)args[4]).getX();events.add("template:"+i+":"+args[6]+":"+args[7]);return i!=2;
                     }
-                    case "proceduralBridge":events.add("procedural:"+args[13]);return false;
+                    case "proceduralBridge":events.add("procedural:"+args[13]);return allowSuccess;
                     case "tunnel": {
                         int i=(int)args[2];events.add("tunnel:"+i+":"+args[5]);
                         TunnelPlan plan=i==7?TunnelPlan.blockedPlan():i==8?TunnelPlan.protectedGapPlan():
@@ -114,7 +124,7 @@ class ConstructionStationWorkTest {
                     case "pave": {
                         int i=(int)args[2];events.add("pave:"+i+":"+Arrays.toString((int[])args[4])+":"+random.nextInt()+":"+(args.length==13?args[12]:"surface"));
                         if(throwAfterPave)throw new IllegalStateException("模拟已产生施工副作用后失败");
-                        if(i==7 || i==10){refusals.put(i,"protected-column");return false;}return true;
+                        if(!allowSuccess && (i==7 || i==10)){refusals.put(i,"protected-column");return false;}return true;
                     }
                     case "apply": {
                         var plan=(TunnelPlan)args[0];events.add("apply:"+(plan.interior().isEmpty()?"none":plan.interior().getFirst().getX()));return null;
