@@ -1889,3 +1889,61 @@ READY冻结2b4d06e对拍当前，预置/空表各96随机步含负坐标、故�
 Javac的DocTree.toString会把中文转义，必须扫描TextTree.getBody原文；中文参数标签不能替代契约正文。首次扩展中文说明造成一处物理1021行，被已有守卫拦下，移除中英重复后928行，未放宽约束。原拆分有52段注释挂到下一成员，不能只翻译继续保留。UTF-8探针误按GB18030解码直接失败，按实际UTF-8重跑后errors=0。临时PowerShell/Python脚本须断言锚点，壳层转义错误不算测试红。
 
 远端同步记录：收尾 git pull --rebase 成功（Current branch main is up to date）；随后 push 因 github.com:443 在21080ms后连接失败。本地提交待推送，工作区空；再次push遭连接重置（Recv failure: Connection was reset）。最终交付明确说明未推送，不声称origin/main已对齐。
+
+
+## 第46轮：五项优化与旧版功能重新核对（2026-11-17）
+
+### 一、我改了什么
+
+- 5d5b0c1：分站铺装列表、中心和跨度端点冻结（含MutableBlockPos），外部工作对象不再改变已发布道路；非法空值继续交校验器诊断，CODEC/schema不变。校验改有界弱身份缓存；合流三路缓存保留线程隔离但键不再强持有整路，派生值不反向持有RoadData。新对象独立校验，失效可安全重建。
+- 同提交：回填在区块间加默认4ms预算，保留8块上限；延迟施工只给已尝试块扣重试，手绘保留未尝试块票据，下一tick重查FULL。已结案前缀不能饿死首个未结案块。几何、落块顺序、台账提交契约不改，推进时机改变。
+- 4ea5879：证据summary可选限历史样本，保留总计数、最新失败、版本隔离和区块结果；detail仍默认完整。
+- 5eca1e8/d89696f/12e200b：逐块可选耗时及异常状态、生产预算AST接线与默认预算/饥饿守卫；弱缓存复用查询键消除32B/get分配，finally释放临时强引用；缓存回收重建产物对照。
+- ed14c0c/846310e：冻结旧版外部契约、反例夹具和CI；旧API25文件token一致、非语言资源82文件一致、注册和语言保留键通过。旧38个删除路径全量核对，结果并入FEATURE-PARITY-CHECK；纠正仍写KNN与CLASSIC不参与新内核的过时注释。无邻仓改动，没有打包部署。
+
+### 二、我验证了什么（附变异）
+
+开工工作区空，git pull --rebase成功，1590全绿、Fabric通过。最终完整回归1600/0/0/0与BUILD SUCCESSFUL；Python证据19项、契约拒绝2项，冻结旧版契约errors=0。生产源码继续有效代码≤1000，中文日志/附着文档和架构守卫同套运行。精确最终日志round46-final-after-mutations.log。
+
+离线性能：8192站内容键get p50 116143.7ns→弱身份19.0ns，两边get分配0B；32/1024站26.0/18.6ns。五列分站冻结增加一次构造成本，29.8ns/24B→85.3ns/131.9B。三预热九组交替缓存探针、分配和完整数值见VALIDATION。重复5万日志detail峰值50427919B，summary16为41041B，计数一致；道路/版本/区块仍随规模增长。不据此承诺FPS、MSPT或加载倍数。
+
+| # | 故意破坏 | 目标守卫 | 结果 |
+|---|---|---|---|
+| 1 | 中心保留MutableBlockPos别名 | RoadPublicationTest发布冻结 | 1断言失败 |
+| 2 | positions保留调用方列表 | RoadPublicationTest发布冻结 | 1断言失败 |
+| 3 | 跨度起点保留游标 | RoadPublicationTest发布冻结 | 1断言失败 |
+| 4 | 弱键队列不排空 | WeakIdentityCacheTest实际入队 | 1断言失败 |
+| 5 | 存储键调用内容hashCode | WeakIdentityCacheTest禁止内容哈希键 | 1断言失败 |
+| 6 | 时间预算永不耗尽 | DeferredChunkQueueTest假时钟 | 1断言失败 |
+| 7 | 预算等待当已尝试 | RoutePreloadWorkTest保票/单次尝试 | 1断言失败 |
+| 8 | 复用查询键不清强引用 | WeakIdentityCacheTest反射查询键 | 1断言失败 |
+| 9 | 生产回填传null预算 | ConstructionBudgetWiringTest解析真实方法 | 1断言失败 |
+| 10 | 默认预算Long.MAX_VALUE | DeferredChunkQueueTest默认4ms | 1断言失败 |
+| 11 | 已结案前缀耗尽预算饿死施工 | DeferredChunkQueueTest首个未结案 | 1断言失败 |
+| 12 | 校验缓存从不读取 | RoadSnapCacheLifecycleTest真实校验实例 | 1断言失败 |
+| 13 | summary不截历史 | Python摘要计数/尾部对照 | 1断言失败 |
+| 14 | summary失败计数恒0 | Python最新失败/计数 | 1断言失败 |
+| 15 | 错误总数冒用样本长度 | Python限样本准确计数 | 1断言失败 |
+| 16 | 契约核对跳过资源 | Python四类破坏拒绝夹具 | 1断言失败 |
+| 17 | 契约忽略缺失语言键 | Python四类破坏拒绝夹具 | 1断言失败 |
+
+全部精确checkout并与原字节确认恢复；17组均为实际断言红，无编译失败充数。元数据round46-mutations.json/round46-extra-mutations.json/round46-python-mutations.json/round46-parity-mutations.json；逐项round46-mut-*.log。没有依赖GC时序：主动clear/enqueue真实WeakReference检查队列路径，但真实GC负载另待现场。
+
+### 三、我没能验证什么
+
+- **需要真机**：首次/重开/Chunky、FPS/MSPT、单块最长回填、桥头隧道及保护列最终落块，河流→长城→道路完整Mixin/事件顺序；新CI尚未在远端执行。
+- **需要存档**：4096真实工作集/NoiseChunk堆与磁盘争用、旧档重开全部能力；4ms只约束区块间让出，不限制单块、选择或flush，不承诺不掉帧。
+- **怀疑但无证据**：现场卡顿是否主要是单块施工或台账；弱缓存真实命中率与锁争用；没有因此改异步或细切单块。
+- **已知边界**：冻结增加列表复制成本；诊断内容摘要仍整路计算；summary保存全部唯一道路/版本/区块；旧算法选择退役、换实现不等于逐种子产物一致。crossing暂无用户数据，双平滑、跨度/QualityGate默认、CPU-only、长桥弯与包围盒不动。没有发现新的已证实旧功能缺失，不声称完美重构。
+
+### 四、遗留半截的东西
+
+五项均有代码、守卫和测量结果，旧版对照与可重复契约工具均交付；临时变异全部恢复，无半写源码。真机验收和外部模组实际运行未完成，独立列出。最终远端同步状态见本节末尾，不把网络失败写成已推送。
+
+### 五、下一轮我会先做什么
+
+先收首次/重开/Chunky独立会话日志：逐块replayUs、flush分段、MSPT和4096工作集。单块主导才设计可恢复施工切片（随机数、灯位、台账原子终态须保留），磁盘主导才讨论合并/异步及停服排空。按新冻结契约工具继续查资源/API退化，真机对照30场景组；无召回/A-B不切crossing或几何默认。
+
+### 六、我踩到但已解决的坑
+
+新增Java由PowerShell/Python写文件要显式newline=LF，换行守卫实际拦到CRLF。弱查询键初版每get32B，经分配探针发现并改复用；finally不清会强持有道路，新增反例实际红。新增桥跨尖峰测试错误假设校验器必拒绝，被正向回归拦下，改为明确target-height-size非法输入，不改变生产几何。初次抽共享util触发依赖棘轮，明确记录postprocess/generation各新增一条单向基础依赖、pathlogic增加一次，提交说明原因，没有给反向依赖开白名单。

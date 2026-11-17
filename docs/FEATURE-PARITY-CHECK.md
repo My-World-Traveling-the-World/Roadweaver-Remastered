@@ -1,6 +1,6 @@
 # RoadWeaver 旧版与重制版功能对照
 
-对照基线：同级只读旧仓库 `roadweaver@2c6547a`，重制版 `e3f262d`。冻结版的[八域明细](functional-inventory/README.md)用于列场景，从两边的工厂、入口和实际调用复核，不把同名类、配置键或测试数量当作功能。
+对照基线：同级只读旧仓库 `roadweaver@2c6547a`，重制版第46轮（现行代码重新核对）。冻结版的[八域明细](functional-inventory/README.md)用于列场景，从两边的工厂、入口和实际调用复核，不把同名类、配置键或测试数量当作功能。
 
 按下面定义的 **30 个场景组**，重制版 **24 组保留、4 组换实现、2 组旧算法选择已退役**。同一组包含多条入口时只计一次；“保留”指在适用维度、配置和依赖条件下能走到相应生产逻辑，不等于同一种子结果一致，也不代表真机完成率。
 
@@ -11,7 +11,7 @@
 | 3 | 基础 A*、双向 A*、GradientDescent、PotentialField 可选 | **选择退役。** 旧 `PathfinderFactory` 创建 4 种实现；新版 `createClassic` 和 BAND 都返回 `BandPathfinder`，AB 同型时只跑一次。保留旧值是为了读旧配置。 |
 | 4 | 硬避让、共享跨越走廊，绕过狭窄障碍 | **保留。** 旧势场走 `PathfindingHelper`；新版 `BandPathfinder` 给 FMM 硬掩码、边级禁行及共享走廊代价。窄禁带、单格绕行和共享走廊有离线生产入口守卫；粗拓扑的 `ObstacleField.NONE` 仍不同于单路线。 |
 | 5 | 水域/非水可调成本 | **换实现。** 旧 `PotentialFieldPathfinder:330,370` 读 `PathTerrainField` 的 WATER/OTHER。新版 `BandPathfinder` 把两档价差折成有限软倍率，复用已有水柱和河/海标记，唯一通路过水时仍可达。粗拓扑仍只用高度；森林等细分偏好两版均无生产分类。 |
-| 6 | 选线时避让巨树预留，并防止施工破坏 | **换实现。** 旧 4 个寻路器查 `HugeTreeReservation.isReserved`。新版 BAND 一次读取相关区块的预留快照，按路宽扩大后约束格点、跨边、平滑和端点短接。API 仍能预留、查询和释放，`RoadConstructionSafety` 继续按落块时的状态保护；后续几何改写的最终占地仍待专项校验。 |
+| 6 | 选线时避让巨树预留，并防止施工破坏 | **换实现。** 旧 4 个寻路器查 `HugeTreeReservation.isReserved`。新版 BAND 一次读取相关区块的预留快照，按路宽扩大后约束格点、跨边、平滑和端点短接。API 仍能预留、查询和释放，`RoadConstructionSafety` 继续按落块时的状态保护；后续几何改写的最终占地已有专项离线校验，真实落块仍待验。 |
 | 7 | 粗高度瓦片与缓存、精确采样、盘山折返 | **保留。** 新版仍有 `CoarseTerrainTileSampler` 和 `AccurateHeightSampler`，生产 `RawPathSearch:69,173` 仍调用 `MountainSwitchbackPlanner.replaceIfSafer`。 |
 | 8 | 过路村庄包围盒裁切、端点村庄落地、保护缺口 | **保留。** 旧 `StructureAvoidanceService` 职责拆到现行 `EndpointOwnerResolver`、`ProtectedGapEvaluator` 等；施工 `PathFeature` 消费保护跨度。 |
 | 9 | 结构预测/验证、快照准备及精确占用 | **保留。** `StructureVerificationService`、`PreparedStartResolver` 和 `StructureAvoidanceService` 仍为生产链供数。群系单点筛不是替代原版多点验证的实现。 |
@@ -42,6 +42,27 @@
 - **旧版没有按森林、沼泽等细分类型选线。** 对旧版整个 `common/src/main`、`fabric/src/main` 查 `biomeCategory(`，只有默认方法和势场调用。只有 WATER/OTHER（默认成本 36/0，权重 2）接入新版 BAND；其余键留作兼容，仍不参与采样或求解。
 - **巨树的选线保护和施工保护在不同阶段。** BAND 用单次快照，离线生产入口已守住跨边单列和道路全宽。施工端还需复核实时预留，因为求解完成后世界状态与路线几何都可能变化。
 - **删除地图类不等于丢底图。** 对旧版删掉的 12 个地图/传输 Java 路径反查生产引用，唯一跨出该组的引用来自两个 PNG writer；这两个 writer 的入口又只在已脱离生产入口的地形采样/回填类里。旧、新 `RoadMapScreen` 均绘制 Xaero，均接采样进度。这个结论不覆盖渲染视觉差异。
+
+## 第46轮重新核对（2026-11-17）
+
+本轮只读重查同级旧仓库，HEAD仍为2c6547a、工作区空。上表是30个场景组的入口对照，不代表同种子产物完全一致。本轮补查资源、API和全部删除路径，没有证据可称“完美重构”。
+
+| 核对面 | 实际结果 | 证据与局限 |
+|---|---|---|
+| 公开API | 25个API Java去注释token一致；api-fabric描述一致 | scripts/parity/legacy-contract.json冻结旧签名token摘要，只证明原公共契约未删改，不证明外部模组运行正确。 |
+| 模板、结构、材质与Fabric资源 | common 81/81、Fabric 2/2路径全保留；common仅两份语言文件变化 | 非语言资源及api-fabric共82文件归一行尾后逐字一致；桥模板、结构NBT、worldgen资源与Mixin清单没有丢失。 |
+| 网络与手绘按键 | 旧5个C2S/6个S2C接收注册、13个手绘按键注册均一致 | MapNetworkFabric、RouteKeysBridgeImpl完整集合对照；13是实际注册数，不是15个定义键数。 |
+| 中英语言键 | en旧704键全部保留；zh只缺10个退役算法选项标签 | 其余旧键均在，允许删除的10键在基线逐项列出，不能扩大为整个配置前缀。 |
+| 存档、手绘模型、命令 | RoadData外层、RouteStorage、PlayerRoute、RouteKind、MapAccessCommand去注释token一致 | 分站/跨度新增冻结构造器不改CODEC；schema2/3/1和routes version1保持。此轮未运行旧档游戏重开。 |
+| 删除类全量追踪 | common36、Fabric2，共38路径全部核对旧引用 | 6个拓扑、4个寻路算法退役；TerrainGradientHelper/ThrottleHelper只供这些算法。旧KNN连分量调用已由ComponentConnector.connectComponents接管，不能只因KNN删除就判丢连通。 |
+| 删除的装饰、施工和地图壳 | 旧ArtificialDecorationSystem、NaturalDecorationSystem、FenceWaypointDecoration、InitialRoadConstructionService、TwoStagePathfindingManager、PresetConfig、RoadDirection、Records外部生产token引用均为0 | 对旧common/fabric全部Java去注释token查完整引用。当前PathFeature直接调用DecorationPlanner/DecorationExecutor；地图采样删除组内部互引，但上游MapTerrainSamplingService/回填入口无旧生产引用，现行RoadMapScreen保留Xaero。 |
+| 动态入口与数据生成 | Fabric entrypoints/mixins逐字相同，无旧datagen入口 | 删除的RoadWeaverDataGenerator仅引用ModWorldGenerator，旧Fabric描述没有注册它；三处既定兼容反射保留。 |
+| 自动路网、保护、桥隧与装饰 | 保留生产链与离线守卫 | ServerPlanningHooks仍tick后台、延迟施工并recover；RawPathSearch仍两处调用盘山；Road仍浅涵洞；PathFeature仍桥提升、模板桥、隧道、装饰；JunctionBatchCoordinator仍负责合流。桥模板、桥共享、隧道、村庄、最终占地和路口端口已有回归，但测试不等于真机召回率。 |
+| 河流→长城→道路 | 道路侧等待/API保留 | InitialGenManager仍等待长城预热并预热初始路线河流；有长城读其就绪，无长城接河流。最终三模组Mixin/事件顺序仍需整合运行，本轮未改邻仓。 |
+
+可重复运行：`python scripts/parity/verify_legacy_contract.py`；拒绝夹具：`python -m unittest discover -s scripts/parity -v`。基线来自旧仓库，不从新版生成。CI同时运行契约和证据工具测试；工具检查外部契约，不检测所有Java行为变化，不能用摘要通过代替游戏验收。
+
+第2/3组旧算法选择退役、第5/6/16/21组换实现仍是明确差异。本轮没有找到新的已证实功能丢失，也没有把真机未测写成保留率100%。后续几何的终态占地已有GeometryProtectionProductTest/FinalConstructionFootprintTest，旧表第6项“待专项校验”已过时，应读作“离线已补、真实落块待验”。
 
 ## 后续对照
 

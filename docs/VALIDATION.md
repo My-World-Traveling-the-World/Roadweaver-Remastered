@@ -350,3 +350,18 @@ Python将同摘要校验和区块记录放versionsByContent，旧无摘要记录
 25组全部红，共29个目标断言失败：21组Java（含6日志守卫实现及1注释守卫实现）和4组Python；编译失败不计红。每次精确checkout并逐字比较，最终全量恢复。逐项表见HANDOFF第45轮。新增注释守卫先用正反夹具发现Javac.toString会转义中文，改读TextTree原文；标签中文不能代替正文。首次行数守卫拦下一处重复说明超物理1000，压缩重复注释而未放宽守卫。
 
 有效代码>1000为0、>800为2，全部生产文件物理行也≤1000。未验证真实4096堆/NoiseChunk、FPS/MSPT/加载尾延迟、完整桥隧/保护落块、三模组最终Mixin次序、真实存档磁盘争用。未改外部仓库、crossing、双平滑、跨度回写/QualityGate默认、长桥正弦、村庄包围盒或存档协议，未制作部署发布件。
+
+
+## 第46轮：冻结、缓存、施工让出与旧版契约（2026-11-17）
+
+基线1590/0/0/0。完整回归命令仍为已安装Gradle8.8的 :common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off。最终日志round46-final-after-mutations.log；Python证据19项、旧版契约拒绝夹具2项，独立契约核对errors=0。测试数量与实际结论在HANDOFF第46轮收口。
+
+缓存探针：加 -I scripts/benchmarks/persistence-stages.gradle :common:roadValidationCacheProbe，512MiB，同JVM3组预热、9组交替顺序、每组10000次get。最终32/1024/8192站内容键p50为493.0/14094.1/116143.7ns，弱身份键26.0/18.6/19.0ns，p95为818.1/14562.6/135034.5对45.8/25.7/19.6ns；两边热get分配均0B（初版弱查询键32B已改复用并守卫释放）。5列分站冻结构造一次测量29.8ns/24B→85.3ns/131.9B；同不可变坐标不复制对象，但仍复制列表。此项是防发布后改动的一次成本，不能只报缓存收益；此构造单组数据不是稳定p95。日志round46-final-noallocation.log。
+
+python scripts/benchmarks/evidence_history_probe.py：同一路线重复1000/10000/50000条校验日志，detail峰值1048250/10109472/50427919B，summary(16)39443/39161/41041B；各次核对计数、最新结果和not-proven。summary仍保存全部道路、版本、区块，未宣称全输入常量空间；原始耗时受tracemalloc影响，不当现场性能。
+
+生产施工默认4ms在区块之间让出，原8块限额仍在；首个未结案块至少推进一次，已结案前缀不饿死施工；等待预算不算失败、不撤手绘票据、不扣重试。单块、候选探查、台账flush不受强中断约束，可能超预算。可选deferredChunkTimings逐块记录replayUs及exception；需真机量尾延迟后才评估进一步切片，不能保证4ms总MSPT。
+
+旧版基线2c6547a。python scripts/parity/verify_legacy_contract.py核对25个API签名token、82个非语言资源、11个网络接收注册、13个实际手绘键位注册及旧语言键（zh仅豁免10个退役算法选项）。38个删除Java路径另全量查旧生产token引用并手核迁移链，见FEATURE-PARITY-CHECK。没有真实存档的游戏等价结论。新CI已接Python工具，不声称已在GitHub实际运行。
+
+变异共17组：12组Java、5组Python，每组目标断言实际失败，编译失败不计，全部精确checkout逐字恢复。分组和文件见HANDOFF，原记录round46-mutations.json、round46-extra-mutations.json、round46-python-mutations.json、round46-parity-mutations.json。初始增加“桥跨尖峰必须失败”夹具错误，被正向回归拦下；改为target-height-size的明确失败，不改生产规则。

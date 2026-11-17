@@ -32,3 +32,10 @@ python -B -m unittest discover -s scripts/evidence -p 'test_*.py' -v
 注释解释约束与原因，不逐行翻译语法；已有英文公式、参数、标记可以保留。重点维护线程/锁归属、输入单位、持久成功条件、保护边界、取消语义和失败返回。record不自动保证嵌套集合深不可变，Future取消不自动强停计算，缓存清空也不能凭直觉标O(1)。历史采样必须写明历史，不作为当前版本结论。精确采样CPU-only与仍可用的粗GPU采样须区分。
 
 `ChineseLogGuardTest`检查日志格式参数；`ChineseCommentGuardTest`用JDK编译器检查已附着成员的Javadoc正文，参数标签、文件头、字符串不能充数。它不强制每个getter都有独立Javadoc，也不能证明中文语义正确；普通行注释、所有历史注释以及脚本/资源不在“3262处正文”的统计内。语义过时仍须查实现与调用方，本轮不能声称全仓每句话都已经证明无误。
+
+
+### 第46轮：区块耗时与摘要限样本
+
+开启既有-Droadweaver.deferredChunkTimings=on时，新增[CHUNK-REPLAY-TIMING] chunk/outcome/replayUs；异常记exception并继续抛出，与NO_PLACEMENT不同。默认关闭逐块日志。回填每次仍最多8块，另在完整区块之间按4ms预算让出；单块、台账flush和候选选择可能超过4ms，该值不是MSPT保证。
+
+大日志可用python scripts/evidence/summarize_route_evidence.py --session 首次 latest.log --mode summary --history-limit 16 --output report.json。摘要只截每阶段尾部历史、错误和无owner样本，保留总计数、latestFailuresByStage、failedObservationsByStage、最新校验、内容版本与区块结果历史；errorCount决定退出码。detail默认保留完整历史。道路/版本/区块仍全保留，不能称全输入恒定内存。
