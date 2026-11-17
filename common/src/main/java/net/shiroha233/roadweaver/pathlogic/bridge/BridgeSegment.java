@@ -12,44 +12,24 @@ import java.util.*;
  * 桥梁段数据结构
  */
 public class BridgeSegment {
-    private final Map<Set<Integer>, Line> bridgeLines = new HashMap<>();
-    private final Set<Integer> landingIndices = new HashSet<>();
+    // 每站只存曲线引用；运行期掩码由区块持有，不跨区块缓存可变结果。
+    private final Line[] linesByStation;
+    private final boolean[] landing;
 
     public BridgeSegment(boolean[] isBridge, List<RoadSegmentPlacement> segments) {
         this(isBridge, segments, null);
     }
 
     public BridgeSegment(boolean[] isBridge, List<RoadSegmentPlacement> segments, int[] targetY) {
-        List<List<Vec3>> list1 = new ArrayList<>();
-        List<Set<Integer>> list2 = new ArrayList<>();
-        list1.add(new ArrayList<>());
-        list2.add(new HashSet<>());
-        
-        for (int i = 0; i < segments.size(); i++) {
-            if (isBridge[i]) {
-                Vec3 center = segments.get(i).middlePos().getCenter();
-                if (targetY != null && i < targetY.length) {
-                    center = new Vec3(center.x, targetY[i], center.z);
-                }
-                list1.get(list1.size() - 1).add(center);
-                list2.get(list1.size() - 1).add(i);
-            } else {
-                if (!list1.get(list1.size() - 1).isEmpty()) {
-                    list1.add(new ArrayList<>());
-                    list2.add(new HashSet<>());
-                }
-            }
-        }
-        
-        if (list1.get(list1.size() - 1).isEmpty()) {
-            list1.remove(list1.size() - 1);
-            list2.remove(list2.size() - 1);
-        }
-
-        for (int i = 0; i < list1.size(); i++) {
-            List<Vec3> seg = list1.get(i);
-            Vec3 start = seg.get(0);
-            Vec3 end = seg.get(seg.size() - 1);
+        linesByStation = new Line[segments.size()];
+        landing = new boolean[segments.size()];
+        for (int i = 0; i < segments.size();) {
+            if (!isBridge[i]) { i++; continue; }
+            int first = i;
+            while (i < segments.size() && isBridge[i]) i++;
+            int last = i - 1;
+            Vec3 start = center(segments, targetY, first);
+            Vec3 end = center(segments, targetY, last);
             double length = Math.sqrt((end.x - start.x) * (end.x - start.x)
                     + (end.z - start.z) * (end.z - start.z));
             double offset = 0.0D;
@@ -63,12 +43,10 @@ public class BridgeSegment {
                         : -RoadConstants.BRIDGE_CURVE_MAX_OFFSET_BLOCKS;
             }
             var line = Line.withHorizontalBend(start, end, offset);
-            Set<Integer> indices = list2.get(i);
-            bridgeLines.put(indices, line);
-            if (!indices.isEmpty()) {
-                landingIndices.add(Collections.min(indices));
-                landingIndices.add(Collections.max(indices));
-            }
+            // 连续桥段共享同一条曲线，查询不再遍历所有桥段或装箱站号。
+            Arrays.fill(linesByStation, first, last + 1, line);
+            landing[first] = true;
+            landing[last] = true;
         }
     }
 
@@ -79,15 +57,16 @@ public class BridgeSegment {
      * @return 对应的桥梁曲线，如果不存在则返回 null
      */
     public Line getLine(int index) {
-        for (Map.Entry<Set<Integer>, Line> entry : bridgeLines.entrySet()) {
-            if (entry.getKey().contains(index)) {
-                return entry.getValue();
-            }
-        }
-        return null;
+        return index >= 0 && index < linesByStation.length ? linesByStation[index] : null;
     }
 
     public boolean isLanding(int index) {
-        return landingIndices.contains(index);
+        return index >= 0 && index < landing.length && landing[index];
     }
+    /** 保留旧中心点与短目标数组的逐站替换语义，不能把方块中心Y偏移混进持久目标Y。 */
+    private static Vec3 center(List<RoadSegmentPlacement> segments, int[] targetY, int i) {
+        Vec3 point = segments.get(i).middlePos().getCenter();
+        return targetY != null && i < targetY.length ? new Vec3(point.x, targetY[i], point.z) : point;
+    }
+
 }
