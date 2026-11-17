@@ -67,6 +67,9 @@ public final class RoadChunkStore implements AutoCloseable {
     private final AtomicReference<RoadSnapshot> snapshot = new AtomicReference<>(RoadSnapshot.empty());
     private volatile boolean loaded;
     private long generation;
+    // 修复失败不等于磁盘已一致；保留到下一次成功提交，不能靠内存引用相等跳过损坏分片。
+    private boolean metadataRepairPending;
+    private RoadShardVerifier.Result pendingShardRepair;
 
     /**
      * **只读降级标志**（★ 2026-09-26 修 WorkBuddy R-5）。
@@ -312,7 +315,7 @@ public final class RoadChunkStore implements AutoCloseable {
             LOGGER.error("首次载入道路 ChunkPos 存储失败 —— 已进入**只读降级**，"
                     + "本次会话不会写入道路索引（避免用空快照覆盖真实索引）: {}", root, e);
             readOnlyDegraded = true;
-            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
+            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
         }
         snapshot.set(loadedSnapshot.snapshot());
         generation = loadedSnapshot.generation();
@@ -331,17 +334,21 @@ public final class RoadChunkStore implements AutoCloseable {
             // 这里不改读路径（查询继续用这份部分快照，不崩），只**拒绝一切写入**：
             // 索引保持原样，等下一次能完整读出时自然恢复。
             readOnlyDegraded = true;
-            LOGGER.error("道路 ChunkPos 存储的索引里有道路文件本次读取失败 —— 已进入**只读降级**，"
+            LOGGER.error("道路 ChunkPos 存储的聚合文件或分片本次读取失败 —— 已进入**只读降级**，"
                     + "本次会话不会改写索引（避免把读不到的道路永久从索引剔除；"
                     + "其 .nbt 文件仍在 {} 下，可重试或人工恢复）", root);
         }
         if (loadedSnapshot.rewriteMetadata() && !readOnlyDegraded) {
             long repairGeneration = generation == 0L ? 1L : generation;
+            metadataRepairPending = true;
+            pendingShardRepair = loadedSnapshot.shards();
             try {
                 persistSnapshot(RoadSnapshot.empty(), loadedSnapshot.snapshot(), repairGeneration, true);
                 generation = repairGeneration;
+                metadataRepairPending = false;
+                pendingShardRepair = null;
             } catch (IOException e) {
-                // 查询仍使用已完成的一次性内存快照；下次实际修改会重新写完整元数据。
+                // 查询用完整内存快照；保留修复意图，让下次实际修改先补全所有分片再发布。
                 LOGGER.warn("修复道路 ChunkPos 分片元数据失败: {}", root, e);
             }
         }
@@ -378,10 +385,12 @@ public final class RoadChunkStore implements AutoCloseable {
                             + "(initial load failed; refusing to overwrite the real index): " + root);
         }
         try {
-            persistSnapshot(previous, next, nextGeneration, false, affectedChunks);
+            persistSnapshot(previous, next, nextGeneration, metadataRepairPending, affectedChunks);
         } catch (IOException e) {
             throw new IllegalStateException("failed to persist road ChunkPos snapshot", e);
         }
+        metadataRepairPending = false;
+        pendingShardRepair = null;
         generation = nextGeneration;
         snapshot.set(next);
         if (CONSTRUCTION_SHADOW) {
@@ -423,18 +432,20 @@ public final class RoadChunkStore implements AutoCloseable {
 
     private LoadedSnapshot readSnapshot() throws IOException {
         Path indexPath = root.resolve(INDEX_FILE);
-        if (!Files.isRegularFile(indexPath)) return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
+        if (!Files.isRegularFile(indexPath)) return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
 
+        // 文件读取在JSON解析之外：Gson会把Reader的IOException包装成RuntimeException，不能因此误隔离。
+        String indexContents = Files.readString(indexPath, StandardCharsets.UTF_8);
         IndexDocument document;
-        try (Reader reader = Files.newBufferedReader(indexPath, StandardCharsets.UTF_8)) {
-            document = GSON.fromJson(reader, IndexDocument.class);
-        } catch (RuntimeException | IOException e) {
+        try {
+            document = GSON.fromJson(indexContents, IndexDocument.class);
+        } catch (RuntimeException e) {
             FileStorageIO.quarantineCorrupt(indexPath, LOGGER, "道路聚合索引损坏，已隔离");
-            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
+            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
         }
         if (document == null || document.roads == null) {
             FileStorageIO.quarantineCorrupt(indexPath, LOGGER, "道路聚合索引缺少 roads，已隔离");
-            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false);
+            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
         }
 
         LinkedHashMap<Long, RoadSnapshot.Entry> entries = new LinkedHashMap<>();
@@ -499,13 +510,14 @@ public final class RoadChunkStore implements AutoCloseable {
         RoadSnapshot loadedSnapshot = RoadSnapshot.fromEntryMap(entries);
         boolean currentIndex = INDEX_SCHEMA.equals(document.schema) && document.version == SCHEMA_VERSION;
         boolean currentRootSchema = hasCurrentRootSchema();
-        boolean currentShards = chunkShardsMatch(loadedSnapshot);
+        // 聚合根读失败时不再校验/修复部分快照的派生分片，完整读取是任何磁盘修改的前提。
+        RoadShardVerifier.Result shards = readFailure ? null : new RoadShardVerifier(root).verify(loadedSnapshot);
         long loadedGeneration = Math.max(0L, document.generation);
         return new LoadedSnapshot(
                 loadedSnapshot,
                 loadedGeneration,
-                skippedEntry || !currentIndex || !currentRootSchema || !currentShards,
-                readFailure);
+                skippedEntry || !currentIndex || !currentRootSchema || (shards != null && !shards.matches()),
+                readFailure || (shards != null && shards.readFailure()), shards);
     }
 
     private boolean hasCurrentRootSchema() {
@@ -517,11 +529,6 @@ public final class RoadChunkStore implements AutoCloseable {
         } catch (RuntimeException | IOException e) {
             return false;
         }
-    }
-
-    private boolean chunkShardsMatch(RoadSnapshot expected) {
-        // 验证迁出；持久化与发布仍在同一写锁边界，单独核对搬迁等价性。
-        return new RoadShardVerifier(root).matches(expected);
     }
 
     private void persistSnapshot(RoadSnapshot previous,
@@ -546,6 +553,11 @@ public final class RoadChunkStore implements AutoCloseable {
                                  boolean forceMetadata,
                                  Set<Long> affectedChunks) throws IOException {
         Files.createDirectories(root);
+        if (forceMetadata && pendingShardRepair != null) {
+            // 只有完整读取且无IO故障的验证结果能进入此处；失败时保留列表供下次提交重试。
+            for (Path corrupt : pendingShardRepair.corrupt()) FileStorageIO.quarantineCorrupt(corrupt, LOGGER, "道路派生分片解析损坏，按完整聚合根重建");
+            for (Path unexpected : pendingShardRepair.unexpected()) Files.deleteIfExists(unexpected);
+        }
         writeSchema();
 
         for (RoadSnapshot.Entry entry : next.entries().values()) {
@@ -573,7 +585,7 @@ public final class RoadChunkStore implements AutoCloseable {
         for (long packedChunk : chunksToScan) {
             long[] oldReferences = previous.chunkReferences().get(packedChunk);
             long[] newReferences = next.chunkReferences().get(packedChunk);
-            if (Arrays.equals(oldReferences, newReferences)) continue;
+            if (!forceMetadata && Arrays.equals(oldReferences, newReferences)) continue;
             RoadChunkKey key = RoadChunkKey.fromPacked(packedChunk);
             Path shardPath = chunkPath(key.x(), key.z());
             if (newReferences == null || newReferences.length == 0) {
@@ -715,7 +727,7 @@ public final class RoadChunkStore implements AutoCloseable {
      * 而不是把它混进「元数据需要修」那个标志里。</p>
      */
     private record LoadedSnapshot(RoadSnapshot snapshot, long generation,
-                                  boolean rewriteMetadata, boolean readFailure) {}
+                                  boolean rewriteMetadata, boolean readFailure, RoadShardVerifier.Result shards) {}
 
     private static final class SchemaDocument {
         String schema;

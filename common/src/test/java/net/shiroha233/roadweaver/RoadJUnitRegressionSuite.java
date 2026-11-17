@@ -506,6 +506,8 @@ public final class RoadJUnitRegressionSuite {
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.architecture.ConstructionBudgetWiringTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.bridge.BridgePairIndexTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.chunk.RoadSnapshotReuseTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.chunk.RoadShardRepairTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.chunk.RoadShardDocumentReaderTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。
