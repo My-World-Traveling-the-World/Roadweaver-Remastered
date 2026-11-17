@@ -20,6 +20,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TiledTerrainFieldTest {
+    @Test
+    void singleCellGradientNeedsNoSamplingButHeightAndWaterStillUseRealChannels() {
+        var calls = new AtomicInteger();
+        var field = new TiledTerrainField(new GridLayout(-9, -7, 1, 1, 8), request -> {
+            calls.incrementAndGet(); return sampled(request);
+        });
+        assertArrayEquals(new double[]{0.0, 0.0}, field.gradient(-9, -7), 0.0);
+        assertEquals(0, calls.get(), "常量零梯度不需要为了快路径额外读入中心列");
+        assertEquals(height(-9, -7), field.height(-9, -7));
+        assertEquals(7, field.waterProxy(-9, -7));
+        assertEquals(1, calls.get());
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2, 3, 4, 5})
     void heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int scenario) {

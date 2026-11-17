@@ -185,7 +185,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         // 场、回溯曲线、跑弹性带平滑 —— 但本类只用端点对，全部曲线算完即弃。
         // 而下游的单条路线又会自己重建局部网格、自己跑场求解。
         // 现在改调 planTopology：边集与原来**完全相同**（同一个 GeodesicMatrix + MST），
-        // 只是不再白算第二轮的几何，规划时间约减半。
+        // 避免白算第二轮几何；真实收益受采样等阶段影响，须按现场计时判断。
         TopologyPlan topology;
         try {
             // 空间桶只剪掉水平距离必然超限的对；高度仍由原端点判据决定。

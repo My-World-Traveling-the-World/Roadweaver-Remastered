@@ -1,5 +1,6 @@
 param(
     [string]$JavaHome = $env:JAVA_HOME,
+    [string]$Baseline = 'e109b9d',
     [ValidateRange(32, 4096)][int]$HeapMiB = 512,
     [switch]$HugeOnly
 )
@@ -16,6 +17,12 @@ $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('roadweaver-terrain-' + 
 [void][System.IO.Directory]::CreateDirectory($scratch)
 $source = Join-Path $repo 'common/src/main/java/net/shiroha233/roadweaver'
 try {
+    # 同 JVM 冻结首版瓦片类，单独量同块梯度优化，避免两次启动的噪声被当作收益。
+    $baselineText = (git -C $repo show "$($Baseline):common/src/main/java/net/shiroha233/roadweaver/bridge/TiledTerrainField.java") -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $baselineText -notmatch 'public final class TiledTerrainField') { throw 'Baseline tile source unavailable.' }
+    $baselineFile = Join-Path $scratch 'BaselineTiledTerrainField.java'
+    [System.IO.File]::WriteAllText($baselineFile, ($baselineText -creplace '\bTiledTerrainField\b', 'BaselineTiledTerrainField'),
+        [System.Text.UTF8Encoding]::new($false))
     # 显式编译真实适配器与求解器；只有世界读入用固定三通道平地替代，没有 MC 桩类型。
     $metric = @('ArrivalTimeField', 'FastMarchingSolver', 'FinslerMetric', 'ObstacleField', 'TerrainField',
         'GridTerrainField', 'GridLayout', 'GridFlags', 'FmmTargets', 'FmmPages', 'FmmValues', 'FmmCostCache') |
@@ -23,7 +30,7 @@ try {
     $sampling = @('AccurateHeightGrid', 'AccurateHeightGridRequest') |
         ForEach-Object { Join-Path $source "pathfinding/sampling/$_.java" }
     & (Join-Path $JavaHome 'bin/javac.exe') -encoding UTF-8 -cp "$slf4j;$fastutil" -d $scratch @metric @sampling `
-        (Join-Path $source 'bridge/TiledTerrainField.java') (Join-Path $PSScriptRoot 'TiledTerrainProbe.java')
+        (Join-Path $source 'bridge/TiledTerrainField.java') $baselineFile (Join-Path $PSScriptRoot 'TiledTerrainProbe.java')
     if ($LASTEXITCODE -ne 0) { throw "javac failed: $LASTEXITCODE" }
     $probeArgs = @(if ($HugeOnly) { 'huge-only' })
     & (Join-Path $JavaHome 'bin/java.exe') "-Xms$($HeapMiB)m" "-Xmx$($HeapMiB)m" -cp "$scratch;$slf4j;$fastutil" `

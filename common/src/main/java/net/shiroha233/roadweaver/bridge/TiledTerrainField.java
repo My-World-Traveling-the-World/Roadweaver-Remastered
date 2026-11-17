@@ -65,6 +65,20 @@ public final class TiledTerrainField implements TerrainField {
         // 邻点按全域索引裁边，不能在瓦片接缝处错误地改成单侧差分。
         int xm = Math.max(0, ix - 1), xp = Math.min(grid.columns() - 1, ix + 1);
         int zm = Math.max(0, iz - 1), zp = Math.min(grid.rows() - 1, iz + 1);
+        if (xm == xp && zm == zp) return new double[]{0.0, 0.0};
+        int firstX = ix / tileSide * tileSide, firstZ = iz / tileSide * tileSide;
+        int width = Math.min(tileSide, grid.columns() - firstX);
+        int rows = Math.min(tileSide, grid.rows() - firstZ);
+        if (xm >= firstX && xp < firstX + width && zm >= firstZ && zp < firstZ + rows) {
+            // 密集探针确认每梯度四次查缓存有成本；同块只取一次，接缝仍走下方全域邻点。
+            int[] heights = tile(ix, iz).motionBlocking();
+            int index = ix - firstX + (iz - firstZ) * width;
+            double gx = xp == xm ? 0.0 : (heights[index + xp - ix] - heights[index + xm - ix])
+                    / ((double) (xp - xm) * grid.step());
+            double gz = zp == zm ? 0.0 : (heights[index + (zp - iz) * width] - heights[index + (zm - iz) * width])
+                    / ((double) (zp - zm) * grid.step());
+            return new double[]{gx, gz};
+        }
         double gx = xp == xm ? 0.0 : (heightAt(xp, iz) - heightAt(xm, iz))
                 / ((double) (xp - xm) * grid.step());
         double gz = zp == zm ? 0.0 : (heightAt(ix, zp) - heightAt(ix, zm))

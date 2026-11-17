@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.metric;
 
 import net.shiroha233.roadweaver.bridge.TiledTerrainField;
+import net.shiroha233.roadweaver.bridge.BaselineTiledTerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGrid;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGridRequest;
 
@@ -13,7 +14,7 @@ public final class TiledTerrainProbe {
     private static final com.sun.management.ThreadMXBean BEAN =
             (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
     private static volatile double sink;
-    private record Run(ArrivalTimeField field, long requests, long columns, TiledTerrainField.Stats stats) {}
+    private record Run(ArrivalTimeField field, long requests, long columns, Object stats) {}
     private record Sample(long nanos, long bytes, Run run) {}
 
     public static void main(String[] args) {
@@ -21,10 +22,10 @@ public final class TiledTerrainProbe {
         if (!BEAN.isThreadAllocatedMemorySupported()) throw new AssertionError("allocation counters unavailable");
         if (!BEAN.isThreadAllocatedMemoryEnabled()) BEAN.setThreadAllocatedMemoryEnabled(true);
         var huge = new GridLayout(-65536, -65536, 16384, 16384, 8);
-        for (int i = 0; i < 8; i++) solve(huge, true, false, false);
+        for (int i = 0; i < 8; i++) solve(huge, 2, false, false);
         long[] nanos = new long[11], bytes = new long[11];
         for (int i = 0; i < nanos.length; i++) {
-            var sample = measure(() -> solve(huge, true, false, false));
+            var sample = measure(() -> solve(huge, 2, false, false));
             nanos[i] = sample.nanos(); bytes[i] = sample.bytes();
             if (sample.run().requests() != 1 || sample.run().columns() != 4096) throw new AssertionError("eager huge sampling");
         }
@@ -42,40 +43,50 @@ public final class TiledTerrainProbe {
     }
 
     private static void compare(String name, GridLayout grid, boolean far) {
-        var whole = solve(grid, false, far, far);
-        var tiled = solve(grid, true, far, far);
+        var whole = solve(grid, 0, far, far);
+        var firstTiled = solve(grid, 1, far, far);
+        var tiled = solve(grid, 2, far, far);
         int tx = far ? grid.maxX() : grid.minX() + 24, tz = far ? grid.maxZ() : grid.minZ() + 24;
         if (Double.doubleToLongBits(whole.field().at(tx, tz)) != Double.doubleToLongBits(tiled.field().at(tx, tz)))
             throw new AssertionError("target weight mismatch");
+        if (Double.doubleToLongBits(firstTiled.field().at(tx, tz)) != Double.doubleToLongBits(tiled.field().at(tx, tz))
+                || firstTiled.requests() != tiled.requests() || firstTiled.columns() != tiled.columns())
+            throw new AssertionError("tile baseline target/requests mismatch");
         if (far) for (int iz = 0; iz < grid.rows(); iz++) for (int ix = 0; ix < grid.columns(); ix++) {
             int x = grid.minX() + ix * grid.step(), z = grid.minZ() + iz * grid.step();
             if (Double.doubleToLongBits(whole.field().at(x, z)) != Double.doubleToLongBits(tiled.field().at(x, z)))
                 throw new AssertionError("field mismatch " + x + "," + z);
+            if (Double.doubleToLongBits(firstTiled.field().at(x, z)) != Double.doubleToLongBits(tiled.field().at(x, z)))
+                throw new AssertionError("tile baseline field mismatch " + x + "," + z);
         }
         var beforePath = whole.field().pathTo(tx, tz); var afterPath = tiled.field().pathTo(tx, tz);
+        var firstPath = firstTiled.field().pathTo(tx, tz);
         if (beforePath.isEmpty() || beforePath.size() != afterPath.size()) throw new AssertionError("empty/different route");
+        if (firstPath.size() != afterPath.size()) throw new AssertionError("tile baseline route size mismatch");
         for (int i = 0; i < beforePath.size(); i++) if (!Arrays.equals(beforePath.get(i), afterPath.get(i))) throw new AssertionError("route mismatch");
+        for (int i = 0; i < firstPath.size(); i++) if (!Arrays.equals(firstPath.get(i), afterPath.get(i))) throw new AssertionError("tile baseline route mismatch");
         System.out.printf("TERRAIN_MATCH scenario=%s cells=%d routePoints=%d wholeColumns=%d tiledColumns=%d stats=%s%n",
                 name, grid.cellCount(), beforePath.size(), whole.columns(), tiled.columns(), tiled.stats());
-        for (int i = 0; i < 3; i++) { solve(grid, false, far, far); solve(grid, true, far, far); }
-        long[][] nanos = new long[2][7], bytes = new long[2][7];
-        for (int i = 0; i < 7; i++) for (int turn = 0; turn < 2; turn++) {
-            int mode = (i + turn) & 1;
-            var sample = measure(() -> solve(grid, mode == 1, far, far));
+        for (int i = 0; i < 3; i++) for (int mode = 0; mode < 3; mode++) solve(grid, mode, far, far);
+        long[][] nanos = new long[3][7], bytes = new long[3][7];
+        for (int i = 0; i < 7; i++) for (int turn = 0; turn < 3; turn++) {
+            int mode = (i + turn) % 3;
+            var sample = measure(() -> solve(grid, mode, far, far));
             nanos[mode][i] = sample.nanos(); bytes[mode][i] = sample.bytes();
         }
-        System.out.printf("TERRAIN_COMPARE scenario=%s allocationP50=%d->%d p50=%.3f->%.3fms p95=%.3f->%.3fms%n",
-                name, percentile(bytes[0], .5), percentile(bytes[1], .5),
-                percentile(nanos[0], .5) / 1e6, percentile(nanos[1], .5) / 1e6,
-                percentile(nanos[0], .95) / 1e6, percentile(nanos[1], .95) / 1e6);
+        System.out.printf("TERRAIN_COMPARE scenario=%s order=whole,firstTiled,currentTiled allocationP50=%d,%d,%d p50=%.3f,%.3f,%.3fms p95=%.3f,%.3f,%.3fms%n",
+                name, percentile(bytes[0], .5), percentile(bytes[1], .5), percentile(bytes[2], .5),
+                percentile(nanos[0], .5) / 1e6, percentile(nanos[1], .5) / 1e6, percentile(nanos[2], .5) / 1e6,
+                percentile(nanos[0], .95) / 1e6, percentile(nanos[1], .95) / 1e6, percentile(nanos[2], .95) / 1e6);
     }
 
-    private static Run solve(GridLayout grid, boolean paged, boolean far, boolean forcePaging) {
+    private static Run solve(GridLayout grid, int mode, boolean far, boolean forcePaging) {
         long[] sampling = new long[2];
         TiledTerrainField.GridSampler sampler = request -> {
             sampling[0]++; sampling[1] += request.sampleCount(); return flat(request);
         };
-        TerrainField terrain = paged ? new TiledTerrainField(grid, sampler) : new GridTerrainField(
+        TerrainField terrain = mode == 2 ? new TiledTerrainField(grid, sampler)
+                : mode == 1 ? new BaselineTiledTerrainField(grid, sampler::sample) : new GridTerrainField(
                 grid.minX(), grid.minZ(), grid.columns(), grid.rows(), grid.step(),
                 sampler.sample(new AccurateHeightGridRequest(grid.minX(), grid.minZ(), grid.columns(), grid.rows(), grid.step())).motionBlocking());
         var metric = FinslerMetric.of(terrain, ObstacleField.NONE);
@@ -84,7 +95,8 @@ public final class TiledTerrainProbe {
         var field = solver.solve(grid.minX(), grid.minZ(), tx, tz);
         if (!field.reachable(tx, tz)) throw new AssertionError("near/far target lost");
         sink = field.at(tx, tz);
-        return new Run(field, sampling[0], sampling[1], terrain instanceof TiledTerrainField t ? t.stats() : null);
+        return new Run(field, sampling[0], sampling[1], terrain instanceof TiledTerrainField t ? t.stats()
+                : terrain instanceof BaselineTiledTerrainField t ? t.stats() : null);
     }
 
     private static void fullCorridor(GridLayout grid) {

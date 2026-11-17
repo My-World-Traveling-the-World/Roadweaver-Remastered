@@ -22,11 +22,12 @@ import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
  * 与道路纵断面的参考面一致。{@code worldSurface} 会把树叶算进去，
  * 道路会莫名抬高；{@code oceanFloor} 是水下地形，只在过水判定时用。</p>
  *
- * <h2>两个构造入口</h2>
+ * <h2>构造入口</h2>
  * <ul>
  *   <li>{@link #of} —— 接受一个 {@link GridSampler} 函数，<b>不依赖 Minecraft</b>，
  *       可以在纯 JUnit 里测；</li>
- *   <li>{@link #fromAccurateSampler} —— 生产入口，走真实的
+ *   <li>{@link #planningSurface} —— 网络规划按规模选择整场或瓦片；</li>
+ *   <li>{@link #fromAccurateSampler} —— 兼容整场入口，走真实的
  *       {@link AccurateHeightSampler}（需要 {@code ServerLevel}）。</li>
  * </ul>
  *
@@ -116,7 +117,7 @@ public final class SampledTerrainField {
     }
 
     /**
-     * 带采样步长地用精确采样器构造地形场 —— <b>网络级规划的唯一可用入口</b>。
+     * 带采样步长的整场兼容入口；网络规划由 planningSurface 选择读入策略。
      *
      * <h3>精度与规模的取舍</h3>
      * <p>规划要到「哪两个结构连一条路」的粒度，1500×1500 的区域在 step=8 时是
