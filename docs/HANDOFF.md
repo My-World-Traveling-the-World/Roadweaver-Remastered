@@ -2010,3 +2010,5 @@ ShardStampProbe真实调用computeShardStamp/matches：两个文件时间1000/30
 ### 六、我踩到但已解决的坑
 
 一律BVH在密集/长桥样本明显变慢，改保守规模+密度策略；三个独立枚举方法产生JIT对照差异，改共用内核再量。半径测试同叶导致变异全绿，新增跨叶夹具；新类漏登记被已有守卫拦下后改明确selectClass。复用快照初版会放宽null元素拒绝，复核旧List.copyOf语义后补显式检查与第12组负控。BuildFrame仍写上一轮“positions未深拷贝”，查当前发布契约后纠正；存储统计戳说明将统计提示夸成内容证明，也已按最小复现改正，没有掩盖未修策略。
+
+远端同步记录：开工pull --rebase成功；收尾pull报Recv failure: Connection was reset，push报github.com:443在21067ms后无法连接。未获得推送成功确认；本轮代码/测试/文档均在本地提交，最终git status --porcelain为空，不声称origin/main已对齐。
