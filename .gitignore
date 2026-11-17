@@ -101,3 +101,6 @@ _audit*.py
 roadweaver-后期重构路线图.md
 # 临时分析产物（不进仓库）
 .analysis_tmp/
+
+# 离线证据工具的解释器缓存不是源码，普通unittest执行也不污染工作区。
+/scripts/evidence/__pycache__/

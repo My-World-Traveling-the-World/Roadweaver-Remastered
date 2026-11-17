@@ -11,3 +11,6 @@
 # 现在显式声明：Java 源码一律 LF，检出时也写 LF（eol=lf），杜绝复发。
 # 二进制资源（.png/.nbt）不在此列，保持现状即可。
 *.java            text eol=lf
+
+# 证据工具也固定LF，保证Windows负控checkout后可以逐字确认恢复。
+scripts/evidence/*.py text eol=lf
