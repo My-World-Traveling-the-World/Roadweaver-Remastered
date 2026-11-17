@@ -16,6 +16,14 @@ class WeakIdentityCacheTest {
         cache.put(a,"a"); cache.put(b,"b");
         assertEquals("a", cache.get(a)); assertEquals("b", cache.get(b));
         assertNull(cache.get(c));
+        assertFalse(cache.containsKey(c)); assertTrue(cache.containsKey(a));
+        try {
+            var lookupField=WeakIdentityCache.class.getDeclaredField("lookup"); lookupField.setAccessible(true);
+            var lookup=lookupField.get(cache);
+            var valueField=lookup.getClass().getDeclaredField("value"); valueField.setAccessible(true);
+            assertNull(valueField.get(lookup),"复用查询键不能跨调用强持有道路");
+        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+
         cache.put(a,"updated"); assertEquals(2,cache.size());
         cache.put(c,"c"); assertEquals(1,cache.size());
         assertNull(cache.get(a)); assertEquals("c",cache.get(c));
