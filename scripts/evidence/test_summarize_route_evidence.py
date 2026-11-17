@@ -34,6 +34,15 @@ class EvidenceSummaryTest(unittest.TestCase):
         self.assertEqual({"COMPLETED": 1}, route["chunkOutcomeCountsByFingerprint"]["-99"])
         self.assertEqual("reason with spaces", route["validation"]["validated"][0]["reason"])
 
+    def test_real_coarse_detail_keeps_nested_same_named_fields_as_opaque_text(self):
+        detail = "Choice[from=0, to=1, geodesic=12.5, selected=true] status=SCORED columns=5 wetRunBlocks=0.0"
+        report = self.report(line("stage=coarse selected=false geodesic=15.0 protection=unprepared detail=" + detail))
+        self.assertEqual([], report["errors"])
+        event = report["routes"][0]["coarse"][0]
+        self.assertFalse(event["selected"])
+        self.assertEqual(15.0, event["geodesic"])
+        self.assertEqual(detail, event["detail"])
+
     def test_copies_with_same_seed_and_endpoints_remain_separate_sessions(self):
         report = summarize([("copy-a", "a", [chunk()]), ("copy-b", "b", [chunk("ABANDONED")])])
         self.assertEqual(2, len(report["routes"]))

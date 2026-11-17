@@ -23,7 +23,12 @@ def parse(line):
     if MARKER not in line:
         return None
     body = line.split(MARKER, 1)[1].strip()
-    matches = list(KEY.finditer(body))
+    matches = []
+    for match in KEY.finditer(body):
+        matches.append(match)
+        # detail是生产记录的原文尾部，内部Choice含同名字段，绝不能当作顶层重新解析。
+        if match["key"] == "detail":
+            break
     fields = {}
     for index, match in enumerate(matches):
         key = match["key"]
