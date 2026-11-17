@@ -8,6 +8,7 @@
 | 下一步做什么、按什么顺序验收 | [技术路线](ROADMAP.md) |
 | 架构与开发规则 | [架构](../ARCHITECTURE.md) · [开发约定](../CONVENTIONS.md) |
 | 怎么编译、回归、真机对照、打包 | [验证手册](VALIDATION.md) |
+| 中文日志、诊断标记与注释契约 | [日志与源码说明](LOGGING.md) |
 | 旧版能力有没有丢 | [功能对照](FEATURE-PARITY-CHECK.md) |
 | 每轮改动、变异与未验证项 | [交接台账](HANDOFF.md) |
 | 已发布的产物和回退方式 | [发布台账](RELEASES.md) |

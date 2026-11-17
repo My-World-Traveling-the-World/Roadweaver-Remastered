@@ -1812,3 +1812,78 @@ Windows Python写文本默认会变成CRLF，新Java必须显式newline='\n'；�
 ### 六、我踩到但已解决的坑
 
 Python默认检出受Git autocrlf影响，即使先写LF，checkout仍可能变CRLF；第一次变异恢复检查准确拦下，固定限定脚本LF后完整重跑。迁移SpanRange时需显式导入Road伴随record，初次编译失败不计守卫。真实粗候选detail里还嵌套Choice.geodesic/selected，平面字段正则会误报重复；新增实际格式夹具先红再修为尾部原文，并跑Java真实回调→CLI端到端。候选少调用梯度不代表所有场景少分配，0°平面反例已记录；候选变快仍不及生产，不切默认。
+
+## 第45轮：中文日志/注释、READY实盘测量与内容版本证据（2026-11-17）
+
+### 一、我改了什么
+
+| 范围 / 提交 | 结果 | 类型 |
+|---|---|---|
+| 全模块日志；df18f82、2935bae | 补中文格式说明并保留稳定诊断字段；修正CPU-only、影子角色和兼容等待措辞；覆盖工厂与别名 | 日志行为变更，规划施工行为等价 |
+| FileStorageIO；bfbbc5a | 隔离成功与失败准确区分；真实文件锁、字节、日志级别/异常验证 | 日志行为变更 |
+| ReadinessCoverageStore；2b4d06e、1a0d6a2 | 可选UTF-8字节及分阶段计时；复用最后成功有序快照并插入新区域，失败不发布 | 性能，产物及提交语义等价 |
+| probes；cae8d1d | READY/台账真实临时文件写、重开与字节对照；ACTIVE扫描/索引对照 | 测量基建 |
+| RoadBuildEvidence及汇总；957202e、181909a | c1内容摘要关联同产物校验/施工，不改道路身份或存档；隔离无摘要旧观测 | 诊断行为变更 |
+| 168生产文件；e6eb2d6 | 635段原英文Javadoc补中文、23处标签补正文、52段迁出残留删除；纠正过时算法/锁/缓存/持久说明 | 注释行为等价，注释外内容一致 |
+| 中文日志/文档守卫；55e233c、e55d558 | 编译器扫701文件、842日志调用、3262成员Javadoc；正反夹具，显式登记suite | 测试基建 |
+
+细节与稳定标记入口为LOGGING.md，不另建重复日志清单。有效代码超过1000为0、超过800为2；物理行也全部≤1000。没有修改CODEC/schema/配置字段/持久枚举或其他模组，没有打包部署。
+
+### 二、我验证了什么（附变异）
+
+开工工作区空，1570全绿、Fabric通过；pull --rebase遇GitHub443超时，交付前再试并如实记录远端状态。新增20项Java至1590，零skip/abort；Python从13增至17项。恢复变异后的完整日志round45-final-after-mutations.log同时含PASS与BUILD SUCCESSFUL。
+
+READY冻结2b4d06e对拍当前，预置/空表各96随机步含负坐标、故障、重复、重开，每次字节一致。实盘3预热9样本/512MiB，65538条构建p50 11.6632→4.7581ms，其中排序/插入8.2096→0.0510ms；写3.9516→3.8552ms。1024连续增长仍1024写，累计写1550.632→1558.322ms，不宣称磁盘提速。台账512/8192/65536条写p50 2.5158/3.8349/5.3451ms，p95 3.0649/4.7780/7.7244；不是现场争用或fsync保证。ACTIVE单世界8活动扫描0.02181微秒/次，决定不做世界索引。复现命令和完整阶段数值见VALIDATION第45轮。
+
+实际Java粗候选回调/格式器→Python CLI通过：3个ID、2个content，新改高内容不继承旧校验；保留旧ABANDONED→COMPLETED，整路not-proven。注释外比较168个生产文件一致；编译器3262处正文中文全部通过，不声称所有成员均有独立文档或每句语义已证明。
+
+| # | 故意破坏 | 对应守卫 | 失败数/结果 |
+|---|---|---|---|
+| 1 | Fabric日志删中文 | ChineseLogGuardTest全项目 | 1，红 |
+| 2 | 动态日志无中文说明 | ChineseLogGuardTest反例 | 1，红 |
+| 3 | 仅异常/参数带中文 | ChineseLogGuardTest反例 | 1，红 |
+| 4 | 解析器错误计入参数中文 | ChineseLogGuardTest反例 | 1，红 |
+| 5 | 不识别Logger别名 | ChineseLogGuardTest别名/工厂 | 1，红 |
+| 6 | 不识别LoggerFactory直接调用 | ChineseLogGuardTest别名/工厂 | 1，红 |
+| 7 | READY插到错误排序位置 | ReadinessOrderingReuseTest | 2，红 |
+| 8 | READY写前发布排序快照 | ReadinessOrderingReuseTest | 2，红 |
+| 9 | 字节数错用字符数 | ReadinessCoverageStoreTest | 1，红 |
+| 10 | 写失败仍报written=true | ReadinessCoverageStoreTest | 1，红 |
+| 11 | 隔离成功错误报失败 | FileStorageLogTest | 1，红 |
+| 12 | 内容摘要忽略targetY | RoadBuildEvidenceTest | 1，红 |
+| 13 | 内容摘要忽略跨度类型 | RoadBuildEvidenceTest | 1，红 |
+| 14 | 内容摘要忽略坐标Y | RoadBuildEvidenceTest | 1，红 |
+| 15 | 删除分站铺装列长度前缀 | RoadBuildEvidenceTest | 1，红 |
+| 16 | 忽略材料状态属性 | RoadBuildEvidenceTest | 1，红 |
+| 17 | 最终校验日志漏content | RoadBuildEvidenceTest | 1，红 |
+| 18 | 强合并不同content | Python EvidenceSummaryTest | 1，红 |
+| 19 | 新content继承旧校验 | Python EvidenceSummaryTest | 1，红 |
+| 20 | 隐藏无版本旧观测 | Python EvidenceSummaryTest | 1，红 |
+| 21 | 接受畸形content | Python EvidenceSummaryTest | 3，红 |
+| 22 | API成员文档删中文 | ChineseCommentGuardTest全项目 | 1，红 |
+| 23 | Fabric成员文档删中文 | ChineseCommentGuardTest全项目 | 1，红 |
+| 24 | 公共算法构造器正文删中文 | ChineseCommentGuardTest全项目 | 1，红 |
+| 25 | 文档解析错误计入参数标签 | ChineseCommentGuardTest反例 | 1，红 |
+
+共25组、29个目标断言失败；其中21组Java、4组Python。全部精确checkout、逐字恢复，编译失败不充红。记录round45-mutations.json及round45-comment-mutations.json，逐项round45-mut-*.log。两个最初无效变异未计入：参数toString仍Unicode转义无法引入中文，改为读取参数描述后才红；分站长度改0仍有分隔，改为删除长度调用才红。
+
+### 三、我没能验证什么
+
+- **需要真机的**：FPS/MSPT、GC、首次/重开/Chunky加载尾延迟，真实桥头、隧道和保护列落块，河流→长城→道路最终Mixin与事件顺序。受控Java格式器不等于真实ServerLevel执行。
+- **需要真实存档的**：4096完整工作集、NoiseChunk与全部缓存堆压力、磁盘争用/卸载等待/跨实例并写。临时文件数据不够决定台账异步，未修改同步成功后发布契约。
+- **怀疑但没有证据的**：现场写盘是否主导卡顿、摘要整路扫描在诊断开启时的开销、中文日志对实际排障速度的改善，均无真机量化。
+- **已知边界未改的**：摘要不含世界/配置/模板，按诊断计算非零成本；无日志不代表未生成，COMPLETED不是可通行实测。Javadoc守卫只查附着正文是否有中文，不强制每个成员文档，也不证明语义；普通行注释和资源脚本未逐句穷尽核实。positions仍未深拷贝，按内容缓存的调用方必须保持发布后输入不变。crossing、双平滑、长桥弯、包围盒裁切、spanWriteback/QualityGate默认、CPU-only保持。
+
+### 四、遗留半截的东西
+
+源码、测试和探针已小步提交且可编译；全部变异恢复，无半写实现。未将现场验收计入完成。中文职责头/已有成员文档/日志完成机械全扫及本轮重点语义校正，“每句旧行注释都已证明正确”没有完成，也不据此加几千段泛泛注释。远端同步结果见本节末尾，不将网络失败隐藏为已push。
+
+### 五、下一轮我会先做什么
+
+1. 收集独立会话的真机首次、重开、Chunky日志，用content定位同产物校验通过后实际放弃的位置；不能用身份指纹继承旧校验。
+2. 量真实4096工作集、MSPT/加载尾延迟、READY与台账分阶段；先判主要开销再决定合并提交或异步，异步必须保留故障/停服排空契约。
+3. 修改代码时继续同步核对相关行注释和调用契约，优先线程/持久化/保护；不为了“全中文”机械给getter或每行赋值堆注释。无召回/A-B样本不动用户要求保留的几何和模式。
+
+### 六、我踩到但已解决的坑
+
+Javac的DocTree.toString会把中文转义，必须扫描TextTree.getBody原文；中文参数标签不能替代契约正文。首次扩展中文说明造成一处物理1021行，被已有守卫拦下，移除中英重复后928行，未放宽约束。原拆分有52段注释挂到下一成员，不能只翻译继续保留。UTF-8探针误按GB18030解码直接失败，按实际UTF-8重跑后errors=0。临时PowerShell/Python脚本须断言锚点，壳层转义错误不算测试红。

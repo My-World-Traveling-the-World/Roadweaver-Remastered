@@ -304,3 +304,49 @@ python -B scripts/evidence/summarize_route_evidence.py --session new-save latest
 23组全部实际红：12组生产（其中2组AST窄接线）、2组测试目录方向候选、9组工具；14组Java共产生21个目标JUnit失败，9组Python共14个断言失败（含subTest），无编译失败冒充红。第一次Python检出因Git自动CRLF被逐字检查拦下，新增限定LF后完整重跑；修复真实detail格式后又重跑全部9组Python。每项finally精确git checkout并与原字节比较。表见HANDOFF第44轮，记录round44-cases.json、round44_mutations.py、round44_python_mutations.py、round44-mutations.json、round44-mutation-run.log、round44-python-mutation-run.log及round44-mut-*.log。
 
 最终701个生产Java，有效行>1000为0、>800为2。未验证4096真实堆/MSPT/加载尾延迟、真实磁盘/卸载/跨实例压力、完整世界施工与三模组Mixin次序；未变更存档、配置键、持久枚举、长桥弯、村庄包围盒、crossing、双平滑默认、spanWriteback/QualityGate默认或废弃GPU。未改外部模组，未打包部署。
+
+## 第45轮中文诊断与READY提交测量
+
+开工基线1570/0/0/0，Fabric编译通过；本轮pull --rebase因GitHub443连接超时失败，交付前重试，不将本地提交误报远端同步。新增20项Java至1590（日志5、隔离2、READY计时2、有序对拍2、内容摘要6、中文Javadoc3），新类显式登记；独立Python17项。最终完整回归记录在round45-final-after-mutations.log，零skip/abort，Fabric BUILD SUCCESSFUL。
+
+### 中文日志与注释
+
+701个生产Java、168个日志文件、842处调用全部有中文格式说明。保留原标记/字段/占位符/等级/节流，不为翻译增加逐列INFO。修正CPU-only迁移、长城兼容等待和隔离成功/失败措辞；FileStorageLogTest用真实Windows删除共享锁验证失败，成功后检查原字节与移走结果。
+
+扫描635段原仅英文Javadoc，保留仍有价值的公式/历史解释，修正旧A*、精确GPU、缓存深不可变、清表O(1)、线程预算与启动门描述。另补23处只有标签的正文，清除52段迁出后挂错成员的残留。168个生产文件去注释后的内容与181909a逐项一致；编译器提取3262处Javadoc正文均有中文。守卫只证明正文中文存在，不证明语义完整或所有成员都有文档；行注释与脚本资源没有逐句穷尽审查。详见[日志与源码说明](LOGGING.md)。
+
+### 临时文件实盘测量
+
+JDK21同JVM、512MiB，3轮预热9组样本；READY冻结2b4d06e与当前成对交替，先做一次真实提交形成有序快照。每组真实原子文件替换、重开并比较字节；每阶段分别取p50，不能相加中位数冒充端到端。sort阶段包含二分插入与ArrayList移动，算法仍需O(n)复制和序列化。
+
+| READY区域数 | 冻结构建p50 ms | 当前构建p50 ms | 冻结排序ms | 当前插入ms | 冻结写盘ms | 当前写盘ms |
+|---|---|---|---|---|---|---|
+| 514 | 0.1968 | 0.0969 | 0.0678 | 0.0061 | 1.5958 | 1.5880 |
+| 8194 | 1.5935 | 0.4619 | 1.0110 | 0.0127 | 2.0698 | 1.9579 |
+| 65538 | 11.6632 | 4.7581 | 8.2096 | 0.0510 | 3.9516 | 3.8552 |
+
+当前最大组写盘p95=7.1049ms。连续1024次增长，两版都写1024次，累计8,308,062字节，最终16,335字节；累计构建86.392→42.212ms，写盘1550.632→1558.322ms。构建节省不等于磁盘改善，保留同步提交。额外有序列表保留每区域一个引用；Long与集合共用。只在writer成功且开放时发布该快照，故障/重开随机96步逐字对拍，非ASCII指纹验证UTF-8字节计数。
+
+| 台账条目 | 收集p50 ms | 排序p50 ms | 编码p50 ms | 写盘p50 ms | 写盘p95 ms |
+|---|---|---|---|---|---|
+| 512 | 0.1954 | 0.1254 | 0.1555 | 2.5158 | 3.0649 |
+| 8192 | 1.4488 | 0.8627 | 0.8777 | 3.8349 | 4.7780 |
+| 65536 | 8.8738 | 6.9050 | 4.7784 | 5.3451 | 7.7244 |
+
+台账每次flush后重开逐项验证，干净状态不重复写。以上都是临时文件，无真实存档竞争、设备flush或停服尾延迟保证。没有据此改台账异步。ACTIVE真实入口只在主世界、preflight最多8活动；合成扫描p50=0.02181微秒/次，索引0.00153；16世界128活动压力原型扫描0.48987微秒不代表生产规模。决定不增加ACTIVE世界分桶。
+
+```powershell
+& $gradle -I scripts/benchmarks/persistence-stages.gradle :common:readinessActiveProbe :common:readinessWriteProbe :common:constructionLedgerProbe --daemon --console=plain --dependency-verification=off
+```
+
+### 内容版本与端到端
+
+RoadBuildEvidence的c1-SHA256诊断摘要包含有序站中心XYZ、铺装列XYZ和分站边界、targetY、跨度端点/类型/顺序、材料状态及属性、宽度/类型/所有者。不修改RoadFingerprint、台账键、CODEC或schema；没有缓存摘要，因为嵌套positions未保证深不可变。仅原影子诊断开启时生产计算，但每条观测仍扫描整路。它不含实际世界/配置/模板内容，不能替代完整施工环境版本。
+
+Python将同摘要校验和区块记录放versionsByContent，旧无摘要记录独立保存，不继承给新内容；身份指纹汇总明确只表示身份。17项独立测试通过。受控Java探针调用真实粗候选回调及格式器→Python CLI：3条连接ID、2个内容摘要、旧内容有校验及ABANDONED→COMPLETED历史、新改高内容无校验且NOT_ATTEMPTED，错误数0，整路仍not-proven。UTF-8输出须使用utf-8-sig，误按GB18030读取会失败；没有用替换字符吞掉解码错误。记录round45-evidence-actual.log/summary.json，不冒充真实ServerLevel执行。
+
+### 变异与边界
+
+25组全部红，共29个目标断言失败：21组Java（含6日志守卫实现及1注释守卫实现）和4组Python；编译失败不计红。每次精确checkout并逐字比较，最终全量恢复。逐项表见HANDOFF第45轮。新增注释守卫先用正反夹具发现Javac.toString会转义中文，改读TextTree原文；标签中文不能代替正文。首次行数守卫拦下一处重复说明超物理1000，压缩重复注释而未放宽守卫。
+
+有效代码>1000为0、>800为2，全部生产文件物理行也≤1000。未验证真实4096堆/NoiseChunk、FPS/MSPT/加载尾延迟、完整桥隧/保护落块、三模组最终Mixin次序、真实存档磁盘争用。未改外部仓库、crossing、双平滑、跨度回写/QualityGate默认、长桥正弦、村庄包围盒或存档协议，未制作部署发布件。
