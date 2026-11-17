@@ -202,3 +202,45 @@ phase=scan诊断保留原日志标签并增加source=incremental，scanUs现在�
 还原后完整:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off通过，PASS tests=1516 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL，日志round42-final-after-mutations.log。695个生产Java文件，超过1000有效行0、超过800行2；门面474/320、样条148/117、落列101/84行（物理/有效）。
 
 本轮没有性能基准、真实世界/存档或三模组整链数据；拆分不宣称减少卡顿或加载时间。零宽度/偶数宽度只锁定现行闭区间语义，不新增用户配置范围；保护列夹具验证已接受安全走廊，不代表栅格器新增世界保护查询。长桥正弦仍由BridgeSegment保留，原生产产物用例继续跑；双平滑默认、crossing、QualityGate、跨度回写和协议均未改。
+
+
+## 第43轮五项代码工作与离线测量
+
+开工f67e70b、status空、pull --rebase最新，先确认1516全绿及Fabric通过。先测后改宽度落列；快照准备/激活、纵断面输入在1516全绿后单独等价提交18ed8f1，再加6项直接守卫。查盘交错三例先在旧实现红3项，整块发布用例先红1项；修复后1528全绿。方向候选与证据接线依次到1534/1542，长路线补守卫后1543。恢复21组变异后重新执行完整回归，日志round43-final-after-mutations.log，PASS tests=1543 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL；不是将定向或编译失败计为守卫通过。
+
+### 宽度落列测量
+
+探针使用冻结LegacyCurveRasterReference与当前生产PathWidthRasterizer；相同输入，同JVM、512MiB堆、JDK21，先逐站比较中心及有序位置，再30轮预热、15组交替顺序取线程分配及耗时中位数。每条路负坐标起点，四分之一格密度，宽5；分配计数来自当前线程ThreadMXBean。修改前两实现分配完全相同；修改后数据如下（round43-width-before.log、round43-width-after.log）：
+
+| 站数 / 宽度 | 包围盒列访问次数（两版相同） | 冻结基线分配 B | 当前分配 B | 基线p50 ms | 当前p50 ms |
+|---|---|---|---|---|---|
+| 128 / 5 | 41,148 | 338,856 | 333,200 | 1.0652 | 0.9762 |
+| 512 / 5 | 165,564 | 1,921,864 | 1,334,728 | 3.6509 | 3.2337 |
+| 2048 / 5 | 663,228 | 8,264,704 | 5,348,960 | 14.8574 | 12.9518 |
+
+仅减少连续站号HashMap节点/装箱，列访问工作量与每站HashSet插入不变。新增512站JUnit对拍跨过Integer缓存边界；原180组曲线、54组生产入口和闭区间/桥头/交叉hint用例保留。微基准是一次单机受控测量，未测游戏、GC尾延迟或统计显著性；2048站分配约降35.3%，不能外推总加载速度或FPS。
+
+```powershell
+& $gradle -I scripts/benchmarks/width-raster.gradle :common:widthRasterProbe --daemon --console=plain --dependency-verification=off
+& $gradle -I scripts/benchmarks/directional-cost.gradle :common:directionalCostProbe --daemon --console=plain --dependency-verification=off
+```
+
+沿用本文件开头的JAVA_HOME/GRADLE_OPTS和已安装Gradle变量，禁止用gradlew。两个探针源文件均在scripts/benchmarks，不进生产包。
+
+### 方向候选的结论与边界
+
+DirectionalUpwindCandidate仅在test目录、最多16384格；用相邻已冻结邻居的三角扇与完整方向代价更新，小段枚举后局部细化，按因果约束冻结。保守检查格内硬列及双向边禁行；没有任意非凸度量的全局精确/收敛证明，也没有生产分页、早停或取消治理，禁止作为生产替代/回退。
+
+33×33解析25%坡面，梯度不经整数差分；同JVM交替9组求解，512MiB堆。0°时生产/候选都得上坡1.0625、等高线1.0000；45°时生产场每格分别1.084306/1.084306，候选1.0625/1.0000。有限距离迎风离散误差包括在该场值，不能与旧大场1.0486直接混比。0°耗时p50 0.8495/8.2100 ms、45°0.3511/7.8754 ms（生产/候选）。两版本轮平面回溯折线均相同，45°上坡方向积分18.031、等高线16.971，转角均0；只修正场值不说明路径或建造质量已提升。硬墙/单格口、独立边屏障、阻塞/越界源均有守卫。实际桥隧、挖填、复杂地形收敛和真机均未验；当前明确不切生产，日志round43-directional-probe.log。
+
+### 采样、拆分及跨阶段证据
+
+新增27项：TargetTerrainInputsTest 4、PlanningSnapshotActivationTest 2、AccurateColumnBatchTest 5、AccurateChunkBatchTest 1、DirectionalUpwindCandidateTest 6、RoadBuildEvidenceTest 4、ConnectionEvidenceTest 2、RouteEvidenceWiringTest 2、长路线对拍1；新类逐FQCN selectClass登记。
+
+采样交错由受控存储端口先返回旧空快照，再触发另一请求只读盘填缓存；三种列/网格/只读网格均断言后端和保存0次。整块读盘还直接验证共享瓦片版本。64轮强制清空一级缓存后仍恢复所有三通道且不重复计算；真实活动网格持有认领时关闭，列等待者在所有者释放前收到失败。这不是实际文件耗时、缓存容量策略或整合包内存压力测试。
+
+快照准备方法与b8b7194中原文逐字相同；作用域维持原ThreadLocal对象恢复，输入保持原批采样/缺样回落/宽度统计/窗口顺序。没有用离线作用域测试冒充真实ServerLevel快照发布验收。架构导入基线仅收紧：pathlogic到core 198→195、generation 65→60、pathfinding 77→75、planning 59→54、structures 10→8；新增证据边界以清理Road的两个确实未用导入维持总数，未放宽规则。
+
+开启`-Droadweaver.buildabilityShadow=on`，`[ROUTE-EVIDENCE]`使用`dimension@seed/x,z~x,z`完整端点键，正反路同键；只用于日志，不改RoadData、RoadFingerprint或台账。粗候选最多沿用12边/4候补预算，保护仍标unprepared；final-water/final-structure/validated逐阶段保留真实safe和reason，pavementEntries是逐站条目而非唯一列或落块计数。PathFeature用实际处理集合报COMPLETED/ABANDONED/INCOMPLETE/NOT_ATTEMPTED/CONFLICT，不能把留缺口且记台账当成成功铺路；缺口写回后读取新计划输出。没有保留全世界映射或新增寻路。世界边界仅2项AST窄接线，行为部分验证有限候选及观测异常不改变森林；需要真实日志才可评价已建可通行性，当前不换边。
+
+21组变异详细表见HANDOFF第43轮；19组改生产（含3组由AST守卫），2组改测试目录中的候选原型。全都有实际目标JUnit失败、零skip/abort；逐项finally精确checkout并比较原字节，记录.analysis_tmp/round43-cases.json、round43_mutations.py、round43-mutations.json、round43-mutation-run.log、round43-mut-*.log。700个生产Java文件，有效行>1000为0、>800为2。没有改存档协议、默认几何、crossing、spanWriteback/QualityGate或废弃GPU，也没有读写其他模组或打包部署。

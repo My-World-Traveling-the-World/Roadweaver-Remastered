@@ -1658,3 +1658,84 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 只比较最终铺装并集会漏掉站点归属与目标Y漂移，必须逐站比较中心和位置列表；只看“样条非空”也会让所有曲线变直仍绿。冻结参照若调用新组件就变成自证，数学依赖也需一并冻结。嵌套Vec2d私有字段不能搬到另一个类后直接读，改record访问器并保留浮点运算顺序。新postprocess文件必须登记S5；架构棘轮按文件计入依赖，不能靠放宽基线过关，删除旧的真实未用导入保持依赖计数不增。类拆小本身不等于运行更快，后续优化仍先测工作量与分配。
+
+
+---
+
+## 第43轮 ｜ 2026-11-17 ｜ 五项代码推进与离线证据 ｜ 源码/测试b8b7194～c1805a8 ｜ `PASS tests=1543 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件/提交 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| PathWidthRasterizer 108/88行；b8b7194、c1805a8 | 连续站号改列表，保留HashSet及原插入/输出顺序；新增同JVM分配探针及512站对拍 | 性能、行为等价 |
+| StructureAvoidanceService 661/458行；PlanningSnapshotPreparation 167/156、Activation 19/15；18ed8f1 | 整段准备/发布与线程作用域等价迁移；嵌套公开类型仍留原处 | 行为等价，先1516全绿单独提交 |
+| TargetYComputation 526/346行；TargetTerrainInputs 71/62；18ed8f1、1815686、c1805a8 | 输入批采样、缺样回落及支撑统计独立端口；保留旧跨度及模式编排；新增中文原因注释与直接守卫 | 行为等价 |
+| AccurateColumnBatch、AccurateChunkBatch及原测试类；ee69961、d95034b | 四条只读盘缓存填充在实际放入后发布；补64轮驱逐与关闭期间列等待者回归 | 行为变更：减少旧未命中导致的重复计算，不改高度值 |
+| DirectionalUpwindCandidate/Test及DirectionalCostProbe；e680bfb | 仅测试目录候选三角迎风与同JVM方向/路径/耗时对照；明确不采用慢原型 | 测试基建，生产行为等价 |
+| RouteEvidenceId、RoadBuildEvidence 17/12及60/49行；RoadPipeline/PipelinePlanner/Road/PathFeature；827b69d | 受原影子开关控制，完整端点ID串起有限粗候选、终态校验与区块处理结果，放弃独立于完成 | 观测接线，选网/施工决策等价 |
+| 测试套件、三个新证据测试类及架构基线 | 新类按FQCN登记；清理实际未用导入，基线仅减不增 | 测试基建 |
+
+行数均为物理/有效，700个生产Java文件，有效行>1000为0、>800为2。Road当前893/693、PathFeature 813/646，不因新观测接线越线。没有修改CODEC/schema/配置键/持久枚举，没有更改河流长城或其他相邻工程，没有打包部署。
+
+### 二、我验证了什么（附负控）
+
+开工status空，pull --rebase已是最新，HEAD f67e70b；基线1516全绿、Fabric通过。宽度先量原实现与冻结参照相同分配，再改列表并全绿提交。快照准备完整方法与b8b7194原文一致；依赖守卫曾要求收紧减少的基线，按实际减少更新，没有放宽。三个查盘交错在原实现先红3项（round43-disk-fill-before.log），整块填充先红1项（round43-chunk-fill-before.log），修复后全绿。六项拆分守卫、六项采样守卫、六项候选守卫、八项证据守卫及一项长路线对拍，共27项；2项证据AST只证明世界边界窄接线，不能算真实世界运行。
+
+宽度固定输入同JVM/512MiB、30轮预热/15组交替p50，逐站中心和位置列表先对拍；数据见下表。2048站分配约减35.3%，没有少访问列或改变几何。单轮微基准不等于FPS/加载耗时收益。
+
+| 站数 / 宽度 | 包围盒列访问次数（两版相同） | 冻结基线分配 B | 当前分配 B | 基线p50 ms | 当前p50 ms |
+|---|---|---|---|---|---|
+| 128 / 5 | 41,148 | 338,856 | 333,200 | 1.0652 | 0.9762 |
+| 512 / 5 | 165,564 | 1,921,864 | 1,334,728 | 3.6509 | 3.2337 |
+| 2048 / 5 | 663,228 | 8,264,704 | 5,348,960 | 14.8574 | 12.9518 |
+
+方向原型33×33解析面：45°时分开上坡1.0625与等高线1.0000，但生产/候选p50 0.3511/7.8754 ms，平面回溯折线相同。没有桥隧/实际挖填或非凸度量收敛证据，故只留离线实验，生产FMM不变。可复现命令、0°数据与范围见VALIDATION第43轮。观测输出只关联证据，不从粗湿格或台账反推成功施工。
+
+恢复全部临时变异后再次完整执行:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off，1543全绿、零skip/abort，Fabric BUILD SUCCESSFUL；日志round43-final-after-mutations.log。21组均真实目标JUnit红，共24次失败，19组生产代码变异（含3组AST守卫）、2组测试目录候选变异；不将编译/脚本失败记为红。脚本先断言所有锚点唯一/指定次数，每项finally精确git checkout且逐字恢复；末尾status空。脚本/输入/JSON/日志位于.analysis_tmp/round43_mutations.py、round43-cases.json、round43-mutations.json、round43-mutation-run.log及round43-mut-*.log。
+
+| # | 故意破坏 | 守卫 | JUnit失败数 |
+|---|---|---|---|
+| 1 | 长路线站号截到127：`station-index-wraps-at-127` | `postprocess.PathWidthRasterizerContractTest#longRoadAboveIntegerCachePreservesEveryOrderedStationProduct` | 1，红 |
+| 2 | 全部列归首站：`all-columns-go-to-first-station` | `postprocess.PathWidthRasterizerContractTest#midpointColumnsStayWithTheLaterStationAtHalfwayAndKeepTargetY` | 1，红 |
+| 3 | 排除路宽闭边界：`width-boundary-excluded` | `postprocess.PathWidthRasterizerContractTest#straightRoadMatchesTheClosedCapsuleIncludingNegativeCoordinatesAndCaps(int)` | 3，红 |
+| 4 | 完整样本仍读世界：`complete-samples-still-read-world` | `pathlogic.core.TargetTerrainInputsTest#completeBatchIncludesCentersAndNeverReadsWorld` | 1，红 |
+| 5 | 缺中心改用Y=0：`missing-center-flattened-to-zero` | `pathlogic.core.TargetTerrainInputsTest#missingCenterUsesWidthSupportAndMissingWidthUsesSampledCenter` | 1，红 |
+| 6 | 删除输入中断检查：`input-cancellation-ignored` | `pathlogic.core.TargetTerrainInputsTest#interruptionStopsBeforeCallingSamplingOrWorldPorts` | 1，红 |
+| 7 | 内层退出丢外层快照：`nested-snapshot-not-restored` | `pathlogic.structures.PlanningSnapshotActivationTest#nestedExpansionRestoresTheExactOuterSnapshotEvenOnFailure` | 1，红 |
+| 8 | 忽略临时扩宽：`temporary-radius-ignored` | `pathlogic.structures.PlanningSnapshotActivationTest#nestedExpansionRestoresTheExactOuterSnapshotEvenOnFailure` | 1，红 |
+| 9 | 漏列查盘发布：`column-disk-publication-omitted` | `pathfinding.sampling.AccurateColumnBatchTest#diskOnlyFillDuringStaleMissDoesNotRecompute(int)` | 1，红 |
+| 10 | 漏网格查盘发布：`grid-disk-publication-omitted` | `pathfinding.sampling.AccurateColumnBatchTest#diskOnlyFillDuringStaleMissDoesNotRecompute(int)` | 1，红 |
+| 11 | 漏只读网格查盘发布：`read-only-grid-publication-omitted` | `pathfinding.sampling.AccurateColumnBatchTest#diskOnlyFillDuringStaleMissDoesNotRecompute(int)` | 1，红 |
+| 12 | 漏整块查盘发布：`chunk-disk-publication-omitted` | `pathfinding.sampling.AccurateChunkBatchTest#diskOnlyChunkFillPublishesTheSharedColumnTileVersion` | 1，红 |
+| 13 | 关闭不唤醒普通列等待者：`shutdown-does-not-wake-column-waiters` | `pathfinding.sampling.AccurateColumnBatchTest#closeDuringActiveGridWakesColumnWaiterBeforeOwnerReturns` | 1，红 |
+| 14 | 候选退化各向同性：`candidate-loses-directional-cost` | `metric.DirectionalUpwindCandidateTest#directionalCandidateDistinguishesUphillFromContourAfterRotation(int)` | 2，红 |
+| 15 | 候选忽略边硬禁行：`candidate-crosses-edge-only-barrier` | `metric.DirectionalUpwindCandidateTest#edgeOnlyBarrierCannotBeBypassedWithDiagonalStencil` | 1，红 |
+| 16 | 观测ID丢第二端点：`evidence-collapses-distinct-endpoints` | `pathlogic.metrics.RoadBuildEvidenceTest#fullEndpointsSurviveReversalNegativeCoordinatesAndWorldChanges` | 1，红 |
+| 17 | 把放弃当完工：`abandoned-counts-as-completed` | `pathlogic.metrics.RoadBuildEvidenceTest#durableAbandonmentAndUntouchedSliceAreNotCompletion` | 1，红 |
+| 18 | 生产水校验结果伪造：`real-water-result-forged` | `planning.RouteEvidenceWiringTest#realValidationCallsUseFinalResultsBehindTheExactDiagnosticGate` | 1，红 |
+| 19 | 生产观测false短路：`diagnostics-short-circuited` | `planning.RouteEvidenceWiringTest#realValidationCallsUseFinalResultsBehindTheExactDiagnosticGate` | 1，红 |
+| 20 | 生产完工集合参数伪造：`chunk-completed-input-forged` | `planning.RouteEvidenceWiringTest#chunkEvidenceUsesActualAttemptSetsAndCoarseObserverUsesRealCoordinates` | 1，红 |
+| 21 | 粗候选回调永不执行：`coarse-observer-never-called` | `pipeline.ConnectionEvidenceTest#selectedAndAlternativeEvidenceUsesRealEndpointsAndLeavesTopologyUnchanged` | 1，红 |
+
+### 三、我没能验证什么
+
+- **需要真机的**：首次生成/重开/Chunky同跑、FPS/MSPT与加载尾延迟；真实ServerLevel的快照准备发布、保护/桥头/隧道施工和三模组最终Mixin顺序未验。新观测仅接线，没有声称已采集现场样本；本轮未重跑任何外部模组回归。
+- **需要真实存档的**：4096预热工作集、真实缓存容量压力及NoiseChunk持有、实际磁盘争用/卸载等待、旧路重铺和跨实例并写；受控存储与强制一级驱逐不代替这些。
+- **怀疑但没有证据的**：列对象重复生成和HashSet尝试在现场的占比、采样端到端节省多少时间、同步READY/施工台账写盘是否为主要卡顿源，均未量；不据此改异步或预算。
+- **已知边界未改的**：方向原型慢、没有任意非凸度量收敛与复杂地形召回证明，明确不用于生产；逐站pavementEntries不是唯一列/方块写入，COMPLETED是当前施工函数结案而非可通行性实测。NOT_ATTEMPTED不代表已从台账验证完工。只有旧数据无owner时标missing-owner-pair，无法与粗端点自动关联。ID在相同维度/种子/端点的存档副本相同，汇总须区分日志会话；它不是持久唯一身份。crossing、双平滑默认、长桥正弦、村庄包围盒、spanWriteback/QualityGate默认及所有存档协议保持。
+
+### 四、遗留半截的东西
+
+五项均有本轮可编译交付：性能有数据、拆分有等价提交、采样缺口有先红后绿、方向有明确不采用结论、证据有生产接线和窄守卫；没有未恢复变异或半写源码。真实数据采集、证据汇总工具及按可建性真正换边属于下一阶段，没有伪装成本轮完成。代码小步提交；文档提交后正常push，最终复核工作区空和origin/main对齐。未制作发布件，不新增虚假RELEASES记录。
+
+### 五、下一轮我会先做什么
+
+1. 继续离线采样压力：补只读网格部分前缀填充交错、真实容量驱逐及关闭/等待的组合，不把版本号当命中。再按实际重复路径决定是否扩大复用。
+2. 宽度探针量重复列对象分配；如果仍占主导，再试只作查询的可变坐标，最终存入集合仍不可变且保持原插入/输出顺序，分配与耗时都要对照。
+3. 可建性先做按ID聚合日志，区分粗代理、终态校验、区块放弃和实际完成；收到存档样本前不换边。方向原型先补复杂地形/收敛与局部求值成本，未优于当前实现前不接生产。
+4. 继续分离TargetY旧模式编排时先冻结产物；READY/台账异步、4096与三模组整链、crossing和双平滑默认继续等现场证据。
+
+### 六、我踩到但已解决的坑
+
+Windows Python写文本默认会变成CRLF，新Java必须显式newline='\n'；宽度第一次完整回归因此只被行尾守卫拦住，修正后1516全绿。迁方法要补真实静态工具宿主，不能假定同名方法仍在Road或Service；初次编译错误均修好后才计回归。架构棘轮要求减少也登记，删除未用导入后基线只能收紧，不能用放宽预算换拆分。只测短路线看不到127号之后的站点；仅验证日志格式又看不到生产从未调用，因此补长路线对拍和AST窄接线。只读盘缓存命中也是发布，忽略它会让过期空快照重复计算；关闭测试必须证明等待者先于阻塞所有者结案。方向场值更准确但路线不变且更慢，必须如实保留不采用结论。
