@@ -30,8 +30,9 @@ final class PathWidthRasterizer {
                                                                  List<BlockPos> centers,
                                                                  List<Double> centerDists,
                                                                  int width) {
-        Map<Integer, Set<BlockPos>> segmentedBlocks = new HashMap<>();
-        for (int i = 0; i < centers.size(); i++) segmentedBlocks.put(i, new HashSet<>());
+        // 站号连续且按顺序访问，用列表避免每个落列查询的整数装箱和散列表节点。
+        List<Set<BlockPos>> segmentedBlocks = new ArrayList<>(centers.size());
+        for (int i = 0; i < centers.size(); i++) segmentedBlocks.add(new HashSet<>());
 
         double halfWidth = width / 2.0;
         double halfWidthSq = halfWidth * halfWidth;
@@ -53,7 +54,8 @@ final class PathWidthRasterizer {
             for (int x = minX; x <= maxX; x++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     if (distToSegmentSq(x, z, pStart, pEnd) <= halfWidthSq) {
-                        assignToNearestCenter(x, z, centers, currentCenterIdx, segmentedBlocks);
+                        int station = nearestCenter(x, z, centers, currentCenterIdx);
+                        segmentedBlocks.get(station).add(new BlockPos(x, 0, z));
                     }
                 }
             }
@@ -72,6 +74,11 @@ final class PathWidthRasterizer {
 
     static void assignToNearestCenter(int x, int z, List<BlockPos> centers,
                                                int hint, Map<Integer, Set<BlockPos>> segmentedBlocks) {
+        // 保留原包内入口，外部夹具和调用方继续使用相同的归属算法。
+        segmentedBlocks.get(nearestCenter(x, z, centers, hint)).add(new BlockPos(x, 0, z));
+    }
+
+    private static int nearestCenter(int x, int z, List<BlockPos> centers, int hint) {
         int bestIdx = hint;
         double bestDistSq = Double.MAX_VALUE;
         int searchStart = Math.max(0, hint - 2);
@@ -95,7 +102,7 @@ final class PathWidthRasterizer {
                 bestIdx = candidateIndex;
             }
         }
-        segmentedBlocks.get(bestIdx).add(new BlockPos(x, 0, z));
+        return bestIdx;
     }
 
 }

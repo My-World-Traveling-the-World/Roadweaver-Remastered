@@ -1,0 +1,18 @@
+// 探针编译到构建目录，共享测试冻结参照，不进入生产包。
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.project(':common')
+    def out = p.layout.buildDirectory.dir('width-raster-probe')
+    def compile = p.tasks.register('compileWidthRasterProbe', JavaCompile) {
+        dependsOn p.tasks.named('testClasses')
+        source p.rootProject.file('scripts/benchmarks/WidthRasterProbe.java')
+        classpath = p.sourceSets.test.runtimeClasspath
+        destinationDirectory.set(out)
+        options.encoding = 'UTF-8'
+    }
+    p.tasks.register('widthRasterProbe', JavaExec) {
+        dependsOn compile
+        classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
+        mainClass = 'net.shiroha233.roadweaver.postprocess.WidthRasterProbe'
+        jvmArgs '-Xms512m', '-Xmx512m'
+    }
+}
