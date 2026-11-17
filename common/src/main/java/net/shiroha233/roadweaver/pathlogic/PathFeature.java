@@ -9,7 +9,6 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.WorldGenLevel;
@@ -26,27 +25,19 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegment;
 import net.shiroha233.roadweaver.config.PathFeatureConfig;
 import net.shiroha233.roadweaver.decoration.base.Decoration;
 import net.shiroha233.roadweaver.decoration.system.DecorationExecutor;
-import net.shiroha233.roadweaver.decoration.system.DecorationPlanner;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
 import net.shiroha233.roadweaver.pathlogic.construction.BuildFrame;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlanner;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlannerNew;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
-import net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder;
 import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
-import net.shiroha233.roadweaver.pathlogic.construction.SegmentPaver;
-import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.HeightProfileService;
-import net.shiroha233.roadweaver.pathlogic.bridge.BuoyBuilder;
 import net.shiroha233.roadweaver.pathlogic.bridge.BuoyMarkerPlanner;
-import net.shiroha233.roadweaver.decoration.system.SkippedBridgeBankSignPlanner;
 import net.shiroha233.roadweaver.worldgen.road.RoadChunkPlan;
 import net.shiroha233.roadweaver.worldgen.road.RoadChunkSlice;
 import net.shiroha233.roadweaver.worldgen.road.RoadWorldgenPlanCache;
 import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
 import net.shiroha233.roadweaver.persistence.RoadReplacement;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
-import net.shiroha233.roadweaver.util.Line;
 import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -496,184 +487,14 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         BridgeSegmentPlanner.Context bridgeCtx = BridgeSegmentPlanner.newContext();
 
         // 先接同序同步执行器，完整站之间可恢复；跨tick启用必须另验装饰、台账及巨树租约。
-        state.cursor().runAll(i -> {
-            // Shared stations are navigation data for this later road only.
-            // The owner road is solely responsible for pavement, clearing,
-            // bridge decks/piers, tunnels, and decorations at these stations.
-            if (spanMasks.networkReuseAt(i) || spanMasks.protectedGapAt(i)) return;
-            BlockPos middle = middlePositions.get(i);
-            int segmentIndex = Math.max(0, Math.min(segments.size() - 2, i));
-            boolean centerOwned = contains(currentChunk, middle);
-            boolean templateBridgeCandidate = bridgeEnabled && isBridge[i];
-            if (!centerOwned && !templateBridgeCandidate)
-                return;
-            if (!processedSegments.add(new ProcessedSegment(roadFingerprint, i)))
-                return;
-
-            BlockPos prev = middlePositions.get(Math.max(0, i - 2));
-            BlockPos next = middlePositions.get(Math.min(middlePositions.size() - 1, i + 2));
-
-            BlockPos averaged = null;
-            int baseYForThis = baseYArr != null ? baseYArr[i] : middle.getY();
-            if (centerOwned) {
-                int sea = server.getSeaLevel();
-                int motion = world.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, middle.getX(), middle.getZ());
-                int surface = world.getHeight(Heightmap.Types.WORLD_SURFACE_WG, middle.getX(), middle.getZ());
-                int topYCenter = (motion > sea + 2) ? motion : surface;
-                averaged = new BlockPos(middle.getX(), topYCenter, middle.getZ());
-                if (baseYArr == null) {
-                    baseYForThis = topYCenter;
-                }
-            }
-
-            RoadSegmentPlacement seg = segments.get(i);
-            if (skipSegments != null && i >= 0 && i < skipSegments.length && skipSegments[i]) {
-                if (!centerOwned) {
-                    return;
-                }
-                if (useBuoysWhenSkipped && buoyMarkersForSkipped != null && i < buoyMarkersForSkipped.length
-                        && buoyMarkersForSkipped[i]) {
-                    BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
-                }
-                return;
-            }
-
-            if (useBuoysInstead && isBridge != null && i >= 0 && i < isBridge.length && isBridge[i]) {
-                if (!centerOwned) {
-                    return;
-                }
-                if (buoyMarkersForBridge != null && i < buoyMarkersForBridge.length && buoyMarkersForBridge[i]) {
-                    BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
-                }
-                return;
-            }
-
-            if (bridgeEnabled && isBridge[i]) {
-                var line = bridgeSegment.getLine(i);
-                int actualDeckY = baseYForThis;
-                boolean placedTemplate = line != null && BridgeSegmentPlannerNew.processSegment(
-                                world, currentChunk, data, line, seg, middle, prev, actualDeckY,
-                                bridgeSegment.isLanding(i));
-                if (!placedTemplate) {
-                    if (!centerOwned) {
-                        return;
-                    }
-                    boolean placedFallback = BridgeSegmentPlanner.processSegment(world, data, seg, middle, prev, next, roadWidth, actualDeckY,
-                            deckY, segmentIndex, random, cfg, bridgeRanges, baseYArr, i, bridgeCtx, line);
-                    if (!placedFallback) {
-                        state.fail();
-                        LOGGER.warn("【桥梁站点施工失败】 " + "RoadWeaver bridge segment construction failed road={} segment={} pos={}",
-                                data.hasOwnerPair() ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
-                                i, middle);
-                    }
-                }
-            } else {
-                RoadTunnelBuilder.processSegment(world, data, seg, i, middlePositions, baseYArr,
-                        slice.isTunnelJunction(i), tunnel -> {
-                    if (tunnel.blocked()) {
-                        if (tunnel.protectedGap()) {
-                            // One genuinely hard-protected volume (confirmed
-                            // structure block, bedrock, block entity, reserved
-                            // trunk, sanctuary) stops excavation at exactly
-                            // this station. Skip it as an explicit protected
-                            // gap: the span keeps building as a tunnel around
-                            // it, the chunk completes, and the backfill loop
-                            // never retries it.
-                            LOGGER.warn("【隧道站点按保护缺口跳过，跨度仍保持隧道类型】 " + "RoadWeaver tunnel station skipped as PROTECTED_GAP road={} segment={} pos={} action=skip_station span_stays_tunnel",
-                                    data != null && data.hasOwnerPair()
-                                            ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
-                                    i, middle);
-                            return;
-                        }
-                        // Task 4: a rejected tunnel must not leave the station
-                        // half-cleaned or unpaved. Seat the station back on the
-                        // terrain line and build it as an ordinary surface road
-                        // (surface-cut fallback); if even that fails the chunk
-                        // stays incomplete so the backfill pass retries, and
-                        // the ledger never records a half-built tunnel.
-                        BlockPos blockedCenter = seg.middlePos();
-                        if (blockedCenter != null) {
-                            int surfaceY = RoadConstructionSafety.terrainHeight(
-                                    world, blockedCenter.getX(), blockedCenter.getZ());
-                            int[] fallbackY = baseYArr != null ? baseYArr : new int[middlePositions.size()];
-                            fallbackY[i] = surfaceY;
-                            LOGGER.warn("【隧道施工被拒，本段按既有规则转为地表切坡】 " + "RoadWeaver tunnel rejected; falling back to surface-cut build road={} segment={} pos={} y={} reason=see_blocked_tunnel_section",
-                                    data != null && data.hasOwnerPair()
-                                            ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
-                                    i, blockedCenter, surfaceY);
-                            SegmentPaver.SegmentGrade fallbackGrade = SegmentPaver.planGrade(
-                                    world, seg, i, middlePositions, fallbackY, false,
-                                    spanMasks.preserveGradeAt(i));
-                            boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions,
-                                    fallbackY, fallbackGrade, roadType, materials, slabMaterials, random, cfg,
-                                    refusalSink.stations());
-                            if (!paved) {
-                                // T-24: 记录拒绝,缺口轮次会把连续失败站落为
-                                // PROTECTED_GAP 并停止该 chunk 的重试循环。
-                                if (refusalSink.stations().containsKey(i)) state.refuse(i);
-                                state.fail();
-                            }
-                            return;
-                        }
-                        state.fail();
-                        return;
-                    }
-                    SegmentPaver.SegmentGrade grade = SegmentPaver.planGrade(
-                            world, seg, i, middlePositions, baseYArr, tunnel.active(),
-                            spanMasks.preserveGradeAt(i));
-                    boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions, baseYArr, grade,
-                            roadType, materials, slabMaterials, random, cfg, refusalSink.stations(),
-                            tunnel.portal());
-                    if (!paved) {
-                        if (refusalSink.stations().containsKey(i)) state.refuse(i);
-                        state.fail();
-                        // Do not apply a tunnel shell after its road deck or
-                        // clearance preflight failed. That created orphaned
-                        // tunnel mouths/platforms and disconnected routes.
-                        return;
-                    }
-                    RoadTunnelBuilder.apply(world, tunnel);
-                });
-
-                if (cfg.roadAppearance().roadSignsEnabled()) {
-                    SkippedBridgeBankSignPlanner.addIfSkippedBridgeBank(
-                            world,
-                            decorations,
-                            averaged,
-                            next,
-                            prev,
-                            roadWidth,
-                            skipSegments,
-                            i);
-                }
-            }
-
-            // Bridge segments use the dedicated guardrail-lantern system.  Do
-            // not also run the normal road decoration planner here: doing so
-            // places tall roadside lamps on the deck (or below a water span)
-            // and duplicates the bridge lighting.
-            // T-24: 施工拒绝站不放路灯 —— 失败站没有任何路面,路灯会插进
-            // 村庄/地形里(用户观察点 -523,144,-263 的密集路灯即来源于此)。
-            if (centerOwned && !spanMasks.directCrossingAt(i) && !isBridge[i]
-                    && !spanMasks.tunnelAt(i)
-                    && !state.refused(i)) {
-                // 里程按全路站序共享；仍只给本站读取当前配置，以保持装饰和拒绝分支的顺序。
-                int lampInterval = Math.max(1, cfg.lampInterval());
-                DecorationPlanner.addDecoration(
-                        world,
-                        decorations,
-                        averaged,
-                        segmentIndex,
-                        next,
-                        prev,
-                        middlePositions,
-                        roadWidth,
-                        random,
-                        buildFrame.stationSpacing().nearestToMultiple(segmentIndex, lampInterval),
-                        lampInterval,
-                        (roadType == 0 ? DecorationPlanner.Mode.ARTIFICIAL : DecorationPlanner.Mode.NATURAL));
-            }
-        });
+        var inputs = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionStationWork.Inputs(
+                data, roadFingerprint, currentChunk, slice, cfg, bridgeEnabled, roadType, roadWidth, materials, slabMaterials, segments, middlePositions, isBridge, bridgeRanges, skipSegments, spanMasks, useBuoysInstead, useBuoysWhenSkipped, buoyMarkersForBridge, buoyMarkersForSkipped, bridgeSegment, deckY, bridgeCtx, buildFrame);
+        state.profile(baseYArr);
+        var work = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionStationWork(inputs, state,
+                new net.shiroha233.roadweaver.pathlogic.construction.WorldConstructionStationAccess(world, server),
+                i -> processedSegments.add(new ProcessedSegment(roadFingerprint, i)),
+                decorations, random, refusalSink.stations());
+        state.cursor().runAll(work);
         LOGGER.info("【道路区块片段施工结果】 " + "RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
                         + "reuse={} gap={} completed={}",
                 roadFingerprint, currentChunk, slice.segmentCount(),

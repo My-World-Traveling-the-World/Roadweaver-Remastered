@@ -32,7 +32,7 @@ class ConstructionBudgetWiringTest {
     }
     @Test void roadConstructionUsesReadOnlySpanMasksAndKeepsMutableHeightAndBridgeCopies() throws Exception {
         var bodies=methods("pathlogic/PathFeature.java").get("processRoadSlice");assertNotNull(bodies);assertEquals(1,bodies.size());
-        String body=bodies.getFirst();
+        String body=bodies.getFirst()+methods("pathlogic/construction/ConstructionStationWork.java").get("accept").getFirst();
         assertTrue(body.contains("ConstructionSpanMasks.of(data, cfg.bridgeRampSegments())"),"生产必须按同一冻结道路和坡道配置复用");
         for(String call:List.of("networkReuseAt(i)","protectedGapAt(i)","preserveGradeAt(i)","directCrossingAt(i)","tunnelAt(i)"))
             assertTrue(body.contains("spanMasks."+call),"生产必须实际消费掩码: "+call);
@@ -43,11 +43,35 @@ class ConstructionBudgetWiringTest {
     @Test void liveConstructionUsesSynchronousCursorAndKeepsFinalizationOutsideIt() throws Exception {
         String slice=methods("pathlogic/PathFeature.java").get("processRoadSlice").getFirst();
         assertTrue(slice.contains("new net.shiroha233.roadweaver.pathlogic.construction.ConstructionSliceState"));
-        assertTrue(slice.contains("state.cursor().runAll("));assertTrue(slice.contains("return state.completed()"));
+        assertTrue(slice.contains("state.cursor().runAll(work)"));
+        assertTrue(slice.contains("new net.shiroha233.roadweaver.pathlogic.construction.WorldConstructionStationAccess(world, server)"));assertTrue(slice.contains("return state.completed()"));
         assertFalse(slice.contains("markComplete("));assertFalse(slice.contains("releaseChunk("));
         var all=methods("pathlogic/PathFeature.java").get("placeChunk");
         assertTrue(all.stream().anyMatch(body->body.contains("DecorationExecutor.tryPlaceDecorations(decorations)")
                 && body.contains("RoadConstructionLedger.markComplete(") && body.contains("finally") && body.contains("HugeTreeReservation.releaseChunk(")));
+    }
+    @Test void worldStationAdapterOnlyForwardsOriginalOperationsInOriginalArgumentOrder() throws Exception {
+        var adapter=methods("pathlogic/construction/WorldConstructionStationAccess.java");
+        var expected=Map.ofEntries(
+            Map.entry("seaLevel",List.of("{return server.getSeaLevel();}")),
+            Map.entry("height",List.of("{return world.getHeight(type,x,z);}")),
+            Map.entry("buoy",List.of("{BuoyBuilder.placeBuoy(world,middle,sea,random,cfg);}")),
+            Map.entry("templateBridge",List.of("{return BridgeSegmentPlannerNew.processSegment(world,chunk,data,line,seg,middle,prev,deck,landing);}")),
+            Map.entry("proceduralBridge",List.of("{return BridgeSegmentPlanner.processSegment(world,data,seg,middle,prev,next,width,actual,deck,index,random,cfg,ranges,profile,station,context,line);}")),
+            Map.entry("tunnel",List.of("{RoadTunnelBuilder.processSegment(world,data,seg,index,centers,profile,junction,consumer);}")),
+            Map.entry("terrain",List.of("{return RoadConstructionSafety.terrainHeight(world,x,z);}")),
+            Map.entry("grade",List.of("{return SegmentPaver.planGrade(world,seg,index,centers,profile,tunnel,crossing);}")),
+            Map.entry("pave",List.of("{return SegmentPaver.paveSegment(world,data,seg,index,centers,profile,grade,type,materials,slabs,random,cfg,refusals);}","{return SegmentPaver.paveSegment(world,data,seg,index,centers,profile,grade,type,materials,slabs,random,cfg,refusals,portal);}")),
+            Map.entry("apply",List.of("{RoadTunnelBuilder.apply(world,plan);}")),
+            Map.entry("bankSign",List.of("{SkippedBridgeBankSignPlanner.addIfSkippedBridgeBank(world,decorations,averaged,next,prev,width,skipped,index);}")),
+            Map.entry("decorate",List.of("{DecorationPlanner.addDecoration(world,decorations,averaged,index,next,prev,centers,width,random,intervalStation,interval,mode);}"))
+        );
+        assertEquals(expected.keySet(),adapter.keySet(),"适配器不能夹带结案、读写或随机操作");
+        for(var entry:expected.entrySet()) {
+            var actual=adapter.get(entry.getKey()).stream().map(body->body.replaceAll("\\s+", "")).sorted().toList();
+            var frozen=entry.getValue().stream().map(body->body.replaceAll("\\s+", "")).sorted().toList();
+            assertEquals(frozen,actual,"原操作参数及转发次数不可改变:"+entry.getKey());
+        }
     }
     private static Map<String,List<String>> methods(String relative) throws Exception {
         Path root=Path.of("src/main/java/net/shiroha233/roadweaver");

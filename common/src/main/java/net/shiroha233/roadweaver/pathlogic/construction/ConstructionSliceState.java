@@ -7,6 +7,10 @@ public final class ConstructionSliceState {
     private final ConstructionStationCursor cursor;
     private final boolean[] refused;
     private boolean completed=true;
+    // 隧道拒绝会原位写回地表高度，数组只属本次片段，不能在多个区块间共享。
+    private int[] profile;
+    public void profile(int[] value){profile=value;}
+    public int[] profile(){return profile;}
     public ConstructionSliceState(int stations,int count,IntUnaryOperator stationAt) {
         refused=new boolean[stations];cursor=new ConstructionStationCursor(count,stationAt);
     }

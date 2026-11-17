@@ -108,7 +108,7 @@ class BridgeDeckYConsistencyTest {
                         + "它与 PathFeature 传的 baseYForThis（未 +1）配套，模板甲板才落在 profile Y。\n"
                         + "改这个 +2 或改 PathFeature 的传参，两边必须同步，否则模板桥整体偏一格");
 
-        String feature = stripComments(read(PKG + "pathlogic/PathFeature.java"));
+        String feature = stripComments(read(PKG + "pathlogic/construction/ConstructionStationWork.java"));
         assertTrue(compact(feature).contains("intactualDeckY=baseYForThis;"),
                 "PathFeature 传给模板路径的必须是 `int actualDeckY = baseYForThis;`（**不加 1**）。\n"
                         + "注意：它与传给程序化兜底的参数是同一个变量，但两条路径对它的解释不同 ——\n"

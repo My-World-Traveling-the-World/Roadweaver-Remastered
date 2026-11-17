@@ -89,14 +89,14 @@ pathfinding -> pathlogic                          24
 pathfinding -> persistence                        3
 pathfinding -> pipeline                           1
 pathfinding -> runtime                            8
-pathlogic -> compat                             17
+pathlogic -> compat 17
 # ★ 2026-11-14：87 -> 89。原因是 S7「第 3 级前置 A」把 SurfaceGradeLimits
 #   从 RoadGradePlanner 抽成顶层类型 pathlogic/grade/SurfaceGradeLimits.java，
 #   新文件自带 ConfigService + PlanningConfig 两个 import（凭空多 2 次）。
 #   这是「同一份代码换位置」的直接后果，不是依赖恶化。
 #    同一提交再 +1：ModeDpBridge 需要 config.sub.RoadGenerationConfig 取坡度口径
 #    （与 DP 剖面求解同参，否则 AB 比的是两套坡度）。
-pathlogic -> config                             78
+pathlogic -> config 81
 # ★ 2026-11-14：217 -> 219。新增 pathlogic/profile/ModeDpBridge（桥隧 AB 观测桥）
 #   需要 core.model.RoadSpan 与 core.model.SpanType 来表达「一段桥/隧道」，
 #   这是把 ModeDpSolver 的逐站模式翻译回跨度所必需的 2 个 import。
@@ -107,23 +107,23 @@ pathlogic -> config                             78
 #   新增 pathlogic/profile/ExistingRoadProbe 补「已有公路」这条禁地面来源，
 #   需要 RoadData / RoadFootprint / RoadShardStorage（+1 core、+2 persistence）。
 #   方向正确：业务层(pathlogic) 依赖基础设施(persistence)，不是反过来。
-pathlogic -> core                               196
-pathlogic -> decoration                         21
-pathlogic -> generation                         60
+pathlogic -> core 202
+pathlogic -> decoration 26
+pathlogic -> generation 60
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次
 #   pathfinding.terrain.PathTerrainField —— 禁地面掩码需要「水面」这一独立证据源，
 #   不再复用旧判定的 isCrossing（解除循环论证）。
-pathlogic -> pathfinding                        75
+pathlogic -> pathfinding 75
 # 2026-11-14 批3：RoadConstructionVolumePlanner 用 RoadShardStorage.computeFingerprint 接 BuildFrame。
-pathlogic -> persistence                        24
-pathlogic -> planning                           54
-pathlogic -> postprocess                        20
-pathlogic -> runtime                            18
-pathlogic -> search                             10
-pathlogic -> spec                               1
-pathlogic -> structures                         8
-pathlogic -> util                               9
-pathlogic -> worldgen                           3
+pathlogic -> persistence 24
+pathlogic -> planning 54
+pathlogic -> postprocess 20
+pathlogic -> runtime 18
+pathlogic -> search 10
+pathlogic -> spec 1
+pathlogic -> structures 8
+pathlogic -> util 10
+pathlogic -> worldgen 4
 persistence -> config                             2
 persistence -> core                               18
 persistence -> pathfinding                        6
