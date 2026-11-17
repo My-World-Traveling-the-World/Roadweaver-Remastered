@@ -42,25 +42,26 @@ public final class HeightProfileService {
         }
         int[] baseYArr = new int[n];
         for (int ii = 0; ii < n; ii++) {
-            java.util.List<Integer> hs = new java.util.ArrayList<>();
+            // 保持每次世界读取的顺序和次数，只去掉临时列表、装箱与Stream。
+            long sum = 0; int count = 0;
             for (int jj = ii - averagingRadius; jj <= ii + averagingRadius; jj++) {
                 if (jj >= 0 && jj < n) {
                     BlockPos sp = middlePositions.get(jj);
-                    if (new ChunkPos(sp).equals(currentChunk)) {
+                    if ((sp.getX() >> 4) == currentChunk.x && (sp.getZ() >> 4) == currentChunk.z) {
                         int yTop = world.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sp.getX(), sp.getZ());
-                        hs.add(yTop);
+                        sum += yTop; count++;
                     }
                 }
             }
-            if (hs.isEmpty()) {
+            if (count == 0) {
                 BlockPos mid = middlePositions.get(ii);
-                if (new ChunkPos(mid).equals(currentChunk)) {
+                if ((mid.getX() >> 4) == currentChunk.x && (mid.getZ() >> 4) == currentChunk.z) {
                     baseYArr[ii] = world.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, mid.getX(), mid.getZ());
                 } else {
                     baseYArr[ii] = middlePositions.get(ii).getY();
                 }
             } else {
-                baseYArr[ii] = (int) Math.round(hs.stream().mapToInt(Integer::intValue).average().orElse(middlePositions.get(ii).getY()));
+                baseYArr[ii] = (int) Math.round((double) sum / count);
             }
         }
         if (!slopeLimitEnabled) {
