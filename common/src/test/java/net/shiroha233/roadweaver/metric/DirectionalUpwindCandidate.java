@@ -17,6 +17,8 @@ public final class DirectionalUpwindCandidate {
         double[] times = new double[grid.arrayLength()];
         Arrays.fill(times, Double.POSITIVE_INFINITY);
         boolean[] frozen = new boolean[times.length];
+        // 同一格的方向目标会被反复求值；局部二次型只取一次，缓存仅在本次小场内有效。
+        DirectionalLocalCost[] localCosts = new DirectionalLocalCost[times.length];
         if (!terrain.contains(sx, sz) || !metric.isPassable(sx, sz)) return field(metric, times);
         int source = grid.snapX(sx) + grid.snapZ(sz) * grid.columns();
         int snappedX = terrain.minX() + source % grid.columns() * terrain.step();
@@ -36,7 +38,8 @@ public final class DirectionalUpwindCandidate {
                 if (frozen[target]) continue;
                 int x = terrain.minX() + nx * terrain.step(), z = terrain.minZ() + nz * terrain.step();
                 if (!metric.isPassable(x, z)) continue;
-                double value = update(metric, nx, nz, times, frozen);
+                if (localCosts[target] == null) localCosts[target] = DirectionalLocalCost.sample(metric, x, z);
+                double value = update(metric, nx, nz, times, frozen, localCosts[target]);
                 if (value < times[target]) { times[target] = value; queue.add(new Entry(target, value)); }
             }
         }
@@ -48,7 +51,7 @@ public final class DirectionalUpwindCandidate {
         return new ArrivalTimeField(times, t.minX(), t.minZ(), t.columns(), t.rows(), t.step(), metric);
     }
 
-    private static double update(FinslerMetric metric, int ix, int iz, double[] times, boolean[] frozen) {
+    private static double update(FinslerMetric metric, int ix, int iz, double[] times, boolean[] frozen, DirectionalLocalCost local) {
         var terrain = metric.terrain(); int w = terrain.columns(), d = terrain.rows(), step = terrain.step();
         int x = terrain.minX() + ix * step, z = terrain.minZ() + iz * step;
         double best = Double.POSITIVE_INFINITY;
@@ -57,7 +60,7 @@ public final class DirectionalUpwindCandidate {
             if (!accepted(ax, az, w, d, frozen)) continue;
             int a = ax + az * w;
             if (!safe(metric, x, z, x + DX[dir] * step, z + DZ[dir] * step)) continue;
-            best = Math.min(best, times[a] + objective(metric, x, z, dir, dir, 0, 0, 0));
+            best = Math.min(best, times[a] + objective(local, step, dir, dir, 0, 0, 0));
             int next = (dir + 1) % 8, bx = ix + DX[next], bz = iz + DZ[next];
             if (!accepted(bx, bz, w, d, frozen)
                     || !safe(metric, x, z, x + DX[next] * step, z + DZ[next] * step)) continue;
@@ -66,17 +69,17 @@ public final class DirectionalUpwindCandidate {
             double position = 0, value = Double.POSITIVE_INFINITY;
             for (int j = 0; j <= 16; j++) {
                 double at = j / 16.0;
-                double cost = objective(metric, x, z, dir, next, at, times[a], times[b]);
+                double cost = objective(local, step, dir, next, at, times[a], times[b]);
                 if (cost < value) { value = cost; position = at; }
             }
             double lo = Math.max(0, position - 1.0 / 16), hi = Math.min(1, position + 1.0 / 16);
             for (int iteration = 0; iteration < 24; iteration++) {
                 double left = lo + (hi - lo) / 3, right = hi - (hi - lo) / 3;
-                if (objective(metric, x, z, dir, next, left, times[a], times[b])
-                        < objective(metric, x, z, dir, next, right, times[a], times[b])) hi = right;
+                if (objective(local, step, dir, next, left, times[a], times[b])
+                        < objective(local, step, dir, next, right, times[a], times[b])) hi = right;
                 else lo = left;
             }
-            value = Math.min(value, objective(metric, x, z, dir, next, (lo + hi) / 2, times[a], times[b]));
+            value = Math.min(value, objective(local, step, dir, next, (lo + hi) / 2, times[a], times[b]));
             // 只接受不早于两个前驱的迎风更新，保持按到达时间冻结的因果顺序。
             if (value >= Math.max(times[a], times[b])) best = Math.min(best, value);
         }
@@ -87,10 +90,10 @@ public final class DirectionalUpwindCandidate {
         return x >= 0 && z >= 0 && x < w && z < d && frozen[x + z * w];
     }
 
-    private static double objective(FinslerMetric metric, int x, int z, int a, int b, double t, double ta, double tb) {
-        double dx = (DX[a] * (1 - t) + DX[b] * t) * metric.terrain().step();
-        double dz = (DZ[a] * (1 - t) + DZ[b] * t) * metric.terrain().step();
-        return ta * (1 - t) + tb * t + Math.hypot(dx, dz) * metric.cost(x, z, -dx, -dz);
+    private static double objective(DirectionalLocalCost local, int step, int a, int b, double t, double ta, double tb) {
+        double dx = (DX[a] * (1 - t) + DX[b] * t) * step;
+        double dz = (DZ[a] * (1 - t) + DZ[b] * t) * step;
+        return ta * (1 - t) + tb * t + local.travel(dx, dz);
     }
 
     private static boolean safe(FinslerMetric metric, int x, int z, int nx, int nz) {

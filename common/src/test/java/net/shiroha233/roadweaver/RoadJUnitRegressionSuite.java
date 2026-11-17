@@ -488,6 +488,8 @@ public final class RoadJUnitRegressionSuite {
                 // 压缩状态必须与冻结的整场版本对拍场值和终态拓扑。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmWorkingSetTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.DirectionalUpwindCandidateTest"),
+                // 方向候选只做离线实验，缓存等价与解析面细化趋势单独约束。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.DirectionalCandidateStudyTest"),
                 // 分页场必须同时证明近目标少分配、远端不断路和稠密访问数值不漂移。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmPagedWorkspaceTest"))
                 .build();

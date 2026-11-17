@@ -4,7 +4,7 @@ gradle.projectsEvaluated {
     def out = p.layout.buildDirectory.dir('directional-cost-probe')
     def compile = p.tasks.register('compileDirectionalCostProbe', JavaCompile) {
         dependsOn p.tasks.named('testClasses')
-        source p.rootProject.file('scripts/benchmarks/DirectionalCostProbe.java')
+        source p.rootProject.files('scripts/benchmarks/DirectionalCostProbe.java', 'scripts/benchmarks/DirectionalStudyProbe.java')
         classpath = p.sourceSets.test.runtimeClasspath
         destinationDirectory.set(out)
         options.encoding = 'UTF-8'
@@ -13,6 +13,13 @@ gradle.projectsEvaluated {
         dependsOn compile
         classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
         mainClass = 'net.shiroha233.roadweaver.metric.DirectionalCostProbe'
+        jvmArgs '-Xms512m', '-Xmx512m'
+    }
+    // 细化与局部求值实验单独执行，避免把离线候选误接到生产入口。
+    p.tasks.register('directionalStudyProbe', JavaExec) {
+        dependsOn compile
+        classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
+        mainClass = 'net.shiroha233.roadweaver.metric.DirectionalStudyProbe'
         jvmArgs '-Xms512m', '-Xmx512m'
     }
 }
