@@ -349,6 +349,28 @@ final class AccurateChunkBatchTest {
                 "检测重入之前不得为前面的键留下无人完成的认领");
     }
 
+    @Test
+    void diskOnlyChunkFillPublishesTheSharedColumnTileVersion() {
+        Store store = new Store();
+        store.stored.put(A, chunk(A));
+        AccurateSamplePublications publications = new AccurateSamplePublications();
+        Map<Long, AccurateHeightChunk> values = new ConcurrentHashMap<>();
+        var cache = new AccurateChunkBatch.Cache() {
+            public AccurateHeightChunk get(long key) { return values.get(key); }
+            public void put(long key, AccurateHeightChunk chunk) { values.put(key, chunk); }
+            public void ensureOpen() {}
+        };
+        var batch = new AccurateChunkBatch(backend(keys -> { throw new AssertionError("unexpected backend"); }),
+                store, cache, () -> 5_000, publications);
+        long before = publications.version();
+        assertEquals(List.of(A), new ArrayList<>(batch.sample(List.of(A)).keySet()));
+        long tile = SamplerStatics.tileKey(ChunkPos.getX(A) * 16, ChunkPos.getZ(A) * 16);
+        assertTrue(publications.changedSince(List.of(tile), before),
+                "整块只查盘也要通知列/网格，不能只在后端计算后发布");
+        assertFalse(publications.changedSince(List.of(tile), publications.version()));
+        assertEquals(0, store.saves.get());
+    }
+
     private static AccurateHeightBackend backend(Function<Collection<Long>, Map<Long, AccurateHeightChunk>> fn) {
         return new AccurateHeightBackend() {
             @Override

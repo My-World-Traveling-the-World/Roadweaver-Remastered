@@ -213,6 +213,7 @@ final class AccurateChunkBatch {
         if (stored.isEmpty()) {
             return;
         }
+        LinkedHashSet<Long> loadedTiles = new LinkedHashSet<>();
         Iterator<Long> iterator = unresolved.iterator();
         while (iterator.hasNext()) {
             long key = iterator.next();
@@ -222,8 +223,12 @@ final class AccurateChunkBatch {
             }
             cache.put(key, chunk);
             result.put(key, chunk);
+            loadedTiles.add(ChunkPos.asLong(Math.floorDiv(ChunkPos.getX(key), 16),
+                    Math.floorDiv(ChunkPos.getZ(key), 16)));
             iterator.remove();
         }
+        // 整块查盘填充可供列/网格直接读取，同样必须淘汰它们的旧未命中观察。
+        publications.publishedTiles(loadedTiles);
     }
 
 }
