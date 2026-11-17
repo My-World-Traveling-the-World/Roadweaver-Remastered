@@ -15,16 +15,16 @@
 
 - `RouteEvidenceId` 仅是世界/种子/完整端点的观测标识，不替代持久道路身份或施工完工键。RoadPipeline经有界候选回调交出真实端点；规划器补世界信息，RoadBuildEvidence用同标识输出终态校验和区块结案。完成、放弃、未完成和未尝试分开；开关关闭时不扫描观测产物，不保存全世界证据表。
 - `ExistingRoadJunctionService` 保留接路入口及世界适配；`JunctionBatchCoordinator` 承担批量选主、校验、捐赠写回和资源释放。`JunctionSpanIndex` 只在同一份道路输入的一次裁切内复用 X/Z 站号索引，不做跨道路缓存。
-- `PathPostProcessor` 保留世界采样、桥掩码及几何流水线编排；`PathControlSimplifier`管简化/补回，`PathControlRelaxer`管限幅/冻结，`PathSplineSampler`管样条和按原站序投影Y，`PathWidthRasterizer`管宽度落列与站点归属。四个纯计算组件不读世界，曲线、保护线性通道和剖面重建共用落列；桥头/急弯、3D采样步数、投影向前窗口、闭区间和等距hint沿用原规则。拆分不移除第二次陆地松弛，不改变任何默认几何。
+- `PathPostProcessor` 保留世界采样、桥掩码及几何流水线编排；`PathControlSimplifier`管简化/补回，`PathControlRelaxer`管限幅/冻结，`PathSplineSampler`管样条和按原站序投影Y，`PathWidthRasterizer`管宽度落列与站点归属。四个纯计算组件不读世界，曲线、保护线性通道和剖面重建共用落列；落列仅用调用内可变坐标查询去重，集合始终保存不可变坐标，保留原插入、扩容和输出顺序；桥头/急弯、3D采样步数、投影向前窗口、闭区间和等距hint沿用原规则。拆分不移除第二次陆地松弛，不改变任何默认几何。
 - `RoutePreloadWork` 分别约束 32 个在途加载和每 tick 8 个就绪区块消费；后者限制施工批量，不能保证单块施工的毫秒上限。
 
 - `VillageEndpointFilter` 接收同次规划的结构表和路线快照，保留村内过滤与整批撤销阀；首次用到有效快照才建本轮位点索引，重复坐标取第一条有效 ID。
 - `PlanningSnapshotPreparation` 独立承担服务器线程前缀、异步预测/解析、代次检查及原顺序发布；`PlanningSnapshotActivation` 只管临时扩宽与线程内嵌套恢复。门面保留公开入口，未搬公开嵌套类型或改变EMPTY的A/B口径。
-- `TargetYComputation` 仍协调跨度与旧模式；`TargetTerrainInputs` 用批采样、表面高度和实时世界回落端口组装输入；`TargetProfileSolver` 负责约束、DP和新版回落。完整样本不读世界，中心缺样取宽度支撑；crossing来源不变。
+- `TargetYComputation` 负责输入、端点锁及模式分派；`TargetTerrainInputs` 组装地形输入，`TargetProfileSolver` 负责约束、DP和新版回落；`LegacyTargetProfile` 仅承担显式旧模式或关闭坡限时的保留编排。其Stations/BoundaryLocks整体传递掩码与锁高，WorldPasses只把交叉剖面和海底重分类留在世界适配端，顺序及末次重座不变；DP不可行仍走新版约束回落，不切旧链。crossing来源保持。
 
 - `AccurateHeightSampler` 保留按世界实例的缓存和资源入口；`AccurateChunkBatch` 管整块的无冲突子集并行与查盘补采；`AccurateColumnBatch` 管逐列/网格的补缺、三通道结果验证与发布。两者经小缓存端口复用原分片与容量。
 - `AccurateTileClaims` 统一列/网格的整批瓦片策略和重入保护：有冲突时不占新瓦片，等待与后端求值都在表锁外执行。普通/加速模式各有在途表；超时接管后旧所有者按 Future 身份条件释放，关闭先标记并唤醒等待者。网格碰撞后迭代重查缓存，不用递归累计争用。
-- `AccurateSamplePublications` 在同一采样门面内为整块、逐列和网格共用 1024 个原子版本槽（槽位载荷 8 KiB）。请求在首次缓存扫描前观察版本，取得瓦片认领后仅当相关槽有新发布才重查缓存/存储。版本在完整填充缓存后、完成共享 Future 前记录，槽内取最大值，防止旧批次迟到覆盖新版本。哈希碰撞最多增加重查，记录本身不承载高度或承诺命中；两级缓存确实都丢失样本时仍正常重算。整块、逐列、网格和只读网格的存储命中也在缓存填充之后发布；只读网格提前返回部分缺样前，已填入的前缀仍记录。整块和逐列真正同时启动时仍可并行计算，不以版本记录承诺全局串行。
+- `AccurateSamplePublications` 在同一采样门面内为整块、逐列和网格共用 1024 个原子版本槽（槽位载荷 8 KiB）。请求在首次缓存扫描前观察版本，取得瓦片认领后仅当相关槽有新发布才重查缓存/存储。版本在完整填充缓存后、完成共享 Future 前记录，槽内取最大值，防止旧批次迟到覆盖新版本。哈希碰撞最多增加重查，记录本身不承载高度或承诺命中；两级缓存确实都丢失样本时仍正常重算。整块、逐列、网格、只读网格及门面cachedSamples/cachedSample的存储命中也在缓存填充之后发布；只读网格提前返回部分缺样前，已填入的前缀仍记录。整块和逐列真正同时启动时仍可并行计算，不以版本记录承诺全局串行。
 - 保存调用返回后才发布样本；端口抛错会传给等待者并允许新请求重试。`FileBackedAccurateSampleStore` 对部分 IO 故障只告警，因此不能将端口正常返回描述为持久化确认。写失败驱逐已原地修改的瓦片，下一次读取从磁盘旧版重建；文件格式和最佳努力语义保持不变。
 - `AccurateStoreLifecycle` 为五个文件访问入口提供共享租约，`close` 独占排空后清理瓦片缓存及锁表。不同瓦片仍可并发；已进入的写入允许在关闭等待期间完成，关闭返回后拒绝全部新访问。同线程读锁内重入关闭明确报错，避免升级死锁。
 - 门面的只读查询在入口和读盘返回后检查关闭，包括空的迟到结果。内存桶的读写都在桶锁内检查关闭标志；关闭先置标志再清空各桶，迟到发布不能绕过清空。诊断计数仍允许在关闭后读取。
@@ -122,3 +122,9 @@ FMM在小于4194304格时保留顺序数组，较大域使用`FmmPages`两级目
 既有跨层引用和双向依赖分别由 `common/src/test/resources/architecture/` 下的 `deps-baseline.txt`、`bidirectional-baseline.txt` 管控。`client` 不新增指向 `persistence`、`worldgen`、`generation` 的直接依赖。施工或路口编排通过小端口读取世界、写方块、写道路；离线测试验证产物和拒绝结果。
 
 旧的 `foundation.*` 整体迁包图从未落地。七批替换的机器台账保存在 [REFACTOR.md](REFACTOR.md)，它不代替生产调用链。
+
+## 离线证据工具与实验边界
+
+`scripts/evidence/summarize_route_evidence.py`只消费日志，不改变选网或施工。调用方显式提供会话名；相同种子/维度/端点的存档副本须用不同会话。区块结果按指纹分组，重复日志不增加完工块数，保留失败再成功的历史；未知owner逐条保留且不合并。detail是尾部原文，不能把嵌套Choice的同名字段再解析成顶层。终态校验日志尚无指纹，不能据此证明某个施工版本已通过校验；无论阶段齐不齐，全路可通行均不自动确认。运行和测试命令见[验证手册](docs/VALIDATION.md#第44轮五项后续工作)。
+
+方向局部二次型、三角迎风、冻结参照均只在测试目录。固定度量下每格三方向取值一次，保留当前障碍势和位置倍率；该代数缓存对一般未来非二次方向公式不成立，直接公式对拍会拦截漂移。旋转山地和三组解析面细化仅是有限实验，没有一般非凸收敛证明；当前候选仍慢，不进生产。

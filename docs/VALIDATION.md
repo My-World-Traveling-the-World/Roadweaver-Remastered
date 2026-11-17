@@ -244,3 +244,63 @@ DirectionalUpwindCandidate仅在test目录、最多16384格；用相邻已冻结
 开启`-Droadweaver.buildabilityShadow=on`，`[ROUTE-EVIDENCE]`使用`dimension@seed/x,z~x,z`完整端点键，正反路同键；只用于日志，不改RoadData、RoadFingerprint或台账。粗候选最多沿用12边/4候补预算，保护仍标unprepared；final-water/final-structure/validated逐阶段保留真实safe和reason，pavementEntries是逐站条目而非唯一列或落块计数。PathFeature用实际处理集合报COMPLETED/ABANDONED/INCOMPLETE/NOT_ATTEMPTED/CONFLICT，不能把留缺口且记台账当成成功铺路；缺口写回后读取新计划输出。没有保留全世界映射或新增寻路。世界边界仅2项AST窄接线，行为部分验证有限候选及观测异常不改变森林；需要真实日志才可评价已建可通行性，当前不换边。
 
 21组变异详细表见HANDOFF第43轮；19组改生产（含3组由AST守卫），2组改测试目录中的候选原型。全都有实际目标JUnit失败、零skip/abort；逐项finally精确checkout并比较原字节，记录.analysis_tmp/round43-cases.json、round43_mutations.py、round43-mutations.json、round43-mutation-run.log、round43-mut-*.log。700个生产Java文件，有效行>1000为0、>800为2。没有改存档协议、默认几何、crossing、spanWriteback/QualityGate或废弃GPU，也没有读写其他模组或打包部署。
+
+## 第44轮五项后续工作
+
+基线4dc3ef0，先确认status空、pull --rebase最新，再跑1543全绿和Fabric编译。提交依次为33e9583（采样发布修复）、9406227（落列分配）、0b4b1dc（汇总工具）、ab06e08（编排等价迁移，1549全绿单独提交）、44d3583（旧模式守卫）、e7de0fe（离线方向实验）、6d9432b（拒绝假接线）、7f65f65（脚本检出行尾）、d3b291b（真实detail格式修复）。最终完整恢复后回归1570全绿、Fabric通过，日志round44-final-after-mutations.log。新增27项Java=采样5+落列1+旧模式/接线12+方向9；三个新JUnit类均按FQCN登记。独立Python13项不混入Java计数。
+
+### 采样与编排
+
+AccurateColumnBatchTest的门面只读两种入口，在旧生产实现先失败2项（round44-facade-before.log）；修复为共享同一AccurateSamplePublications，仅样本入缓存后通知，三通道数值/容量/模式隔离不变。部分只读网格填入首列后因缺样返回，外层过期空快照只能补剩余三列。生产COLUMN_SHARD_CAPACITY=16384、同桶坐标真实触发LRU，热首列保留、次列确实驱逐、查盘重载不增后端或保存次数；不是手工clear。另验活动列所有者关闭时，网格等待者先于被阻塞的所有者结案。存储端口受控，不代表真实磁盘争用或全堆压力。
+
+LegacyTargetProfile 138/124行（物理/有效），TargetYComputation 526/346→395/274。冻结0b4b1dc旧分支，三次世界操作仅经同顺序端口替代；不共享新编排入口，底层未动的grade算子仍共享，不能把这份对拍说成独立数学证明。八组地形/桥隧/村庄/未知端点/共用剖面/关闭坡限产物、输入交错及跨度副作用相等；另钉住返回剖面、隧道尖峰、末次端点重座和异常传播。AST仅证明DP空臂与直接世界调用接线，false分支中的同名调用会红，不冒充真实ServerLevel验证。清除相邻EndpointProfileOps实际未用的三条导入，依赖基线未放宽。
+
+### 落列分配对照
+
+同JVM/JDK21/512MiB，冻结旧Map、上一轮List和当前实现三方先逐站比较中心及有序位置，再30轮预热、15组轮转交替，ThreadMXBean当前线程分配和耗时p50。轴向四分之一格样条、宽5、负起点；包围盒访问不变。下表只比较上一轮List与当前，历史Map数据仍由探针输出（round44-width-after.log）。
+
+| 站数 | 命中插入尝试 / 最终逐站列条目 | 上轮分配B | 当前分配B | 上轮p50 ms | 当前p50 ms |
+|---|---|---|---|---|---|
+| 128 | 11430 / 656 | 333200 | 74648 | 0.9545 | 0.9920 |
+| 512 | 45990 / 2576 | 1334696 | 292784 | 3.3474 | 3.1067 |
+| 2048 | 184230 / 10256 | 5348960 | 1173608 | 13.0233 | 12.5763 |
+
+可变坐标只作contains查询；新列仍new不可变BlockPos，保留HashSet原插入/扩容/输出顺序。新增密集折返夹具断言不可变并在后续调用后再次对拍。单轮微基准：长路分配约减78.1%，短路耗时略增，不能推断FPS、GC停顿或加载收益。
+
+### 方向候选实验
+
+DirectionalLocalCost从真实metric.cost三个方向取当前二次型，保留障碍势和位置倍率；每节点本次求解只准备一次，不改生产FinslerMetric/FMM。2000组方向值与直接公式对拍；四种角度的旋转山地含窄口、优惠倍率的全到达场与冻结候选误差<=1e-8。探针先验整场，再4轮预热/9组交替取p50，计数另跑，避免AtomicInteger成本混进耗时；512MiB。日志round44-directional-probe.log。
+
+| 地形 | 生产p50 ms | 冻结候选p50 ms | 缓存候选p50 ms | 梯度求值 冻结→缓存 |
+|---|---|---|---|---|
+| 0°平面 | 0.8665 | 7.7013 | 5.2360 | 403346→3264 |
+| 45°平面 | 0.3440 | 9.0648 | 4.9607 | 403279→3264 |
+| 0°山地 | 0.3135 | 9.6234 | 3.2395 | 224591→1872 |
+| 30°山地 | 0.2121 | 11.0761 | 3.0515 | 224859→1872 |
+| 90°山地 | 0.1858 | 11.1931 | 3.0582 | 224591→1872 |
+
+冻结/缓存候选全场最大差7.1e-15～1.8e-14。30°山地线程分配7232400→124296 B，但0°平面61584→109480 B（JIT可能消除旧临时对象，新增缓存也有成本），不宣称所有场景都减分配。三解析面目标(20,12)，步长4→2→1，绝对到达误差：0° 0.488511→0.321491→0.202834；30° 0.469263→0.308153→0.194044；45° 0.476815→0.312784→0.196783。测试钉住两次误差均下降，仍无一般非凸度量收敛、真实桥隧或挖填收益证明。候选仍明显慢于生产且缺分页/早停/取消治理，仅在测试目录，禁止切默认或作回退。
+
+复现落列和方向实验：
+
+```powershell
+& $gradle -I scripts/benchmarks/width-raster.gradle :common:widthRasterProbe --daemon --console=plain --dependency-verification=off
+& $gradle -I scripts/benchmarks/directional-cost.gradle :common:directionalStudyProbe --daemon --console=plain --dependency-verification=off
+```
+
+### 证据汇总工具
+
+```powershell
+python -B -m unittest discover -s scripts/evidence -p 'test_*.py' -v
+python -B scripts/evidence/summarize_route_evidence.py --session new-save latest.log --encoding utf-8-sig --output summary.json
+```
+
+--session NAME LOG可以重复；相同会话的轮转文件按旧到新提供，不同存档副本/重开分开命名。GBK控制台产物显式--encoding gb18030。逐行读取，格式错误保留位置并返回非零；输出仍包含有效记录。按会话+完整观测ID关联，区块按施工指纹隔离，重复只计观测不多计完工块，保留放弃后成功和后来失败；未知owner逐条保留不拼接。detail作为尾部原文，防止内嵌Choice重复geodesic/selected；该缺陷先加夹具红，再修。终态校验未携带施工指纹，不能自动归到某个版本；没有完整尝试ID不编造尝试次数，缺日志不代表没有生成，阶段齐全也不宣称全路落成或可通行。
+
+临时Java探针实际执行RoadPipeline候选回调和RoadBuildEvidence格式器，产出3个真实端点ID，再由Python CLI读入：errors=0、1条齐全链、2个隔离指纹，完成区块只计1，修补后NOT_ATTEMPTED不继承旧完成，roadCompletion仍not-proven。记录round44-evidence-actual.log/round44-evidence-summary.json；这是受控输入，不是现场日志，未运行PipelinePlanner的ServerLevel适配。
+
+### 变异、恢复和未验证项
+
+23组全部实际红：12组生产（其中2组AST窄接线）、2组测试目录方向候选、9组工具；14组Java共产生21个目标JUnit失败，9组Python共14个断言失败（含subTest），无编译失败冒充红。第一次Python检出因Git自动CRLF被逐字检查拦下，新增限定LF后完整重跑；修复真实detail格式后又重跑全部9组Python。每项finally精确git checkout并与原字节比较。表见HANDOFF第44轮，记录round44-cases.json、round44_mutations.py、round44_python_mutations.py、round44-mutations.json、round44-mutation-run.log、round44-python-mutation-run.log及round44-mut-*.log。
+
+最终701个生产Java，有效行>1000为0、>800为2。未验证4096真实堆/MSPT/加载尾延迟、真实磁盘/卸载/跨实例压力、完整世界施工与三模组Mixin次序；未变更存档、配置键、持久枚举、长桥弯、村庄包围盒、crossing、双平滑默认、spanWriteback/QualityGate默认或废弃GPU。未改外部模组，未打包部署。

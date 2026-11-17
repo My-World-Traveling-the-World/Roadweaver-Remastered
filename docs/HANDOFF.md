@@ -1739,3 +1739,76 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 Windows Python写文本默认会变成CRLF，新Java必须显式newline='\n'；宽度第一次完整回归因此只被行尾守卫拦住，修正后1516全绿。迁方法要补真实静态工具宿主，不能假定同名方法仍在Road或Service；初次编译错误均修好后才计回归。架构棘轮要求减少也登记，删除未用导入后基线只能收紧，不能用放宽预算换拆分。只测短路线看不到127号之后的站点；仅验证日志格式又看不到生产从未调用，因此补长路线对拍和AST窄接线。只读盘缓存命中也是发布，忽略它会让过期空快照重复计算；关闭测试必须证明等待者先于阻塞所有者结案。方向场值更准确但路线不变且更慢，必须如实保留不采用结论。
+
+## 第44轮 ｜ 2026-11-17 ｜ 五项后续代码工作 ｜ 源码/测试HEAD `d3b291b` ｜ `PASS tests=1570 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件/提交 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| AccurateHeightSampler、AccurateColumnBatchTest；33e9583 | 门面单列/批量只读入缓存后共享发布；补前缀、真实容量驱逐和反向关闭 | 行为变更：避免旧未命中重复整网格计算，不改三通道值 |
+| PathWidthRasterizer 112/91行、Round43WidthRasterReference及探针；9406227 | 可变坐标仅查询，新列才分配不可变对象；保留集合插入及输出顺序 | 性能、行为等价 |
+| scripts/evidence两个脚本；0b4b1dc、d3b291b | 按会话/ID/指纹汇总实际日志，区分校验、放弃、完成、未尝试和缺失；修复真实detail嵌套字段误扫 | 工具新增及工具行为修复，生产决策等价 |
+| TargetYComputation 395/274、LegacyTargetProfile 138/124、独立冻结参照；ab06e08 | 保留模式编排与世界操作边界迁出；相邻EndpointProfileOps清除三条实际未用导入，基线不放宽 | 行为等价，1549全绿后单独提交，再补守卫 |
+| LegacyTargetProfileTest/WiringTest、测试套件；44d3583、6d9432b | 八组产物、锁高、尖峰、端口顺序与异常直接实测；AST拒绝false假接线 | 测试基建 |
+| DirectionalLocalCost/StudyTest、冻结候选与探针；e7de0fe | 每节点三次度量取值缓存；旋转山地全场对拍、解析面细化和真实分配/求值计数 | 测试目录实验，误差容限内等价；生产不采用 |
+| .gitattributes/.gitignore；7f65f65 | Python工具固定LF检出，解释器缓存不进源码 | 构建行为等价，保证逐字恢复 |
+
+行数为物理/有效。701个生产Java，有效行>1000为0、>800为2。旧能力和所有存档协议/配置键/持久枚举保持；没有改相邻河流、长城或调度模组，没有打包部署。
+
+### 二、我验证了什么（附负控）
+
+开工status空，pull --rebase最新，HEAD4dc3ef0；先跑1543全绿和Fabric。门面只读两参数用例修复前失败2项；部分前缀、生产单桶16384容量真实驱逐后查盘重载、列所有者关闭唤醒网格均有直接断言。宽度三方有序对拍先于计时；2048站相对上一轮每次分配5348960→1173608 B（约减78.1%），p50 13.0233→12.5763 ms；128站0.9545→0.9920 ms，不宣称短路也提速。细节见VALIDATION。
+
+旧模式单独迁移1549全绿提交后才补12项；冻结参照不调用新编排，但共享未改底层grade算子，世界真实读取不在其覆盖内。方向30°山地冻结候选11.0761→3.0515 ms，生产0.2121 ms；梯度224859→1872，整场差约1.4e-14。三个解析面4/2/1细化误差逐步下降，不是一般收敛证明，仍不接生产。Java新增27至1570，独立Python13项；真实Java候选回调/格式器到Python的CLI汇总实际通过，受控输入不冒充真机日志。
+
+23组变异均实际红并finally精确checkout、逐字比较；14组Java共21个目标失败，9组Python共14个断言失败，均不是编译失败。2组生产变异只由AST接线守卫抓住，另2组是测试目录候选，9组是工具，分类不混淆。
+
+| # | 故意改坏什么 / 记录名 | 目标守卫 | 失败数 / 结果 |
+|---|---|---|---|
+| 1 | 只读网格部分前缀返回前漏发布：`partial-prefix-publication-missing` | `pathfinding.sampling.AccurateColumnBatchTest#partialReadOnlyPrefixInvalidatesAnOlderWholeGridMiss` | 1，红 |
+| 2 | 门面批量只读填充漏发布：`facade-batch-publication-missing` | `pathfinding.sampling.AccurateColumnBatchTest#facadeReadOnlyFillInvalidatesAnOlderWholeGridMiss(boolean)` | 1，红 |
+| 3 | 门面单列只读填充漏发布：`facade-single-publication-missing` | `pathfinding.sampling.AccurateColumnBatchTest#facadeReadOnlyFillInvalidatesAnOlderWholeGridMiss(boolean)` | 1，红 |
+| 4 | LRU永不驱逐：`lru-eviction-disabled` | `pathfinding.sampling.AccurateColumnBatchTest#realShardCapacityEvictsLeastRecentAndReloadsWithoutBackendOrSave` | 1，红 |
+| 5 | 关闭只清表不唤醒网格等待者：`close-does-not-wake-grid-waiter` | `pathfinding.sampling.AccurateColumnBatchTest#closeDuringActiveColumnsWakesGridWaiterBeforeOwnerReturns` | 1，红 |
+| 6 | 把可变查询键直接存入集合：`mutable-query-inserted-into-set` | `postprocess.PathWidthRasterizerContractTest#denseRetracedColumnsKeepOrderedImmutableProductsAcrossCalls` | 1，红 |
+| 7 | 交换交叉与海底世界操作：`legacy-world-pass-order-reversed` | `pathlogic.core.LegacyTargetProfileTest#representativeModesMatchFrozenOrderedProductAndPortInputs(int)` | 8，红 |
+| 8 | 丢弃海底端口返回剖面：`legacy-sea-result-discarded` | `pathlogic.core.LegacyTargetProfileTest#worldPassReturnedProfileIsUsedAndSingleTunnelSpikeIsRemoved` | 1，红 |
+| 9 | 删除末次端点锁高：`legacy-last-locks-disabled` | `pathlogic.core.LegacyTargetProfileTest#lateWorldPassCannotEraseVillageOrSharedApproachLocks` | 1，红 |
+| 10 | 删除隧道去尖峰：`legacy-tunnel-spike-pass-skipped` | `pathlogic.core.LegacyTargetProfileTest#worldPassReturnedProfileIsUsedAndSingleTunnelSpikeIsRemoved` | 1，红 |
+| 11 | DP模式分派条件颠倒：`legacy-dp-dispatch-reversed` | `pathlogic.core.LegacyTargetProfileWiringTest#legacyRunsOnlyInDpAbsentBranchAndRetainsRealWorldPortOrder` | 1，红 |
+| 12 | 真实交叉调用仅放在false分支：`legacy-crossing-unreachable` | `pathlogic.core.LegacyTargetProfileWiringTest#legacyRunsOnlyInDpAbsentBranchAndRetainsRealWorldPortOrder` | 1，红 |
+| 13 | 方向交叉项强置零：`direction-cross-term-dropped` | `metric.DirectionalCandidateStudyTest#localQuadraticRetainsObstaclesScaleAndAllDirectionSigns` | 1，红 |
+| 14 | 每次更新重建局部代价缓存：`direction-local-cache-disabled` | `metric.DirectionalCandidateStudyTest#gradientSamplingIsBoundedPerNodeRatherThanPerObjectiveEvaluation` | 1，红 |
+| 15 | 跨日志会话合并：`evidence-sessions-merged` | `EvidenceSummaryTest#test_copies_with_same_seed_and_endpoints_remain_separate_sessions` | 1，红 |
+| 16 | 不同施工指纹合并：`evidence-fingerprints-merged` | `EvidenceSummaryTest#test_gap_repair_fingerprint_never_inherits_old_completion` | 1，红 |
+| 17 | 结果永远停留在首次观测：`evidence-first-outcome-sticky` | `EvidenceSummaryTest#test_abandoned_then_retry_complete_keeps_both_observations` | 1，红 |
+| 18 | 重复日志当新完工区块：`evidence-duplicate-counts-as-new-chunk` | `EvidenceSummaryTest#test_duplicate_rotated_log_does_not_inflate_completed_chunk_count` | 1，红 |
+| 19 | 无owner旧路强行合并：`evidence-ownerless-roads-merged` | `EvidenceSummaryTest#test_old_roads_without_owners_cannot_be_merged` | 1，红 |
+| 20 | 阶段观测冒充整路完成：`evidence-whole-road-claimed-complete` | `EvidenceSummaryTest#test_complete_observation_chain_still_does_not_prove_whole_road` | 1，红 |
+| 21 | 格式错误静默丢弃：`evidence-malformed-silently-ignored` | `EvidenceSummaryTest#test_malformed_events_report_location_and_do_not_destroy_valid_rows` | 6，红 |
+| 22 | 最终校验强报成功：`evidence-validation-forged-true` | `EvidenceSummaryTest#test_latest_validation_failure_keeps_reason_and_never_means_built` | 1，红 |
+| 23 | detail内嵌字段误扫为顶层：`evidence-nested-detail-parsed-as-top-level` | `EvidenceSummaryTest#test_real_coarse_detail_keeps_nested_same_named_fields_as_opaque_text` | 1，红 |
+
+恢复后再次完整运行common回归及fabric编译，1570/0/0/0、BUILD SUCCESSFUL，日志round44-final-after-mutations.log；Python13项再次全绿，日志round44-evidence-tests.log。变异元数据/逐项日志和探针原始数据在.analysis_tmp/round44-*，文档保留可复现命令和实际数值，不依赖临时文件才知道结论。
+
+### 三、我没能验证什么
+
+- **需要真机的**：FPS/MSPT、GC停顿、首次生成/重开/Chunky并行、真实终态落块和河流→长城→道路最终Mixin/事件顺序；当前汇总尚无现场样本，不能证明整路可通行。
+- **需要真实存档的**：4096全工作集、全采样缓存/NoiseChunk真实堆压力、实际磁盘争用/卸载/跨实例并写及旧路重铺；本轮只超生产单个列缓存桶容量，不等于全世界压力验收。
+- **怀疑但没有证据的**：READY/台账同步写盘是否主导卡顿；落列减少分配对现场GC和帧时间的贡献；没有据此改异步、预算或作倍数承诺。
+- **已知边界未改的**：方向候选仍慢，0°平面还增加缓存分配；缺一般非凸收敛/分页/早停/取消治理。证据依赖文件输入顺序，会话需显式划分；终态校验未携带施工指纹，无尝试ID，不能自动关联某个版本或推断尝试数。缺日志不代表没有生成，COMPLETED仍是函数结案，不是可通行性实测。crossing及几何/跨度/QualityGate默认继续保持，用户暂无真机数据。
+
+### 四、遗留半截的东西
+
+五项均已提交可编译结果，没有未恢复变异或半写源码。采样补守卫并修实际重复计算、落列有三方数据、工具有真实格式对照、旧模式先等价提交再补测试、方向有明确继续不采用结论。真机验收和真实日志采集未完成；没有将其计入五项离线交付。文档随后独立提交、正常push，最终复核工作区空与origin/main对齐。
+
+### 五、下一轮我会先做什么
+
+1. 用首次生成/重开/Chunky的独立会话日志运行证据汇总，先定位校验通过却施工放弃的真实连接，再决定针对哪条路径修复；无数据不换边。
+2. 量4096完整工作集、MSPT/p95/最长等待及READY/台账采集/排序/编码/替换分阶段耗时，再决定批量、异步或并发预算；异步方案必须包含停服排空。
+3. 用真实存档验证桥头/隧道/保护落块和三模组完整启动/重开/停止流程；测试仍留各自模组。没有召回/A/B数据不动crossing、双平滑、跨度回写或QualityGate默认，不继续为行数而拆类。
+
+### 六、我踩到但已解决的坑
+
+Python默认检出受Git autocrlf影响，即使先写LF，checkout仍可能变CRLF；第一次变异恢复检查准确拦下，固定限定脚本LF后完整重跑。迁移SpanRange时需显式导入Road伴随record，初次编译失败不计守卫。真实粗候选detail里还嵌套Choice.geodesic/selected，平面字段正则会误报重复；新增实际格式夹具先红再修为尾部原文，并跑Java真实回调→CLI端到端。候选少调用梯度不代表所有场景少分配，0°平面反例已记录；候选变快仍不及生产，不切默认。
