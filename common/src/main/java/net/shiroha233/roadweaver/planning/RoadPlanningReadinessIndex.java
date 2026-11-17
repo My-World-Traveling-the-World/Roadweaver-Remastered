@@ -20,7 +20,6 @@ import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
 import net.shiroha233.roadweaver.persistence.WorldDataProvider;
 import net.shiroha233.roadweaver.persistence.WorldgenFingerprintService;
-import net.shiroha233.roadweaver.persistence.files.FileStorageIO;
 import net.shiroha233.roadweaver.persistence.files.FileStoragePathResolver;
 import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
@@ -34,9 +33,7 @@ import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Entry;
 import net.shiroha233.roadweaver.planning.ReadinessRegionTable.State;
 import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Snapshot;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,14 +54,14 @@ public final class RoadPlanningReadinessIndex {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final boolean READINESS_TIMINGS = "on".equalsIgnoreCase(
             System.getProperty("roadweaver.chunkyReadinessTimings", "off"));
-    private static final int READINESS_SCHEMA = 2;
+    private static final int READINESS_SCHEMA = ReadinessCoverageStore.SCHEMA;
     private static final int PLAN_MARGIN_CHUNKS = REGION_CHUNKS;
     private static final int FALLBACK_CORRIDOR_CHUNKS = 12;
     private static final int MAX_PLAN_ATTEMPTS = 3;
     private static final long MISSING_PATH_RETRY_MILLIS = 2_000L;
     private static final String READY_FILE = "chunky-ready-regions-v2.txt";
 
-    private static final Map<WorldKey, WorldState> WORLDS = new ConcurrentHashMap<>();
+    private static final Map<WorldKey, ReadinessCoverageStore> WORLDS = new ConcurrentHashMap<>();
     private static final ReadinessRegionTable<RegionKey, WorldKey> ENTRIES =
             new ReadinessRegionTable<>(RegionKey::world);
     private static final Map<WorldKey, Map<ConnectionKey, CachedPath>> PLANNED_PATHS =
@@ -94,9 +91,9 @@ public final class RoadPlanningReadinessIndex {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) {
             return State.UNSUPPORTED.name();
         }
-        WorldState world = worldState(level);
+        ReadinessCoverageStore world = worldState(level);
         long packed = packRegion(regionX, regionZ);
-        if (world.ready.contains(packed)) return State.READY.name();
+        if (world.contains(packed)) return State.READY.name();
 
         RegionKey key = key(level, regionX, regionZ);
 
@@ -178,7 +175,7 @@ public final class RoadPlanningReadinessIndex {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) {
             return State.UNSUPPORTED.name();
         }
-        if (worldState(level).ready.contains(packRegion(regionX, regionZ))) return State.READY.name();
+        if (worldState(level).contains(packRegion(regionX, regionZ))) return State.READY.name();
         Entry entry = ENTRIES.get(key(level, regionX, regionZ));
         return entry == null ? State.UNPLANNED.name() : entry.state().name();
     }
@@ -188,7 +185,7 @@ public final class RoadPlanningReadinessIndex {
         WorldKey worldKey = worldKey(level);
         // 进度与调度读取同一口径，避免两个独立扫描在并发转换间互相矛盾。
         Snapshot supply = supplySnapshot(worldKey);
-        return "ready=" + worldState(level).ready.size()
+        return "ready=" + worldState(level).size()
                 + ", queued=" + supply.queued()
                 + ", planning=" + supply.planning()
                 + ", readyAhead=" + supply.readyAhead()
@@ -532,9 +529,8 @@ public final class RoadPlanningReadinessIndex {
     }
 
     private static boolean markCoverageReady(ServerLevel level, int regionX, int regionZ) {
-        WorldState world = worldState(level);
-        boolean added = world.ready.add(packRegion(regionX, regionZ));
-        if (added) persistReady(level, world);
+        ReadinessCoverageStore world = worldState(level);
+        boolean added = world.markReady(packRegion(regionX, regionZ));
         Entry entry = ENTRIES.get(key(level, regionX, regionZ));
         if (entry != null) ENTRIES.transition(key(level, regionX, regionZ), entry, State.READY);
         return added;
@@ -607,80 +603,13 @@ public final class RoadPlanningReadinessIndex {
         return null;
     }
 
-    private static WorldState worldState(ServerLevel level) {
+    private static ReadinessCoverageStore worldState(ServerLevel level) {
         return WORLDS.computeIfAbsent(worldKey(level), ignored -> loadReady(level));
     }
 
-    private static WorldState loadReady(ServerLevel level) {
-        Set<Long> ready = ConcurrentHashMap.newKeySet();
-        String expectedFingerprint = readinessFingerprint(level);
-        Path path = readyPath(level);
-        if (Files.isRegularFile(path)) {
-            try {
-                int schema = 0;
-                String storedFingerprint = "";
-                List<Long> storedRegions = new ArrayList<>();
-                for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
-                    String value = line.trim();
-                    if (value.isEmpty() || value.startsWith("#")) continue;
-                    if (value.startsWith("schema=")) {
-                        schema = Integer.parseInt(value.substring("schema=".length()).trim());
-                    } else if (value.startsWith("fingerprint=")) {
-                        storedFingerprint = value.substring("fingerprint=".length()).trim();
-                    } else if (value.startsWith("region=")) {
-                        String[] parts = value.substring("region=".length()).split(",", 2);
-                        if (parts.length == 2) {
-                            storedRegions.add(packRegion(
-                                    Integer.parseInt(parts[0].trim()),
-                                    Integer.parseInt(parts[1].trim())));
-                        }
-                    }
-                }
-                if (schema == READINESS_SCHEMA && expectedFingerprint.equals(storedFingerprint)) {
-                    ready.addAll(storedRegions);
-                } else {
-                    LOGGER.info("RoadWeaver ignored stale Chunky readiness coverage: schema={} fingerprintMatch={}.",
-                            schema, expectedFingerprint.equals(storedFingerprint));
-                }
-            } catch (RuntimeException | IOException failure) {
-                LOGGER.warn("RoadWeaver could not read Chunky readiness state {}.", path, failure);
-            }
-        }
-        return new WorldState(ready, expectedFingerprint);
-    }
-
-    private static void persistReady(ServerLevel level, WorldState world) {
-        // 单列记录整表构造与原子写入，先确认瓶颈再考虑改 READY 写入节奏。
-        long buildStart = READINESS_TIMINGS ? System.nanoTime() : 0L;
-        List<Long> ordered = new ArrayList<>(world.ready);
-        ordered.sort(Long::compare);
-        StringBuilder output = new StringBuilder("# RoadWeaver Chunky planning coverage\n");
-        output.append("schema=").append(READINESS_SCHEMA).append('\n');
-        output.append("fingerprint=").append(world.fingerprint).append('\n');
-        for (long packed : ordered) {
-            output.append("region=")
-                    .append((int) (packed >> 32))
-                    .append(',')
-                    .append((int) packed)
-                    .append('\n');
-        }
-        Path file = readyPath(level);
-        String contents = output.toString();
-        long writing = READINESS_TIMINGS ? System.nanoTime() : 0L;
-        IOException writeFailure = null;
-        try {
-            FileStorageIO.writeStringAtomic(file, contents);
-        } catch (IOException failure) {
-            writeFailure = failure;
-        }
-        long finished = READINESS_TIMINGS ? System.nanoTime() : 0L;
-        if (writeFailure != null) {
-            LOGGER.error("RoadWeaver could not persist Chunky readiness state.", writeFailure);
-        }
-        if (READINESS_TIMINGS) {
-            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
-                    ordered.size(), writeFailure == null, (writing - buildStart) / 1000, (finished - writing) / 1000);
-        }
+    private static ReadinessCoverageStore loadReady(ServerLevel level) {
+        // 世界相关路径和指纹只在门面解析；文件边界负责原格式，离线可直接打开同一实现。
+        return ReadinessCoverageStore.open(readyPath(level), readinessFingerprint(level));
     }
 
     /**
@@ -752,5 +681,4 @@ public final class RoadPlanningReadinessIndex {
         }
     }
     private record CachedPath(List<BlockPos> path, long retryAfterMillis) { }
-    private record WorldState(Set<Long> ready, String fingerprint) { }
 }
