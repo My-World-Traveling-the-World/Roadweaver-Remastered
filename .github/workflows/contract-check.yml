@@ -1,0 +1,19 @@
+name: Legacy Contracts And Evidence Tools
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # 冻结基线随仓库保存，CI不依赖开发机上的旧仓库路径。
+      - name: Check preserved legacy contracts
+        run: python scripts/parity/verify_legacy_contract.py
+      - name: Test contract rejection fixtures
+        run: python -m unittest discover -s scripts/parity -v
+      - name: Test route evidence summaries
+        run: python -m unittest discover -s scripts/evidence -v

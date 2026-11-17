@@ -528,12 +528,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
     }
 
     /**
-     * 0.8.420：按配置生成主边。KNN 算法时把 PlanningConfig 的四个拓扑旋钮
-     * （k / alpha / minAngleDeg / degreeCap）显式传给 {@link KNNPlanner}；
-     * 其它算法走 {@link NetworkPlanner} 默认两参接口。配置值与默认值相同时
-     * 产出与旧硬编码路径逐位一致。
-     * 0.8.421：长度上限也从 {@code RoadConstants.DEFAULT_PLAN_MAX_EDGE_LEN_BLOCKS}
-     * 改为读配置（{@code planMaxEdgeLenBlocks}），默认值不变。
+     * 无世界入口供离线调用；工厂统一使用新版PIPELINE，旧算法键仅用于读取旧配置。
+     * 长度上限仍取配置，但测地距离需要世界，生产应使用下面带世界的重载。
      */
     static List<StructureConnection> planPrimaryEdges(List<BlockPos> points, ModConfig cfg0) {
         return planPrimaryEdges(null, points, cfg0);
