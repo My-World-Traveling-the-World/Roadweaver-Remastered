@@ -514,10 +514,6 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         return state.completed();
     }
 
-    private static boolean contains(ChunkPos chunkPos, BlockPos pos) {
-        return pos.getX() >= chunkPos.getMinBlockX() && pos.getX() <= chunkPos.getMaxBlockX()
-                && pos.getZ() >= chunkPos.getMinBlockZ() && pos.getZ() <= chunkPos.getMaxBlockZ();
-    }
 
     /** T-20C: 每 60 秒至多一条聚合 INFO,替代原先每 chunk 一条的 WARN 洪峰。 */
     private static void logEmptyWorldgenPlanSummary() {

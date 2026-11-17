@@ -2,7 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.construction;
 import java.util.function.IntUnaryOperator;
 
-/** 高度可能被隧道退让改写，必须由本次区块执行持有；暂停和失败不能记作施工完成。 */
+/** 高度与拒绝由本次片段持有；暂停和失败不能记作施工完成，外层事务仍同步管理。 */
 public final class ConstructionSliceState {
     private final ConstructionStationCursor cursor;
     private final boolean[] refused;
