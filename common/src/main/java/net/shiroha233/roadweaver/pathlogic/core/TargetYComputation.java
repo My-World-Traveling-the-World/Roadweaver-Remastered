@@ -4,10 +4,7 @@ package net.shiroha233.roadweaver.pathlogic.core;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
-import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
-import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
-import net.shiroha233.roadweaver.planning.terrain.StructureRepair;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
@@ -15,50 +12,19 @@ import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
-import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator.PathCalculationResult;
-import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.planning.RouteProfileTendency;
-import net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner;
-import net.shiroha233.roadweaver.planning.RoadPlanningService;
-import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
-import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
-import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
-import net.shiroha233.roadweaver.structures.precompute.RoadsideStructurePrecomputer;
-import net.shiroha233.roadweaver.structures.precompute.RoadsideVillagePrecomputer;
-import net.shiroha233.roadweaver.runtime.RoadLifecycle;
-import net.shiroha233.roadweaver.generation.InitialGenManager;
-import net.shiroha233.roadweaver.generation.RoutePrecisionRetryPolicy;
-import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
-import net.shiroha233.roadweaver.generation.ConnectionDeletionService;
-import net.shiroha233.roadweaver.generation.DetailedRoadGenerationStats;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.*;
-import java.util.concurrent.CancellationException;
-import net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlanner;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
 import net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightRegistry;
-import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
-import net.shiroha233.roadweaver.pathlogic.metrics.RoadQualityMetrics;
-import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
-import net.shiroha233.roadweaver.pathlogic.structures.StructureRoadOffsetService;
-import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
-import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadWaterValidator;
-import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
-import net.shiroha233.roadweaver.pathlogic.validation.RoadPlanConsistencyService;
 import static net.shiroha233.roadweaver.pathlogic.core.RoadCrossingOps.*;
 import static net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps.*;
 import static net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps.*;
@@ -118,67 +84,14 @@ public final class TargetYComputation {
             }
         }
 
-        int avg = Math.max(0, cfg.averagingRadius());
-        int[] terrainY = new int[n];
-        int[] footprintSupport = new int[n];
-        int[] base = new int[n];
         AccurateHeightSampler accurate = cache.getAccurateSampler(level);
-        List<BlockPos> footprintPositions = new ArrayList<>();
-        for (RoadSegmentPlacement segment : segments) {
-            throwIfInterrupted();
-            if (segment != null && segment.positions() != null) footprintPositions.addAll(segment.positions());
-        }
-        // Structure connections keep endpoint Y flattened to zero. Include
-        // the actual center columns in the same accurate sampling batch so
-        // the grade planner can anchor the profile to terrain at both ends.
-        footprintPositions.addAll(centers);
-        throwIfInterrupted();
-        Map<Long, AccurateHeightSample> footprintSamples = accurate.samplePositions(footprintPositions);
-        throwIfInterrupted();
-        for (int i = 0; i < n; i++) {
-            throwIfInterrupted();
-            BlockPos center = centers.get(i);
-            AccurateHeightSample centerSample = center == null ? null
-                    : footprintSamples.get(AccurateHeightSample.key(center.getX(), center.getZ()));
-            RoadSegmentPlacement segment = segments.get(i);
-            List<BlockPos> positions = segment == null ? List.of() : segment.positions();
-            // The world read is this station's last-resort fallback, only reached when the accurate backend
-            // missed the centre sample or the segment carries no positions at all. It used to run for every
-            // station unconditionally, which put a live block read (up to 129 getBlockState calls, see
-            // RoadConstructionSafety.terrainHeight) inside the planning loop - while the gate parks the
-            // server thread without pumping the chunk queue, that read can wait on a chunk nobody generates.
-            // Guarding it changes no value: both consumers below are already conditional on exactly these
-            // two cases.
-            boolean needsWorldTerrain = centerSample == null || positions == null || positions.isEmpty();
-            int worldCenterTerrain = !needsWorldTerrain ? 0
-                    : center == null ? level.getMinBuildHeight()
-                    : RoadConstructionSafety.terrainHeight(level, center.getX(), center.getZ());
-            int[] stationTerrain = new int[positions == null ? 0 : positions.size()];
-            for (int j = 0; j < stationTerrain.length; j++) {
-                throwIfInterrupted();
-                BlockPos position = positions.get(j);
-                AccurateHeightSample sample = footprintSamples.get(
-                        AccurateHeightSample.key(position.getX(), position.getZ()));
-                stationTerrain[j] = sample == null
-                        ? (centerSample == null ? worldCenterTerrain : accurate.surfaceHeight(centerSample))
-                        : accurate.surfaceHeight(sample);
-            }
-            // Never use the flattened connection Y as a terrain fallback. A
-            // width-support sample is safer than treating the terrain as Y=0
-            // when a backend temporarily misses one center sample.
-            int widthSupport = stationTerrain.length == 0
-                    ? worldCenterTerrain
-                    : RoadGradePlanner.robustFootprintSupport(stationTerrain);
-            terrainY[i] = centerSample == null
-                    ? widthSupport
-                    : accurate.surfaceHeight(centerSample);
-            footprintSupport[i] = stationTerrain.length == 0
-                    ? terrainY[i] : RoadGradePlanner.robustFootprintSupport(stationTerrain);
-        }
-        for (int i = 0; i < n; i++) {
-            throwIfInterrupted();
-            base[i] = RoadGradePlanner.robustWindowHeight(terrainY, i, avg);
-        }
+        // 输入组装只搬读边界；旧跨度crossing及后续模式编排保持原样。
+        var inputs = TargetTerrainInputs.sample(segments, centers, Math.max(0, cfg.averagingRadius()),
+                accurate::samplePositions, accurate::surfaceHeight,
+                center -> center == null ? level.getMinBuildHeight()
+                        : RoadConstructionSafety.terrainHeight(level, center.getX(), center.getZ()));
+        int[] terrainY = inputs.terrainY(), footprintSupport = inputs.footprintSupport(), base = inputs.base();
+        Map<Long, AccurateHeightSample> footprintSamples = inputs.footprintSamples();
 
         int[] smoothed = RoadGradePlanner.stabilizeSurfaceProfile(
                 base, terrainY, footprintSupport, isCrossing,

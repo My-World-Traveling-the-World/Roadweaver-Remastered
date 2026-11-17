@@ -1,52 +1,30 @@
 /* 文件职责：缓存已加载区块的结构边界，让路面铺设 worker 线程无需同步触发主线程 chunk 加载。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
-import it.unimi.dsi.fastutil.longs.LongSet;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import it.unimi.dsi.fastutil.longs.LongSets;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.minecraft.world.level.levelgen.structure.StructurePiece;
-import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.util.Unit;
-import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
-import net.minecraft.core.registries.Registries;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.core.model.StructureInfo;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.generation.InitialGenManager;
-import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
-import net.shiroha233.roadweaver.generation.progress.InitialGenerationStage;
 import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
-import net.shiroha233.roadweaver.search.StructurePredictor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.HashMap;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -54,10 +32,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
@@ -278,147 +254,9 @@ public final class StructureAvoidanceService {
     }
 
     static CompletableFuture<Void> preparePlanningSnapshotsOnServerThread(
-            ServerLevel level, Collection<StructureConnection> connections,
-            PrepareTiming timing) {
-        var server = level.getServer();
-        if (server == null || !server.isSameThread()) {
-            return CompletableFuture.failedFuture(
-                    new IllegalStateException("Structure snapshots must be submitted on the server thread"));
-        }
-        if (timing != null) timing.markRan();
-
-        long snapshotStartedAt = System.nanoTime();
-        long predictedBefore = StructureAvoidanceDiagnostics.PREDICTED_DIRECT_LOOKUPS.get();
-        long manualBefore = StructureAvoidanceDiagnostics.MANUAL_REFERENCE_LOOKUPS.get();
-        long cacheBefore = StructureAvoidanceDiagnostics.PREPARED_CACHE_HITS.get();
-        long emptyBefore = StructureAvoidanceDiagnostics.PREPARED_EMPTY_RESULTS.get();
-        long boxesBefore = StructureAvoidanceDiagnostics.PREPARED_EXACT_BOXES.get();
-        long tilesBefore = StructureAvoidanceDiagnostics.OBSTACLE_PREDICTION_TILES.get();
-        long predictionChunksBefore = StructureAvoidanceDiagnostics.OBSTACLE_PREDICTION_CHUNKS.get();
-        long tileCacheBefore = StructureAvoidanceDiagnostics.OBSTACLE_TILE_CACHE_HITS.get();
-        long candidatesBefore = StructureAvoidanceDiagnostics.OBSTACLE_CANDIDATES.get();
-        long corridorCandidatesBefore = StructureAvoidanceDiagnostics.OBSTACLE_CORRIDOR_CANDIDATES.get();
-        long directStartsBefore = StructureAvoidanceDiagnostics.DIRECT_STRUCTURE_STARTS.get();
-        long directFallbacksBefore = StructureAvoidanceDiagnostics.DIRECT_STRUCTURE_FALLBACKS.get();
-        boolean trackInitialProgress = InitialGenManager.isActive();
-        if (trackInitialProgress) {
-            InitialGenerationProgressTracker.enterStage(
-                    InitialGenerationStage.PLANNING, "predicting_structure_obstacles");
-        }
-        StructureFileStorage.StructureSnapshot storageSnapshot = StructureFileStorage.getStructureSnapshot(level);
-        long epoch = ThreadPoolManager.currentEpoch();
-        ThreadPoolManager.TaskRole predictionRole = trackInitialProgress
-                ? ThreadPoolManager.TaskRole.INITIAL
-                : ThreadPoolManager.TaskRole.STRUCTURE;
-        // 0.9.059（①）：服务器线程上的前缀段（取快照 + 取 epoch），不计入下面任何子段。
-        if (timing != null) timing.addServerInit(System.nanoTime() - snapshotStartedAt);
-        return ThreadPoolManager.supplyAsync(predictionRole, () -> {
-            long predictionStartedAt = System.nanoTime();
-            if (!ThreadPoolManager.isEpoch(epoch)) {
-                throw new java.util.concurrent.CancellationException("RoadWeaver world changed before structure prediction");
-            }
-            long tileSampleStartedAt = System.nanoTime();
-            Map<RouteKey, List<StructurePredictor.AvoidanceStructureCandidate>> obstacleCandidates =
-                    predictObstacleCandidates(level, connections);
-            if (timing != null) timing.addTileSample(System.nanoTime() - tileSampleStartedAt);
-            long startKeyStartedAt = System.nanoTime();
-            Map<RouteKey, RouteStartPlan> routePlans = new LinkedHashMap<>();
-            Set<PreparedStartKey> uniqueStarts = new LinkedHashSet<>();
-            for (StructureConnection connection : connections) {
-                if (connection == null) continue;
-                RouteKey key = routeKey(level, connection);
-                if (StructureAvoidanceCache.PLANNING_SNAPSHOTS.containsKey(key)) continue;
-                Set<PreparedStartKey> starts = collectPlanningStartKeys(
-                        level, connection, storageSnapshot, obstacleCandidates.getOrDefault(key, List.of()));
-                routePlans.put(key, new RouteStartPlan(connection, starts, Set.of()));
-                uniqueStarts.addAll(starts);
-            }
-            if (timing != null) {
-                timing.addStartKeys(System.nanoTime() - startKeyStartedAt);
-                timing.setRoutes(routePlans.size());
-                timing.setStarts(uniqueStarts.size());
-            }
-            SnapshotPreparation preparation = new SnapshotPreparation(routePlans, List.copyOf(uniqueStarts));
-            LOGGER.debug("RoadWeaver structure prediction timing: dimension={} routes={} uniqueStarts={} elapsedMs={}",
-                    level.dimension().location(), routePlans.size(), uniqueStarts.size(),
-                    elapsedMillis(predictionStartedAt));
-            return preparation;
-        }).thenCompose(preparation -> {
-            if (!ThreadPoolManager.isEpoch(epoch)) {
-                return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException(
-                        "RoadWeaver world changed before structure snapshot loading"));
-            }
-            if (trackInitialProgress) {
-                InitialGenerationProgressTracker.setPlanningStartPlan(
-                        preparation.uniqueStarts().size(), "loading_exact_structure_starts");
-            }
-            long resolutionStartedAt = System.nanoTime();
-            return resolvePreparedStartsAsync(level, preparation.uniqueStarts(), trackInitialProgress, timing)
-                    .thenAccept(resolvedStarts -> {
-                if (!ThreadPoolManager.isEpoch(epoch)) return;
-                // 0.9.059（①）：结构占用叠加段 = 精确起点解析整段。
-                if (timing != null) timing.addStructureOverlay(System.nanoTime() - resolutionStartedAt);
-                long cacheWriteStartedAt = System.nanoTime();
-                for (Map.Entry<RouteKey, RouteStartPlan> entry : preparation.routePlans().entrySet()) {
-                    Set<OwnedStructureBox> boxes = new HashSet<>();
-                    for (PreparedStartKey start : entry.getValue().starts()) {
-                        List<OwnedStructureBox> prepared = resolvedStarts.get(start);
-                        if (prepared != null) boxes.addAll(prepared);
-                    }
-                    indexConstructionBoxes(boxes);
-                    Set<StructureOwnerKey> endpointOwners = resolveEndpointOwners(
-                            entry.getValue().connection(), storageSnapshot, boxes);
-                    PlanningSnapshot snapshot = PlanningSnapshot.forRoute(
-                            entry.getValue().connection(), boxes, entry.getValue().starts(), Set.of(), endpointOwners);
-                    StructureAvoidanceCache.ROUTE_ENDPOINT_OWNERS.put(entry.getKey(), snapshot.endpointOwners());
-                    putBounded(StructureAvoidanceCache.PLANNING_SNAPSHOTS, StructureAvoidanceCache.PLANNING_SNAPSHOT_ORDER, entry.getKey(), snapshot,
-                            PLANNING_SNAPSHOT_CACHE_CAPACITY);
-                }
-                if (trackInitialProgress) {
-                    InitialGenerationProgressTracker.completePlanningSnapshots("structure_snapshots_ready");
-                }
-                // 0.9.059（①）：写缓存段 = 合并进 StructureAvoidanceCache.PLANNING_SNAPSHOTS + 施工盒索引 + 有界淘汰。
-                if (timing != null) {
-                    timing.addCacheWrite(System.nanoTime() - cacheWriteStartedAt);
-                    timing.observeWorkerThread();
-                }
-
-                long predicted = StructureAvoidanceDiagnostics.PREDICTED_DIRECT_LOOKUPS.get() - predictedBefore;
-                long manual = StructureAvoidanceDiagnostics.MANUAL_REFERENCE_LOOKUPS.get() - manualBefore;
-                long cacheHits = StructureAvoidanceDiagnostics.PREPARED_CACHE_HITS.get() - cacheBefore;
-                long empty = StructureAvoidanceDiagnostics.PREPARED_EMPTY_RESULTS.get() - emptyBefore;
-                long boxes = StructureAvoidanceDiagnostics.PREPARED_EXACT_BOXES.get() - boxesBefore;
-                long tiles = StructureAvoidanceDiagnostics.OBSTACLE_PREDICTION_TILES.get() - tilesBefore;
-                long predictionChunks = StructureAvoidanceDiagnostics.OBSTACLE_PREDICTION_CHUNKS.get() - predictionChunksBefore;
-                long tileCacheHits = StructureAvoidanceDiagnostics.OBSTACLE_TILE_CACHE_HITS.get() - tileCacheBefore;
-                long candidates = StructureAvoidanceDiagnostics.OBSTACLE_CANDIDATES.get() - candidatesBefore;
-                long corridorCandidates = StructureAvoidanceDiagnostics.OBSTACLE_CORRIDOR_CANDIDATES.get() - corridorCandidatesBefore;
-                long directStarts = StructureAvoidanceDiagnostics.DIRECT_STRUCTURE_STARTS.get() - directStartsBefore;
-                long directFallbacks = StructureAvoidanceDiagnostics.DIRECT_STRUCTURE_FALLBACKS.get() - directFallbacksBefore;
-                if (timing != null) {
-                    timing.setObstacleTiles((int) Math.min(Integer.MAX_VALUE, tiles));
-                    timing.setResolvedBoxes((int) Math.min(Integer.MAX_VALUE, boxes));
-                }
-                if (predicted + manual + cacheHits + tiles + tileCacheHits > 0L) {
-                    LOGGER.info("RoadWeaver structure snapshots: obstacleTiles={} predictionChunks={} obstacleTileCacheHits={} obstacleCandidates={} corridorCandidates={} predictedDirect={} nativeDirectStarts={} realChunkFallbacks={} manualReferenceFallback={} cacheHits={} emptyResults={} exactPieceBoxes={} prefilterSkipped={} prefilterKept={} prefilterEnabled={}",
-                            tiles, predictionChunks, tileCacheHits, candidates, corridorCandidates,
-                            predicted, directStarts, directFallbacks,
-                            manual, cacheHits, empty, boxes,
-                            PREFILTERED_CANDIDATES.get(), PREFILTER_KEPT_CANDIDATES.get(),
-                            STRUCTURE_PREFILTER_ENABLED.get());
-                }
-                LOGGER.info("RoadWeaver structure snapshot timing: dimension={} routes={} uniqueStarts={} resolutionMs={} totalMs={}",
-                        level.dimension().location(), preparation.routePlans().size(),
-                        preparation.uniqueStarts().size(), elapsedMillis(resolutionStartedAt),
-                        elapsedMillis(snapshotStartedAt));
-                // 0.9.034（R-07 计数模式）：累计值（进程内），不改任何结果。
-                // wouldRejectNonEmpty 就是「开群系预筛会丢掉的真实结构数」—— 必须是 0 才算可证明安全。
-                LOGGER.info("RoadWeaver structure biome-prefilter probe (count only, results unchanged): "
-                                + "probed={} wouldReject={} wouldRejectNonEmpty={} emptyResults={}",
-                        StructureAvoidanceDiagnostics.BIOME_PROBE_PROBED.get(), StructureAvoidanceDiagnostics.BIOME_PROBE_REJECTED.get(),
-                        StructureAvoidanceDiagnostics.BIOME_PROBE_REJECTED_NONEMPTY.get(), empty);
-            });
-        });
+            ServerLevel level, Collection<StructureConnection> connections, PrepareTiming timing) {
+        // 门面保留原入口；准备与发布在独立组件中保持同一次代次和快照。
+        return PlanningSnapshotPreparation.preparePlanningSnapshotsOnServerThread(level, connections, timing);
     }
 
     /** Activates the immutable snapshot for the current pathfinding worker. */
@@ -434,18 +272,10 @@ public final class StructureAvoidanceService {
     public static PlanningScope activatePlanningSnapshot(ServerLevel level,
                                                          StructureConnection connection,
                                                          int additionalRoadRadius) {
-        PlanningSnapshot previous = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
         PlanningSnapshot selected = level == null || connection == null
                 ? PlanningSnapshot.EMPTY
                 : StructureAvoidanceCache.PLANNING_SNAPSHOTS.getOrDefault(routeKey(level, connection), PlanningSnapshot.EMPTY);
-        if (additionalRoadRadius > 0) {
-            selected = selected.withAdditionalRoadRadius(additionalRoadRadius);
-        }
-        StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.set(selected);
-        return () -> {
-            if (previous == null) StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.remove();
-            else StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.set(previous);
-        };
+        return PlanningSnapshotActivation.activate(selected, additionalRoadRadius);
     }
 
     /** Returns true only for a verified structure piece intersecting the road construction band.

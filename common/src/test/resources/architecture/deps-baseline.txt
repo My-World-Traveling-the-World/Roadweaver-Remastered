@@ -104,21 +104,21 @@ pathlogic -> config                             78
 #   新增 pathlogic/profile/ExistingRoadProbe 补「已有公路」这条禁地面来源，
 #   需要 RoadData / RoadFootprint / RoadShardStorage（+1 core、+2 persistence）。
 #   方向正确：业务层(pathlogic) 依赖基础设施(persistence)，不是反过来。
-pathlogic -> core                               198
+pathlogic -> core                               195
 pathlogic -> decoration                         21
-pathlogic -> generation                         65
+pathlogic -> generation                         60
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次
 #   pathfinding.terrain.PathTerrainField —— 禁地面掩码需要「水面」这一独立证据源，
 #   不再复用旧判定的 isCrossing（解除循环论证）。
-pathlogic -> pathfinding                        77
+pathlogic -> pathfinding                        75
 # 2026-11-14 批3：RoadConstructionVolumePlanner 用 RoadShardStorage.computeFingerprint 接 BuildFrame。
 pathlogic -> persistence                        24
-pathlogic -> planning                           59
+pathlogic -> planning                           54
 pathlogic -> postprocess                        20
 pathlogic -> runtime                            18
 pathlogic -> search                             10
 pathlogic -> spec                               1
-pathlogic -> structures                         10
+pathlogic -> structures                         8
 pathlogic -> util                               6
 pathlogic -> worldgen                           3
 persistence -> config                             2
