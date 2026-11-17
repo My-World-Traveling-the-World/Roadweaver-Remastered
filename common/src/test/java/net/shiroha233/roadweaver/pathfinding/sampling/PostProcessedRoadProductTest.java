@@ -20,11 +20,37 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegment;
 import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 import net.shiroha233.roadweaver.postprocess.SplineHelper.CurveMode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PostProcessedRoadProductTest {
     private static final int Y = 64;
+
+    @ParameterizedTest
+    @EnumSource(CurveMode.class)
+    void productionCurveEntryMatchesFrozenSuffixForDryAndWetRoads(CurveMode mode) {
+        var routes = List.of(
+                List.of(new BlockPos(-24, 66, -8), new BlockPos(-16, 68, -6), new BlockPos(-8, 70, -2),
+                        new BlockPos(0, 72, 0), new BlockPos(8, 71, 1), new BlockPos(16, 70, 0)),
+                List.of(pos(0, 0), pos(8, 8), pos(16, 16), pos(8, 24), pos(0, 32)));
+        int compared = 0;
+        for (var input : routes) for (boolean wet : new boolean[]{false, true}) for (int width : new int[]{1, 2, 5}) {
+            var expectedSampler = new AccurateHeightSampler(null, new FlatHeight(), AccurateSampleStore.noop());
+            var sampler = new AccurateHeightSampler(null, new FlatHeight(), AccurateSampleStore.noop());
+            // 仅世界读口使用原平地Backend，生产四阶段入口真实执行；后半段与冻结算法独立对拍。
+            var expected = net.shiroha233.roadweaver.postprocess.LegacyCurveRasterReference.process(
+                    input, width, new Terrain(wet), expectedSampler, mode);
+            var actual = PathPostProcessor.process(input, width, null, null, new Terrain(wet), 1, mode, sampler);
+            assertTrue(expected.size() > 2);
+            assertEquals(expected, actual, "最终逐站中心、铺装列归属和顺序必须一致 mode=" + mode + " wet=" + wet + " width=" + width);
+            assertEquals(input.getFirst(), actual.getFirst().middlePos());
+            assertEquals(input.getLast(), actual.getLast().middlePos());
+            compared++;
+        }
+        assertEquals(12, compared, "必须实际执行两路形×水陆×三档宽度，不能空集合跳过");
+    }
 
     @Test
     void 短输入在四个公开入口均不取世界也不出路() {
