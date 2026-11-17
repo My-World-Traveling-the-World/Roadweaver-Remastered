@@ -1,0 +1,560 @@
+/* 文件职责：实现普通道路的世界生成入口。 */
+package net.shiroha233.roadweaver.pathlogic;
+
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
+import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import com.mojang.serialization.Codec;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
+import net.shiroha233.roadweaver.config.ConfigService;
+import net.shiroha233.roadweaver.config.ModConfig;
+import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.pathlogic.metrics.RoadBuildEvidence;
+import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.core.model.RoadSpan;
+import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegment;
+import net.shiroha233.roadweaver.config.PathFeatureConfig;
+import net.shiroha233.roadweaver.decoration.base.Decoration;
+import net.shiroha233.roadweaver.decoration.system.DecorationExecutor;
+import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
+import net.shiroha233.roadweaver.pathlogic.construction.BuildFrame;
+import net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentPlanner;
+import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
+import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
+import net.shiroha233.roadweaver.pathlogic.pathcalc.HeightProfileService;
+import net.shiroha233.roadweaver.pathlogic.bridge.BuoyMarkerPlanner;
+import net.shiroha233.roadweaver.worldgen.road.RoadChunkPlan;
+import net.shiroha233.roadweaver.worldgen.road.RoadChunkSlice;
+import net.shiroha233.roadweaver.worldgen.road.RoadWorldgenPlanCache;
+import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
+import net.shiroha233.roadweaver.persistence.RoadReplacement;
+import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
+import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.*;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
+/**
+ * 道路世界生成 Feature
+ */
+public class PathFeature extends Feature<PathFeatureConfig> {
+    private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    /** T-20C: 空计划(擦边)chunk 聚合诊断计数与周期性摘要窗口。 */
+    private static final java.util.concurrent.atomic.AtomicLong EMPTY_WORLDGEN_PLAN_CHUNKS =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong EMPTY_WORLDGEN_PLAN_SUMMARY_AT =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final long EMPTY_WORLDGEN_PLAN_SUMMARY_INTERVAL_MS = 60_000L;
+    /**
+     * T-25 终态:施工拒绝且局部修复(PROTECTED_GAP)不可用、已被标记为永久放弃的
+     * chunk 计数与摘要窗口。用于确认"不再重试"是否真的生效(该值应收敛而非单调增长)。
+     */
+    private static final java.util.concurrent.atomic.AtomicLong ROAD_CHUNKS_ABANDONED =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong ROAD_CHUNKS_ABANDONED_SUMMARY_AT =
+            new java.util.concurrent.atomic.AtomicLong();
+    private static final long ROAD_CHUNKS_ABANDONED_SUMMARY_INTERVAL_MS = 60_000L;
+
+    public PathFeature(Codec<PathFeatureConfig> codec) {
+        super(codec);
+    }
+
+    @Override
+    public boolean place(FeaturePlaceContext<PathFeatureConfig> ctx) {
+        WorldGenLevel world = ctx.level();
+        Level lvl = world.getLevel();
+        if (!(lvl instanceof ServerLevel server) || !Level.OVERWORLD.equals(server.dimension()))
+            return false;
+
+        return placeChunk(world, server, new ChunkPos(ctx.origin()), ctx.random());
+    }
+
+    /** 世界生成和已加载区块回填共用施工入口，避免两条规则链漂移。 */
+    public static boolean placeChunk(WorldGenLevel world,
+                                     ServerLevel server,
+                                     ChunkPos currentChunk,
+                                     RandomSource random) {
+        if (world == null || server == null || currentChunk == null || random == null
+                || !Level.OVERWORLD.equals(server.dimension())) return false;
+
+        ModConfig cfg = ConfigService.get();
+        if (!cfg.roadAppearance().roadsEnabled()) return false;
+        return placeChunk(world, server, currentChunk, random, cfg, null);
+    }
+
+    public enum LoadedPlacement { PLACED, EMPTY_PLAN, NO_PLACEMENT }
+
+    /** 回填先看当前计划再直接消费同一版本，不在两层各查一次 LRU。 */
+    public static LoadedPlacement replayLoadedChunk(ServerLevel server, ChunkPos chunk, long randomSeed) {
+        ModConfig cfg = ConfigService.get();
+        return replayPlan(() -> RoadWorldgenPlanCache.get(server, chunk, cfg),
+                plan -> placeChunk(server, server, chunk, RandomSource.create(randomSeed), cfg, plan));
+    }
+
+    static LoadedPlacement replayPlan(Supplier<RoadChunkPlan> load, Predicate<RoadChunkPlan> place) {
+        RoadChunkPlan plan = load.get();
+        // 空计划不用进入施工，也不能提前释放仍供世界生成使用的预留。
+        if (plan.slices().isEmpty()) return LoadedPlacement.EMPTY_PLAN;
+        return place.test(plan) ? LoadedPlacement.PLACED : LoadedPlacement.NO_PLACEMENT;
+    }
+
+    private static boolean placeChunk(WorldGenLevel world, ServerLevel server, ChunkPos currentChunk,
+                                      RandomSource random, ModConfig cfg, RoadChunkPlan checkedPlan) {
+        try {
+            RoadChunkPlan plan = checkedPlan == null
+                    ? RoadWorldgenPlanCache.get(server, currentChunk, cfg) : checkedPlan;
+            if (plan.slices().isEmpty()) {
+                // A chunk that still lists road shards but compiles to an empty
+                // plan means the worldgen plan cache is stale or the compiler
+                // pruned the road here. This is the missing-construction case.
+                var shards = RoadShardStorage.queryChunk(server, currentChunk);
+                if (shards != null && !shards.isEmpty()) {
+                    // Task 4: shard archives cover the width-radius disc around
+                    // every station (RoadFootprint.addDisk), so a chunk touched
+                    // only by that disc — or by a corridor replanned elsewhere
+                    // since — compiles to an empty plan without being a gap.
+                    // A real gap shows up in the compiler's 'produced 0
+                    // localIndices' diagnostic with nonzero maskHits or
+                    // chunkIntersects=true. Those compiler-internal counters
+                    // are unavailable at this call site; the shard fingerprints
+                    // and span counts below identify the roads to cross-check.
+                    // T-20C: 明细降级为 debug(仅在 debug 开启时承担指纹计算
+                    // 成本),WARN 洪峰改为周期性一条聚合 INFO。
+                    if (LOGGER.isDebugEnabled()) {
+                        for (RoadData shardRoad : shards) {
+                            if (shardRoad == null) continue;
+                            LOGGER.debug("【区块编译计划为空的道路分片明细】 " + "RoadWeaver empty worldgen plan detail chunk={},{} shardRoadId={} "
+                                            + "stations={} spans={} compilerMaskHits=unavailable "
+                                            + "compilerChunkIntersects=unavailable compilerLocalIndices=unavailable",
+                                    currentChunk.x, currentChunk.z,
+                                    RoadShardStorage.computeFingerprint(shardRoad),
+                                    shardRoad.roadSegmentList() == null ? 0 : shardRoad.roadSegmentList().size(),
+                                    shardRoad.spans() == null ? 0 : shardRoad.spans().size());
+                        }
+                        LOGGER.debug("【区块有道路分片但无施工计划，可能仅擦边或路线已迁移】 " + "RoadWeaver chunk has {} road shard(s) but empty worldgen plan chunk={},{} "
+                                        + "(benign when the road disc only grazes this chunk or the route moved; "
+                                        + "cross-check the compiler 'produced 0 localIndices' diagnostic)",
+                                shards.size(), currentChunk.x, currentChunk.z);
+                    }
+                    EMPTY_WORLDGEN_PLAN_CHUNKS.incrementAndGet();
+                    logEmptyWorldgenPlanSummary();
+                }
+                return false;
+            }
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("【当前区块施工计划版本与片段数】 " + "RoadWeaver chunk plan chunk={},{} slices={} revision={}",
+                        currentChunk.x, currentChunk.z, plan.slices().size(),
+                        plan.revision());
+            }
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    prepareConstructionChunk(
+                            world, new ChunkPos(currentChunk.x + dx, currentChunk.z + dz));
+                }
+            }
+            int averagingRadius = Math.max(0, cfg.averagingRadius());
+            Set<ProcessedSegment> processedSegments = new HashSet<>();
+            Set<Decoration> decorations = new HashSet<>();
+            Set<Long> completedRoads = new HashSet<>();
+            Set<Long> incompleteRoads = new HashSet<>();
+            Map<Long, RefusalAccumulator> refusals = new LinkedHashMap<>();
+
+            processRoadSlices(world, server, currentChunk, plan.slices(), cfg, random,
+                    averagingRadius, processedSegments, decorations, completedRoads, incompleteRoads, refusals);
+
+            // T-24: 施工拒绝(fill-too-deep / protected-*)的连片站落为
+            // PROTECTED_GAP 并把 RoadData 原位替换一次;替换会使计划缓存失效,
+            // 随后用新鲜计划重跑一轮 —— 缺口站被既有掩码跳过(不再铺装、不再
+            // 打密度 stamp、不再放路灯),剩余站正常铺装并记账,chunk 由此按
+            // 完成处理,不再进入 1-5 秒重试循环。只允许一轮替换。
+            RoadChunkPlan evidencePlan = plan;
+            boolean gapRepairApplied = false;
+            if (!refusals.isEmpty() && persistConstructionRefusalGaps(server, refusals)) {
+                gapRepairApplied = true;
+                // 原位写回保护缺口会改版本；此处必须重新读，不能沿用回填预检得到的计划。
+                RoadChunkPlan refreshedPlan = RoadWorldgenPlanCache.get(server, currentChunk, cfg);
+                if (!refreshedPlan.slices().isEmpty()) {
+                    evidencePlan = refreshedPlan;
+                    refusals = new LinkedHashMap<>();
+                    processRoadSlices(world, server, currentChunk, refreshedPlan.slices(), cfg, random,
+                            averagingRadius, processedSegments, decorations, completedRoads, incompleteRoads, refusals);
+                }
+            }
+
+            DecorationExecutor.tryPlaceDecorations(decorations);
+            for (long roadFingerprint : completedRoads) {
+                RoadConstructionLedger.markComplete(server, currentChunk, roadFingerprint);
+            }
+
+            // T-25 终态:局部修复(PROTECTED_GAP 原位替换)没能救回来时不再重试。
+            //
+            // 2026-09-16 真机事故:某条路的隧道 span 因 fluid-in-wall-volume 被拒,
+            // 地表回退又因 fill-too-deep 失败,而失败站全部落在既有 TUNNEL span 的
+            // covered 掩码内 —— 于是 withConstructionRefusalGapSpans() 返回 null,
+            // 缺口一个都加不上,chunk 永远 incomplete。后果是每 60 秒重规划一次、
+            // 每次刷 168 行 WARN(单存档累计 13224 次 tunnel rejected),主线程被
+            // 日志 I/O 拖死;重启后 recover() 又按台账把这些 chunk 捞回队列,
+            // 形成跨会话死循环。
+            //
+            // 用户定的停止准则:「留个缺口,局部修复救不了就不救了」。
+            //
+            // 🔴 关键设计:终态必须写进 RoadConstructionLedger(有持久化),而不是
+            // DeferredInitialRoadConstructionService.NO_CONSTRUCTION_REQUIRED(纯
+            // 内存态)。因为「是否还需要施工」的三处判定全部只读 ledger:
+            //   ① DeferredInitialRoadConstructionService.recover()  —— 重启后重入队
+            //   ② LoadedChunkRoadBackfill.isConstructionComplete()   —— 每 60 秒回填
+            // 写进 ledger 后两处自动跳过,且重启不再复活;若只写内存态,①会复活死循环。
+            //
+            // （原列表还有第 ② 项 InitialRoadConstructionService.verifyConstruction()，
+            //   那个类 2026-11-15 已作为死代码物理删除 —— 它从来没被接线，所以
+            //   「开局校验会抛异常」这条风险现在不存在。① 的死循环风险仍然成立。）
+            boolean abandoned = false;
+            if (!incompleteRoads.isEmpty() && completedRoads.isEmpty()
+                    && !refusals.isEmpty() && !gapRepairApplied) {
+                abandoned = true;
+                for (long roadFingerprint : incompleteRoads) {
+                    RoadConstructionLedger.markComplete(server, currentChunk, roadFingerprint);
+                }
+                ROAD_CHUNKS_ABANDONED.incrementAndGet();
+                LOGGER.warn("RoadWeaver chunk={},{} 施工拒绝且局部修复(PROTECTED_GAP)不可用,"
+                                + "已记台账为终态(留缺口,不再重试)。roads={}",
+                        currentChunk.x, currentChunk.z, incompleteRoads.size());
+                logAbandonedSummary();
+            } else if (!incompleteRoads.isEmpty() && completedRoads.isEmpty() && !gapRepairApplied) {
+                LOGGER.warn("【区块道路片段均未结案，需检查隧道或体积拒绝原因】 " + "RoadWeaver chunk={},{} has road slice(s) but none completed; "
+                                + "likely tunnel/volume rejected",
+                        currentChunk.x, currentChunk.z);
+            }
+            if (RoadBuildEvidence.enabled()) {
+                // 仅用本次实际处理集合判状态；台账可能记录放弃，不能借此冒报成功落块。
+                Set<Long> reported = new HashSet<>();
+                for (var slice : evidencePlan.slices()) {
+                    long fingerprint = RoadShardStorage.computeFingerprint(slice.road());
+                    if (!reported.add(fingerprint)) continue;
+                    var outcome = RoadBuildEvidence.outcome(completedRoads.contains(fingerprint),
+                            incompleteRoads.contains(fingerprint), abandoned);
+                    LOGGER.info("【道路区块施工结案证据】 " + "{}", RoadBuildEvidence.chunk(server.dimension().location().toString(),
+                            server.getSeed(), slice.road(), fingerprint, currentChunk.x, currentChunk.z,
+                            slice.segmentCount(), outcome, gapRepairApplied));
+                }
+            }
+            // 终态放弃的 chunk 按"已处理"返回 true,调用方不再把它当待施工候选。
+            return !completedRoads.isEmpty() || abandoned;
+        } finally {
+            HugeTreeReservation.releaseChunk(server, currentChunk);
+        }
+    }
+
+    /** T-24: 单次 placeChunk 的切片处理循环(替换后用新鲜计划重跑一次)。 */
+    private static void processRoadSlices(WorldGenLevel world,
+            ServerLevel server,
+            ChunkPos currentChunk,
+            List<RoadChunkSlice> slices,
+            ModConfig cfg,
+            RandomSource random,
+            int averagingRadius,
+            Set<ProcessedSegment> processedSegments,
+            Set<Decoration> decorations,
+            Set<Long> completedRoads,
+            Set<Long> incompleteRoads,
+            Map<Long, RefusalAccumulator> refusals) {
+        for (RoadChunkSlice slice : slices) {
+            long roadFingerprint = RoadShardStorage.computeFingerprint(slice.road());
+            if (RoadConstructionLedger.isComplete(server, currentChunk, roadFingerprint)) continue;
+            boolean completed = processRoadSlice(world, server, currentChunk, slice,
+                    processedSegments, decorations, random, cfg, averagingRadius, refusals);
+            if (completed) {
+                completedRoads.add(roadFingerprint);
+                incompleteRoads.remove(roadFingerprint);
+            } else {
+                incompleteRoads.add(roadFingerprint);
+                completedRoads.remove(roadFingerprint);
+            }
+        }
+    }
+
+    /**
+     * T-24: 把施工拒绝的连续站合并为 PROTECTED_GAP span 并原位替换道路数据
+     * (每条路至多一次)。替换使计划缓存按受影响 chunk 失效;带缺口 span 的
+     * chunk 重新编译后跳过这些站,施工台账按完成记账。水/结构校验自身的
+     * 保护缺口语义不受影响。
+     */
+    private static boolean persistConstructionRefusalGaps(ServerLevel server,
+                                                          Map<Long, RefusalAccumulator> refusals) {
+        if (refusals.isEmpty()) return false;
+        // C1：原先对每个 accumulator 单独调一次 replaceRoads，单次调用会让
+        // RoadChunkStore.persistSnapshot 以 previous ∪ next 全量遍历 + 写全部分片
+        // （实测 6094 个 chunk 分片）。同一 chunk 的多个 slice 会触发多次全量落盘，
+        // 叠在主线程上。这里先收集全部替换，一次性提交，落盘次数由 N 降为 1。
+        List<RoadReplacement> replacements = new ArrayList<>(refusals.size());
+        List<RefusalAccumulator> accepted = new ArrayList<>(refusals.size());
+        for (RefusalAccumulator accumulator : refusals.values()) {
+            RoadData updated = accumulator.withConstructionRefusalGapSpans();
+            if (updated == null) continue;
+            replacements.add(new RoadReplacement(accumulator.fingerprint(), updated));
+            accepted.add(accumulator);
+        }
+        if (replacements.isEmpty()) return false;
+        try {
+            RoadShardStorage.replaceRoads(server, replacements);
+        } catch (RuntimeException failure) {
+            // 批量提交失败时不谎报成功：让 chunk 保持未完成，走既有重试路径。
+            for (RefusalAccumulator accumulator : accepted) {
+                LOGGER.warn("【施工拒绝缺口持久化失败】 " + "RoadWeaver could not persist construction refusal gaps road={}",
+                        accumulator.fingerprint(), failure);
+            }
+            return false;
+        }
+        for (RefusalAccumulator accumulator : accepted) {
+            LOGGER.info("【施工拒绝缺口已保存，区块按既有规则结案以停止重试】 " + "RoadWeaver persisted construction refusal gaps road={} refusedStations={} "
+                            + "(chunk completes; retry loop ends)",
+                    accumulator.fingerprint(), accumulator.stations().size());
+        }
+        return true;
+    }
+
+    /** T-24: 单条道路的施工拒绝累积(站点索引 -> 拒绝原因)。 */
+    private static final class RefusalAccumulator {
+        private final RoadData road;
+        private final long fingerprint;
+        private final java.util.TreeMap<Integer, String> stations = new java.util.TreeMap<>();
+
+        RefusalAccumulator(RoadData road, long fingerprint) {
+            this.road = road;
+            this.fingerprint = fingerprint;
+        }
+
+        java.util.TreeMap<Integer, String> stations() {
+            return stations;
+        }
+
+        long fingerprint() {
+            return fingerprint;
+        }
+
+        /**
+         * 连续失败站合并为 PROTECTED_GAP span。与既有 span 重叠的站跳过
+         * (隧道/桥/复用走廊的归属不变);合并后道路必须通过最终校验,
+         * 否则返回 null(保持既有重试行为)。
+         */
+        RoadData withConstructionRefusalGapSpans() {
+            List<RoadSegmentPlacement> segments = road.roadSegmentList();
+            if (stations.isEmpty() || segments == null || segments.size() < 3) return null;
+            Map<Long, Integer> indexByMiddle = new HashMap<>();
+            for (int i = 0; i < segments.size(); i++) {
+                RoadSegmentPlacement segment = segments.get(i);
+                if (segment != null && segment.middlePos() != null) {
+                    indexByMiddle.putIfAbsent(xzKey(segment.middlePos()), i);
+                }
+            }
+            boolean[] covered = new boolean[segments.size()];
+            for (RoadSpan span : road.spans() == null ? List.<RoadSpan>of() : road.spans()) {
+                if (span == null || span.start() == null || span.end() == null) continue;
+                Integer a = indexByMiddle.get(xzKey(span.start()));
+                Integer b = indexByMiddle.get(xzKey(span.end()));
+                if (a == null || b == null) continue;
+                for (int i = Math.min(a, b); i <= Math.max(a, b); i++) covered[i] = true;
+            }
+            List<RoadSpan> spans = new ArrayList<>(road.spans() == null ? List.of() : road.spans());
+            Integer runStart = null;
+            Integer runEnd = null;
+            boolean added = false;
+            for (java.util.Map.Entry<Integer, String> entry : stations.entrySet()) {
+                int index = entry.getKey();
+                if (index < 0 || index >= segments.size() || covered[index]) continue;
+                if (runStart != null && index == runEnd + 1) {
+                    runEnd = index;
+                    continue;
+                }
+                if (runStart != null) {
+                    spans.add(new RoadSpan(segments.get(runStart).middlePos(),
+                            segments.get(runEnd).middlePos(), SpanType.PROTECTED_GAP));
+                    added = true;
+                }
+                runStart = index;
+                runEnd = index;
+            }
+            if (runStart != null) {
+                spans.add(new RoadSpan(segments.get(runStart).middlePos(),
+                        segments.get(runEnd).middlePos(), SpanType.PROTECTED_GAP));
+                added = true;
+            }
+            if (!added) return null;
+            RoadData updated = new RoadData(road.width(), road.roadType(), road.materials(),
+                    road.slabMaterials(), segments, List.copyOf(spans), road.targetY(),
+                    road.ownerA2dKey(), road.ownerB2dKey());
+            return RoadDataValidator.validateFinalRoad(updated).valid() ? updated : null;
+        }
+    }
+
+    private static boolean processRoadSlice(WorldGenLevel world,
+            ServerLevel server,
+            ChunkPos currentChunk,
+            RoadChunkSlice slice,
+            Set<ProcessedSegment> processedSegments,
+            Set<Decoration> decorations,
+            RandomSource random,
+            ModConfig cfg,
+            int averagingRadius,
+            Map<Long, RefusalAccumulator> refusals) {
+        if (!cfg.roadAppearance().roadsEnabled()) {
+            return true;
+        }
+
+        RoadData data = slice.road();
+        long roadFingerprint = RoadShardStorage.computeFingerprint(data);
+        RefusalAccumulator refusalSink = refusals.computeIfAbsent(roadFingerprint,
+                ignored -> new RefusalAccumulator(data, roadFingerprint));
+
+        boolean bridgeEnabled = cfg.bridgeEnabled();
+        int roadType = data.roadType();
+        if (roadType != 0 && roadType != 1) {
+            LOGGER.warn("【道路类型不支持，拒绝无效施工片段】 " + "RoadWeaver rejected malformed road slice with unsupported roadType={} chunk={} road={}",
+                    roadType, currentChunk, roadFingerprint);
+            return false;
+        }
+
+        int roadWidth = Math.max(1, data.width());
+        List<BlockState> materials = data.materials();
+        List<BlockState> slabMaterials = data.slabMaterials();
+        List<RoadSegmentPlacement> segments = data.roadSegmentList();
+        if (segments == null || segments.size() < 5) {
+            LOGGER.warn("【站点数不足，拒绝无效施工片段】 " + "RoadWeaver rejected malformed road slice with too few segments chunk={} road={} segments={}",
+                    currentChunk, roadFingerprint, segments == null ? 0 : segments.size());
+            return false;
+        }
+        // 可变状态按片段持有；纯跨度和里程仍单独只读复用，不把世界塞进状态对象。
+        var state = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionSliceState(
+                segments.size(), slice.segmentCount(), slice::segmentIndexAt);
+
+        // 中心线与规划期桥范围对同一条路恒定不变（compute 是纯函数、RoadData 不可变），
+        // 按「内容指纹 + 配置」缓存一次，避免每个区块都 O(站数) 重扫全条路。
+        // copyForUser() 会深拷贝掩码 —— 区块生成会就地改掩码，共享同一份数组会串味。
+        BuildFrame.Frames buildFrame = BuildFrame.of(roadFingerprint, segments, data.spans(), cfg);
+        List<BlockPos> middlePositions = buildFrame.middlePositions();
+        BridgeRangeCalculator.RangeResult plannedBridgeResult = buildFrame.copyForUser();
+        BridgeRangeCalculator.RangeResult res = RoadConstructionSafety.promoteRuntimeBridges(
+                world, currentChunk, data, middlePositions, plannedBridgeResult);
+        boolean[] isBridge = res.isBridge();
+        List<int[]> bridgeRanges = res.mergedRanges();
+        boolean[] skipSegments = res.skipSegments();
+        // 只读跨度按冻结道路复用；世界高度、隧道退让和桥晋级仍由当前区块独立持有。
+        var spanMasks = net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks.of(
+                data, cfg.bridgeRampSegments());
+
+        boolean useBuoysInstead = bridgeEnabled && cfg.bridgeUseBuoysInstead();
+        boolean useBuoysWhenSkipped = bridgeEnabled && cfg.bridgeUseBuoysWhenSkipped();
+
+        int intervalBlocks = Math.max(4, cfg.buoyIntervalBlocks());
+        boolean[] buoyMarkersForBridge = (useBuoysInstead
+                ? BuoyMarkerPlanner.markersForBridgeRanges(middlePositions, bridgeRanges, intervalBlocks)
+                : null);
+        boolean[] buoyMarkersForSkipped = (useBuoysWhenSkipped
+                ? BuoyMarkerPlanner.markersForMask(middlePositions, skipSegments, intervalBlocks)
+                : null);
+
+        var targetY = data.targetY();
+        boolean slopeLimitEnabled = cfg.slopeLimitEnabled();
+        HeightProfileService.HeightProfile hp = HeightProfileService.build(
+                world,
+                middlePositions,
+                currentChunk,
+                averagingRadius,
+                slopeLimitEnabled,
+                cfg.maxSlopeStepPerTwoSegments(),
+                targetY);
+        boolean usePersisted = hp.usePersisted();
+        int[] smoothedYArr = hp.smoothedY();
+        int[] baseYArr;
+        if (usePersisted && targetY != null && targetY.size() == middlePositions.size()) {
+            baseYArr = targetY.stream().mapToInt(Integer::intValue).toArray();
+        } else {
+            baseYArr = smoothedYArr;
+        }
+        BridgeSegment bridgeSegment = new BridgeSegment(isBridge, segments, baseYArr);
+        int deckY = server.getSeaLevel() + cfg.bridgeDeckClearance();
+        BridgeSegmentPlanner.Context bridgeCtx = BridgeSegmentPlanner.newContext();
+
+        // 先接同序同步执行器，完整站之间可恢复；跨tick启用必须另验装饰、台账及巨树租约。
+        var inputs = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionStationWork.Inputs(
+                data, roadFingerprint, currentChunk, slice, cfg, bridgeEnabled, roadType, roadWidth, materials, slabMaterials, segments, middlePositions, isBridge, bridgeRanges, skipSegments, spanMasks, useBuoysInstead, useBuoysWhenSkipped, buoyMarkersForBridge, buoyMarkersForSkipped, bridgeSegment, deckY, bridgeCtx, buildFrame);
+        state.profile(baseYArr);
+        var work = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionStationWork(inputs, state,
+                new net.shiroha233.roadweaver.pathlogic.construction.WorldConstructionStationAccess(world, server),
+                i -> processedSegments.add(new ProcessedSegment(roadFingerprint, i)),
+                decorations, random, refusalSink.stations());
+        state.cursor().runAll(work);
+        LOGGER.info("【道路区块片段施工结果】 " + "RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
+                        + "reuse={} gap={} completed={}",
+                roadFingerprint, currentChunk, slice.segmentCount(),
+                countMask(isBridge), spanMasks.tunnelCount(),
+                spanMasks.networkReuseCount(), spanMasks.protectedGapCount(), state.completed());
+        if (!state.completed()) {
+            int tunnelStations = 0;
+            int tunnelJunctionStations = 0;
+            for (int index = 0; index < isBridge.length; index++) {
+                if (index < spanMasks.size() && spanMasks.tunnelAt(index)) tunnelStations++;
+                if (slice.isTunnelJunction(index)) tunnelJunctionStations++;
+            }
+            LOGGER.warn("【道路区块施工尚未完成】 " + "RoadWeaver chunk construction incomplete road={} chunk={} tunnelStations={} "
+                            + "tunnelJunctionStations={} segments={}",
+                    roadFingerprint, currentChunk, tunnelStations, tunnelJunctionStations, segments.size());
+        }
+        return state.completed();
+    }
+
+
+    /** T-20C: 每 60 秒至多一条聚合 INFO,替代原先每 chunk 一条的 WARN 洪峰。 */
+    private static void logEmptyWorldgenPlanSummary() {
+        long now = System.currentTimeMillis();
+        long last = EMPTY_WORLDGEN_PLAN_SUMMARY_AT.get();
+        if (now - last < EMPTY_WORLDGEN_PLAN_SUMMARY_INTERVAL_MS) return;
+        if (!EMPTY_WORLDGEN_PLAN_SUMMARY_AT.compareAndSet(last, now)) return;
+        LOGGER.info("【空区块施工计划累计统计，逐块细节见调试日志】 " + "RoadWeaver empty worldgen plan chunks observed: total={} (benign grazing discs or moved routes; "
+                + "per-chunk detail at debug level)", EMPTY_WORLDGEN_PLAN_CHUNKS.get());
+    }
+
+    /** T-25: 每 60 秒至多一条终态放弃的聚合 INFO，替代每 chunk 重复刷 WARN。 */
+    private static void logAbandonedSummary() {
+        long now = System.currentTimeMillis();
+        long last = ROAD_CHUNKS_ABANDONED_SUMMARY_AT.get();
+        if (now - last < ROAD_CHUNKS_ABANDONED_SUMMARY_INTERVAL_MS) return;
+        if (!ROAD_CHUNKS_ABANDONED_SUMMARY_AT.compareAndSet(last, now)) return;
+        LOGGER.info("RoadWeaver 终态放弃的施工 chunk 累计: {} (局部修复不可用,已留缺口并退出重试;"
+                + "该值应停止增长)", ROAD_CHUNKS_ABANDONED.get());
+    }
+
+    /**
+     * T-24: 去重键。roadFingerprint 是内容指纹(与 RoadShardStorage 一致),
+     * 原位替换前后保持稳定,因此重跑轮次不会对已处理站点二次铺装。
+     */
+    private record ProcessedSegment(long roadFingerprint, int segmentIndex) {
+    }
+
+
+    // 拒绝跨度累积仍使用原XZ键，不能随纯掩码计算一起迁走。
+    private static long xzKey(BlockPos pos) {
+        return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
+    }
+
+    private static int countMask(boolean[] mask) {
+        if (mask == null) return 0;
+        int count = 0;
+        for (boolean value : mask) {
+            if (value) count++;
+        }
+        return count;
+    }
+
+}

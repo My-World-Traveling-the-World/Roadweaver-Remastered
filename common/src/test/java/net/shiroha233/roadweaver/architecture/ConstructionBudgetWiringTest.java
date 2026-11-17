@@ -73,6 +73,73 @@ class ConstructionBudgetWiringTest {
             assertEquals(frozen,actual,"原操作参数及转发次数不可改变:"+entry.getKey());
         }
     }
+    @Test void chunkWorldAdapterRetainsFrozenTransactionOperations() throws Exception {
+        // 行为测试只替换端口；再对冻结旧入口核对边界正文，防止真实适配器成为空壳。
+        var frozen=parsedMethods(Path.of("src/test/resources/construction/chunk-transaction-5b399d5.java.txt"));
+        var old=frozen.get("placeChunk").stream().filter(m->m.getParameters().size()==6).toList();
+        assertEquals(1,old.size());
+        var original=(TryTree)old.getFirst().getBody().getStatements().getFirst();
+        var statements=original.getBlock().getStatements();
+        assertEquals(20,statements.size(),"冻结旧入口发生变化时必须逐句重新核实");
+        var live=methods("pathlogic/PathFeature.java");
+        java.util.function.BiConsumer<String,String> same=(name,body)-> {
+            assertEquals(1,live.get(name).size(),name);
+            assertEquals(compact(body),compact(live.get(name).getFirst()),name);
+        };
+        var initial=(VariableTree)statements.get(0);
+        same.accept("loadInitial","{return "+initial.getInitializer()+";}");
+        var empty=(IfTree)statements.get(1);
+        same.accept("isEmpty","{return "+((ParenthesizedTree)empty.getCondition()).getExpression()+";}");
+        var emptyBody=((BlockTree)empty.getThenStatement()).getStatements();
+        same.accept("emptyPlan","{"+join(emptyBody.subList(0,emptyBody.size()-1))+"}");
+        StringBuilder prepare=new StringBuilder("{");
+        for(int i=2;i<=9;i++) {
+            var statement=statements.get(i);
+            if(statement instanceof VariableTree variable)
+                prepare.append(variable.getName()).append("=").append(variable.getInitializer()).append(';');
+            else prepare.append(statement);
+        }
+        same.accept("prepare",prepare.append('}').toString());
+        same.accept("process","{"+statements.get(10)+"}");
+        var repair=(IfTree)statements.get(13);
+        same.accept("repairRefusals","{return "+((ParenthesizedTree)repair.getCondition()).getExpression()+";}");
+        var repairBody=((BlockTree)repair.getThenStatement()).getStatements();
+        var refreshed=(VariableTree)repairBody.get(1);
+        same.accept("loadRefreshed","{return "+refreshed.getInitializer()+";}");
+        var nonEmpty=(IfTree)repairBody.get(2);
+        var reset=((BlockTree)nonEmpty.getThenStatement()).getStatements().get(1);
+        same.accept("resetRefusals","{"+reset+"}");
+        same.accept("decorate","{"+statements.get(14)+"}");
+        same.accept("commitCompleted","{"+statements.get(15)+"}");
+        same.accept("finish","{"+join(statements.subList(16,statements.size()))+"}");
+        same.accept("release",original.getFinallyBlock().toString());
+    }
+    private static String join(List<? extends StatementTree> statements) {
+        return statements.stream().map(tree->tree.toString()+(tree instanceof VariableTree?";":""))
+                .collect(java.util.stream.Collectors.joining());
+    }
+    private static String compact(String value) {
+        // 只忽略格式空白，不忽略调用、参数或分支。
+        return value.replaceAll("\\s+", "");
+    }
+    private static Map<String,List<MethodTree>> parsedMethods(Path source) throws Exception {
+        var compiler=Objects.requireNonNull(ToolProvider.getSystemJavaCompiler());
+        var result=new HashMap<String,List<MethodTree>>();
+        String text=Files.readString(source);
+        var file=new javax.tools.SimpleJavaFileObject(java.net.URI.create("string:///Fixture.java"),javax.tools.JavaFileObject.Kind.SOURCE) {
+            @Override public CharSequence getCharContent(boolean ignore){return text;}
+        };
+        try(var manager=compiler.getStandardFileManager(null,null,java.nio.charset.StandardCharsets.UTF_8)) {
+            var task=(JavacTask)compiler.getTask(null,manager,null,List.of("-proc:none"),null,List.of(file));
+            for(var unit:task.parse())new TreeScanner<Void,Void>() {
+                @Override public Void visitMethod(MethodTree tree,Void unused) {
+                    if(tree.getBody()!=null)result.computeIfAbsent(tree.getName().toString(),k->new ArrayList<>()).add(tree);
+                    return super.visitMethod(tree,unused);
+                }
+            }.scan(unit,null);
+        }
+        return result;
+    }
     private static Map<String,List<String>> methods(String relative) throws Exception {
         Path root=Path.of("src/main/java/net/shiroha233/roadweaver");
         assertTrue(Files.isRegularFile(root.resolve(relative)),"生产接线源文件必须存在");
