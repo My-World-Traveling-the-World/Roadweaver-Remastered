@@ -31,13 +31,7 @@ public final class ConfigService {
     private static final String BASE_DIR = "roadweaver";
     private static final String FILE_NAME = "roadweaver.json";
 
-    /**
-     * The live config. Volatile read instead of a synchronized getter: hot
-     * planning loops call this constantly and no caller relies on this
-     * method's monitor (load/save keep their own synchronization for swap and
-     * file IO; readers may observe in-place sanitize clamps mid-apply, which
-     * are idempotent).
-     */
+    /** 热循环通过volatile读取配置引用，避免每次取配置都竞争类锁；这不构成字段深度不可变快照。 */
     private static volatile ModConfig INSTANCE = new ModConfig();
 
     private ConfigService() {}
@@ -105,7 +99,7 @@ public final class ConfigService {
         return INSTANCE;
     }
 
-    /** Stable payload used to invalidate persisted road-planning coverage. */
+    /** 生成持久规划覆盖的指纹载荷，使相关配置变化能使旧覆盖失效。 */
     public static synchronized String planningFingerprintPayload() {
         JsonObject root = new JsonObject();
         root.add("structurePrediction", GSON.toJsonTree(INSTANCE.structurePrediction()));
@@ -219,7 +213,7 @@ public final class ConfigService {
         return migrated;
     }
 
-    /** Reads an optional JSON number without letting a wrong type abort the whole migration. */
+    /** 迁移时容忍单个可选数值类型错误，避免整个旧配置被一并丢弃。 */
     private static Double readNumber(JsonObject parent, String key) {
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonPrimitive()) {
@@ -232,11 +226,7 @@ public final class ConfigService {
         }
     }
 
-    /**
-     * 2.2.x used different performance property names. A plain Gson load
-     * silently discards them, which would otherwise start 2.3.1 with CPU-core
-     * defaults and its new OpenCL sampler enabled.
-     */
+    /** 迁移旧性能字段以保留玩家预算；精确采样保持CPU-only，不因旧配置开启废弃GPU路径。 */
     private static boolean migrateLegacyPerformance(JsonObject root, ModConfig loaded) {
         JsonElement performanceElement = root.get("performance");
         if (performanceElement == null || !performanceElement.isJsonObject()) {

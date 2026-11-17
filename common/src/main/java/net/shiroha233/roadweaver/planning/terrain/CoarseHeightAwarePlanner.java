@@ -18,7 +18,8 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import net.shiroha233.roadweaver.core.constants.PathfindingConstants;
 
-/**
+/** 三维粗候选展开实际Y层，允许地表绕坡或下挖隧道弦，入口仍受坡限约束。
+ *
  * Coarse planning fallback that expands real Y levels. It can choose either a
  * surface contour or a lowered tunnel chord through a mountain, so a village
  * at the foot of a cliff is not approached by a single impossible drop.
@@ -26,7 +27,7 @@ import net.shiroha233.roadweaver.core.constants.PathfindingConstants;
 final class CoarseHeightAwarePlanner {
     private static final int COARSE_TUNNEL_VERTICAL_STEP = 2;
     private static final int COARSE_MIN_BUILD_Y = -64;
-    /** Cost of one edge crossing a predicted building footprint (task 9). */
+    /** 穿越预测建筑占地的边有独立代价，不可与硬保护终验混淆。 */
     private static final int[][] DIRECTIONS = {
             {1, 0}, {-1, 0}, {0, 1}, {0, -1},
             {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
@@ -143,7 +144,7 @@ final class CoarseHeightAwarePlanner {
         return null;
     }
 
-    /** Shared grade ceiling; fallback mirrors the sanitize default 0.5. */
+    /** 搜索和过渡共用坡度上限，配置不可取时使用同一默认比例。 */
     private static double maxGradeFraction() {
         try {
             return Math.max(0.1D, Math.min(0.9D,
@@ -153,7 +154,8 @@ final class CoarseHeightAwarePlanner {
         }
     }
 
-    /**
+    /** 隧道候选层从地表逐层下移，层数受配置深度限制，避免无限Y状态。
+ *
      * Tunnel candidate offsets below the sampled terrain, read once per
      * search. Level 0 is the surface; each further level drops one coarse
      * vertical step until the configured tunnel depth is covered.

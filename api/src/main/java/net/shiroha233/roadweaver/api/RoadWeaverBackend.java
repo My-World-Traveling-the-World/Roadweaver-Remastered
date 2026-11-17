@@ -32,7 +32,7 @@ public interface RoadWeaverBackend {
 
     // ── 结构预留（incoming）───────────────────────────────────────────────
 
-    /** @see net.shiroha233.roadweaver.api.incoming.StructureReservationApi#reserve */
+    /** 预留结构的后端契约与公开入口保持一致，避免绕过占地校验。 */
     boolean reserveStructure(ServerLevel level, String structureId, BlockPos center,
                              int[] rotationMirrored, int fallenDirection);
 
@@ -66,12 +66,12 @@ public interface RoadWeaverBackend {
 
     // ── 路网操作（incoming）───────────────────────────────────────────────
 
-    /** @see net.shiroha233.roadweaver.api.RoadNetworkApi#registerStructureEndpoint */
+    /** 注册外部结构端点；自动连路意图由公开接口定义。 */
     void registerStructureEndpoint(ServerLevel level, BlockPos pos, String structureId, boolean autoConnect);
 
-    /** @see net.shiroha233.roadweaver.api.RoadNetworkApi#ensureConnection */
+    /** 提交两端点连接意图，立即生成标志沿用公开接口契约。 */
     void ensureConnection(ServerLevel level, BlockPos from, BlockPos to, boolean generateImmediately);
 
-    /** @see net.shiroha233.roadweaver.api.RoadNetworkApi#planRegion */
+    /** 按方块坐标矩形请求规划，边界口径以公开入口为准。 */
     void planRegion(ServerLevel level, int minBlockX, int minBlockZ, int maxBlockX, int maxBlockZ);
 }

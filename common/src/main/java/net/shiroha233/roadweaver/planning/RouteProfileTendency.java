@@ -9,7 +9,8 @@ import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
+/** AUTO按本连接地形占比记录偏桥或偏隧道倾向；不回写全局配置，显式模式忽略该表。
+ *
  * Per-route terrain tendency resolved by the coarse AUTO profile
  * ({@code RawPathSearch} classifies the route and, when the global mode is
  * AUTO, stores TUNNEL_FIRST / BRIDGE_FIRST / BALANCED here). Consumers in the
@@ -45,12 +46,13 @@ public final class RouteProfileTendency {
         ACTIVE.remove(PlannedPathKey.of(connection));
     }
 
-    /** Drops every route-level tendency (cache clear / world change). */
+    /** 世界切换及缓存清理时清除所有连接倾向，避免跨存档复用。 */
     public static void clearAll() {
         ACTIVE.clear();
     }
 
-    /**
+    /** 显式模式优先，AUTO才读取本连接倾向，平衡倾向映回AUTO基准。
+ *
      * The profile mode the exact generation phase should apply to this route:
      * the global mode when it is an explicit selection, otherwise the route's
      * AUTO tendency (BALANCED reads back as AUTO, which is the balanced

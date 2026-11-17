@@ -162,12 +162,7 @@ public final class ThreadPoolManager {
         } finally { PoolRetirements.drain(); }
     }
 
-    /**
-     * Restores the startup hardware budget after runtime QoS has reduced one
-     * of the pools while the world was preparing to enter. Initial generation
-     * is a bounded gate, so no player-facing runtime work should shrink its
-     * road or exact-structure lanes underneath it.
-     */
+    /** 开局恢复硬件预算时不继承普通游玩QoS缩小值，避免等待通道被错误压缩。 */
     public static void prepareInitialGeneration() {
         try {
             synchronized (ThreadPoolManager.class) {
@@ -191,7 +186,8 @@ public final class ThreadPoolManager {
         } finally { PoolRetirements.drain(); }
     }
 
-    /**
+    /** 调整已有共享池但不取消已排队/运行工作；预检临时供给结束恢复配置预算。
+ *
      * Adjusts the existing shared worker pool without cancelling queued or
      * running planning work. Chunky readiness uses this for a small temporary
      * supply boost; ordinary runtime work returns it to the configured size.
@@ -290,7 +286,8 @@ public final class ThreadPoolManager {
         STRUCTURE_STABLE_SINCE.set(0L);
     }
 
-    /**
+    /** 目标容量稳定足够久才应用变更，避免每次压力抖动都调整线程池。
+ *
      * @return true 表示这次变更应当真正应用（目标已稳定足够久）
      */
     private static boolean capacitySettled(AtomicLong pending, AtomicLong stableSince, int target) {
@@ -384,12 +381,7 @@ public final class ThreadPoolManager {
         return startupHardwareProfile().nativeStructureWorkers();
     }
 
-    /**
-     * P0-7: the old {@code processors / 2} budget left a 16-core machine at
-     * eight runtime road workers even when the initial-generation lane was
-     * allowed sixteen. Reserving two cores keeps the server thread and the OS
-     * comfortable while letting the pool scale with the machine.
-     */
+    /** 普通工作预算预留服务端及系统余量；只约束该池，不保证全部池合计始终留出两核。 */
     public static int maxRuntimeRoadThreads() {
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
         return Math.max(1, Math.min(12, Math.max(1, processors - 2)));
@@ -670,7 +662,7 @@ public final class ThreadPoolManager {
         } finally { PoolRetirements.drain(); }
     }
 
-    /** Small dedicated lane for snapshot predictions that road tasks block on. */
+    /** 快照预测使用独立小通道，避免道路等待的工作被排在道路自己后面。 */
     private static ThreadPoolExecutor snapshotExecutor() {
         try {
             if (RoadLifecycle.isStopping()) throw new RejectedExecutionException("RoadWeaver is stopping");
@@ -690,13 +682,7 @@ public final class ThreadPoolManager {
         } finally { PoolRetirements.drain(); }
     }
 
-    /**
-     * Two workers: enough to serve the bounded runtime road concurrency
-     * (maxConcurrentGenerations) without queueing predictions behind each
-     * other, and independent of the runtime QoS shrinking of the shared and
-     * structure pools, so a waiting road task is never hostage to them.
-     * Startup predictions stay on the INITIAL lane (trackInitialProgress).
-     */
+    /** 游玩快照独立于共享池QoS收缩，开局预测走INITIAL通道；小池不承诺所有请求无排队。 */
     private static void rebuildSnapshotPool() {
         shutdownQuietly(SNAPSHOT_WORKERS.get());
         SNAPSHOT_WORKERS.set(new LifecycleWorkerPool(

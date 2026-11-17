@@ -48,7 +48,7 @@ final class RoadChunkIntersection {
         return false;
     }
 
-    /** Task 16 diagnostic: stations of one span mask inside the chunk bounds. */
+    /** 诊断区块内跨度掩码站数，不以站数证明方块已写入。 */
     static int countMaskHits(List<RoadSegmentPlacement> placements,
                                      ChunkPos chunkPos,
                                      boolean[] mask) {
@@ -69,7 +69,7 @@ final class RoadChunkIntersection {
         return hits;
     }
 
-    /** Task 16 diagnostic: whether any placement footprint touches the chunk. */
+    /** 判断完整铺装占地是否碰区块，不能只看中心站所属区块。 */
     static boolean anyPlacementIntersectsChunk(List<RoadSegmentPlacement> placements,
                                                        ChunkPos chunkPos) {
         for (RoadSegmentPlacement placement : placements) {

@@ -58,7 +58,7 @@ public final class AccurateTerrainRegionSampler {
                 true, AccurateSamplingProgress.NONE, true);
     }
 
-    /** Samples only columns inside a local circular repair window. */
+    /** 局部采样限定在冲突圆窗内，避免修一栋建筑扫描整条路。 */
     public static AccurateTerrainRegion sampleAcceleratedMasked(ServerLevel level,
                                                                 TerrainSamplingCache cache,
                                                                 int minBlockX,

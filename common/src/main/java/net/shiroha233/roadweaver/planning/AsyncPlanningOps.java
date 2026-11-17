@@ -422,7 +422,7 @@ public final class AsyncPlanningOps {
                         timing.publishNanos = System.nanoTime() - phaseStartedAt);
     }
 
-    /** 0.9.059：{@code async planning timing} + {@code [PLAN-SNAPSHOT-BREAKDOWN]} + {@code [PLAN-ADAPTIVE]}。 */
+    /** 规划阶段诊断保留稳定标记，便于将采样、快照和自适应预算分开分析。 */
     public static void logAsyncPlanning(
             ServerLevel level,
             int[] coreBounds,

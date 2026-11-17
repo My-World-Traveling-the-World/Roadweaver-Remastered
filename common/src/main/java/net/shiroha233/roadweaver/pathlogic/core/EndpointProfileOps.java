@@ -106,18 +106,15 @@ public final class EndpointProfileOps {
                 profile[last], endTerrain, endBoundary, profile[last] - endTerrain);
     }
 
-    /**
-     * Keeps every route's structure-facing station on the same boundary grade
-     * while limiting the approach to one block per station. This is applied
-     * after tunnel/profile selection so a low tunnel cannot terminate below a
-     * high structure entrance.
-     */
-    /**
+
+    /** 村庄边界固定地面高程；普通道路路口不套用该锁高，以免产生陡坡。
+ *
      * Locks one road endpoint to a village-boundary height and ramps toward the
      * interior. Non-village endpoints (spawn, ordinary road junctions) are never
      * locked, so their grade stays on the normal smooth slope instead of being
      * forced into a steep ramp.
      */
+    /** 按端点朝路内方向复制已协商的共享剖面，避免每条来路独立定入口坡。 */
     public static void applySharedApproachProfile(int[] profile,
                                                    int endpoint,
                                                    int[] shared) {
@@ -131,6 +128,7 @@ public final class EndpointProfileOps {
         }
     }
 
+    /** 固定入口站并在有限半路窗口内接坡，避免改动另一端入口。 */
     public static void applySingleBoundaryGrade(int[] profile,
                                                  int endpoint,
                                                  int boundaryHeight) {
@@ -140,7 +138,8 @@ public final class EndpointProfileOps {
         constrainEndpointRamp(profile, endpoint, endpoint == 0 ? 1 : -1, half);
     }
 
-    /**
+    /** 未知端点按约定高度只降不升接近段，高侧降到入口，避免补出高填方。
+ *
      * Unknown-endpoint variant of the boundary lock: pins the endpoint to the
      * agreed height and descends the approach onto it with
      * prefer-cut semantics — the high side is pressed down onto the locked
@@ -162,7 +161,8 @@ public final class EndpointProfileOps {
         }
     }
 
-    /**
+    /** 入口边界使用独立精确列采样，避免预取插值或建筑屋顶高度使入口悬浮。
+ *
      * Returns the real terrain surface height at the boundary crossing point,
      * sampled as a dedicated one-column precise query. The route's bulk
      * footprint batch often reuses a prefetched/interpolated height; this pins
@@ -185,7 +185,8 @@ public final class EndpointProfileOps {
         return fallback;
     }
 
-    /**
+    /** 裁切后首尾站才是结构穿越锚点，不可用建筑中心屋顶代替道路接地位置。
+ *
      * The road↔structure crossing anchor: the route's own first/last station
      * once the path has been trimmed at the structure boundary (village and
      * other known-structure endpoints stop outside the built area), falling

@@ -94,7 +94,7 @@ public final class PathMetricsOps {
         return path == null ? 0 : path.hashCode();
     }
 
-    /** Generous bound on one snapshot-prediction wait (10× the sampling wait, 5s..120s). */
+    /** 快照预测等待有上下界，与采样等待区分，避免无限阻塞。 */
     public static long snapshotWaitTimeoutMs() {
         try {
             long samplingTimeoutMs = Math.max(100, Math.min(30_000,
@@ -434,7 +434,7 @@ public final class PathMetricsOps {
         return result;
     }
 
-    /** Raises only deep-cut stations to the ordinary five-block cut limit, leaving physical spans intact. */
+    /** 只把普通深挖站抬至地表挖方限值，已有物理跨度保持原剖面。 */
     public static List<BlockPos> raiseProfileToSafeCut(List<BlockPos> profile, int[] minimumTerrain, boolean[] bypass) {
         if (profile == null || profile.size() < 3 || minimumTerrain == null
                 || minimumTerrain.length != profile.size()) return profile;

@@ -169,7 +169,7 @@ public final class ConflictWindowOps {
                 saturatingAdd(center.getZ(), radius)}, center, radius);
     }
 
-    /** Checks the swept line between two coarse path nodes for a structure hit. */
+    /** 检查粗节点间扫掠线，避免建筑藏在相邻采样点之间。 */
     public static boolean pathEdgeConflicts(List<BlockPos> path, int index) {
         if (path == null || index <= 0 || index >= path.size()) return false;
         BlockPos from = path.get(index - 1);
@@ -273,7 +273,7 @@ public final class ConflictWindowOps {
         return boundsIncludingConnections(minX, minZ, maxX, maxZ, connections);
     }
 
-    /** Returns a bounded union rectangle for candidate corridors and detours. */
+    /** 候选及绕行的采样矩形有界合并，防止局部失败膨胀成全域扫描。 */
     public static int[] samplingBoundsForConnections(
             List<StructureConnection> connections, int paddingBlocks) {
         int[] bounds = boundsIncludingConnections(0, 0, 0, 0, connections);
@@ -285,7 +285,7 @@ public final class ConflictWindowOps {
                 saturatingAdd(bounds[3], padding)};
     }
 
-    /** Returns only the endpoint corridor window for one failed route. */
+    /** 失败路线只提取端点走廊窗口，不无条件重采完整地图。 */
     public static int[] samplingBoundsForConnection(
             StructureConnection connection, int paddingBlocks) {
         if (connection == null) return new int[]{0, 0, 0, 0};

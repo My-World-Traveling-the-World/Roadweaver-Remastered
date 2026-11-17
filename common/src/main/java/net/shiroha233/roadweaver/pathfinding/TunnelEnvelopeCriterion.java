@@ -318,20 +318,7 @@ public final class TunnelEnvelopeCriterion {
         return prominence;
     }
 
-    /**
-     * 把突起度切成**一座一座山**：先按种子（{@code prominence >= seed}）切成连续段，
-     * 再在段内的**严格局部极小**处继续切分。
-     *
-     * <h3>为什么要切局部极小</h3>
-     * <p>只按种子切，相邻两座山之间的鞍部只要还剩 2 格突起度就会把它们连成一段 —— 于是一整条
-     * 丘陵带变成「一座宽 300 站的大山」，坡面站数（flank）被撑到几百，「按实际坡度算的引道」
-     * 永远能塞得进去 ⇒ {@code portal-too-long} 恒真 ⇒ 隧道又永远命中不了。切在严格局部极小处，
-     * 每座山各自报自己的数字，鞍部归相邻的哪一侧不影响判据（它本来就只用来算坡面站数）。</p>
-     *
-     * <p>平顶山不会被切碎：只有 <b>严格</b> 局部极小（两侧都更高）才算切点。</p>
-     *
-     * @return 形如 {@code [start0,end0,start1,end1,...]} 的区间列表（含端点、互不重叠、按位置升序）
-     */
+
     /**
      * 输出一段 run，必要时按 {@link #MAX_TUNNEL_RUN_STATIONS} 切分并留
      * {@link #TUNNEL_WINDOW_STATIONS} 站天窗。

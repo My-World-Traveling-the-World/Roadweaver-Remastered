@@ -20,15 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Runtime budget for coarse OpenCL requests.
- *
- * The OpenCL session is still serialized by OpenCLSubmissionGate. This class
- * only decides how many coarse requests may be admitted to the GPU path before
- * excess work is diverted to CPU, and changes that budget gradually as load
- * changes. A single GPU request is always retained outside Chunky-exclusive
- * generation so a busy foreground cannot disable the accelerator completely.
- */
+/** 粗GPU预算控制准入数量并随压力渐变，实际设备提交仍受独立门约束。 */
 public final class RuntimeCoarseGpuBudget {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int MIN_BUDGET = 1;
@@ -49,7 +41,8 @@ public final class RuntimeCoarseGpuBudget {
     private RuntimeCoarseGpuBudget() {
     }
 
-    /**
+    /** 可中断等待粗GPU额度；分带采样的间隔按逻辑瓦片只计一次，不乘以带数。
+ *
      * Waits for a GPU concurrency slot instead of diverting queued work to the
      * slower CPU. The wait is interruptible so shutdown/cancellation cannot
      * strand a road worker indefinitely.
@@ -99,7 +92,8 @@ public final class RuntimeCoarseGpuBudget {
         throw new CancellationException("Interrupted while waiting for runtime OpenCL coarse GPU budget");
     }
 
-    /**
+    /** 每个逻辑瓦片只收取一次提交间隔，避免分带数放大等待；开局/Chunky按各自策略处理。
+ *
      * Charges the coarse GPU submit interval gate once per logical tile.
      *
      * <p>The interval gate decides "when the next tile may submit", not "how

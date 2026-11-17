@@ -30,7 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
-/** Optional read-only access to Streams Reflowing's public river plan. */
+/** 只读接入河流公开规划API；可选模组缺席由兼容层处理。 */
 public final class StreamsReflowingCompat {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final AtomicBoolean ENABLED_LOGGED = new AtomicBoolean();
@@ -114,7 +114,7 @@ public final class StreamsReflowingCompat {
         openSession(level).prewarmStrict(positions, "initial-global");
     }
 
-    /** Asynchronous readiness gate used by the Chunky region coordinator. */
+    /** 向区块预生成协调器提供异步河流预热完成门，不自行宣布道路完工。 */
     public static CompletableFuture<Void> prewarmRoutesAsync(
             ServerLevel level, List<BlockPos> positions, String scope) {
         if (prewarmPausedForDimension || level == null
@@ -134,7 +134,7 @@ public final class StreamsReflowingCompat {
         prewarmPausedForDimension = false;
     }
 
-    /** RoadWeaver's Streams bridge is Overworld-only; Chunky itself is untouched. */
+    /** 道路的河流桥接只服务主世界；暂停标志不修改Chunky本身。 */
     public static void setPrewarmPausedForDimension(boolean paused) {
         if (prewarmPausedForDimension == paused) return;
         prewarmPausedForDimension = paused;

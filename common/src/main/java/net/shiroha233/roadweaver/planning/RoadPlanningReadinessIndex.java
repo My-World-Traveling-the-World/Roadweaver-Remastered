@@ -46,7 +46,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
+/** READY表示32乘32区块区域的规划数据已持久；实体道路可能稍后施工，不能作为完工标记。
+ *
  * Persists 32x32-chunk planning coverage for external pregenerators. READY
  * means topology, terrain paths and exact structure snapshots are durable;
  * physical road blocks may still be constructed later.
@@ -89,7 +90,7 @@ public final class RoadPlanningReadinessIndex {
     private RoadPlanningReadinessIndex() {
     }
 
-    /** Reflection-friendly API used by PlainCraft Chunky AutoGen. */
+    /** 为外部预生成器保留稳定可反射入口，签名变更须同步消费者。 */
     public static String requestRegion(Object levelObject, int regionX, int regionZ) {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) {
             return State.UNSUPPORTED.name();
@@ -173,7 +174,7 @@ public final class RoadPlanningReadinessIndex {
         return supplySnapshot(world).pending() >= MAX_BACKLOG_REGIONS;
     }
 
-    /** Reflection-friendly read-only API used by PlainCraft Chunky AutoGen. */
+    /** 只读就绪查询供外部预生成器使用，不能因查询创建施工任务。 */
     public static String regionState(Object levelObject, int regionX, int regionZ) {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) {
             return State.UNSUPPORTED.name();
@@ -197,17 +198,17 @@ public final class RoadPlanningReadinessIndex {
                 + ", failed=" + supply.failed();
     }
 
-    /** Reflection-friendly lifecycle signal from PlainCraft Chunky AutoGen. */
+    /** 接收外部预生成生命周期信号，避免误把普通游玩当独占生成。 */
     public static void setChunkyPreflightActive(boolean active) {
         RuntimeLoadPolicy.setChunkyPreflightActive(active);
     }
 
-    /** Reflection-friendly lifecycle signal while Chunky owns worldgen. */
+    /** 在Chunky占用世界生成时切换道路协作预算，不接管Chunky调度。 */
     public static void setChunkyExclusiveActive(boolean active) {
         RuntimeLoadPolicy.setChunkyExclusiveActive(active);
     }
 
-    /** Reflection-friendly notification after Chunky accepts a ready region. */
+    /** 区域被Chunky接受后通知协调器，避免同一READY反复供给。 */
     public static void markRegionDispatched(Object levelObject, int regionX, int regionZ) {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) return;
         ENTRIES.markDispatched(key(level, regionX, regionZ));
@@ -245,7 +246,7 @@ public final class RoadPlanningReadinessIndex {
         }
     }
 
-    /** Initial world generation calls this after road shards and statuses flush. */
+    /** 初始道路分片与状态提交后再发布覆盖，避免先报READY后存盘。 */
     public static void markInitialCoverageReady(ServerLevel level) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())) return;
         int radius = Math.max(1, ConfigService.get().planning().initialPlanRadiusChunks());
@@ -276,7 +277,7 @@ public final class RoadPlanningReadinessIndex {
                 marked, progressSummary(level));
     }
 
-    /** Construction no longer gates pregeneration once durable planning exists. */
+    /** 规划持久后区块预生成不再等待实体道路施工，避免两阶段互相等待。 */
     public static StructureConnection nextPlannedConnection(ServerLevel level) {
         return null;
     }
@@ -314,7 +315,7 @@ public final class RoadPlanningReadinessIndex {
         runtimePausedForDimension = false;
     }
 
-    /** Pause readiness planning outside the Overworld without affecting Chunky. */
+    /** 玩家离开主世界只暂停道路就绪规划，不暂停Chunky任务本身。 */
     public static void setRuntimePausedForDimension(boolean paused) {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;
@@ -372,7 +373,8 @@ public final class RoadPlanningReadinessIndex {
         });
     }
 
-    /**
+    /** 预生成前只预热区域相关河流路径；完成回调后仍由原条件判断READY，不能提前放行冷河流数据。
+ *
      * Chunky must not start against cold river data. Prewarm only the paths
      * touching this readiness region, then let the existing callback publish
      * READY. The plate work runs on the dedicated Streams prewarm executor.
@@ -475,7 +477,8 @@ public final class RoadPlanningReadinessIndex {
         return true;
     }
 
-    /**
+    /** 一次就绪扫描复用同一路持久路径；缺失短期重试而非永久当空，避免旧缓存误报完成。
+ *
      * A readiness sweep touches many 32x32 cells that share the same road.
      * Resolve its persisted path once, rather than reopening it for every
      * cell. A missing path is retried shortly so an active planner remains

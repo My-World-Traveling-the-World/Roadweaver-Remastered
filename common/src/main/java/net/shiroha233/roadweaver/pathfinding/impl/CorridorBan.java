@@ -84,7 +84,7 @@ public final class CorridorBan {
     }
 
 
-    /** 量化粒度 2 的幂次：4 格。 */
+
 
     /** 升序排列的量化格 key（{@code cx} 在高 32 位、{@code cz} 在低 32 位）。 */
     private final long[] cells;
@@ -186,7 +186,7 @@ public final class CorridorBan {
         return false;
     }
 
-    /** True when the quantized cell containing {@code (x, z)} is banned. */
+    /** 检查量化格是否禁行，调用方须与搜索使用相同网格口径。 */
     public boolean blocks(int x, int z) {
         return blocksCell(x >> PathfindingConstants.CORRIDOR_QUANT_SHIFT,
                 z >> PathfindingConstants.CORRIDOR_QUANT_SHIFT);

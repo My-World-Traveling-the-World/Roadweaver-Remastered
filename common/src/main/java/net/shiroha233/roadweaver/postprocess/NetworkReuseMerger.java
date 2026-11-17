@@ -147,7 +147,8 @@ final class NetworkReuseMerger {
         spans.add(new RoadSpan(first, second, type));
     }
 
-    /**
+    /** 在两段分离的接近段之间复用主路精确站点，再从第二接点离开，避免复制整条主路。
+ *
      * Reuses an existing road between two separated approach runs. This is the
      * planning-stage form of the blue-point case: the later route enters the
      * owner road, follows its exact segments, then leaves at the second point.
@@ -230,7 +231,8 @@ final class NetworkReuseMerger {
         return true;
     }
 
-    /**
+    /** 长且同向的平行段才合并；先取最长无物理跨度阻断子窗，避免一个坏站否决全部可用共用段。
+ *
      * Endpoint snapping cannot remove the duplicate corridor shown by two
      * roads travelling beside one another through the same mountain pass.
      * Replace only a long, direction-compatible middle run with the primary
@@ -379,15 +381,7 @@ final class NetworkReuseMerger {
         return null;
     }
 
-    /**
-     * 0.8.368 (T3): diagnosis only — records why a parallel-corridor merge was
-     * rejected. The candidate has never once been produced on a real save
-     * (0.8.366 and 0.8.367 both logged zero {@code merged parallel corridor}
-     * lines), and a simplified offline model said eleven of thirteen overlapping
-     * pairs should pass, so the blocking check is not where it was assumed to
-     * be. One real run with these lines identifies it. Nothing here changes any
-     * decision.
-     */
+    /** 并行段拒绝原因只作诊断，历史某存档未产生候选不代表当前代码必然不工作。 */
     static void logOverlapReject(String reason,
                                          RoadData primary,
                                          RoadData secondary,
@@ -416,7 +410,8 @@ final class NetworkReuseMerger {
                 && gradeCompatibleAtJunction(primary, primaryIndex, secondary, secondaryIndex, distance);
     }
 
-    /**
+    /** 方向以多点多数票判定并使用实际最近站映射，避免长弯道单点方向误判。
+ *
      * True when the two runs really are one corridor rather than a crossing.
      *
      * <p>0.8.369 (T2b): two defects made this reject the exact case it exists
@@ -590,7 +585,8 @@ final class NetworkReuseMerger {
         return false;
     }
 
-    /**
+    /** 在双路无工程跨度且对应站单调的子窗中取最长可用段，避免拼接后往返折线。
+ *
      * 0.8.366 (M1): the longest sub-range of {@code [from..to]} that is free of
      * engineered spans on <b>both</b> roads and whose primary mapping stays
      * monotonic.
@@ -612,7 +608,7 @@ final class NetworkReuseMerger {
         int bestEnd = -1;
         int start = -1;
         int previousTarget = -1;
-        /** +1 ascending, -1 descending, 0 not yet decided within this window. */
+        /** 站号单调方向只在当前窗口确定：升序、降序与未定分开，避免沿用其他窗口方向。 */
         int direction = 0;
         for (int i = from; i <= to; i++) {
             boolean blocked = (secBlocked != null && i < secBlocked.length && secBlocked[i]);
@@ -710,7 +706,8 @@ final class NetworkReuseMerger {
                 && gradeCompatibleAtJunction(primary, primaryIndex, secondary, secondaryIndex, distance);
     }
 
-    /**
+    /** 合流的一格采样误差仅局部限坡，大地形跳变仍交给专用修坡，避免无限放宽。
+ *
      * A junction can inherit a one-sample two-block discontinuity after the
      * anchor and secondary profile are concatenated. Clamp only that local
      * join before rejecting the whole candidate; larger terrain jumps remain
@@ -729,7 +726,8 @@ final class NetworkReuseMerger {
         }
     }
 
-    /**
+    /** 从锚点向外只降高站形成逐站合法坡道；修后仍须校验，不能用局部变更保证整路有效。
+ *
      * 0.8.366 (M3): lowers stations away from {@code anchorIndex} in
      * {@code step} direction onto a ramp that meets {@code seatY} at the anchor.
      * Station {@code anchorIndex ± d} may sit at most {@code seatY + d}, so the
@@ -772,7 +770,8 @@ final class NetworkReuseMerger {
         if (first != null && second != null) spans.add(new RoadSpan(first, second, SpanType.NETWORK_REUSE));
     }
 
-    /**
+    /** 桥、跨越与隧道不能被普通走廊替换；保护缺口和已有复用保留语义并由终验决定。
+ *
      * Marks spans whose physical construction cannot be replaced by an
      * ordinary donor corridor.  A protected building gap is deliberately not
      * blocked here: both routes may have been detoured around the same

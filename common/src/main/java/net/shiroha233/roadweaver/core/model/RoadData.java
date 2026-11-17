@@ -23,11 +23,7 @@ public record RoadData(
 ) {
     public static final long NO_OWNER_2D = Long.MIN_VALUE;
 
-    /**
-     * The target-height list is the route's construction contract.  It is
-     * calculated once while the route is planned and every later stage must
-     * consume the same immutable profile.
-     */
+    /** 目标高度是道路后续施工的契约；规划后各阶段须消费同一剖面，局部改线则创建一致的新路数据。 */
     public RoadData {
         materials = List.copyOf(materials == null ? List.of() : materials);
         slabMaterials = List.copyOf(slabMaterials == null ? List.of() : slabMaterials);

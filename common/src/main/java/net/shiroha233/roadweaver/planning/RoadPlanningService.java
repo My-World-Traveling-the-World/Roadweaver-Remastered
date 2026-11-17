@@ -66,18 +66,20 @@ public final class RoadPlanningService {
     private RoadPlanningService() {}
 
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    /** Endpoint-side stations merged into one shared approach profile. */
+    /** 共端点共享接近剖面只覆盖附近有限站数，避免改动全路。 */
     static final int APPROACH_WINDOW_STATIONS = 16;
     static final Set<Long> ROAD_BACKFILL_PLAN_TILES = ConcurrentHashMap.newKeySet();
     static final Set<Long> PLANNING_TILES = ConcurrentHashMap.newKeySet();
-    /**
+    /** 把施工期精确保护冲突点移交局部重试，避免下一波仅看粗路径漏掉真实侧列冲突。
+ *
      * Carries construction-time protected-gap locations into the local retry
      * phase. The retry receives only a connection, so without this handoff it
      * has to rediscover a conflict from the coarse path and can miss it.
      */
     static final Map<PlannedPathKey, List<BlockPos>> PROTECTED_GAP_HINTS = new ConcurrentHashMap<>();
 
-    /**
+    /** 生成前汇总未知节点全部来路的接近高度并定共同入口；出生点与村庄继续使用原锁高。
+ *
      * Pre-plans one agreed height for every unknown structure endpoint before
      * any road is generated. All incoming routes are gathered from the task
      * list; for each route the coarse planned path's endpoint-side window (the
@@ -159,7 +161,7 @@ public final class RoadPlanningService {
         }
     }
 
-    /** Real surface height for one column, guarded against transient sampling failures. */
+    /** 精确地表查询对临时失败保留既定处理，不能把缺样当作已验证地面。 */
     static int sampleSurface(AccurateHeightSampler sampler, BlockPos point) {
         if (point == null) return 0;
         try {
@@ -169,7 +171,7 @@ public final class RoadPlanningService {
         }
     }
 
-    /** Endpoint identity from the structure snapshot, for planning diagnostics. */
+    /** 诊断从结构快照读取入口身份，不以位置近似替代持久身份。 */
     static String classifyUnknownEndpoint(ServerLevel level, BlockPos endpoint) {
         StructureFileStorage.StructureSnapshot snapshot =
                 StructureFileStorage.getStructureSnapshot(level);
@@ -222,7 +224,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         return hints == null ? List.of() : hints;
     }
 
-    /**
+    /** 保护交叉查询须使用注册或重绑路径时相同精度键，避免查错粗走廊。
+ *
      * Returns whether the persisted route currently intersects a real building.
      * The path fingerprint binds the query to one A* precision, so callers
      * must pass the same step the route was registered (or rebound) under.
@@ -246,7 +249,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         return false;
     }
 
-    /**
+    /** 重试先将已有走廊重绑到目标精度，避免缓存键失配触发全端点区域重搜。
+ *
      * Rebinds an already generated coarse route to a retry precision. Retry
      * generation must refine the saved corridor; it must not lose the path
      * cache and rescan the entire endpoint-to-endpoint region again.
@@ -582,7 +586,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         return spawn != null && spawn.getX() == pos.getX() && spawn.getZ() == pos.getZ();
     }
 
-    /**
+    /** 真实收集的未知结构可作节点；从未收集的纯拓扑占位点仍排除。
+ *
      * Keeps connections whose two endpoints are the shared spawn or any
      * collected structure location, including unknown structure entries.
      * Only topology-only placeholder nodes that were never collected as a
@@ -675,7 +680,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                 ThreadPoolManager.TaskRole.INITIAL, false);
     }
 
-    /**
+    /** 只重规划未解决连接并共用一批地形，成功路线保持原路径。
+ *
      * Samples one startup-wide terrain batch while planning only the supplied
      * unresolved connections. Successful routes therefore keep their original
      * path, while all failed routes share the same precision-specific tiles.
@@ -696,25 +702,17 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                         level, result.paths(), ThreadPoolManager.TaskRole.INITIAL));
     }
 
-    /**
-     * Refines failed routes one at a time using an independent local window.
-     * Keeping windows per connection prevents distant failures from expanding
-     * one union rectangle across the whole startup region.
-     */
-    /**
-     * Samples all local conflict circles once before route-specific A* work.
-     * Windows are de-duplicated by X/Z, so overlapping buildings or multiple
-     * conflicts on one route do not repeatedly submit the same GPU columns.
-     * The sampler persists the result, allowing the independent route workers
-     * below to read the same terrain snapshot without another worldgen call.
-     */
-    /**
+
+
+    /** 只替换冲突附近片段并拼回原走廊，临时端点须在局部圆窗内。
+ *
      * Plans only the local slice around one conflict and splices that slice
      * back into the already-persisted route. The temporary connection keeps
      * the local A* endpoints inside the radius-100 circle; using the original
      * endpoints here would make a circular region incapable of finding a
      * complete route and would tempt a broad fallback scan.
      */
+    /** 与当前世界采样会话使用同一模式，避免缓存与后续读取的指纹不一致。 */
     static TerrainSamplingMode resultMode(ServerLevel level) {
         return TerrainSamplingSessions.forLevel(level).effectiveMode();
     }
@@ -724,7 +722,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         return slices.isEmpty() ? null : slices.getFirst();
     }
 
-    /**
+    /** 局部圆窗生成有限组入出锚点，防止单个最近枢轴失效就否定整片可行绕路。
+ *
      * Builds several bounded entry/exit pairs for one conflict circle.  The
      * old implementation selected one nearest pivot and could reject a valid
      * detour when that pivot did not leave two usable anchors.  Candidates are
@@ -803,7 +802,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         BlockPos end() { return path.getLast(); }
     }
 
-    /**
+    /** 按连续结构碰撞段提取窗口，避免长失败路把小修复变成百万格扫描。
+ *
      * Finds only local conflict corridors on the persisted coarse path.
      * Windows are built around contiguous structure-collision runs instead of
      * the complete endpoint-to-endpoint corridor. This keeps a long failed
@@ -812,7 +812,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
     record LocalSamplingWindow(int[] bounds, BlockPos center, int radius) {
     }
 
-    /** Returns the startup-wide sampling rectangle, including all endpoint closures. */
+    /** 开局采样矩形包括各端点闭合范围，避免边界站缺样。 */
     record PlannedRegionResult(List<StructureConnection> incoming) {}
 
     record TerrainPlannedRegionResult(PlannedRegionResult region,
@@ -910,7 +910,8 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         int roadsExpanded;
         int structures;
 
-        /**
+        /** 自适应余量受配置及面积守卫共同约束，不改变用户要求的核心规划范围。
+ *
          * @param configuredCapMargin 用户配置的单边外扩上限（{@code planMaxEdgeLenBlocks}）
          * @param initialMargin       0.9.060：经 {@link AdaptiveCandidateBounds#guard} 收窄后的相对余量
          */

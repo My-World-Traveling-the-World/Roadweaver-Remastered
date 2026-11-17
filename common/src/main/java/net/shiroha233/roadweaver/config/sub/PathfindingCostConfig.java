@@ -494,7 +494,7 @@ public final class PathfindingCostConfig implements SubConfig {
         return aStarStep;
     }
 
-    /** Returns an isolated planning snapshot at a temporary precision. */
+    /** 临时精度通过独立配置快照传递，避免一次局部搜索改写全局配置。 */
     public PathfindingCostConfig withAStarStep(int step) {
         PathfindingCostConfig copy = snapshot();
         copy.aStarStep = step;

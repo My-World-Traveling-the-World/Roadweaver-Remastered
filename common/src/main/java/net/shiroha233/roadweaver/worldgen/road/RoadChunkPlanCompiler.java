@@ -36,9 +36,9 @@ public final class RoadChunkPlanCompiler {
     private static final int FILL_DEPTH = 6;
     private static final float MAX_FILL = 0.5F;
     private static final float MAX_CARVE = 0.6F;
-    /** A road is a swept corridor, not only its centre stations. */
-    /** Maximum centre-line separation for a continuous five-block corridor. */
-    /** Nearby parallel corridors need a longer run than an exact crossing. */
+
+
+    /** 平行近路需要更长证据段，真正交叉使用独立判据。 */
 
     private RoadChunkPlanCompiler() {
     }
@@ -354,7 +354,8 @@ public final class RoadChunkPlanCompiler {
         return List.copyOf(valid);
     }
 
-    /**
+    /** 地图复用施工物理归属归一，重开丢失规划内存后也不重复显示已让给主路的走廊。
+ *
      * Applies the same deterministic physical ownership pass used by chunk
      * construction to read-only map consumers. This keeps map geometry from
      * displaying a secondary route over a corridor that is already owned by
@@ -366,7 +367,7 @@ public final class RoadChunkPlanCompiler {
         return RoadPhysicalReuseNormalizer.normalizePhysicalOverlaps(valid);
     }
 
-    /** Construction-side ownership guard for overlapping route footprints. */
+    /** 施工占地重叠按统一所有权规则消解，避免两个道路分片重复铺设。 */
 
     private static List<JunctionMarker> collectTunnelJunctions(List<RoadData> roads) {
         List<JunctionMarker> markers = new ArrayList<>();
@@ -445,7 +446,7 @@ public final class RoadChunkPlanCompiler {
     private record JunctionMarker(RoadData owner, RoadSegmentPlacement placement, int y) {
     }
 
-    /** Task 3 diagnostic helper kept private: 1-block sampling of one centre edge. */
+    /** 诊断按一格步距检查中心边，不能只取两个端点。 */
     private static void addNeighborIndices(List<Integer> indices, int size, boolean[] excluded) {
         Set<Integer> expanded = new HashSet<>(indices);
         for (int index : indices) {

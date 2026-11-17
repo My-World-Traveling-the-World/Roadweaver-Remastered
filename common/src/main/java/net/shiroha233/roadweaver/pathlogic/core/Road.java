@@ -98,7 +98,7 @@ public final class Road {
         this.featureConfig = featureConfig;
         this.genConfig = genConfig;
     }
-    
+
     public RoadData generateRoad(int maxSteps) {
         return generateRoad(maxSteps, true);
     }
@@ -126,7 +126,7 @@ public final class Road {
         boolean allowA = genConfig.allowArtificial();
         boolean allowN = genConfig.allowNatural();
         if (!allowA && !allowN) return null;
-        
+
         int type = allowA && allowN ? (random.nextBoolean() ? 0 : 1) : (allowA ? 0 : 1);
         List<BlockState> materials;
         List<BlockState> slabMaterials;
@@ -707,17 +707,12 @@ public final class Road {
                 RoadDataValidator.normalizeDuplicateJunctions(candidate));
         return RoadDataValidator.validateFinalRoad(candidate).valid() ? candidate : road;
     }
-    
+
     /** 「按当前 spans 结算剖面 + 隧道区间」的结果。 */
     private record SettledProfile(List<RoadSpan> spans, List<Integer> targetY) {
     }
 
-    /**
-     * 物理区间提取的<b>唯一入口</b>。
-     *
-     * <p>原先有两处调用，参数完全相同（{@code segments, level, cache, terrain, streams,
-     * routeBridgeMinWaterDepth()}）—— 收成一处，将来接 {@code RoadSpec} 时只改这里。</p>
-     */
+
     /**
      * 把 DP 判出的桥隧合并进 spans —— <b>跨度回写的唯一入口</b>。
      *
@@ -764,6 +759,7 @@ public final class Road {
         return merged;
     }
 
+    /** 统一从最终站点和目标剖面提取物理跨度，避免两处不同输入口径。 */
     private List<RoadSpan> extractPhysicalSpans(List<RoadSegmentPlacement> segments, ServerLevel level,
                                                 TerrainSamplingCache cache, PathTerrainField terrain,
                                                 StreamsReflowingCompat.SamplingSession streams) {
@@ -802,15 +798,9 @@ public final class Road {
                 connection, routeBridgeMinWaterDepth());
     }
 
-    /**
-     * 0.8.368 (T2 diagnosis): prints the profile's real end heights against the
-     * terrain and the boundary lock. {@code structure boundary grades locked}
-     * reports the lock's intent, so a route can log {@code startY=407} while its
-     * profile actually holds 389. Comparing the three call sites of this helper
-     * shows whether the lock survives the profile passes, or is only lost later
-     * inside {@code repairFinalHeightConflict}. Diagnosis only.
-     */
-    /**
+
+    /** 每条路的AUTO偏桥倾向只放宽该连接水深阈值，不回写全局模式。
+ *
      * Bridge depth for this route: a route-level AUTO bridge-first tendency
      * (resolved in {@code RawPathSearch} from the water share) relaxes the
      * threshold to one block for this connection only; explicit profile modes
@@ -824,24 +814,13 @@ public final class Road {
                 : genConfig.bridgeMinWaterDepth();
     }
 
-    /**
-     * True when a road endpoint is a structure-facing node that must meet every
-     * incoming road at one surface height. Villages keep their existing
-     * boundary lock; the shared spawn and named structure nodes gain the same
-     * lock, while an ordinary road-only junction stays smooth. Unknown
-     * (unnamed) structure nodes are excluded here — they negotiate their
-     * shared height through {@link UnknownEndpointHeightRegistry} instead.
-     *
-     * <p>Performance note (audit P2-13, optional): this scans the structure
-     * snapshot list linearly (~2 calls per route). An X/Z index is only safe
-     * with invalidation hooks at every mutation site of the snapshot list;
-     * revisit only if profiling shows this scan matters.
-     */
+    /** 真实结构与出生点入口共享地表锁高；未知端点另行协商，索引优化须覆盖快照全部变更入口。 */
     record SpanRange(int start, int end, SpanType type) {
     }
 
-    /** Compact span breakdown for per-route pipeline diagnostics. */
-    /**
+
+    /** 重绑缓存使用局部修复将查询的精度键，避免下一波因键不同丢失已有走廊。
+ *
      * Rebinding stores the route under the precision that the local-repair
      * wave later queries. Using the full-route step here leaves the rebound
      * cache under a different key, which made the following local pass report

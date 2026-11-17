@@ -15,7 +15,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
+/** 未知端点共享协商高度；首路按入口窗口挖填代价选择，后路复用；不可建时明确告警并采用可达接近高程。
+ *
  * Per-endpoint chosen construction height for unknown structure nodes.
  *
  * <p>A village or the shared spawn locks every incoming road to the endpoint's
@@ -32,8 +33,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class UnknownEndpointHeightRegistry {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final Map<Long, EndpointState> CHOSEN = new ConcurrentHashMap<>();
-    /** Pre-planned agreed height, set before generation from all incoming routes. */
-    /**
+
+    /** 共用接近剖面从端点向路内排列，逐站坡差已归一。
+ *
      * Pre-planned shared approach profile per unknown endpoint: element 0 is
      * the endpoint station itself and later elements run inward, one per
      * station, already flattened to one block per station.
@@ -41,9 +43,9 @@ public final class UnknownEndpointHeightRegistry {
     private static final Map<Long, int[]> AGREED_PROFILE = new ConcurrentHashMap<>();
     private static final Map<Long, Integer> AGREED = new ConcurrentHashMap<>();
 
-    /** Evaluation window: the last N stations before the endpoint. */
+    /** 仅评价端点附近有限站数，避免为协商入口扫描整条道路。 */
     private static final int APPROACH_WINDOW = 48;
-    /** Stations the endpoint height may be reached over (8..32 per contract). */
+    /** 入口可达高度在有限接近窗口内评估，避免突然爬升。 */
     private static final int APPROACH_ANCHOR = 16;
     private static final long STEP_PENALTY = 10_000L;
 
@@ -55,7 +57,8 @@ public final class UnknownEndpointHeightRegistry {
         AGREED_PROFILE.clear();
     }
 
-    /**
+    /** 未知端点先查协商记录；无法采用共享高度时保留可辨识告警，不能静默当作一致。
+ *
      * Registry-aware lock height for an unknown endpoint. First road computes
      * and stores; later roads reuse, degrading to their own feasible height
      * (WARN) when the stored height is unbuildable for their approach.
@@ -96,7 +99,8 @@ public final class UnknownEndpointHeightRegistry {
         return state.chosen;
     }
 
-    /**
+    /** 生成前聚合全部来路的自然接近高度，避免先生成的高路锁死所有低路。
+ *
      * Pre-plans the agreed endpoint height before any road is generated. The
      * caller gathers every incoming route and passes the lowest natural
      * approach height, so every road into this unknown endpoint shares one
@@ -106,7 +110,8 @@ public final class UnknownEndpointHeightRegistry {
         AGREED.put(endpointKey, height);
     }
 
-    /**
+    /** 共用剖面首项必须等于约定高度；仅有高度时允许不带剖面。
+ *
      * Pre-plans the agreed endpoint height together with the shared gentle
      * approach profile. The profile merges every incoming route's
      * endpoint-side window into one flattened (one block per station) grade;
@@ -122,7 +127,8 @@ public final class UnknownEndpointHeightRegistry {
         }
     }
 
-    /**
+    /** 读取未知端点的规划接近剖面，无记录返回空引用，不伪造平路。
+ *
      * The pre-planned shared approach profile for this unknown endpoint
      * (element 0 = endpoint station, running inward), or {@code null} when
      * this endpoint has no pre-planned profile.
@@ -132,13 +138,14 @@ public final class UnknownEndpointHeightRegistry {
         return profile == null ? null : profile.clone();
     }
 
-    /** Per-endpoint mutable negotiation state. */
+    /** 端点协商状态按节点共享，其可变性不能被外部当作道路不可变值。 */
     private static final class EndpointState {
         int chosen = Integer.MIN_VALUE;
         int lowestBase = Integer.MAX_VALUE;
     }
 
-    /**
+    /** 模拟两个固定入口候选的挖填和坡差代价，平手优先地表入口。
+ *
      * Picks the cheaper of the two candidates by simulating each pinned ramp
      * over the near-endpoint window and charging for cut/fill beyond the
      * configured limits plus every one-block-step violation. Ties prefer the
@@ -155,7 +162,8 @@ public final class UnknownEndpointHeightRegistry {
         return feasibleCost < surfaceCost ? approachFeasibleY : structureSurfaceY;
     }
 
-    /**
+    /** 按剩余站数外推最大可达高度，避免端点要求超过合法爬坡能力。
+ *
      * The height the road can actually reach at the endpoint without an
      * impossible climb: the profile value {@code anchor} stations before the
      * endpoint, extended toward the structure surface by at most one block per
@@ -178,7 +186,8 @@ public final class UnknownEndpointHeightRegistry {
         return Math.max(base - distance, Math.min(structureSurfaceY, base + distance));
     }
 
-    /**
+    /** 只降不升模拟固定入口坡道，再计超预算挖填与普通相邻坡差代价。
+ *
      * Construction cost of pinning the endpoint to {@code height}: the window
      * is ramped at one block per station (only lowering), then charged for
      * cut/fill beyond the configured limits and for every adjacent ordinary

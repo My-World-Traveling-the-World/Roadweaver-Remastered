@@ -68,7 +68,8 @@ public final class FinslerMetric {
         boolean blocks(int x0, int z0, int x1, int z1);
     }
 
-    /**
+    /** 地形与障碍权重共同定义有向移动代价，不能将缺省障碍误作已验证无障碍。
+ *
      * @param terrain        地形场
      * @param obstacles      障碍势场（可用 {@link ObstacleField#NONE}）
      * @param gradeWeight    坡罚权重（&gt;= 0）

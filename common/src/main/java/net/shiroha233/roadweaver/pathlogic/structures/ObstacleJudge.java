@@ -196,7 +196,7 @@ public final class ObstacleJudge {
         return clusters;
     }
 
-    /** Returns the protected piece rejecting a planning sample without changing planning behavior. */
+    /** 返回拒绝规划样本的保护部件，保留原因而不改避让行为。 */
     public static String describePlanningCollision(BlockPos pos) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
         // 2026-11-15（A 方案）：EMPTY 也归入「没有可用快照」。
@@ -207,7 +207,7 @@ public final class ObstacleJudge {
                 : "no-active-snapshot";
     }
 
-    /** Describes the first protected sample across a planning edge. */
+    /** 诊断一条规划边上首个受保护采样点，避免只报不可达。 */
     public static String describePlanningCollision(BlockPos from, BlockPos to) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
         return StructureAvoidanceCache.isUsableSnapshot(snapshot)
@@ -215,7 +215,7 @@ public final class ObstacleJudge {
                 : "no-active-snapshot";
     }
 
-    /** Returns the protected structure box at a planning conflict, if any. */
+    /** 返回冲突位置所属结构盒，供局部修复定位。 */
     public static BoundingBox planningCollisionBox(BlockPos pos, int horizontalClearance) {
         PlanningSnapshot snapshot = StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
         // 2026-11-15（A 方案）：EMPTY 直接返回 null —— 与改前等价（空快照本来就找不到碰撞盒），
@@ -238,7 +238,8 @@ public final class ObstacleJudge {
         return owned == null ? null : owned.collisionBox();
     }
 
-    /**
+    /** 端点道路可进入村庄空地，实际路面将触及已确认建筑体素前停止。
+ *
      * Lets endpoint roads enter village open space, then stops immediately
      * before their exact footprint would touch a real building block.
      */
@@ -250,13 +251,14 @@ public final class ObstacleJudge {
         return snapshot.stopAtVillageBuilding(connection, segments);
     }
 
-    /** Radius used by route search before a concrete RoadData width exists. */
+    /** 未生成RoadData宽度前使用规划道路半径，避免中心线被当成零宽道路。 */
     public static int planningRoadRadius() {
         int width = Math.max(1, ConfigService.get().roadAppearance().roadWidth());
         return Math.max(0, (int) Math.ceil(width / 2.0D));
     }
 
-    /**
+    /** 结构端点允许接近所属结构；最终体积触楼时裁在安全站，而非直接丢弃整条连接。
+ *
      * Structure-to-structure roads are allowed to enter their endpoint
      * structures. If the final construction volume reaches the real building,
      * stop at the last safe station instead of rejecting the whole connection.

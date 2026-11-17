@@ -183,16 +183,7 @@ public class ClientInit implements ClientModInitializer {
         });
     }
 
-    /**
-     * 用存档里的路线重建服务端登记表（★ 审计 R3-P1-4）。
-     *
-     * <p>在**服务端线程**上跑：{@code RouteBuildService.rebuildRegistryFromStorage}
-     * 会调 {@code RouteInjector.plan}（含地形采样）并写
-     * {@code PlannedPathCache} —— 那些都是服务端数据，不能在客户端线程碰。</p>
-     *
-     * <p>拿不到单人服务端（多人游戏）时直接跳过：多人下路线本来就不落盘，
-     * 没有任何东西可重建。</p>
-     */
+
     /**
      * 取「离开世界清理」用的 {@code ServerLevel}（★ Codex 审查 D-1 配套）。
      *

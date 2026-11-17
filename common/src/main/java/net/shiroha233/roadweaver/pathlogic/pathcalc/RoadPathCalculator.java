@@ -74,7 +74,7 @@ public final class RoadPathCalculator {
             RoutePrecisionRetryPolicy.structureDetourBlocks();
     static final int RIVER_LOCAL_DETOUR_BLOCKS = 50;
     static final int MAX_EXACT_CONSTRAINT_CYCLES = 4;
-    /** Deep-depression continuity repair starts above the ordinary surface-fill limit. */
+    /** 深凹地连续性修复使用独立阈值，不能把所有普通填方都当峡谷。 */
     static final int MAX_CONSTRUCTION_FILL_BEFORE_REPAIR = RoadConstructionSafety.MAX_FILL_DEPTH;
     /**
      * 中心线<b>挖方</b>的可建造上限。0.9.087：与施工端同源。
@@ -96,11 +96,11 @@ public final class RoadPathCalculator {
      */
     static final int MAX_BUILDABLE_CENTER_FILL_DEPTH =
             RoadConstructionSafety.MAX_LOCAL_CENTER_GRADE_DEPTH;
-    /** Network merge must not re-run a full local A* over a long tunnel chain. */
+    /** 合流后长隧道链不重跑全路局部A*，避免主线程重复昂贵搜索。 */
     static final int NETWORK_MERGE_LONG_ROUTE_SEGMENTS = 512;
     static final int NETWORK_MERGE_LONG_TUNNEL_SEGMENTS = 64;
     static final int NETWORK_MERGE_INTERFACE_WINDOW = 24;
-    /** Conflicts within this many stations of a route end may escalate every radius (endpoint approach). */
+    /** 靠近端点的冲突允许在既定局部预算内升级半径，不放大成全路搜索。 */
     static final int ENDPOINT_APPROACH_STATIONS = 24;    /**
      * 0.8.340：建筑本地绕行的**累计长度上限**（相对进入修复时的原始长度）。
      *
@@ -146,7 +146,8 @@ public final class RoadPathCalculator {
 
     private RoadPathCalculator() {}
 
-    /**
+    /** 长桥隧合流只归一局部路口坡度并终验，短普通路仍保留完整修坡能力。
+ *
      * Long tunnel/bridge networks were already height-checked before they
      * entered the merge pass. Re-running the 100-block 3D repair after every
      * junction rewrite can monopolize the server thread for minutes. Such
@@ -247,7 +248,8 @@ public final class RoadPathCalculator {
                 path, nodesBefore, nodesAfter, changed, shortcutMs, continuityMs, repairMs, totalMs);
     }
 
-    /**
+    /** 只检查合流及共享端点窗口，已保存长隧道主体不再做第二次全路高度搜索。
+ *
      * Checks only the small windows where a merged route touches another road
      * or a shared endpoint. The long tunnel body is already persisted and must
      * not be sent through a second full-route height A* on the server thread.
@@ -328,21 +330,8 @@ public final class RoadPathCalculator {
         return rebuilt == null ? road : rebuilt;
     }
 
-    /**
-     * Replans only the local height-conflict corridor after network reuse or
-     * junction merging changes a persisted target profile. The normal profile
-     * smoother remains first; this method is the bounded 50-block step=1
-     * fallback and never starts a new endpoint-to-endpoint search.
-     */
-    /**
-     * 0.8.368 (T2 diagnosis): prints the repaired profile's real end heights.
-     * Pairs with {@code EndpointProfileOps.logEndpointProfile} around computeTargetY. The
-     * suspected defect is that {@code enforceContinuousSlopePreferCut} only ever
-     * lowers stations, so a locked village boundary grade is pulled back down to
-     * meet the tunnel chord; a route ending in a TUNNEL span lost 18 blocks this
-     * way while its other endpoint stayed exact. Diagnosis only; no height is
-     * changed here.
-     */
+
+    /** 记录修复后实际端高以跟踪历史锁高问题；不把旧故障描述为当前必现。 */
     static void logRepairEndpoint(String stage, RoadData road, StructureConnection connection) {
         if (road == null || road.targetY() == null || road.targetY().isEmpty()
                 || road.roadSegmentList() == null || road.roadSegmentList().isEmpty()
@@ -591,7 +580,7 @@ public final class RoadPathCalculator {
         return candidate;
     }
 
-    /** Task 3: exposes the profile rebuild for the final structure-repair loop. */
+    /** 最终结构修复循环复用剖面重建入口，避免另写一套目标高度计算。 */
     public static RoadData rebuildRoadDataFromProfile(RoadData road,
                                                        List<BlockPos> profile,
                                                        ServerLevel level,
@@ -614,7 +603,7 @@ public final class RoadPathCalculator {
         return reason == null ? "unknown" : reason;
     }
 
-    /** Task 3: records a final-validation conflict coordinate for later local waves. */
+    /** 保存最近精确施工冲突位置，供下一次局部重试使用。 */
     public static void recordConstructionConflictHint(StructureConnection connection, BlockPos position) {
         if (connection == null || position == null) return;
         CONSTRUCTION_CONFLICT_HINTS.put(
@@ -667,7 +656,8 @@ public final class RoadPathCalculator {
                 road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    /**
+    /** 读取并消费最后冲突点，避免粗路平坦时无法定位真实宽路面深沟。
+ *
      * Returns and consumes the last precise construction-conflict location for
      * a route. Local repair uses this when the coarse path itself looked flat
      * but the final accurate fill preflight found a deep depression.
@@ -682,7 +672,8 @@ public final class RoadPathCalculator {
         CONSTRUCTION_CONFLICT_HINTS.clear();
     }
 
-    /**
+    /** 完整占地一次连续性扫描同时返回地形最低值，避免修剖面重复采相同列。
+ *
      * One bounded continuity scan for the complete road footprint. The result
      * carries per-segment terrain minima so profile repair never samples the
      * same road columns a second time.
@@ -788,7 +779,8 @@ public final class RoadPathCalculator {
         return placement == null ? null : placement.middlePos();
     }
 
-    /**
+    /** 剩余小挖填由施工短坡承担；超预算深谷仍必须桥接或改线。
+ *
      * True when the residual cut/fill is small enough that the construction
      * paver can still build it as a local centre grade (6..8 blocks) instead of
      * dropping the whole route. Deeper conflicts remain true canyons.
@@ -850,17 +842,16 @@ public final class RoadPathCalculator {
         private static final FillConflictWidth EMPTY = new FillConflictWidth(-1, -1, 0.0D);
     }
 
-    /**
+    /** 深凹地站只降到实地再限坡，不用高填土强行补连通。
+ *
      * Lowers only deep-depression stations to the local ground surface (no
      * fill) and projects the bounded profile to a continuous grade.
      */
     record DirectRouteConnections(StructureConnection planningConnection,
                                   StructureConnection ownerConnection) {}
 
-    /**
-     * 直接后处理规划阶段已经完成的精确路径，不再采样或重复寻路。
-     */
-    /** Per-connection wait cache: unchanged path → reuse the completed snapshot future. */
+
+    /** 相同连接且路径未变时复用已完成快照Future，避免每次等待重新预测结构。 */
     record SnapshotWaitEntry(int pathFingerprint, CompletableFuture<Void> future) {}
 
     static final java.util.concurrent.ConcurrentHashMap<PlannedPathKey, SnapshotWaitEntry>

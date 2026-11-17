@@ -27,7 +27,8 @@ public final class GridTerrainField implements TerrainField {
     private final int step;
     private final int[] heights;
 
-    /**
+    /** 连续网格的宽深和行优先下标必须与高度数组一致，避免转置地形。
+ *
      * @param minX    区域最小 x
      * @param minZ    区域最小 z
      * @param width   区域宽（格）

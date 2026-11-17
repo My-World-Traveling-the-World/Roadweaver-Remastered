@@ -21,7 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-/**
+/** 只有持续坡度实质改善且满足原走廊/长度预算时才采用盘山候选，普通主规划仍权威。
+ *
  * Bounded contour retry for a genuinely steep primary road route.
  * The normal RoadWeaver planner remains authoritative; this retry only
  * replaces a route when it materially lowers sustained grade and still fits
@@ -58,7 +59,8 @@ final class MountainSwitchbackPlanner {
         return replaceIfSafer(primaryPath, start, goal, terrain, config, false);
     }
 
-    /**
+    /** 粗规划阶段优先避免陡坡，减少后续隧道被迫修补不可达入口。
+ *
      * Initial coarse planning uses a stricter grade gate than runtime repair.
      * A coarse route is still cheap to replace, so it should prefer a contour
      * or switchback before a later tunnel pass has to recover an impossible
@@ -110,7 +112,8 @@ final class MountainSwitchbackPlanner {
         return result.path();
     }
 
-    /**
+    /** 先局部修复短陡崖，再考虑更贵的结构间重试；窗口保留两侧接坡上下文。
+ *
      * Repairs short cliff climbs locally before attempting an expensive
      * structure-to-structure retry. A rise greater than ten blocks over a
      * twelve-block route window receives a wider contour search with enough
@@ -361,7 +364,7 @@ final class MountainSwitchbackPlanner {
         }
     }
 
-    /** Same expand budget the 3D coarse height-aware candidate uses; config-driven. */
+    /** 盘山展开预算沿用三维高度配置，避免新增无效独立旋钮。 */
     private static int coarseStateLimit() {
         try {
             return Math.max(50_000, Math.min(1_000_000,
@@ -371,7 +374,8 @@ final class MountainSwitchbackPlanner {
         }
     }
 
-    /**
+    /** 墙钟预算随状态上限增长且有封顶，避免增加状态预算却始终被固定时限截断；不代表实际耗时保证。
+ *
      * Scales the wall-clock budget with the expand budget: ≈1.56 s at the default 260k states, and
      * up to 6 s when {@code heightAwareStateLimit} is raised to its 1M ceiling.
      *

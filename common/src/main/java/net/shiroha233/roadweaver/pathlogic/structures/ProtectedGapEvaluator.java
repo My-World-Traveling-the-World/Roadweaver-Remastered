@@ -122,7 +122,7 @@ public final class ProtectedGapEvaluator {
         return false;
     }
 
-    /** True when a route intersects only decoded structure blocks, not unknown fallback boxes. */
+    /** 仅解码真实建筑碰撞可形成保护缺口；未知回落盒不作为已确认建筑。 */
     public static boolean intersectsPreparedRouteWithUnresolvedStructure(
             ServerLevel level,
             StructureConnection connection,
@@ -132,7 +132,8 @@ public final class ProtectedGapEvaluator {
         return false;
     }
 
-    /**
+    /** 已确认建筑冲突只有在缺口两侧仍有可用道路时保留为显式保护缺口，不能吞掉整个连接。
+ *
      * A verified-building collision may be retained as a bounded, explicit
      * construction gap. The route remains valid only when both sides have
      * enough usable road and the gap is a small fraction of the route.
@@ -143,7 +144,7 @@ public final class ProtectedGapEvaluator {
         return hasAcceptableBuildingGaps(level, connection, path);
     }
 
-    /** Returns persisted gap spans for a finalized road, if all gaps are valid. */
+    /** 最终路的所有缺口均验证通过后才生成持久缺口跨度，不能只验第一处。 */
     public static List<RoadSpan> protectedGapSpans(ServerLevel level,
                                                     StructureConnection connection,
                                                     List<RoadSegmentPlacement> segments) {
@@ -215,7 +216,8 @@ public final class ProtectedGapEvaluator {
         return crossings;
     }
 
-    /**
+    /** 端点建筑边缘的有意截断不触发全网换点；内部缺口仍由既定重试策略处理。
+ *
      * A gap at the approach to a selected endpoint is an intentional road
      * termination at the building edge. It must not make the whole connection
      * eligible for topology replacement. Internal gaps retain the existing
@@ -262,14 +264,15 @@ public final class ProtectedGapEvaluator {
         return true;
     }
 
-    /** Validates a candidate path against the configured road-body footprint. */
+    /** 候选路径按配置道路本体宽度验保护，不能只验中心线。 */
     public static boolean intersectsPreparedPath(ServerLevel level,
                                                  StructureConnection connection,
                                                  List<BlockPos> path) {
         return intersectsPreparedPath(level, connection, path, null);
     }
 
-    /**
+    /** 建筑绕行检查道路本体，与可选路肩分开，避免路肩开关改变基本绕行可行性。
+ *
      * Checks only the configured road body.  Building avoidance is deliberately
      * independent from the optional terrain shoulders: a detour is valid when
      * the five-block road itself can pass without touching a real building.
@@ -303,7 +306,7 @@ public final class ProtectedGapEvaluator {
         return false;
     }
 
-    /** True only when a center path touches an unresolved fallback structure. */
+    /** 只判中心路径是否触及未解析回落结构，不能冒充精确建筑碰撞。 */
     public static boolean intersectsPreparedPathWithUnresolvedStructure(
             ServerLevel level,
             StructureConnection connection,
@@ -313,7 +316,8 @@ public final class ProtectedGapEvaluator {
         return false;
     }
 
-    /**
+    /** 已确认建筑允许内部留缺口，但两侧必须有可用道路；快照已包含配置占地半径。
+ *
      * A verified building may leave an unpaved protection gap. The gap can be
      * long, but it must be an internal span with usable road on both sides.
      * The path points are the swept center samples; the snapshot already
@@ -328,7 +332,8 @@ public final class ProtectedGapEvaluator {
         return evaluateProtectedGapPattern(path, collisions, connection);
     }
 
-    /**
+    /** 保护缺口检查整段扫掠路面，避免粗站间建筑漏采后误判整路不可用。
+ *
      * A protected gap is a construction decision, so inspect the same swept
      * horizontal road footprint used by the planning collision query. Testing
      * only path nodes misses a building that lies between two coarse stations
@@ -361,7 +366,7 @@ public final class ProtectedGapEvaluator {
         return collisions;
     }
 
-    /** Package-private route policy hook used by the structure regression harness. */
+    /** 包内纯策略端口用于直接验证保护判据，避免测试依赖真实世界。 */
     static boolean protectedGapPatternAcceptableForTest(List<BlockPos> path, boolean[] collisions) {
         return evaluateProtectedGapPattern(path, collisions, null);
     }

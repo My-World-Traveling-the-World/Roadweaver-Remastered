@@ -206,7 +206,7 @@ public final class DeferredInitialRoadConstructionService {
         }
     }
 
-    /** True when the chunk was already proven to need no road construction. */
+    /** 只在已证明不需施工时认定区块无道路工作，不能用未加载代替无工作。 */
     public static boolean isMarkedNoConstructionRequired(ServerLevel level, long chunkKey) {
         if (level == null) return false;
         Set<Long> marked = NO_CONSTRUCTION_REQUIRED.get(level);
@@ -251,7 +251,7 @@ public final class DeferredInitialRoadConstructionService {
         return removed;
     }
 
-    /** True when every road shard covering this chunk is already ledger-complete. */
+    /** 覆盖该区块的所有道路分片都须台账完成，不能只检查第一条路。 */
     public static boolean isConstructionComplete(ServerLevel level, ChunkPos chunkPos) {
         return level != null && chunkPos != null
                 && isComplete(level, ChunkPos.asLong(chunkPos.x, chunkPos.z));

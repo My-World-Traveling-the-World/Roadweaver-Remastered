@@ -66,7 +66,8 @@ public final class SlopeContinuityEnforcer {
         return result;
     }
 
-    /**
+    /** 不可避免的陡崖采用降高侧而非抬低侧，避免生成高填方悬路。
+ *
      * Resolves an unavoidable cliff by lowering the high side instead of
      * raising the low side. The lowered sustained section is then eligible
      * for tunnel extraction; ordinary terrain is never turned into sky road.
@@ -77,7 +78,8 @@ public final class SlopeContinuityEnforcer {
         return enforceContinuousSlopePreferCut(source, protectedMask, maxStepPerTwoSegments, null);
     }
 
-    /**
+    /** 被钉住的结构入口只参与邻站坡限，不参与下压，避免隧道弦或地形限幅偷偷改入口高度。
+ *
      * 0.8.369 (T2): {@code pinnedMask} names the stations whose height is a hard
      * structure boundary lock. Every pass here only ever <em>lowers</em> a
      * station ({@code Math.min}), so a locked endpoint was silently pulled back
@@ -102,7 +104,8 @@ public final class SlopeContinuityEnforcer {
         return enforceContinuousSlopePreferCut(source, protectedMask, maxStepPerTwoSegments, pinnedMask, null);
     }
 
-    /**
+    /** 只降高侧并按可选水平站距约束坡差，不能在斜向与轴向采用不同物理坡度。
+ *
      * @param stationSpacing 相邻站真实水平距离（索引 i 是 i-1→i 的距离；{@code null} = 按站号计）。
      *                       斜向一步是 {@code sqrt(2)} 格，按站号限坡会让同一段路在斜向更陡；
      *                       传真实距离后「每两站允许的高差」按实际走过的长度换算，方向不再影响坡度。
@@ -133,7 +136,8 @@ public final class SlopeContinuityEnforcer {
         lowerRunToSlope(profile, start, end, step2, null, null);
     }
 
-    /**
+    /** 跳过固定站写入但保留邻接约束读取，使接近坡仍锚定固定入口。
+ *
      * Pinned stations keep their height. They still constrain their neighbours,
      * because the sweep reads {@code profile[i - 1]} / {@code profile[i + 1]} of
      * the live array — skipping only the write leaves the ramp anchored on the
@@ -169,7 +173,8 @@ public final class SlopeContinuityEnforcer {
         }
     }
 
-    /**
+    /** 有站距时按真实水平距离放宽允许升高；无站距时保留原逐站常量步长。
+ *
      * {@return the rise allowed between station {@code index - 1} and {@code index}}
      *
      * <p>Only ever relaxes: a longer edge (a diagonal is {@code sqrt(2)} blocks) may rise
@@ -183,7 +188,7 @@ public final class SlopeContinuityEnforcer {
         return Math.max(adjacentStep, (int) Math.round(adjacentStep * length));
     }
 
-    /** {@return the rise allowed across two stations, scaled by the real length they span} */
+    /** 跨两站的坡差预算按两段真实水平里程计算，避免斜向口径变化。 */
     public static int twoStepAt(int step2, double[] spacing, int index) {
         if (spacing == null || index < 2 || index >= spacing.length) return step2;
         double first = spacing[index];
@@ -194,7 +199,8 @@ public final class SlopeContinuityEnforcer {
         return Math.max(step2, (int) Math.round(step2 * average));
     }
 
-    /**
+    /** 弧长模型关闭时不创建站距；开启时第i项为i-1到i的水平距离，高度不计入坡度分母。
+ *
      * {@return the per-station spacing of a route, or {@code null} when the arc-length model is off}
      *
      * <p>Index {@code i} holds the horizontal distance from station {@code i - 1} to station
@@ -210,7 +216,7 @@ public final class SlopeContinuityEnforcer {
         return stationSpacing(positions);
     }
 
-    /** {@return the nominal spacing array for a route; index 0 is 1.0 by construction} */
+    /** 创建名义站距数组，首项固定一格以保留边界约定。 */
     public static double[] stationSpacing(java.util.List<BlockPos> positions) {
         if (positions == null || positions.isEmpty()) return null;
         int count = positions.size();

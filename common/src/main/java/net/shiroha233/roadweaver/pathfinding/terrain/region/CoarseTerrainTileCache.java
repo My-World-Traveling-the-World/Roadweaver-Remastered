@@ -89,7 +89,8 @@ public final class CoarseTerrainTileCache {
         return coordinateInFlight(key, () -> loadOrSample(level, key));
     }
 
-    /**
+    /** 按键协调在途粗瓦片：等待有界并可接管或返回未命中，避免挂起的所有者永远占住工作线程。
+ *
      * In-flight coordination, kept package-visible so the concurrency
      * regression can drive it without a Minecraft level. Exactly one thread
      * owns a key at a time; every other thread waits at most the configured

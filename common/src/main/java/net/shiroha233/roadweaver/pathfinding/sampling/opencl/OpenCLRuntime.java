@@ -37,7 +37,7 @@ public final class OpenCLRuntime implements AutoCloseable {
     private static final String KERNEL_RESOURCE = "/assets/roadweaver/opencl/OpenCLCoarseHeightKernel.cl";
     private static final Object RUNTIME_LOCK = new Object();
     private static final Map<RuntimeKey, OpenCLRuntime> RUNTIMES = new LinkedHashMap<>();
-    /** Extra independent sessions used by coarse startup sampling lanes. */
+    /** 为粗开局通道保留独立设备会话，避免与其他采样共用命令队列。 */
     private static final Set<OpenCLRuntime> EXTRA_RUNTIMES = ConcurrentHashMap.newKeySet();
 
     private final Object operationLock = new Object();
@@ -103,7 +103,8 @@ public final class OpenCLRuntime implements AutoCloseable {
         }
     }
 
-    /**
+    /** 独立粗采样会话隔离命令队列，缓存会话仍要求单所有者使用。
+ *
      * Creates an independent device session for a coarse sampling lane. A
      * normal cached runtime must remain single-owner because accurate sampling
      * and coarse sampling may otherwise serialize behind the same queue.

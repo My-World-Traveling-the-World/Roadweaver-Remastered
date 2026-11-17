@@ -121,14 +121,13 @@ import static net.shiroha233.roadweaver.generation.InitialPlanWaiter.*;
  */
 public final class InitialGenManager {
     static final int INITIAL_HEIGHT_PREFETCH_BATCH_COLUMNS = 4096;
-    /** Topology fallback candidates are disabled; failures stay diagnosable. */
+    /** 禁用拓扑替代候选以保留原边失败原因，不默默改换连接。 */
     static final boolean TOPOLOGY_CANDIDATES_ENABLED = false;
     private InitialGenManager() {}
 
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
 
-    /** Diagnostic heartbeat interval. Route cancellation is intentionally
-     * disabled in this diagnostic build. */
+    /** 此间隔只控制诊断心跳，不应误读为任务超时或取消保证。 */
     static final long INITIAL_ROUTE_WATCHDOG_LOG_MS = 5_000L;
 
     static volatile boolean active;
@@ -482,21 +481,8 @@ public final class InitialGenManager {
         if (changed) provider.setStructureConnections(level, updated);
     }
 
-    /**
-     * P0-4: walks the planned-path cache once and returns the concatenated route
-     * positions so the height prefetch of the first precision wave can reuse the
-     * same set instead of walking {@code PlannedPathCache} a second time.
-     * Returns {@code null} when Streams prewarming is unavailable, in which case
-     * the prefetch falls back to its own walk.
-     */
-    /**
-     * Holds the road's initial generation until the Great Wall has published its prewarm.
-     *
-     * <p>The gate itself is asynchronous, soft and bounded ({@link GreatWallPrewarmCompat}); this call
-     * site joins it because the startup step it follows - the river plate prewarm - already blocks here
-     * by design. A gate that could stop the road would be worse than the contention it removes, so any
-     * failure is logged and the road continues.
-     */
+
+    /** 该兼容等待仅显示长城等待阶段；入口严格前置门负责确认就绪，兼容层放行或异常不能作为长城完成证据。 */
     static void awaitGreatWallPrewarm(ServerLevel level) {
         // ⑤ 2026-10-15：把等待说清楚。长城预热期间道路什么都不做，卡面若还写着
         // "generating_roads"，玩家看到的就是「进度条卡住了」。enterStage 只改阶段与
@@ -513,6 +499,7 @@ public final class InitialGenManager {
         }
     }
 
+    /** 河流预热和后续精确预取复用一次收集的粗路线坐标；不可用返回null，让调用方走自己的收集路径。 */
     static List<BlockPos> prewarmInitialRiverPlates(ServerLevel level,
                                                   List<StructureConnection> tasks) {
         if (!StreamsReflowingCompat.isAvailable() || tasks == null || tasks.isEmpty()) return null;
@@ -548,8 +535,8 @@ public final class InitialGenManager {
 
     record PersistedBatch(Set<PlannedPathKey> edges, Set<Long> chunkKeys) {}
 
-    /** Checks a candidate against already accepted roads, not the deferred original. */
-    /** Keep the server executor available for bounded startup chunk requests. */
+
+    /** 服务端主线程等待时继续处理受管理任务，避免区块请求与等待形成死锁。 */
     static <T> T awaitInitialFuture(ServerLevel level, Future<T> future)
             throws InterruptedException, ExecutionException {
         if (future == null) return null;
@@ -560,22 +547,8 @@ public final class InitialGenManager {
         return future.get();
     }
 
-    /**
-     * Resolve the shared exact-height cache once for a generation wave before
-     * route workers start their per-road repair and segment construction. The
-     * sampler owns in-flight tile coalescing, so overlapping roads are merged
-     * without changing route topology or precision.
-     *
-     * <p>P0-4: the first precision wave reuses the positions the river prewarm
-     * already collected for the same task list, and the per-wave barrier is gone
-     * — every batch is submitted at once and awaited as a whole, so a slow batch
-     * no longer idles the other workers until the next wave.</p>
-     */
-    /**
-     * Collects route futures independently. The old implementation waited on
-     * futures in submission order, so one silent route blocked every route
-     * behind it and prevented the world-entry gate from ever completing.
-     */
+
+
     /**
      * 第一波缺口少于这个"断口数"的路不再移交局部修复，直接保留。
      *
@@ -586,15 +559,16 @@ public final class InitialGenManager {
      */
     static final int MIN_LOCAL_REPAIR_GAP_RUNS = 2;
 
-    /** 保护缺口断口数（PROTECTED_GAP span 个数）。 */
-    /** 保护缺口总块长（各断口首末站的水平距离之和）。 */
-    /** 候选路是否比参考路留下更少的洞：先比断口数，并列再比总块长。 */
-    /** 逐路计时：最终水校验耗时计入 route timing（不改变任何判定）。 */
+
+
+
+
     /** 逐路计时：最终结构/施工体积校验耗时计入 route timing（不改变任何判定）。 */
+    /** 携带最终待验证道路及原连接键，避免改线后丢失任务归属。 */
     record FinalRoadWork(PlannedPathKey owner, RoadData road) {}
 
     record ConnectionChange(StructureConnection original, StructureConnection updated) {
     }
 
-    /** 0.8.355：开局流程收尾汇总日志。 */
+
 }

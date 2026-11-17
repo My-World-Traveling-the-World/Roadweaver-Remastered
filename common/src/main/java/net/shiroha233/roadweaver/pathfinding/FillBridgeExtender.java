@@ -91,7 +91,8 @@ public final class FillBridgeExtender {
         return refineFinalFillBridgeSpans(existing, centers, targetY, lowest);
     }
 
-    /**
+    /** 只延伸已选中的河流桥到实际雕刻河岸；干走廊本身不能创建新桥。
+ *
      * Extends an already selected Streams bridge through the remainder of its
      * own carved corridor.  This is deliberately not a new crossing detector:
      * a dry Streams corridor cannot create a bridge by itself.  It only keeps

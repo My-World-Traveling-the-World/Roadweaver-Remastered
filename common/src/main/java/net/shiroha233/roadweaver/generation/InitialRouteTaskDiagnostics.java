@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Per-route startup diagnostics used to detect silent waits before world entry. */
+/** 逐路开局诊断用于定位进档前的静默等待，不参与路径选择。 */
 public final class InitialRouteTaskDiagnostics {
     private InitialRouteTaskDiagnostics() {}
 

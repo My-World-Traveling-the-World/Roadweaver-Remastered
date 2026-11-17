@@ -196,7 +196,7 @@ final class RawPathSearch {
         return ban == null || ban.isEmpty() || !ban.intersectsPath(candidate);
     }
 
-    /** Depth from the global mode alone (before any route-level AUTO tendency). */
+    /** 全局模式先给基础桥深，再按该路AUTO倾向调整。 */
     private static int globalBridgeMinDepth() {
         boolean bridgeFirst = ConfigService.get().planning().terrainProfileMode()
                 == PlanningConfig.TerrainProfileMode.BRIDGE_FIRST;
@@ -204,7 +204,8 @@ final class RawPathSearch {
                 : Math.max(1, ConfigService.get().bridge().minWaterDepth());
     }
 
-    /**
+    /** 只有AUTO按山水占比选倾向；两项都高时取较大者，显式模式不被自动覆盖。
+ *
      * Route-level AUTO tendency from the classified terrain shares. Only AUTO
      * switches; when both shares exceed their thresholds the larger share
      * wins, otherwise the balanced baseline applies. Explicit profile modes
@@ -231,7 +232,7 @@ final class RawPathSearch {
         return RouteProfileTendency.Tendency.BALANCED;
     }
 
-    /** Share of classified stations that are actual water columns (coast is land). */
+    /** 统计真实水列占比，海岸陆地不能仅因群系名称计水。 */
     static double waterFraction(Map<RoadTerrainType, Integer> counts) {
         return countedFraction(counts,
                 RoadTerrainType.RIVER, RoadTerrainType.LAKE, RoadTerrainType.OCEAN);
@@ -259,7 +260,7 @@ final class RawPathSearch {
         return total == 0 ? 0.0D : selected / (double) total;
     }
 
-    /** Height-aware coarse search trigger, extracted for the profile-mode regression. */
+    /** 三维高度候选触发独立纯判据，便于直接验证模式边界。 */
     static boolean wantsHeightAware(boolean coarseHeightAwareEnabled,
                                     boolean transitionProblem,
                                     boolean tunnelFirst,
@@ -379,7 +380,8 @@ final class RawPathSearch {
         return false;
     }
 
-    /**
+    /** 粗边过渡与搜索共用保护半径，避免走廊留下本可绕开的建筑缺口。
+ *
      * True when any coarse transition crosses a protected structure footprint.
      * Reuses the same planning-road radius as the search cost, so a chosen
      * corridor is not silently left with a protected gap behind a building it
@@ -410,7 +412,8 @@ final class RawPathSearch {
         return false;
     }
 
-    /**
+    /** 粗地形的持续山脊可投影隧道弦；水列受跨越保护，不在这里变山体隧道。
+ *
      * Carries an inexpensive mountain decision into the persisted coarse
      * corridor. The coarse field already contains sampled heights; use them
      * to lower sustained mountain humps onto a tunnel chord before exact

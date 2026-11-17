@@ -42,10 +42,10 @@ public final class StructureRoadOffsetService {
             List<RoadSegmentPlacement> segments,
             BlockPos rawStart,
             BlockPos rawEnd) {
-        
+
         if (segments == null || segments.size() < 3) return segments;
         if (!Level.OVERWORLD.equals(level.dimension())) return segments;
-        
+
         // Only villages participate in the boundary-intersection trim; spawn,
         // named structures, and unknown endpoints keep their own handling.
         BoundingBox startVillageBox = detectCategory(level, rawStart) == StructureCategory.VILLAGE
@@ -58,11 +58,11 @@ public final class StructureRoadOffsetService {
         if (startOffset <= 0 && endOffset <= 0 && startVillageBox == null && endVillageBox == null) {
             return segments;
         }
-        
+
         int n = segments.size();
         int trimStart = 0;
         int trimEnd = n;
-        
+
         if (startVillageBox != null) {
             // A village endpoint trims the leading stations that stay inside
             // the village structure box; the road terminates at the first
@@ -87,7 +87,7 @@ public final class StructureRoadOffsetService {
                 }
             }
         }
-        
+
         if (endVillageBox != null) {
             for (int i = n - 1; i >= 0; i--) {
                 BlockPos pos = segments.get(i).middlePos();
@@ -109,7 +109,7 @@ public final class StructureRoadOffsetService {
                 }
             }
         }
-        
+
         if (trimStart >= trimEnd || trimEnd - trimStart < 3) {
             // The boundary trim would consume the whole route (e.g. a short
             // village-to-village hop under two 60-block offsets). Shrink the
@@ -130,7 +130,8 @@ public final class StructureRoadOffsetService {
         return new ArrayList<>(segments.subList(trimStart, trimEnd));
     }
 
-    /**
+    /** 村庄端点返回实际结构包围盒；未加载时不阻塞取块，返回无盒而非主动生成。
+ *
      * The village structure's actual {@link BoundingBox} for an endpoint, or
      * null when the endpoint is not a village or its chunk is not loaded.
      * Uses the chunk's resolved structure starts and pieces; {@code getChunkNow}

@@ -4,7 +4,8 @@ package net.shiroha233.roadweaver.decoration;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
+/** 桥梁水下走廊与隧道共用玻璃壳几何和色板，保证接缝截面一致。
+ *
  * Shared geometry and palette for a glazed viewing corridor.
  *
  * <p>Two builders need the same vault: {@code RoadTunnelBuilder} glazes a bored tunnel, and
@@ -13,7 +14,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * cross-section, which is what makes them read as one continuous tube.</p>
  */
 public final class ScenicGlassShell {
-    /**
+    /** 圆拱半径决定宽度与拱高，避免把圆顶画成平顶楔形。
+ *
      * Half-width of the vault, in blocks: the arch spans {@code 2*RADIUS+1} columns and
      * reaches {@code RADIUS} blocks above its springing line, so the profile is a true
      * half-round rather than a wedge with a flat crown.
@@ -23,7 +25,8 @@ public final class ScenicGlassShell {
     private ScenicGlassShell() {
     }
 
-    /**
+    /** 颜色按跨度进度往返渐变，避免相邻站随机跳色并使两端色调一致。
+ *
      * Glass tint at {@code progress} along a span, as a there-and-back gradient.
      *
      * <p>Colour is a function of position rather than a hash of the first block, so
@@ -47,7 +50,8 @@ public final class ScenicGlassShell {
         return palette[Math.floorMod(step, palette.length)];
     }
 
-    /**
+    /** 由圆方程计算侧向拱高；超出拱宽返回负值，防止外侧列误建拱顶。
+ *
      * How far the vault rises above its springing line at this lateral offset.
      *
      * <p>{@code sqrt(r^2 - lateral^2)} for the semicircle, rounded to whole blocks. The

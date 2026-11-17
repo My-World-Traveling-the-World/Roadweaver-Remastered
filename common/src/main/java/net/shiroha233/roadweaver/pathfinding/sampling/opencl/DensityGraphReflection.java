@@ -27,7 +27,8 @@ final class DensityGraphReflection {
         return null;
     }
 
-    /**
+    /** 反射解包C2ME编译噪声图的原始fallback，保持未安装C2ME时仍可加载。
+ *
      * C2ME replaces router roots with a compiled wrapper after the world has
      * been initialized. Its protected fallback is the original vanilla graph,
      * which is what the OpenCL compiler needs to inspect. Keep this fully

@@ -19,7 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
+/** 服务端生命周期Mixin负责道路启动和关闭接线，不能与纯世界算法职责混淆。
+ *
  * MinecraftServer Mixin
  */
 @Mixin(MinecraftServer.class)

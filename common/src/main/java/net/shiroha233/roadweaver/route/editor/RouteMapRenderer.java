@@ -608,12 +608,7 @@ public final class RouteMapRenderer {
         g.drawString(font, state.heightInputText() + "_", x + 50, y + 6, 0xFFFFEE88, false);
     }
 
-    /**
-     * 世界内编辑模式的 HUD（底部一行操作提示 + 施工反馈）。
-     *
-     * <p>这是「3D 里怎么知道现在在编辑什么」的关键 —— 玩家在地形里看不到
-     * 地图上的工具条，所以必须把「当前类型 / 选中项 / 怎么操作」贴在屏幕上。</p>
-     */
+
     /**
      * 世界内编辑模式的 HUD（★ 2026-09-25 改为**左侧竖排**，可用按键/按钮开关）。
      *

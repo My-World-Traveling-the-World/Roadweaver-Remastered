@@ -194,7 +194,7 @@ public final class BridgeTemplateStructureRegistry {
         return choose(level, seed, null);
     }
 
-    /** Selects only the two bundled generic RoadWeaver bridge templates. */
+    /** 只选择内置两种通用桥模板，避免任意结构模板进入桥体投影。 */
     public static BridgeTemplate chooseOriginal(ServerLevel level, int seed) {
         List<BridgeTemplate> originals = new ArrayList<>();
         for (BridgeTemplate template : getAll(level)) {

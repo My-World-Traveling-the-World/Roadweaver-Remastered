@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Repairs malformed four-line sign text before vanilla's codec logs an error. */
+/** 原生告示牌codec解码前修正畸形四行文本，避免整块内容因错误文本被拒。 */
 @Mixin(SignBlockEntity.class)
 public abstract class SignBlockEntityMixin {
     @Inject(method = "loadAdditional", at = @At("HEAD"))

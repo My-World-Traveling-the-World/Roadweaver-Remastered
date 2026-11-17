@@ -324,7 +324,8 @@ public final class PathCorridorBuilder {
         return Set.copyOf(starts);
     }
 
-    /**
+    /** 按走廊折线段距离判定覆盖，避免仅查离散节点漏掉边中区域。
+ *
      * True when any polyline segment of the corridor path lies within
      * {@link #PLANNING_CORRIDOR_RADIUS} blocks of the given position.
      */

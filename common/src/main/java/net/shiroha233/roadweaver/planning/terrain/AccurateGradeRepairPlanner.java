@@ -57,7 +57,8 @@ import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
 import static net.shiroha233.roadweaver.planning.terrain.RepairAcceptance.*;
 import static net.shiroha233.roadweaver.planning.terrain.WaterCostModel.*;
 
-/**
+/** 精确地形修复仅针对不可行坡差和突崖；正常粗走廊仍作为权威输入。
+ *
  * Final bounded route repair using accurate terrain heights. The coarse
  * planner remains authoritative unless the resolved path contains a physically
  * impossible one-block grade or a cliff-sized 12-block rise/drop.
@@ -86,20 +87,21 @@ public final class AccurateGradeRepairPlanner {
     static final int STRUCTURE_CONTEXT_BLOCKS = 96;
     static final int STRUCTURE_SEARCH_MARGIN_BLOCKS = 192;
     static final int STRUCTURE_AHEAD_CLEARANCE_BLOCKS = 10;
-    /** Used only when a caller has no world-height context. Runtime repair uses the world minimum. */
+    /** 没有世界高度上下文时才用保守下界，运行修复使用真实世界最低高程。 */
     static final int DEFAULT_TUNNEL_DEPTH_BLOCKS = 12;
     static final int LAKE_CONTEXT_BLOCKS = 96;
     static final int LAKE_SHORE_PROBE_BLOCKS = 8;
     static final int LAKE_REROUTE_CLEARANCE_BLOCKS = 10;
-    /** Lake banks may be lightly leveled, but must not be cut into visible trenches. */
+    /** 湖岸仅轻微整平，避免绕水修复挖出深沟。 */
     static final int MAX_LAKE_SHORE_CUT_DEPTH = 2;
     static final int MAX_LAKE_SHORE_FILL_DEPTH = 2;
     static final int MAX_LOCAL_REPAIRS = 4;
-    /** One bounded local reroute for a grade anomaly that survives normal repair. */
+    /** 普通修坡后仍有异常时才进行一次有界局部改线。 */
     static final int HEIGHT_ANOMALY_DETOUR_BLOCKS = 50;
-    /** A tier may fix each local conflict once; successful fixes remain fixed. */
+    /** 每个层级对每个局部冲突修一次，已成功窗口不反复返工。 */
     static final int MAX_STRUCTURE_REPAIRS = 8;
-    /**
+    /** 相邻建筑逐步局部修复，不能把一串建筑合成完整端点间搜索。
+ *
      * A chain of nearby buildings must not turn a local 10/20/50-block detour
      * into an endpoint-to-endpoint search. Later buildings are repaired by the
      * next pass after the preceding local repair has been committed.
@@ -107,11 +109,11 @@ public final class AccurateGradeRepairPlanner {
     static final int MAX_STRUCTURE_CLUSTER_SPAN_BLOCKS = 192;
     static final int MAX_LAKE_REPAIRS = 8;
     static final int MAX_RIVER_REPAIRS = 8;
-    /** Dry stations tolerated between two wet runs of one crossing group. */
+    /** 同组水跨越允许少量干岸站连接，避免河道被碎分重复绕行。 */
     static final int RIVER_RUN_MERGE_MAX_DRY_STATIONS = 12;
     static final int MAX_EXPANDED_STATES = 90_000;
     static final int MAX_TUNNEL_EXPANDED_STATES = 240_000;
-    /** Exact building repair is intentionally local; it must not stall a whole road. */
+    /** 精确建筑修复有局部预算，避免一栋建筑拖住整路。 */
     static final int MAX_EXACT_BUILDING_EXPANDED_STATES = 24_000;
     /**
      * 0.9.001：单个局部修坡窗口 A* 的墙钟预算兜底值（20 秒）。
@@ -128,12 +130,7 @@ public final class AccurateGradeRepairPlanner {
             {1, 0}, {-1, 0}, {0, 1}, {0, -1},
             {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
     };
-    /** Repairs independent (non-overlapping) grade windows in parallel so a
-     *  single road can use idle CPU cores instead of fixing one violation at a
-     *  time. The pool size is configurable (PlanningConfig.gradeRepairParallelism,
-     *  0 = auto); the old fixed 4-thread pool left road workers blocked in
-     *  future.get() while most cores idled. Auto never exceeds the CPU count,
-     *  so the pool cannot oversubscribe the machine. */
+    /** 互不重叠的修坡窗口可并行；独立池上限不等于各池合计占核上限。 */
     static final ExecutorService GRADE_REPAIR_POOL = Executors.newFixedThreadPool(
             resolvedGradeRepairParallelism(),
             runnable -> {
@@ -142,7 +139,7 @@ public final class AccurateGradeRepairPlanner {
                 return thread;
             });
 
-    /** Resolved once at class init: read the configured parallelism (0 = auto). */
+    /** 线程池初始化时解析修坡并行度，后续配置变化不能假称立即重建此池。 */
     static int resolvedGradeRepairParallelism() {
         int processors = Math.max(1, Runtime.getRuntime().availableProcessors());
         int configured;
@@ -277,7 +274,7 @@ public final class AccurateGradeRepairPlanner {
         return List.copyOf(working);
     }
 
-    /** Computes the local step=1 repair for one non-overlapping grade window. */
+    /** 每个独立修坡窗口使用一格搜索，不对全路重新细化。 */
     static GradePlan computeGradePlan(ServerLevel level,
                                               AccurateHeightSampler sampler,
                                               PathfindingCostConfig fine,
@@ -420,7 +417,8 @@ public final class AccurateGradeRepairPlanner {
         return previous;
     }
 
-    /**
+    /** 真实施工高度冲突只在有限窗口改XZ，避免中心坡度合法却接受深挖或高填方。
+ *
      * Reroutes a construction-time height conflict before the road is
      * persisted. The ordinary grade repair above can only change Y values;
      * this pass changes X/Z inside one bounded conflict-centered window so a
@@ -505,13 +503,9 @@ public final class AccurateGradeRepairPlanner {
         }
     }
 
-    /**
-     * Repairs an accurate route whose nodes or connecting edges enter a
-     * protected structure. This runs after coarse planning because resolving
-     * real surface heights can change the route's vertical intersection with
-     * a structure even when the coarse corridor was valid.
-     */
-    /**
+
+    /** 湖泊局部绕行仅由河流引擎的lakeAt判据触发；河道仍优先桥梁跨越。
+ *
      * Reroutes only the local window occupied by a Streams lake. River
      * channels remain governed by the existing bridge logic; this predicate
      * is based exclusively on RiverEngine.lakeAt().
@@ -530,7 +524,8 @@ public final class AccurateGradeRepairPlanner {
                 Math.floorDiv(first.getZ() + last.getZ(), 2));
     }
 
-    /**
+    /** 同连接的已准备冲突圆窗可复用已完成快照Future，避免每次外扩半径都重复发现结构。
+ *
      * Same connection + same conflict circle + already-prepared snapshot →
      * reuse the completed future. Local repair calls this once per detour
      * radius and lake cycle; without the cache every repeat re-ran the
@@ -543,7 +538,7 @@ public final class AccurateGradeRepairPlanner {
     static final java.util.concurrent.ConcurrentHashMap<net.shiroha233.roadweaver.planning.path.PlannedPathKey, CircleSnapshotEntry>
             CIRCLE_SNAPSHOT_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Generous bound on one snapshot-prediction wait (10× the sampling wait, 5s..120s). */
+    /** 快照等待按采样等待派生且限制在明确范围，避免永久阻塞。 */
     static long snapshotWaitTimeoutMs() {
         try {
             long samplingTimeoutMs = Math.max(100, Math.min(30_000,
@@ -603,7 +598,7 @@ public final class AccurateGradeRepairPlanner {
         }
     }
 
-    /** True when the cached completed snapshot circle covers the requested one. */
+    /** 只有已完成圆窗完整覆盖新请求时才命中，不能靠版本号或相同中心自证覆盖。 */
     static boolean circleCoveredBy(CircleSnapshotEntry cached,
                                            BlockPos center,
                                            int radius) {
@@ -799,12 +794,7 @@ public final class AccurateGradeRepairPlanner {
         return null;
     }
 
-    /**
-     * 0.9.059（③）：{@code [PLAN-LENGTH-CAP]} 诊断行。
-     *
-     * <p>只在"确实剪过节点"时打 INFO（前 40 次 + 之后每 200 次），否则降级为 DEBUG ——
-     * 否则每条路每次局部搜索都打一行会把日志淹掉。{@code pathLen=-1} 表示这一趟没求出解。</p>
-     */
+
     /**
      * 0.9.059（③）：{@code [PLAN-LENGTH-CAP]} 诊断行。
      *
@@ -905,7 +895,7 @@ public final class AccurateGradeRepairPlanner {
     record StateKey(int x, int y, int z, int direction) {
     }
 
-    /**
+    /*
      * R7（0.9.003）：{@code length} = 从起点到本节点的**累计水平长度**（与
      * {@code routeLength} 同口径：只累计水平分量，不含垂直），供长度上界剪枝使用。
      */

@@ -333,7 +333,8 @@ public final class PreparedStartResolver {
         return resolvePredictedChunkBoxesAsync(level, pos);
     }
 
-    /**
+    /** 用原生Structure.generate解析精确起点，不创建/调度实际区块，保留模组结构实现。
+ *
      * Runs the same Structure.generate path used by ChunkGenerator.createStructures,
      * but without allocating or scheduling a real chunk. This preserves modded
      * Structure implementations while removing the startup chunk-executor cycle.
@@ -539,15 +540,7 @@ public final class PreparedStartResolver {
         return main;
     }
 
-    /**
-     * 扫描主缓存，统计「除 structureSet 外其余字段全同」的条目数。
-     *
-     * <p>若该计数持续 &gt; 0，说明缓存键被 {@code Holder} identity 污染：
-     * 语义相同的 start 因 Holder 实例不同而被当成不同键，导致重复解析。
-     * 反之若恒为 0，则 miss 是真实的新 start（缓存本身没问题）。</p>
-     *
-     * <p>为控制开销，每 {@value #DIAG_PROBE_INTERVAL} 次 miss 才扫一次。</p>
-     */
+
     /**
      * 0.9.010：prepared-start 命中诊断。**默认关闭**，用 {@code -Droadweaver.preparedStartDiag=true} 打开。
      *
@@ -647,7 +640,8 @@ public final class PreparedStartResolver {
                 PREPARED_CACHE_EVICTIONS.get());
     }
 
-    /**
+    /** 开局全部精修工作结束后再压缩精确起点缓存，避免边修边淘汰重解析。
+ *
      * Initial generation reuses exact starts while grade repair and structure
      * rerouting refine the same roads. Compact only after all startup workers
      * have joined so an early start is never evicted and regenerated mid-run.
@@ -673,7 +667,7 @@ public final class PreparedStartResolver {
         logPreparedStartDiagnostics();
     }
 
-    /** Manual endpoints may reference starts in other chunks, so resolve both levels without blocking ticks. */
+    /** 手绘端点可能引用邻区块起点，兼容两级解析且不阻塞tick。 */
     public static CompletableFuture<List<OwnedStructureBox>> resolveManualPointBoxesAsync(
             ServerLevel level, int cx, int cz) {
         StructureAvoidanceDiagnostics.MANUAL_REFERENCE_LOOKUPS.incrementAndGet();

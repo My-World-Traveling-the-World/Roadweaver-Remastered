@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Coordinates user-requested removal of non-completed connections. */
+/** 统一处理用户删除未完成连接的请求，保持状态与持久记录同步。 */
 public final class ConnectionDeletionService {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final Set<WorldConnectionKey> CANCELLED = ConcurrentHashMap.newKeySet();

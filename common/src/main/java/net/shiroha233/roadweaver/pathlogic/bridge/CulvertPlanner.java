@@ -147,7 +147,7 @@ public final class CulvertPlanner {
         return water.available() && water.water();
     }
 
-    /** A station qualifies when its own column is water and the planned surface sits inside it. */
+    /** 仅自身列为水且计划路面位于水体中的站点才候选涵洞。 */
     private static boolean isCulvertStation(RoadSegmentPlacement segment, int plannedY,
                                             int maxWaterDepth, Probe probe) {
         Water water = stationWater(segment, probe);
@@ -167,7 +167,7 @@ public final class CulvertPlanner {
         return water.available() && water.water() ? water.depth() : 0;
     }
 
-    /** Deepest water of a station: the centre plus the two blocks either side of the road. */
+    /** 涵洞水深取中心及道路两侧探测的最深值，避免中心浅而侧面深时误建。 */
     private static Water stationWater(RoadSegmentPlacement segment, Probe probe) {
         if (segment == null || segment.middlePos() == null) return Water.unavailable();
         Water worst = probe.at(segment.middlePos().getX(), segment.middlePos().getZ());
@@ -192,7 +192,7 @@ public final class CulvertPlanner {
         }
     }
 
-    /** Stations covered by a span that owns its own geometry: a culvert must not cut through them. */
+    /** 已有独立几何跨度优先，涵洞不能切穿桥梁、隧道或共用段。 */
     private static boolean[] spanMask(RoadData road, int size) {
         boolean[] mask = new boolean[size];
         if (road.spans() == null || road.spans().isEmpty()) return mask;

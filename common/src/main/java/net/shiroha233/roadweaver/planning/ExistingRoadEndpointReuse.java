@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Optional;
 
-/**
+/** 已有自动路仅作为生成时短接候选；短支路成功后才持久化端点替换，不能先改拓扑再盲建。
+ *
  * Finds a completed automatic road that can be used as the endpoint of a
  * later automatic connection. This is intentionally a generation-time
  * candidate: the replacement is persisted only after its short branch is

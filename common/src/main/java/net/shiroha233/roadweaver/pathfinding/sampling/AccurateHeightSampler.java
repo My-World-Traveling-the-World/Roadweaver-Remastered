@@ -38,7 +38,8 @@ public final class AccurateHeightSampler {
     // 条相邻路复用"放大，逐列缓存与整块缓存都留得住，跨路也能命中。
     static final int CHUNK_CACHE_CAPACITY = 8192;
     static final int COLUMN_CACHE_CAPACITY = 262_144;
-    /**
+    /** 精确缓存拆为独立锁LRU桶，复用影响命中与重复计算，不改地形采样值。
+ *
      * P1-6: the two caches used to sit behind a single {@code cacheLock}, so
      * every worker serialised on every column lookup. They are now split into
      * independently locked LRU buckets. Cache contents only decide reuse, never
@@ -112,7 +113,7 @@ public final class AccurateHeightSampler {
         }, SamplerStatics::inFlightTimeoutMs, publications);
     }
 
-    /** One independently locked LRU bucket of a shared sampler cache. */
+    /** 单桶独立加锁限制缓存竞争，避免在整张缓存上串行所有读者。 */
     static final class Shard<V> {
         private final Object lock = new Object();
         private final Map<Long, V> entries;
@@ -279,7 +280,7 @@ public final class AccurateHeightSampler {
         return result;
     }
 
-    /** Returns only already cached/persisted samples and never invokes worldgen. */
+    /** 只读查询仅复用内存或磁盘已有样本，不触发世界生成。 */
     public Map<Long, AccurateHeightSample> cachedSamples(Collection<BlockPos> positions) {
         // 只读查询也会读盘并填充缓存，关闭后不能把它当成无副作用的诊断 API。
         ensureOpen();
@@ -358,10 +359,7 @@ public final class AccurateHeightSampler {
         samplePositions(positions);
     }
 
-    /**
-     * Startup-only prefetch path. It waits for the shared OpenCL lane instead
-     * of silently diverting a large batch to the serial CPU backend.
-     */
+    /** 加速专用入口仅在后端支持时等待其通道；生产精确采样仍为CPU-only，不由此恢复废弃GPU开关。 */
     public Map<Long, AccurateHeightSample> prefetchAcceleratedPositions(
             Collection<BlockPos> positions, AccurateSamplingProgress progress) {
         if (!supportsAcceleratedSampling()) {

@@ -25,7 +25,7 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.LanternBlock;
 import net.shiroha233.roadweaver.util.Line;
 
-/** Builds a route-following wooden bridge without projecting template terrain downward. */
+/** 沿既有路线程序化建木桥，不把模板外围地形向下投影成填土。 */
 public final class BridgeBuilder {
     private static final int BODY_PERIOD = 7;
     private static final int SUPPORT_PHASE = 3;
@@ -180,7 +180,8 @@ public final class BridgeBuilder {
         return true;
     }
 
-    /**
+    /** 在桥面及其上方检查水体，识别淹没或排水空腔中的桥站，避免水下走廊两端开口。
+ *
      * Whether this deck station sits under water rather than in open air.
      *
      * <p>Sampled at the deck itself and just above it. A station whose own block is already
@@ -200,7 +201,8 @@ public final class BridgeBuilder {
         return false;
     }
 
-    /**
+    /** 水下桥面使用共用半圆玻璃壳与灯光；刻意不加桥墩，保持悬挂水廊视野。
+ *
      * Seals a submerged deck under a semicircular glass vault with periodic lighting.
      *
      * <p>Piers are deliberately omitted: the corridor hangs in the water column, so the
@@ -290,7 +292,7 @@ public final class BridgeBuilder {
         return ((long) x << 32) ^ (z & 0xffffffffL);
     }
 
-    /** Route progress through the crossing, for the shared glass gradient. */
+    /** 沿跨越进度计算共用玻璃渐变，避免各区块各自重新起色。 */
     private static double scenicProgress(Line geometryLine, BlockPos middle) {
         if (geometryLine == null || middle == null) return 0.0D;
         double length = geometryLine.getTotalLength();
@@ -300,7 +302,8 @@ public final class BridgeBuilder {
         return Math.max(0.0D, Math.min(1.0D, frame.globalT));
     }
 
-    /**
+    /** 灯从圆拱中心悬挂，复用桥灯间隔，保持水上与水下节奏一致。
+ *
      * Hanging lights along the corridor centre, on the same interval the bridge uses.
      *
      * <p>Reuses the bridge light spacing so a crossing does not change rhythm when it becomes
@@ -363,7 +366,7 @@ public final class BridgeBuilder {
         }
     }
 
-    /** Replaces one center-line deck block at a stable route-distance interval. */
+    /** 按稳定路线里程替换桥面中心灯，避免区块顺序改变灯位。 */
     private static void placeCenterLightBlock(
             WorldGenLevel world,
             RoadData road,
@@ -420,7 +423,8 @@ public final class BridgeBuilder {
         world.setBlock(lightPos, Blocks.SEA_LANTERN.defaultBlockState(), 3);
     }
 
-    /**
+    /** 站点拥有邻站中点之间的里程窗口，避免相邻站同时认领同一灯位。
+ *
      * Local station spacing in blocks. A station owns the interval between the
      * midpoints to its neighbours, so the claim window is half of the distance
      * to the nearest neighbour. prev/next are two stations away.

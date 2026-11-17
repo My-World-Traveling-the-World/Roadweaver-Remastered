@@ -20,13 +20,7 @@ public record StructureInfo(BlockPos pos, String structureId) {
         return structureId != null && !structureId.isBlank() && !"unknown".equalsIgnoreCase(structureId.trim());
     }
 
-    /**
-     * True only for village-shaped structures. ctov / towns_and_towers /
-     * biomeswevegone / minecraft / terralith / trek villages all carry the
-     * "village" token; non-village structures such as bone dragons, wells and
-     * chapels do not. This is the gate that keeps unknown/non-village
-     * structures out of road connections.
-     */
+    /** 村庄识别基于结构ID中的village标记；该启发式不等价于确认所有未知模组结构均非村庄。 */
     public static boolean isVillageId(String structureId) {
         return structureId != null
                 && structureId.toLowerCase(java.util.Locale.ROOT).contains("village");

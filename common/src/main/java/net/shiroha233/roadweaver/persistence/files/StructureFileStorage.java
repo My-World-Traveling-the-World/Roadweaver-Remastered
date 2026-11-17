@@ -169,7 +169,8 @@ public final class StructureFileStorage {
         return isSuppressed(state(level), from, to);
     }
 
-    /**
+    /** 清理手绘遗留未知拓扑占位点及其连接，真实已知结构和共享出生点保留。
+ *
      * Removes stale/unknown topology endpoints left by manual connection
      * records.  Unknown entries are not real discovered structures and must
      * not become automatic road nodes; the only exception is the shared spawn
@@ -224,7 +225,8 @@ public final class StructureFileStorage {
         return removed.size();
     }
 
-    /**
+    /** 已耗尽完整管线的拓扑候选按世界记忆，避免重启后在A与B间无限替换。
+ *
      * Records a topology candidate that has already exhausted the complete
      * road pipeline. The record is world-local and intentionally unbounded:
      * it prevents A -> B -> A fallback loops after a world restart.
@@ -309,7 +311,8 @@ public final class StructureFileStorage {
         save(level, state);
     }
 
-    /**
+    /** 结构加入与扫描窗口完成合并一次写透，避免同窗口连续重写相同状态文件。
+ *
      * P0-3: {@code addStructures} followed by {@code markScanWindowDone} wrote
      * the whole state file twice per scan window. Folding both mutations into a
      * single write-through halves that I/O without changing what is persisted.
@@ -620,18 +623,7 @@ public final class StructureFileStorage {
         return (((long) x) << 32) ^ (z & 0xffffffffL);
     }
 
-    /**
-     * P0-3: memory-resident state per dimension. Every public entry point of
-     * this class is {@code static synchronized}, so the map only ever needs the
-     * class monitor. Mutators change the cached instance first and then write it
-     * through, so the JSON produced by {@link #save} is byte-identical to what
-     * the previous read-mutate-write cycle produced. Before this cache every
-     * query re-read and re-parsed the whole state file, and one scan window cost
-     * three full reads plus three full writes.
-     *
-     * <p>Cleared by {@link #resetSnapshotCache()}, which {@code CacheManager}
-     * already invokes on server start and stop.</p>
-     */
+    /** 每维度状态由类锁保护并写透；生命周期清缓存，不应将内存更新等同于持久成功。 */
     private static final Map<ResourceKey<Level>, StateData> STATE_CACHE = new HashMap<>();
 
     private static StateData state(ServerLevel level) {

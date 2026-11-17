@@ -33,7 +33,7 @@ import java.util.Map;
  */
 public final class RoadQualityMetrics {
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("roadweaver");
-    /** Roads measured this session, and the running sums the rollup line reports. */
+    /** 本会话累计质量样本及总和，重开需按生命周期清除。 */
     private static final java.util.concurrent.atomic.AtomicInteger ROADS =
             new java.util.concurrent.atomic.AtomicInteger();
     private static final java.util.concurrent.atomic.AtomicLong TOTAL_BREAKS =
@@ -126,7 +126,8 @@ public final class RoadQualityMetrics {
         return pos == null ? "(none)" : "(" + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ")";
     }
 
-    /**
+    /** 逐路记录质量并定期汇总，观测本身不修改道路结果。
+ *
      * Measures one finished road, logs its numbers, and every tenth road logs the session rollup.
      *
      * <p>The per-road line answers "is this road right"; the rollup answers "is the generator drifting
@@ -159,7 +160,8 @@ public final class RoadQualityMetrics {
         return report;
     }
 
-    /**
+    /** 质量报告是只读观测，宽度、高差和桥隧指标不代表已通过实体可通行验收。
+ *
      * @param widthVariation     每站足迹宽度（沿 x/z 的最大跨度 + 1）的标准差，0 = 宽窄完全一致
      * @param holes              没有任何放置位置的站数
      * @param continuityBreaks   相邻普通站之间高差 &gt; 1 的次数（桥/隧道/路口跨度不计）
@@ -201,7 +203,7 @@ public final class RoadQualityMetrics {
                          double gradeP95Land,
                          String spanDetail) {
 
-        /** A single line for the log: every number on it is a regression guard. */
+        /** 输出供比较的质量指标；一行日志不是自动回归断言或施工成功证明。 */
         public String format() {
             return String.format(java.util.Locale.ROOT,
                     "stations=%d widthVar=%.2f holes=%d breaks=%d seamSteps=%d gradeP95=%.3f gradeP95Land=%.3f "
@@ -314,7 +316,7 @@ public final class RoadQualityMetrics {
                 bound.duplicateXzStations(), seamSteps, percentile(landGrades, 0.95D), spanDetail(bound));
     }
 
-    /** {@return "[BRIDGE n=2 p95=2.0 max=2 gaps=1 TUNNEL n=1 p95=3.0 max=3 gaps=0]"} */
+    /** 格式化桥隧跨度数量及高度差指标，不把样本数量当作可通行保证。 */
     private static String spanDetail(Bound bound) {
         if (bound.lengthsByType().isEmpty()) return "[]";
         StringBuilder text = new StringBuilder("[");
@@ -335,12 +337,12 @@ public final class RoadQualityMetrics {
         return text.append(']').toString();
     }
 
-    /** Span masks plus what could not be bound to a station, so the report can say so. */
+    /** 跨度掩码同时保留无法绑定端点的数量，避免异常跨度被静默漏报。 */
     private record Bound(Map<SpanType, boolean[]> masks, int unboundSpans, int duplicateXzStations,
                          List<Integer> spanLengths, int spanGaps,
                          Map<SpanType, List<Integer>> lengthsByType, Map<SpanType, Integer> gapsByType) { }
 
-    /** One station's exact position; the XZ-only key a junction collides on is kept separately. */
+    /** 精确站点位置与XZ键分开保存，避免立交高度被水平键合并。 */
     private record StationKey(int x, int y, int z) { }
 
     private static Bound masks(RoadData road, int size) {
@@ -401,7 +403,7 @@ public final class RoadQualityMetrics {
         return new Bound(masks, unbound, duplicates, lengths, gaps, lengthsByType, gapsByType);
     }
 
-    /** {@return the station index of a span endpoint: exact (x,y,z) first, XZ as the fallback} */
+    /** 跨度端点先匹配完整XYZ，找不到才按XZ回落，保持旧数据兼容口径。 */
     private static Integer station(Map<StationKey, Integer> exact, Map<Long, Integer> xz, BlockPos position) {
         Integer hit = exact.get(new StationKey(position.getX(), position.getY(), position.getZ()));
         return hit != null ? hit : xz.get(key(position));

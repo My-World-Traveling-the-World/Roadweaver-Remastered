@@ -42,11 +42,13 @@ import org.slf4j.LoggerFactory;
 final class OpenCLAccurateProgram implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int HEIGHT_PARALLEL_LANES = 64;
-    /** Allow only a bounded number of adaptive splits per GPU request. Once the
+    /** 设备分配失败只做有限次拆分，避免驱动持续拒绝时无限重试。
+ * Allow only a bounded number of adaptive splits per GPU request. Once the
      *  driver keeps rejecting device allocation, splitting further only burns
      *  time; the remaining work must fall back to the CPU sampler. */
     private static final int MAX_ADAPTIVE_SPLITS = 10;
-    /** Below this many columns a recoverable allocation failure is treated as a
+    /** 小批仍分配失败时停止继续二分，避免拆到单列反复刷错。
+ * Below this many columns a recoverable allocation failure is treated as a
      *  dead device rather than a too-large request, so we stop halving instead
      *  of recursing down to 1+1 and spamming the log. */
     private static final int MIN_RECOVERABLE_BATCH = 4;
@@ -206,7 +208,8 @@ final class OpenCLAccurateProgram implements AutoCloseable {
         return result;
     }
 
-    /**
+    /** 历史精确GPU入口只重试失败子批；保留实现不等于开启当前生产精确GPU。
+ *
      * Samples one column batch and retries only the failing sub-batch when the
      * driver rejects a device allocation. The old code invalidated the whole
      * OpenCL runtime on -61, causing every remaining precise sample to fall

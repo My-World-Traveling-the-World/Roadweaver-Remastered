@@ -497,7 +497,8 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
         return ValidationResult.failed(firstMismatch(expected, actual), expected.length);
     }
 
-    /**
+    /** 粗GPU首会话做有界分布抽查，不重复完整CPU瓦片；抽查仍负责拒绝错误程序。
+ *
      * Full CPU validation duplicated an entire tile before the accelerated
      * path could be used. A fixed, evenly distributed spot check keeps the
      * first session bounded while still rejecting an invalid GPU program.

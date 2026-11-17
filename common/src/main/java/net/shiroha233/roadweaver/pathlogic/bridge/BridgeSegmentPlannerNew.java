@@ -32,7 +32,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
+/** 模板桥仅投影已保存体素，并且每次只写当前区块拥有的方块，避免跨区块重复放置。
+ *
  * Places the bundled RoadWeaver bridge template along a long water span.
  * Template coordinates outside the saved voxel volume are never projected
  * downward, and each invocation writes only blocks owned by the chunk that is
@@ -41,19 +42,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class BridgeSegmentPlannerNew {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final Set<String> LOGGED_BRIDGES = ConcurrentHashMap.newKeySet();
-    /** Support columns added under template bridges; a template bridge with 0 of these has no piers. */
+    /** 诊断模板桥新增支撑列数量，不以计数决定建造行为。 */
     private static final java.util.concurrent.atomic.AtomicLong PIERS_PLACED =
             new java.util.concurrent.atomic.AtomicLong();
     /** 0.9.033：陆侧桥口靠桥身映射补出甲板的次数（O-14「陆侧桥口缺甲板」的取证计数）。 */
     private static final java.util.concurrent.atomic.AtomicLong LANDING_MOUTHS_FILLED =
             new java.util.concurrent.atomic.AtomicLong();
 
-    /** {@return how many template-bridge support columns this process has placed} */
+    /** 返回本进程实际新增的模板桥支撑列数，不能当作某一条桥的完工证明。 */
     public static long piersPlaced() {
         return PIERS_PLACED.get();
     }
 
-    /** {@return how many land-side bridge mouths this process had to fill from the body mapping} */
+    /** 统计模板桥陆侧口部的体素补齐，便于定位入口缺块。 */
     public static long landingMouthsFilled() {
         return LANDING_MOUTHS_FILLED.get();
     }
@@ -240,7 +241,7 @@ public final class BridgeSegmentPlannerNew {
         return true;
     }
 
-    /** {@return whether the top block of this column is open fluid, i.e. the bridge mouth is over water} */
+    /** 检查列顶是否为开放流体，避免把水上桥口当作普通陆基。 */
     private static boolean isWallOwned(BlockPos pos) {
         return pos != null && net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
                 net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
@@ -255,10 +256,11 @@ public final class BridgeSegmentPlannerNew {
         return !world.getBlockState(new BlockPos(pos.getX(), top, pos.getZ())).getFluidState().isEmpty();
     }
 
-    /** How far a template bridge's support column may descend when the config leaves it open. */
+    /** 未显式限制时仍限制支撑向下探测范围，避免无限扫描。 */
     private static final int DEFAULT_PIER_DESCENT_CAP = 48;
 
-    /**
+    /** 按桥墩间隔向首个实地补支撑，遵守高度、当前区块及保护限制，避免模板自带短墩停在水面。
+ *
      * Carries a template bridge down to solid ground under every pier interval.
      *
      * <p>The bundled templates are eight blocks tall: their piers are three logs that end on the template's
@@ -298,7 +300,8 @@ public final class BridgeSegmentPlannerNew {
         }
     }
 
-    /**
+    /** 海晶灯按桥自身跨度里程布置，使用本区块实际放出的模板列，不跨区块补灯。
+ *
      * Replaces the template deck's center block with a sea lantern every
      * {@code DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS} blocks of bridge span:
      * one at 0, one at 16, one at 32, and so on up to the deck length. The
@@ -358,7 +361,8 @@ public final class BridgeSegmentPlannerNew {
         return false;
     }
 
-    /**
+    /** 读取本次实际写入的中心甲板体素，避免忽略模板高度偏移而猜错灯Y。
+ *
      * The template voxel at the deck center for one span offset, or null when
      * this invocation did not write that column. Uses the actual template
      * voxel written for the current chunk, which avoids guessing the deck Y
@@ -398,7 +402,7 @@ public final class BridgeSegmentPlannerNew {
         return exact != null ? exact : near;
     }
 
-    /** Exact non-air template voxels used by save-time structure validation. */
+    /** 存档前校验使用模板精确非空气体素，避免只验中心线。 */
     public static List<BlockPos> plannedBlocks(
             ServerLevel level,
             Line line,
@@ -410,7 +414,7 @@ public final class BridgeSegmentPlannerNew {
         return plannedBridge(level, line, segment, middle, previous, deckY, landingStation).blocks();
     }
 
-    /** Full template geometry plus whether the middle point's chunk will suppress procedural fallback. */
+    /** 同时返回模板几何与程序化主体抑制信息，使校验覆盖真正会写出的体积。 */
     public static PlannedBridge plannedBridge(
             ServerLevel level,
             Line line,
@@ -614,7 +618,8 @@ public final class BridgeSegmentPlannerNew {
                 && pos.getZ() >= chunk.getMinBlockZ() && pos.getZ() <= chunk.getMaxBlockZ();
     }
 
-    /**
+    /** 由桥端点生成稳定模板种子，避免各区块观察到的局部长度不同而选出不同桥体。
+ *
      * Derives a stable template seed from the bridge's endpoints, independent of the bridge length
      * that a chunk happens to observe at generation time. The old seed was {@code (int) bridgeLength},
      * and because the runtime bridge range could grow differently per chunk, the same bridge could

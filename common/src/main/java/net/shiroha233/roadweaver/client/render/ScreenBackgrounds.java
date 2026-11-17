@@ -3,7 +3,8 @@ package net.shiroha233.roadweaver.client.render;
 
 import net.minecraft.client.gui.GuiGraphics;
 
-/**
+/** 共享无模糊背景绘制，保证各自定义界面呈现一致。
+ *
  * Shared non-blur screen background used by custom UI screens.
  */
 public final class ScreenBackgrounds {

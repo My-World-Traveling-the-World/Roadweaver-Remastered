@@ -84,7 +84,7 @@ public final class GreatWallRoadGuard {
         LOGGER.info("【检测到长城走廊，道路止于墙脚】 " + "Great Wall corridor detected; roads will stop at the wall foot");
     }
 
-    /** Clears contact/skip diagnostics when a server/world session ends. */
+    /** 世界会话结束时清除接触与跳过统计，避免下一存档沿用旧诊断。 */
     public static void resetDiagnostics() {
         CONTACT_CELLS.clear();
         CONTACTS.clear();

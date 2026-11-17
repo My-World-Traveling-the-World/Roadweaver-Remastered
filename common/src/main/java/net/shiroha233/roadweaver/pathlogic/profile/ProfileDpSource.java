@@ -26,7 +26,7 @@ public final class ProfileDpSource {
     private ProfileDpSource() {
     }
 
-    /**
+    /*
      * 硬契约：DP 必须无条件遵守的三件事。
      *
      * <h2>为什么这三条必须是「约束」而不是「代价」</h2>

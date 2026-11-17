@@ -45,9 +45,9 @@ import java.util.Set;
  */
 public final class RoadsideStructurePrecomputer {
     private RoadsideStructurePrecomputer() {}
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver/StructurePrecomputer");
-    
+
     public static int precomputeStructures(ServerLevel level,
                                            List<RoadSegmentPlacement> segments,
                                            List<RoadSpan> spans,
@@ -59,23 +59,23 @@ public final class RoadsideStructurePrecomputer {
         if (segments == null || segments.size() < RoadConstants.MIN_ROAD_SEGMENTS_FOR_STRUCTURE) {
             return 0;
         }
-        
+
         ModConfig cfg = ConfigService.get();
 
         if (!cfg.roadsideStructure().enabled()) {
             return 0;
         }
-        
+
         int maxStructures = cfg.roadsideStructure().maxStructuresPerRoad();
         if (maxStructures <= 0) {
             return 0;
         }
-        
+
         List<RoadsideStructureEntry> allStructures = RoadsideStructureRegistry.getAll(level);
         if (allStructures.isEmpty()) {
             return 0;
         }
-        
+
         Set<Integer> excludedIndices = new HashSet<>();
         if (spans != null) {
             java.util.Map<Long, Integer> spanIndices = new java.util.HashMap<>();
@@ -102,63 +102,63 @@ public final class RoadsideStructurePrecomputer {
                 }
             }
         }
-        
+
         int roadLength = segments.size();
         int checkInterval = Math.max(1, roadLength / (maxStructures + 1));
-        
+
         Set<Long> placedChunks = new HashSet<>();
         int placedCount = 0;
-        
+
         for (int i = checkInterval; i < roadLength - checkInterval && placedCount < maxStructures; i += checkInterval) {
             if (Thread.currentThread().isInterrupted()) return placedCount;
             if (excludedIndices.contains(i)) {
                 continue;
             }
-            
+
             BlockPos middle = segments.get(i).middlePos();
-            
+
             int windowSize = RoadConstants.STRUCTURE_PLACEMENT_WINDOW_SIZE;
             BlockPos prev = segments.get(Math.max(0, i - windowSize)).middlePos();
             BlockPos next = segments.get(Math.min(roadLength - 1, i + windowSize)).middlePos();
-            
+
             double dirX = next.getX() - prev.getX();
             double dirZ = next.getZ() - prev.getZ();
             double len = Math.sqrt(dirX * dirX + dirZ * dirZ);
             if (len < 0.01) continue;
             dirX /= len;
             dirZ /= len;
-            
+
             Holder<Biome> biomeHolder = cache.getBiome(level, middle.getX(), middle.getZ());
             BiomeCategory category = BiomeCategory.fromBiome(biomeHolder);
-            
+
             RoadsideStructureEntry entry = selectStructure(allStructures, category, roadLength, random);
             if (entry == null) {
                 continue;
             }
-            
+
             RoadsideStructure structure = entry.structure();
             Vec3i sizeHint = structure.sizeHint();
-            
+
             boolean leftSide = random.nextBoolean();
             int offset = getOffsetForScale(structure.scale(), cfg);
 
             Rotation rotation = calculateRotation(dirX, dirZ, leftSide, structure.faceRoad());
-            
+
             double perpX = leftSide ? -dirZ : dirZ;
             double perpZ = leftSide ? dirX : -dirX;
 
             int sizeX = sizeHint.getX();
             int sizeZ = sizeHint.getZ();
-            
+
             double halfExtentInPerpDir;
             switch (rotation) {
                 case NONE, CLOCKWISE_180 -> halfExtentInPerpDir = (Math.abs(perpX) * sizeX + Math.abs(perpZ) * sizeZ) / 2.0;
                 case CLOCKWISE_90, COUNTERCLOCKWISE_90 -> halfExtentInPerpDir = (Math.abs(perpX) * sizeZ + Math.abs(perpZ) * sizeX) / 2.0;
                 default -> halfExtentInPerpDir = Math.max(sizeX, sizeZ) / 2.0;
             }
-            
+
             double centerOffset = offset + halfExtentInPerpDir;
-            
+
             int placeX = middle.getX() + (int) Math.round(perpX * centerOffset);
             int placeZ = middle.getZ() + (int) Math.round(perpZ * centerOffset);
 
@@ -222,42 +222,42 @@ public final class RoadsideStructurePrecomputer {
                 sizeHint.getY(),
                 sizeHint.getZ()
             );
-            
+
             placedChunks.add(chunkKey);
             placedCount++;
-            
+
             LOGGER.debug("【沿路结构预计算完成】 " + "Precomputed structure {} at {} for chunk [{}, {}]", entry.id(), anchor, chunkPos.x, chunkPos.z);
         }
-        
+
         return placedCount;
     }
-    
+
     private static RoadsideStructureEntry selectStructure(List<RoadsideStructureEntry> structures,
                                                           BiomeCategory category,
                                                           int roadLength,
                                                           RandomSource random) {
         List<RoadsideStructureEntry> candidates = new ArrayList<>();
         int totalWeight = 0;
-        
+
         for (RoadsideStructureEntry entry : structures) {
             RoadsideStructure structure = entry.structure();
-            
+
             if (!structure.placementRule().isBiomeAllowed(category)) {
                 continue;
             }
-            
+
             if (roadLength < structure.placementRule().minRoadLength()) {
                 continue;
             }
-            
+
             candidates.add(entry);
             totalWeight += structure.weight();
         }
-        
+
         if (candidates.isEmpty() || totalWeight <= 0) {
             return null;
         }
-        
+
         int roll = random.nextInt(totalWeight);
         int cumulative = 0;
         for (RoadsideStructureEntry entry : candidates) {
@@ -266,32 +266,11 @@ public final class RoadsideStructurePrecomputer {
                 return entry;
             }
         }
-        
+
         return candidates.get(candidates.size() - 1);
     }
 
-    /**
-     * Check if the terrain on a certain structure's center position meets the following condition:
-     *
-     * <ul>
-     *     <li>The center's column does NOT have water body (river, ocean, etc.) on the surface.</li>
-     *     <li>The height change from the center to the edge on 4 directions (-X, +X, -Z, +Z) does NOT exceed
-     *     {@link RoadConstants#MAX_STRUCTURE_SLOPE}. Note that the height change is NOT slope, as this method only
-     *     calculates the absolute value of the height of the center minus the height of the center of the edge and
-     *     comparing this value to {@link RoadConstants#MAX_STRUCTURE_SLOPE}, but not dividing it by the distance on
-     *     XZ-plane.</li>
-     * </ul>
-     *
-     * @param center The center of the structure.
-     * @param size The size of the structure, represented by {@link Vec3i}.
-     * @param cache The {@link TerrainSamplingCache} object storing the terrain cache. Used in {@link #getHeight}.
-     * @param level The {@link ServerLevel} object representing the world.
-     * @param heightmap The heightmap type that needs to be sampled. Used in {@link #getHeight}.
-     * @param useBaseHeight Whether to use {@link TerrainSamplingCache#height} or {@link ChunkGenerator#getBaseHeight}
-     *                      to calculate the terrain height. Used in {@link #getHeight}.
-     * @return {@code true} if the terrain at the structure's center position meets the condition, {@code false}
-     * otherwise.
-     */
+    /** 路边结构中心无水且四向边缘绝对高差不过阈值才候选；这是高差判据，不是除以距离的坡度。 */
     private static boolean checkTerrainConditions(
         BlockPos center,
         Vec3i size,
@@ -324,13 +303,13 @@ public final class RoadsideStructurePrecomputer {
         int y4 = getHeight(x, z + halfZ, level, cache, terrain, heightmap, useBaseHeight);
 
         //LOGGER.debug("y={} y1={} y2={} y3={} y4={}", y, y1, y2, y3, y4);
-        
+
         return Math.abs(y1 - y) <= maxSlope &&
                Math.abs(y2 - y) <= maxSlope &&
                Math.abs(y3 - y) <= maxSlope &&
                Math.abs(y4 - y) <= maxSlope;
     }
-    
+
     private static int getOffsetForScale(StructureScale scale, ModConfig cfg) {
         return switch (scale) {
             case SMALL -> cfg.roadsideStructure().smallStructureOffset();
@@ -339,28 +318,7 @@ public final class RoadsideStructurePrecomputer {
         };
     }
 
-    /**
-     * Calculate the terrain height of a specific coordinate.
-     * <p>
-     * When {@code useBaseHeight} is set to {@code false}, this method will use fast {@link TerrainSamplingCache#height}
-     * to sample the height on the specific coordinate, which is inaccurate and can only probe the surface height, thus
-     * {@code heightmap} is ignored in this case.
-     * <p>
-     * On the other hand, when {@code useBaseHeight} is set to true, this method will use the more accurate
-     * {@link ChunkGenerator#getBaseHeight} to sample the height, which can specify the heightmap type that needs to be
-     * sampled, but much slower compared to {@link TerrainSamplingCache#height}. In this case, parameter {@code cache}
-     * is ignored since it is no longer engaged in height calculation.
-     *
-     * @param x The X value of the coordinate being sampled.
-     * @param z The Z value of the coordinate being sampled.
-     * @param level The {@link ServerLevel} object representing the world.
-     * @param cache The {@link TerrainSamplingCache} object storing the terrain cache. Used when {@code useBaseHeight}
-     *              is {@code false}.
-     * @param heightmap The heightmap type that needs to be sampled. Used when {@code useBaseHeight} is {@code true}.
-     * @param useBaseHeight Whether to use {@link TerrainSamplingCache#height} or {@link ChunkGenerator#getBaseHeight}
-     *                      to calculate the terrain height.
-     * @return The calculated height of the coordinate.
-     */
+    /** 快速地形高度不使用heightmap；精确原生getBaseHeight使用指定高度图，两者缓存与精度边界必须分清。 */
     private static int getHeight(int x,
                                  int z,
                                  ServerLevel level,
@@ -382,15 +340,15 @@ public final class RoadsideStructurePrecomputer {
     static boolean hasAlignedTerrainSample(PathTerrainField terrain, int x, int z) {
         return terrain instanceof AccurateTerrainRegion region && region.bounds().containsSample(x, z);
     }
-    
+
     private static Rotation calculateRotation(double dirX, double dirZ, boolean leftSide, boolean faceRoad) {
         if (!faceRoad) {
             return Rotation.NONE;
         }
-        
+
         double absX = Math.abs(dirX);
         double absZ = Math.abs(dirZ);
-        
+
         if (absX > absZ) {
             if (leftSide) {
                 return dirX > 0 ? Rotation.CLOCKWISE_180 : Rotation.NONE;

@@ -90,7 +90,7 @@ public final class CorridorAttract {
         }
     }
 
-    /** 量化粒度 2 的幂次：4 格（与 {@code CorridorBan} 一致）。 */
+
 
     /** 升序排列的量化格 key（{@code cx} 在高 32 位、{@code cz} 在低 32 位）。 */
     private final long[] cells;

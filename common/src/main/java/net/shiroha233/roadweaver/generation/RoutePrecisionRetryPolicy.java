@@ -8,7 +8,7 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Keeps every route attempt at the precision selected by the player. */
+/** 重试策略保持玩家所选精度，不自行降低质量。 */
 public final class RoutePrecisionRetryPolicy {
     private RoutePrecisionRetryPolicy() {
     }
@@ -19,17 +19,12 @@ public final class RoutePrecisionRetryPolicy {
         return List.of(safeConfigured);
     }
 
-    /** Startup refinement tiers; each tier is sampled once for the whole batch. */
+    /** 开局精细采样层级由策略统一发布，不能按调用方各自追加精度。 */
     public static List<Integer> initialBatchSteps(int configuredStep) {
         return fullRouteSteps(configuredStep);
     }
 
-    /**
-     * Local repair is a separate retry phase, even when the configured route
-     * precision has no lower tier.  Re-running the unresolved corridors after
-     * the first batch gives the planner a chance to refresh local terrain and
-     * obstacle snapshots before topology candidates are considered.
-     */
+    /** 局部修复单独一波以刷新冲突上下文；不代表启用已关闭的拓扑替换。 */
     public static List<Integer> localRepairBatchSteps(int configuredStep) {
         // Local conflict repair uses a 2-block level. It is only patching the
         // recorded conflict windows, so the finest 1-block pass is unnecessary
@@ -37,7 +32,7 @@ public final class RoutePrecisionRetryPolicy {
         return List.of(Math.max(2, RoadConstants.ASTAR_STEP_MIN));
     }
 
-    /** Candidate topology replacements use the same player-selected precision. */
+    /** 拓扑候选沿用玩家精度，避免换点同时偷偷换精度。 */
     public static List<Integer> candidateBatchSteps(int configuredStep) {
         return List.of(Math.max(RoadConstants.ASTAR_STEP_MIN,
                 Math.min(RoadConstants.ASTAR_STEP_MAX, configuredStep)));

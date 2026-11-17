@@ -37,7 +37,7 @@ import net.shiroha233.roadweaver.pathlogic.construction.SegmentPaver;
 import net.shiroha233.roadweaver.pathlogic.construction.RoadConstructionVolumePlanner;
 import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
 
-/** Save-time gate that validates the final, span-aware three-dimensional road volume. */
+/** 落盘前检查最终带跨度的三维施工体积，不能只检查原始路线。 */
 public final class FinalRoadStructureValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final boolean AUDIT_FINAL_FOOTPRINT = "on".equalsIgnoreCase(
@@ -79,7 +79,8 @@ public final class FinalRoadStructureValidator {
         return result;
     }
 
-    /**
+    /** 先预取体积遍历会触及的全部列；密集覆盖按块、稀疏部分按列，避免校验中反复世界采样。
+ *
      * Final structure validation must not discover a cache miss after entering
      * the volume walk. Prefetch the road's actual footprint columns. The CPU
      * backend samples whole chunks into the shared chunk cache, so a column
@@ -282,7 +283,8 @@ public final class FinalRoadStructureValidator {
         };
     }
 
-    /**
+    /** 所有内部已确认建筑碰撞均标记明确不铺站，不能仅处理首个碰撞而漏掉侧列。
+ *
      * Retains an otherwise usable route while marking every internal verified
      * building collision as an explicit unpaved station. Final construction
      * checks the complete swept volume, so handling only the first collision
@@ -317,18 +319,7 @@ public final class FinalRoadStructureValidator {
         return null;
     }
 
-    /**
-     * Before a protected gap is accepted, pull its two pavement edges into one
-     * continuous profile: both edges are seated onto the lower side and the
-     * higher approach descends onto it (prefer-cut — stations are only ever
-     * lowered, never filled), so no adjacent ordinary pair exceeds the
-     * validator's one-block step. Ramp windows extend 8..48 stations per side
-     * (a 40-block delta needs 42, so a 32 cap could never satisfy it). A gap
-     * whose descent cannot fit its window is left unchanged with a warning
-     * and the validator's existing failure path hands it to the topology
-     * fallback. Ordinary continuous segments and bridge/tunnel decisions are
-     * untouched; bridge/crossing/tunnel stations anchor the ramp.
-     */
+    /** 接受保护缺口前只降高侧接坡；物理跨度固定，窗口容纳不了的冲突保留失败原因交给上层策略。 */
     static RoadData smoothProtectedGapApproaches(RoadData road) {
         if (road == null || road.targetY() == null || road.roadSegmentList() == null
                 || road.roadSegmentList().size() < 3
@@ -435,7 +426,8 @@ public final class FinalRoadStructureValidator {
                 road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    /**
+    /** 两遍限幅只降低非冻结站并接到缺口边高程，不修改桥、隧道、跨越及缺口锚点。
+ *
      * Forces [from..to] into a ≤1-block-per-station ramp that meets
      * {@code seat} at the window edge adjoining the gap. Two clamping passes
      * (outward from the seat, then back) leave every adjacent difference ≤ 1
@@ -459,7 +451,8 @@ public final class FinalRoadStructureValidator {
         return profile;
     }
 
-    /** Same adjacent-pair rule as RoadDataValidator (gap-adjacent pairs exempt),
+    /** 局部坡差使用与结构校验相同的普通相邻规则，缺口邻接豁免不能扩大到整个窗口。
+ * Same adjacent-pair rule as RoadDataValidator (gap-adjacent pairs exempt),
      * evaluated over [from..to] clamped to the profile. */
     private static int ordinaryHeightSteps(int[] profile, boolean[] gapMask, int from, int to) {
         int steps = 0;

@@ -228,7 +228,8 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         return blocks(pos, 0);
     }
 
-    /**
+    /** 普通避让排除所属端点结构；端点裁切反向只查所属结构内已解码真实建筑。
+ *
      * Endpoint structures are excluded from ordinary avoidance so a road
      * can reach them. Endpoint trimming needs the opposite query: only a
      * decoded real building inside an endpoint structure should stop the

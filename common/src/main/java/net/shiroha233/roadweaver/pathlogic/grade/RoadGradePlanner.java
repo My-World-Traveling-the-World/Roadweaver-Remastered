@@ -31,7 +31,8 @@ import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 import static net.shiroha233.roadweaver.pathlogic.grade.GradeOptimizer.*;
 import static net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer.*;
 
-/**
+/** 持久纵断面先满足地形与坡度，再把连续山体深挖段交给隧道分类。
+ *
  * Constrains the persisted road profile to real terrain while preserving only
  * complete, sustained mountain cuts as tunnel candidates.
  */
@@ -47,18 +48,20 @@ public final class RoadGradePlanner {
     static final int TUNNEL_CORE_OVERBURDEN = SurfaceGradeLimits.TUNNEL_CORE_OVERBURDEN;
     static final int TUNNEL_MOUTH_OVERBURDEN = 2;   // 旧算法专用（隧道口覆土），不随快照搬走
     static final int TUNNEL_MIN_RUN = SurfaceGradeLimits.TUNNEL_MIN_RUN;
-    /**
+    /** 普通短地表挖方能承担的山段不改隧道，避免分类与施工挖深口径相冲突。
+ *
      * A surface cut this deep or deeper still builds as a short hillside grade
      * (RoadConstructionSafety.MAX_LOCAL_CENTER_GRADE_DEPTH), so a mountain run
      * whose surface-following profile stays within it is NOT converted into a
      * tunnel chord.
      */
     static final int TUNNEL_SURFACE_CUT_BUDGET = 8;
-    /** Search far enough to cover long mountain faces without scanning a whole route. */
+    /** 山体搜索上下文有界，避免为确认一段山坡扫描全路。 */
     static final int TUNNEL_ANCHOR_SEARCH_STATIONS = 128;
-    /** Permit a route endpoint inside a mountain to act as the tunnel mouth. */
+    /** 允许山内端点成为隧道口，避免要求端点必须在露天地表。 */
     static final int ENDPOINT_TUNNEL_ANCHOR_WINDOW = 16;
-    /**
+    /** 过长山段分为地形锚定的多个区间，避免单根水平弦让覆土持续增长。
+ *
      * A run longer than this stops using one flat two-anchor chord and splits
      * into terrain-anchored segments instead, so the bore climbs with the
      * massif instead of pinning roadY while overburden grows past 17.
@@ -93,7 +96,8 @@ public final class RoadGradePlanner {
         return result;
     }
 
-    /**
+    /** 用局部稳健地面高程抑制单列深沟，避免整段平路被孤立洞拖低。
+ *
      * Returns a robust local terrain height. A narrow ravine or isolated
      * column cannot drag an otherwise level 20-30 block road section down.
      */
@@ -111,7 +115,8 @@ public final class RoadGradePlanner {
                 : window[middle];
     }
 
-    /**
+    /** 完整路面站允许忽略至多一个孤立低孔，避免单孔决定整站支撑高度。
+ *
      * Returns the low support level of one complete road station while
      * ignoring at most one isolated hole below the pavement footprint.
      */
@@ -126,7 +131,8 @@ public final class RoadGradePlanner {
         return width >= 4 ? 1 : 0;
     }
 
-    /**
+    /** 完整宽度支撑不足时只降普通站；跨越与已定隧道保留，邻站只降不升接坡。
+ *
      * Lowers ordinary road stations that the complete pavement width cannot
      * support. Crossings and already selected tunnel corridors are preserved.
      * The slope pass only lowers neighboring stations, so it cannot recreate
@@ -160,7 +166,8 @@ public final class RoadGradePlanner {
                 : result;
     }
 
-    /**
+    /** 地形限幅后重判隧道直至剖面稳定，避免后期宽度下压留下未分类深挖。
+ *
      * Re-evaluates tunnels after footprint and slope constraints until the
      * persisted height profile stops changing. This prevents a late
      * full-width clamp from leaving a new, unclassified deep cut.
@@ -175,7 +182,8 @@ public final class RoadGradePlanner {
                 slopeEnabled, maxStepPerTwoSegments, SurfaceGradeLimits.capture());
     }
 
-    /**
+    /** 显式有效模式由调用方传入，允许单连接AUTO倾向而不改全局配置。
+ *
      * Route-level AUTO tendency support: the caller passes the effective mode
      * (global mode, or the route tendency resolved by
      * {@code RouteProfileTendency.effectiveMode}).
@@ -400,7 +408,8 @@ public final class RoadGradePlanner {
         return result;
     }
 
-    /**
+    /** 连续山脊在两侧锚点之间选择下挖剖面；水跨越不在这里改成山体隧道。
+ *
      * Selects tunnel elevations during planning for a sustained mountain hump.
      * This is deliberately based on the sampled terrain profile, not on a
      * construction failure. A run is eligible only when both sides provide a
@@ -416,7 +425,8 @@ public final class RoadGradePlanner {
                 slopeEnabled, maxStepPerTwoSegments, null);
     }
 
-    /**
+    /** 固定结构入口保留地表锁高，邻站承担进入隧道的坡度，避免入口被覆土上界压低。
+ *
      * 0.8.369 (T2): {@code pinnedMask} names hard structure boundary locks.
      * A locked station keeps its surface height instead of being pressed down
      * onto the tunnel chord or the {@code terrain - overburden} cap. Because the
@@ -534,7 +544,7 @@ public final class RoadGradePlanner {
         return result;
     }
 
-    /**
+    /*
      * 精采样阶段的纵向坡度规划（"陡壁在规划期就规划好"）。
      *
      * <p>准确高度解析原先把整条路的 Y 直接换成逐列精确地表高度，于是粗采样
@@ -553,7 +563,8 @@ public final class RoadGradePlanner {
      * @param maxStepPerTwoSegments 每两段允许的高差（0 表示不启用）
      * @param slopeLimitEnabled     是否启用坡度限制
      */
-    /**
+    /** 目标高程与分段锚点一起约束纵坡，物理跨越固定并切断普通求解区间。
+ *
      * @param targetY     每站的期望高度：地表站是精确地表高度，已判定隧道的站是洞身弦高度。
      *                    求解器会贴着期望高度走，并在两者之间用合法坡度过渡（洞口坡道）。
      * @param splitMask   分段边界（水面/桥面），这些站被钉在 {@code targetY} 上且各自断开求解。
@@ -574,7 +585,8 @@ public final class RoadGradePlanner {
                 flatCostMask, null);
     }
 
-    /**
+    /** 实际水平站距只在弧长模型开启时传入，避免未开启配置也改变坡度结果。
+ *
      * @param stationSpacing 相邻站的真实水平距离（{@code null} = 按站号计，即旧行为）。
      *                       只有 {@code slopeByArcLength} 打开时调用方才会传非 null。
      */
@@ -644,27 +656,10 @@ public final class RoadGradePlanner {
     /** 端点偏离地表的软惩罚（每格）。可行时端点锚定地表，不可行时取最接近的剖面。 */
     static final int ENDPOINT_DEVIATION_WEIGHT = 200;
 
-    /**
-     * 纵向坡度的最优剖面：分层 DAG 最短路（经典 Viterbi / 有界坡度剖面）。
-     *
-     * <p>状态是"当前站相对期望高度的偏移"，代价是下挖/上填的加权深度加坡度超限的软惩罚，
-     * 复杂度 {@code O(n · H²)}，H = {@link #ACCURATE_MAX_CUT} + {@link #ACCURATE_MAX_FILL} + 1，
-     * 比在每个违反窗口重跑 2D A* 便宜几个数量级，而且**同时处理上坡与下坡**——
-     * 旧的双向/单向贪心只会压低高侧，下坡陡壁永远修不好。</p>
-     *
-     * <p>坡度用软惩罚而不是硬约束，是为了在"坡度 + 切填预算"互相矛盾时仍能给出全局最优的
-     * 折中剖面，而不是整段放弃、退回贴地表；残留的超限由后续 span/修复兜底。</p>
-     *
-     * <p>期望高度 {@code targetY} 不只是地表：已判定隧道的站传洞身弦高度，于是求解器会在
-     * 洞口把地表段与洞身弦用合法坡度连起来（洞口坡道），不再留下 1 站跳 11~12 格的台阶。</p>
-     *
-     * <p>{@code splitMask}（水面/桥面）是硬边界：这些站钉在 {@code targetY} 上并各自断开求解。</p>
-     */
-    /**
-     * Applies the final longitudinal constraint after every terrain clamp.
-     * Protected crossings are solved separately by BridgeDeckProfile.
-     */
-    /**
+
+
+    /** 只消除同一隧道内两侧近齐平的孤立一格尖峰，不抹平正常持续坡度。
+ *
      * Removes isolated one-block spikes inside tunnel runs: a station that
      * stands exactly one block above both of its neighbours (which are nearly
      * level with each other) is seated on them. Sustained slopes and ordinary

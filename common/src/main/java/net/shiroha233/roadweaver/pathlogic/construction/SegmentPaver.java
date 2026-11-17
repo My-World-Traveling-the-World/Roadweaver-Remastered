@@ -38,7 +38,7 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
 public final class SegmentPaver {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final AtomicLong UNSUPPORTED_STATIONS = new AtomicLong();
-    /** Road lip supports placed this session; a diagnostic, never a gate. */
+    /** 路肩支撑数量仅作诊断，路肩当前有意关闭，不能因计数为零自动启用。 */
     private static final AtomicLong SHOULDER_SUPPORTS = new AtomicLong();
     /**
      * 0.9.033：受保护路基上照常铺了路面的列数（O-14「单列保护漏单格洞」的取证计数）。

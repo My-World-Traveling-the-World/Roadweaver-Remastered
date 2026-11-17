@@ -26,7 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
+/** 共端点路线在精细高度、桥隧和施工前先共享主干，减少重复规划。
+ *
  * Makes paths sharing a structure endpoint reuse a common tail before any
  * detailed height, bridge, tunnel, or construction work begins.
  */
@@ -210,7 +211,8 @@ public final class SharedEndpointPathReuse {
         return result;
     }
 
-    /**
+    /** 正向限制只用于空间复用，主干评分允许反向同廊，避免U形接入与合法反向道路混为一谈。
+ *
      * @param requireForward 0.9.046（D-1）：是否只接受**正向**跑动。
      *       空间复用段传 {@code true}（掐死 U 型回头）；共享端点主干打分传 {@code false}
      *       —— 0.9.040 把这条约束写死在函数内部，连带改掉了 choosePrimary 的主干选择，
@@ -316,7 +318,7 @@ public final class SharedEndpointPathReuse {
 
     private record SpatialJoin(int primaryStart, int primaryEnd, int secondaryStart, int secondaryEnd) {}
 
-    /** Keep one shared trunk, then preserve the secondary route's own endpoint. */
+    /** 共享主干后保留次路自己的另一端，避免直接把整条次路替换成主路。 */
     static List<BlockPos> mergeIntoSharedTrunk(List<BlockPos> primary,
                                                List<BlockPos> secondary,
                                                SpatialJoin precomputedJoin,
@@ -368,7 +370,7 @@ public final class SharedEndpointPathReuse {
         return merged.size() >= MIN_REUSABLE_STATIONS ? List.copyOf(merged) : null;
     }
 
-    /** True when {@code position} lies within {@code reuseDistance} of any primary trunk station. */
+    /** 按复用距离检查是否位于主干附近，不以单个完全相等坐标为必要条件。 */
     private static boolean withinTrunkCorridor(BlockPos position,
                                                List<BlockPos> primary,
                                                int primaryEndInclusive,
@@ -443,12 +445,13 @@ public final class SharedEndpointPathReuse {
         return path;
     }
 
-    /** Stations scanned from the endpoint toward the far side when picking the reachable height. */
+    /** 入口可达高度仅看端点附近固定窗口，避免全路最低值拖低入口。 */
     private static final int UNKNOWN_ENDPOINT_WINDOW_STATIONS = 16;
-    /** Never tunnel a shared unknown endpoint deeper than this below its surface. */
+    /** 未知共用端点向地表下探有界，避免协商出无穷深入口。 */
     private static final int MAX_UNKNOWN_ENDPOINT_DROP = 8;
 
-    /**
+    /** 沿入口有限站数取最低可达高度，再汇总来路选择共享高度，避免高侧先生成锁死低侧。
+ *
      * Lowest Y over the endpoint station plus up to {@value
      * UNKNOWN_ENDPOINT_WINDOW_STATIONS} stations toward the far side. This is
      * the height one incoming route can genuinely reach without an impossible
@@ -476,7 +479,8 @@ public final class SharedEndpointPathReuse {
         // Cap how deep the shared endpoint may tunnel to reach one low approach.
         return Math.max(endpoint.getY() - MAX_UNKNOWN_ENDPOINT_DROP, minimum);
     }
-    /**
+    /** 入口接近段只降不升到统一高度，没有需要降低时返回无改动。
+ *
      * Lowers the endpoint station of one incoming route onto the agreed
      * {@code unifiedY} (prefer-cut) and ramps the approach so no station is
      * more than one block above the previous one toward the endpoint. Stations
@@ -576,12 +580,12 @@ public final class SharedEndpointPathReuse {
         return position == null ? Long.MIN_VALUE : (((long) position.getX()) << 32) ^ (position.getZ() & 0xffffffffL);
     }
 
-    /** Test seam for {@link #endpointApproachReachableY}. */
+    /** 暴露有限入口窗口的纯判据供离线测试，不修改生产调用顺序。 */
     static int endpointApproachReachableYForTest(List<BlockPos> path, BlockPos endpoint) {
         return endpointApproachReachableY(path, endpoint);
     }
 
-    /** Test seam for {@link #lowerEndpointApproach}. */
+    /** 暴露入口降坡纯运算以钉住只降不升和逐站限坡契约。 */
     static List<BlockPos> lowerEndpointApproachForTest(List<BlockPos> path, BlockPos endpoint, int unifiedY) {
         return lowerEndpointApproach(path, endpoint, unifiedY);
     }

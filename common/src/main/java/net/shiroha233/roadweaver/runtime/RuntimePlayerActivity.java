@@ -10,9 +10,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-/** Keeps background road planning dormant while players are actively moving. */
+/** 玩家活动决定普通后台道路是否应暂缓，避免移动时抢占前台资源。 */
 public final class RuntimePlayerActivity {
-    /** Keep gameplay background work at the safety floor for 5 minutes after movement. */
+    /** 移动后保持一段保护窗口，避免刚停步就立刻恢复高负载。 */
     private static final long SETTLE_NANOS = TimeUnit.MINUTES.toNanos(5);
     private static final double MOVEMENT_THRESHOLD_SQUARED = 0.01D;
     private static final Map<UUID, Position> POSITIONS = new HashMap<>();

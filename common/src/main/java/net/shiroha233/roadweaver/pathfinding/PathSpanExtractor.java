@@ -60,26 +60,27 @@ public final class PathSpanExtractor {
             "roadweaver.bumpProminence", 8);
     static final int BUMP_WINDOW_STATIONS = Integer.getInteger(
             "roadweaver.bumpWindow", 12);
-    /** Fallback when the dry-depression bridge threshold cannot be read. */
+    /** 配置不可读取时使用明确的干凹地阈值默认值，不能跳过桥接判定。 */
     static final int DEFAULT_DRY_DEPRESSION_BRIDGE_DEPTH = 6;
     static final int CANYON_BANK_SEARCH_SEGMENTS = 8;
     static final int CANYON_MIN_DEPTH_BLOCKS = 10;
     static final int CANYON_MIN_WIDTH_BLOCKS = 5;
-    /** Very long, deep ocean crossings may become transparent sea-floor tunnels. */
+    /** 仅很长且很深的海洋跨越考虑透明海底隧道，普通河湖仍保留桥梁。 */
     static final int UNDERSEA_TUNNEL_MIN_LENGTH_BLOCKS = 256;
     static final int UNDERSEA_TUNNEL_MIN_DEPTH_BLOCKS = 8;
     static final double UNDERSEA_TUNNEL_SELECTION_PROBABILITY = 0.5D;
-    /** Land-side approach covered by the tunnel before reaching the shoreline. */
+    /** 海底隧道延伸到陆侧的接近段，避免在岸线突然封口。 */
     static final int UNDERSEA_APPROACH_TUNNEL_BLOCKS = 128;
-    /** A water crossing up to this many blocks wide stays a short ford (ROAD_CROSSING). */
+    /** 窄水域按水平宽度判短跨越，不能只看站数。 */
     public static final int ROAD_CROSSING_MAX_WIDTH_BLOCKS = 12;
-    /** A shallow dry depression can be graded across a bounded endpoint step. */
+    /** 浅干凹地在有限端点坡差内允许整平，避免全部升级为桥。 */
     static final int MAX_DRY_CROSSING_ENDPOINT_DELTA = 3;
-    /** Search beyond the immediate edge when a dry depression is a real canyon. */
+    /** 搜索越过直接边缘以确认真实峡谷，避免单列噪声拉出过短跨越。 */
     static final int DRY_DEPRESSION_BANK_SEARCH_STATIONS = 32;
-    /** Deep dry depressions must never fall back to ordinary fill. */
+    /** 深干凹地禁止落回普通填方，避免在谷底堆出高填土墙。 */
     static final int DRY_DEPRESSION_FORCE_BRIDGE_DEPTH = 16;
-    /**
+    /** 桥梁延至河流雕刻走廊的稳定岸边，避免桥端低岸被后续普通填方拒绝。
+ *
      * Streams distinguishes its wet channel from the wider terrain-carved
      * corridor.  A persisted bridge must reach the latter's bank; otherwise a
      * low bank station is later rejected as an unsafe ordinary-road fill.
@@ -88,7 +89,8 @@ public final class PathSpanExtractor {
 
     private PathSpanExtractor() {}
 
-    /**
+    /** 偏桥模式放宽水跨越深度，其他模式保留原配置阈值。
+ *
      * Bridge-first lets every water crossing ignore the bridge depth
      * threshold; other modes keep the configured depth. Public pure helper,
      * exercised directly by the profile-mode regression.
@@ -225,7 +227,8 @@ public final class PathSpanExtractor {
         return highest;
     }
 
-    /**
+    /** 从最终目标剖面识别隧道，不能只用原始节点的Y跳变代替覆土。
+ *
      * Select tunnels from the final persisted road profile, rather than from
      * raw path Y jumps.  A smoothed hillside route has no sharp jump, yet may
      * still be buried deep enough to require a tunnel.
@@ -550,7 +553,7 @@ public final class PathSpanExtractor {
         }
     }
 
-    /** 0.9.005-B: centre-station overburden (terrain height - planned road Y). */
+    /** 中心站覆土按地面高度减计划路面高度计算，避免把水深当岩层。 */
     static int centerStationOverburden(List<BlockPos> centers, List<Integer> targetY,
                                                Map<Long, AccurateHeightSample> samples,
                                                AccurateHeightSampler accurate, int index) {
@@ -564,7 +567,7 @@ public final class PathSpanExtractor {
         return overburden(centers, targetY, index);
     }
 
-    /** 0.9.005-B: is the centre station a wet column (water surface above ocean floor). */
+    /** 中心列是否水域由水面与海床高度关系判断，不能只认河流群系。 */
     static boolean isWetStation(List<BlockPos> centers,
                                         Map<Long, AccurateHeightSample> samples, int index) {
         if (index < 0 || index >= centers.size() || samples == null || samples.isEmpty()) return false;
@@ -574,11 +577,8 @@ public final class PathSpanExtractor {
         return sample != null && sample.worldSurfaceWg() > sample.oceanFloorWg();
     }
 
-    /**
-     * Converts only very long, deep ocean bridges into TUNNEL spans. Rivers,
-     * lakes, shallow crossings and mixed shore corridors remain bridges.
-     */
-    /** Rebuilds tunnel spans after a road has been trimmed or merged. */
+
+    /** 裁切或合流后从最终路线重建隧道跨度，避免旧端点失配。 */
     public static RoadData refineRoadTunnels(RoadData road,
                                              ServerLevel level,
                                              TerrainSamplingCache cache) {
@@ -596,13 +596,8 @@ public final class PathSpanExtractor {
                 road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    /**
-     * Detects a bounded dry depression after the final height pass. Short
-     * depressions use the direct-crossing construction path; wider ones use
-     * the bridge template. Water spans already present in {@code existing}
-     * always take precedence.
-     */
-    /** Final physical-span mutual exclusion for already-classified spans. */
+
+    /** 已分类物理跨度最后互斥归一，避免同站既桥又隧道。 */
     static void collectBridgeSpans(List<RoadSpan> spans,
                                            List<RoadSegmentPlacement> segments,
                                            List<BlockPos> centers,
@@ -685,7 +680,7 @@ public final class PathSpanExtractor {
                 waterStart, waterEnd, stations, footprint, fullWet, partlyWet, singleColumnWet);
     }
 
-    /** Samples every rasterized road column, not just the center station. */
+    /** 检查全部栅格路面列，避免中心安全而侧列入水。 */
     static BridgeWaterSample segmentWaterSample(ServerLevel level,
                                                         TerrainSamplingCache cache,
                                                         PathTerrainField terrain,
@@ -818,7 +813,7 @@ public final class PathSpanExtractor {
                 : SpanType.BRIDGE;
     }
 
-    /** Horizontal block width of one wet range, used by the short-ford decision as well. */
+    /** 水域宽度使用水平格距，与短涉水跨越判据保持同口径。 */
     public static int crossingWidthBlocks(List<BlockPos> centers, int waterStart, int waterEnd) {
         if (centers == null || centers.isEmpty()) return 0;
         int start = Math.max(0, Math.min(waterStart, centers.size() - 1));
@@ -843,7 +838,8 @@ public final class PathSpanExtractor {
         return Math.sqrt((double) dx * dx + (double) dz * dz);
     }
 
-    /**
+    /** 稳定岸侧接近段可以重叠；桥拥有重叠站，短跨越须裁掉重叠而不能双重持久化。
+ *
      * Water ranges include stable bank approaches. Adjacent narrow and wide
      * water ranges can therefore overlap by one or more stations even though
      * the water itself does not. A bridge owns that overlap; trim the smaller
@@ -946,7 +942,7 @@ public final class PathSpanExtractor {
         return -1;
     }
 
-    /** Builds one x/z -> index lookup for a whole span pass. */
+    /** 一次跨度处理共用XZ到站号索引，避免每个跨度重复全路扫描。 */
     static Map<Long, Integer> xzIndex(List<BlockPos> centers) {
         Map<Long, Integer> index = new HashMap<>(centers == null ? 0 : centers.size() * 2);
         if (centers == null) return index;
@@ -967,7 +963,8 @@ public final class PathSpanExtractor {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
-    /**
+    /** 干凹地桥判据按完整路面最低支撑列的填方深度计算，与普通填方上限分离。
+ *
      * A dry depression only becomes a bridge/crossing once the required fill
      * above its lowest footprint column reaches this depth. Independent of the
      * ordinary fill limit: shallow depressions are graded, deep ones bridged.

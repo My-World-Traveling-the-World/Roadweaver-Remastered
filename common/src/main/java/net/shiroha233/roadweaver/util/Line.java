@@ -43,7 +43,7 @@ public class Line {
         return start.lerp(end, Math.max(0.0D, Math.min(1.0D, t)));
     }
 
-    /** Point on the bridge centerline. The lateral offset is zero at both ends. */
+    /** 桥中心线侧偏在两端归零，保留长桥正弦而不移动桥头。 */
     public Vec3 pointAt(double t) {
         t = Math.max(0.0D, Math.min(1.0D, t));
         Vec3 point = chordPoint(t);
@@ -57,7 +57,7 @@ public class Line {
         return new Vec3(point.x + nx * offset, point.y, point.z + nz * offset);
     }
 
-    /** Maps a straight-chord footprint column onto this bridge centerline. */
+    /** 将弦线占地列映射到曲桥中心线，保护与写入须消费同一几何。 */
     public BlockPos mapRoadPosition(BlockPos original) {
         if (original == null || !isCurved()) return original;
         double dx = end.x - start.x;

@@ -15,7 +15,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 
-/**
+/** 巨树写入前预留精确列，避免异步道路规划与树放置竞态；装饰模板不按普通巨树预留。
+ *
  * Exact-column reservation for normal Tan's Huge Trees.  The optional tiny
  * compatibility hook calls this before TreePlacer writes blocks, eliminating
  * the race with asynchronous road planning without treating decoration
@@ -66,7 +67,7 @@ public final class HugeTreeReservation {
         return reservations == null ? PlanningMask.EMPTY : reservations.planningMask(minX, minZ, maxX, maxZ, radius);
     }
 
-    /** Releases only columns whose own chunk has finished the road feature. */
+    /** 道路特征完成后仅释放对应区块列，避免提早释放邻区块占地。 */
     public static void releaseChunk(ServerLevel level, ChunkPos chunk) {
         if (level == null || chunk == null) return;
         LevelReservations reservations = RESERVATIONS.get(level);

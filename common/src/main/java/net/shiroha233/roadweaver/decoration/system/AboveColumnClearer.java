@@ -28,7 +28,7 @@ import java.util.function.IntFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Clears road headroom without exposing an unchecked falling-block column. */
+/** 清理道路净空时检查上方落块，避免挖开后落块重新堵路。 */
 public final class AboveColumnClearer {
     /** 0.9.005：保底强行净空时被强清的受保护方块要留日志，但带上限避免刷屏。 */
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
@@ -397,7 +397,7 @@ public final class AboveColumnClearer {
                 allowedExistingBlock == null ? ALLOW_NONE : allowedExistingBlock).check();
     }
 
-    /** May be called before the matching headroom is cleared. */
+    /** 在净空清理前也可检查落块风险，避免写入顺序影响安全判定。 */
     public static boolean stabilizeFallingCap(WorldGenLevel world, BlockPos surfacePos,
             RoadData road, int clearedHeight) {
         FallingCapPlan plan = planFallingCap(world, surfacePos, road, Math.max(1, clearedHeight), ALLOW_NONE);
@@ -550,7 +550,7 @@ public final class AboveColumnClearer {
         }
     }
 
-    /** Removes a plant or snow chain left unsupported after a terrain cut. */
+    /** 挖方后移除失去支撑的植物/雪链，避免悬挂装饰残留。 */
     public static int clearUnsupportedSurfaceClutter(WorldGenLevel world, BlockPos originalSurface,
                                                      RoadData road) {
         if (world == null || originalSurface == null) return 0;

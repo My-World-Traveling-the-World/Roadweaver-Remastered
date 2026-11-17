@@ -46,16 +46,18 @@ import static net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder.*
 import static net.shiroha233.roadweaver.pathlogic.tunnel.PortalSafetyRules.*;
 import static net.shiroha233.roadweaver.pathlogic.tunnel.ScenicDomeBuilder.*;
 
-/**
+/** 持久隧道跨度逐截面预检，不安全截面不能默默按普通地表道路埋入岩层。
+ *
  * Conservative tunnel construction for persisted TUNNEL spans. Each section
  * is checked before excavation; an unsafe section is left untouched instead
  * of being paved as an ordinary road inside solid terrain.
  */
 public final class RoadTunnelBuilder {
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
-    /** The historical clear height, still the default in the config. */
+    /** 历史净空常量保留为默认值，实际建造仍读取冻结配置。 */
     static final int DEFAULT_CLEAR_HEIGHT = 5;
-    /**
+    /** 隧道净空与铺路清空使用同一冻结配置，避免设高后顶板与清空范围分离。
+ *
      * Clear height of the bore, read from the frozen config instead of a constant.
      *
      * <p>It used to be hard-coded five, so raising "tunnel clear height" in the settings changed a number
@@ -68,12 +70,13 @@ public final class RoadTunnelBuilder {
                 .roadAppearance().tunnelClearHeight());
     }
 
-    /** Roof line above the deck: one above the clear height, so the roof block closes the bore. */
+    /** 顶板在净空上方一格封口，避免将可步行净空算入实体屋顶。 */
     public static int roofOffset() { return clearHeight() + 1; }
 
-    /** Overburden a section needs before it may be sealed rather than treated as a portal. */
+    /** 覆土决定密封或开放口部，不能把地表薄层一律封成洞体。 */
     public static int minOverburden() { return roofOffset() + 1; }
-    /**
+    /** 顶板与开放水之间保留实岩层；海床高度须先扣顶板偏移再扣覆土，不能把水当岩石。
+ *
      * Solid rock the profile must leave between the roof and the first block of open water.
      *
      * <p>Planning used to place an undersea tunnel's deck {@code safeClear + 1} below the ocean floor's
@@ -84,9 +87,10 @@ public final class RoadTunnelBuilder {
     public static final int ROCKS_ABOVE_ROOF = 2;
     static final int SIDE_CLEARANCE = 1;
     static final int WALL_OFFSET = 2;
-    /** One lantern roughly every 10 tunnel stations (stations are ~1 block apart). */
+    /** 隧道灯按站序间隔设置；该间隔并非严格世界格距离。 */
     static final int LANTERN_INTERVAL = 10;
-    /**
+    /** 无采样或无地形时才用口部站数默认值；正常洞口长度按实际地形求解，避免短隧道全成露天沟。
+ *
      * Fallback mouth length (stations) for the case where no terrain can be read.
      *
      * <p>0.9.064: this is <b>no longer the mouth length</b>. It used to be, and a fixed answer meant a
@@ -104,15 +108,16 @@ public final class RoadTunnelBuilder {
      * indefinitely. The cap also bounds {@link #portalAdvance} whatever the sampled depth says.
      */
     static final int PORTAL_MAX_SEGMENTS = 32;
-    /** Shortest mouth section, in stations: the throat has to exist for the road to enter the bore. */
+    /** 保留最短喉口，避免隧道入口被直接封死。 */
     static final int PORTAL_MIN_SEGMENTS = 1;
-    /**
+    /** 观景隧道与水下跨越共用壳层尺寸，保持截面衔接。
+ *
      * Viewing-dome dimensions for a glazed (scenic) tunnel. The width comes from the shared
      * shell so this vault and a submerged crossing's vault are the same shape.
      */
     static final int DOME_RADIUS = ScenicGlassShell.RADIUS;
     static final int DOME_SPRING = roofOffset() + 2 - DOME_RADIUS;
-    /** A portal is a local mouth, never an instruction to strip an entire mountain. */
+    /** 洞口只处理局部入口，不能以口部标记剥掉整座山。 */
     static final int MAX_PORTAL_CLEAR_HEIGHT = 16;
     static final AtomicLong PORTAL_SECTIONS = new AtomicLong();
     static final AtomicLong BLOCKED_SECTIONS = new AtomicLong();
@@ -123,21 +128,7 @@ public final class RoadTunnelBuilder {
     static final AtomicLong STATION_FALLBACK_MISSES = new AtomicLong();
     static final Map<net.minecraft.server.level.ServerLevel, ConcurrentHashMap<SpanKey, SpanState>> SPAN_STATES =
             Collections.synchronizedMap(new WeakHashMap<>());
-    /**
-     * Spans in which at least one station was rejected for a non-protection
-     * reason (fluids, invalid span/section geometry). Genuine hard protection
-     * no longer lands here: it becomes a per-station PROTECTED_GAP so the span
-     * keeps building as a tunnel. Every remaining station of a rejected span
-     * still takes the surface-cut fallback so a corridor is never left as
-     * tunnel cavities separated by an unexcavated wall.
-     *
-     * <p>0.8.365 (S1): keyed by level, like {@link #SPAN_STATES}. Previously a
-     * single flat {@code ConcurrentHashMap<Long, Boolean>} that neither
-     * {@code clearForLevel} nor {@code clearAll} ever touched, so a span
-     * rejected once stayed rejected for the whole JVM session and leaked
-     * across dimensions and worlds. The rejection is a per-session,
-     * per-level runtime observation, not durable state.</p>
-     */
+    /** 按世界与会话记跨度拒绝；硬保护独立成逐站缺口，其他拒绝按既定地表处理，不跨存档沿用。 */
     static final Map<net.minecraft.server.level.ServerLevel, Set<Long>> REJECTED_TUNNEL_SPANS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -376,7 +367,7 @@ public final class RoadTunnelBuilder {
         }
     }
 
-    /** Call after SegmentPaver has put down the selected road deck. */
+    /** 在铺路器写入选定甲板后调用，避免壳层覆盖或悬离实际路面。 */
     public static void apply(WorldGenLevel world, TunnelPlan plan) {
         if (world == null || plan == null || !plan.active()) return;
         try (var timing = TunnelReadTiming.begin("apply", plan.interior().isEmpty() ? null : plan.interior().get(0))) {
@@ -544,7 +535,8 @@ public final class RoadTunnelBuilder {
         }
     }
 
-    /**
+    /** 兼容入口保留签名；洞口分类仍依赖真实地形或显式端点，不用已归一的中心Y自证。
+ *
      * Kept for binary/source compatibility with the nearby transition code.
      * Portal classification must use actual terrain (see requiresOpenPortal)
      * or an explicit span endpoint, never the already-normalized centre Y.
@@ -564,7 +556,7 @@ public final class RoadTunnelBuilder {
                 || (last >= centers.size() - 1 && segmentIndex == last);
     }
 
-    /** The throat of a tunnel is always an open mouth, even inside a mountain. */
+    /** 隧道跨度喉口保持开放，即使其位于山内也保留可进入口。 */
     static boolean isSpanMouthSegment(PortalSplit split, Span span, int segmentIndex) {
         if (split != null) {
             return Math.abs(segmentIndex - split.spanFirst()) < split.portalStart()
@@ -795,47 +787,20 @@ public final class RoadTunnelBuilder {
         return split;
     }
 
-    /**
-     * Whether the bore itself is open to the sky at this station.
-     *
-     * <p>Tested on the roadway's own columns rather than on the whole shell: a station whose roadside wall
-     * column happens to graze the surface is still a covered tunnel over the road, and letting one such
-     * column veto the station is what turned whole stretches into a five-wide trench - no roof, no walls, no
-     * lanterns, just an open cut with a tunnel's profile.
-     *
-     * <p>Open water above the bore counts as cover. A seabed station always reads "almost no rock above",
-     * and that reading must never mean "cut it open": it is exactly the case where the roof is the only
-     * thing keeping the ocean out.
-     */
-    /** Water cells removed from inside a sealed bore. */
+
+    /** 洞内排水统计转交专用安全规则，避免门面重复维护计数。 */
     static final AtomicLong DRIED_BORE_CELLS = new AtomicLong();
-    /** Water cells in the shell that the lining replaced. */
+    /** 壳层封水统计转交专用安全规则，避免两个实现口径分离。 */
     static final AtomicLong SEALED_SHELL_CELLS = new AtomicLong();
     static final int[][] BORE_SIDES = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
-    /**
-     * Keeps the bore of a sealed tunnel dry.
-     *
-     * <p>Carving the bore to air is not enough. The carve writes air where rock used to be, so any water
-     * cell just outside that new air - an aquifer pocket, a lake bed, or the sea under a seabed bore -
-     * flows into the bore the moment the chunk ticks. The tunnel then reads as a tube with water hanging
-     * in it that neither falls nor drains. So every water cell that touches the walkable volume through
-     * the lining is replaced by the lining itself, and water already inside the bore is removed.
-     *
-     * <p>Portal sections get the drying half only: their mouth is meant to be open, and lining it would
-     * wall off the entrance the player walks through.
-     */
-    /** Every direct tunnel write goes through the same wall veto; planning is never consulted here. */
-    /**
-     * Whether open water sits directly above this column's roof line.
-     *
-     * <p>Scanned from one block above the roof upwards. The previous version started at the column's
-     * terrain height, and for a water column that height is the water surface plus one - already above the
-     * water - so the scan found nothing and the "water is not an opening" rule never applied to the one case
-     * it was written for.
-     */
-    /** Geometry/load failures must not split a mountain tunnel; only hard
+
+
+
+    /** 只有硬保护可停止洞体；其他失败不能作为已确认建筑缺口。
+ * Geometry/load failures must not split a mountain tunnel; only hard
      *  structural protection (protected-*) is allowed to stop the bore. */
+    /** 仅读取当前区域地形；无世界或位置返回未知哨兵，不触发加载。 */
     static int terrainHeightAt(WorldGenLevel world, BlockPos pos) {
         return pos == null || world == null
                 ? Integer.MIN_VALUE
@@ -904,7 +869,7 @@ public final class RoadTunnelBuilder {
         return TunnelPlan.blockedPlan();
     }
 
-    /** Stable identity of one tunnel span of one road for the rejection ledger. */
+    /** 拒绝记录绑定道路的稳定隧道跨度身份，避免一条路影响另一条路。 */
     static long spanKey(RoadData road, Span span) {
         long fingerprint = road == null ? 0L : net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage.computeFingerprint(road);
         int start = span == null ? -1 : span.start();
@@ -912,7 +877,7 @@ public final class RoadTunnelBuilder {
         return fingerprint * 1_000_003L + start * 31L + end;
     }
 
-    /** 0.8.365 (S1): true when this span was already rejected for this level. */
+    /** 只读取当前世界已拒绝跨度，不把全JVM历史当当前状态。 */
     static boolean isSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
         if (level == null || road == null || span == null) return false;
         Set<Long> rejected;
@@ -920,7 +885,7 @@ public final class RoadTunnelBuilder {
         return rejected != null && rejected.contains(spanKey(road, span));
     }
 
-    /** 0.8.365 (S1): records the whole-span rejection for this level only. */
+    /** 跨度拒绝只记录本世界会话，避免跨维度和重开污染。 */
     static void markSpanRejected(net.minecraft.server.level.ServerLevel level, RoadData road, Span span) {
         if (level == null || road == null || span == null) return;
         Set<Long> rejected;
@@ -930,9 +895,10 @@ public final class RoadTunnelBuilder {
         rejected.add(spanKey(road, span));
     }
 
-    /** Longitudinal length of a plan's interior, for normalising the glass gradient. */
-    /** How far along the span this column sits, as 0..1 along the centre line. */
-    /**
+
+
+    /** 玻璃颜色委托共用往返渐变，保持隧道与淹没桥面衔接。
+ *
      * Glass colour for one point along a glazed tunnel, as a round-trip gradient.
      *
      * <p>Delegates to the shared shell so a submerged bridge deck and a bored tunnel use the
@@ -940,6 +906,7 @@ public final class RoadTunnelBuilder {
      *
      * @param progress 0 at the span start, 1 at its end; clamped
      */
+    /** 从已有洞内坐标选最近点，避免以玻璃渐变进度误当最近距离。 */
     static BlockPos nearestInterior(BlockPos target, List<BlockPos> interior) {
         if (target == null || interior == null || interior.isEmpty()) return null;
         BlockPos nearest = null;
@@ -957,7 +924,7 @@ public final class RoadTunnelBuilder {
         return nearest;
     }
 
-    /** Runtime backfill may inspect loaded chunks, but must never request a new one. */
+    /** 运行期回填可检查已加载区块，禁止为预检申请加载新区块。 */
     public static void clearForLevel(net.minecraft.server.level.ServerLevel level) {
         if (level == null) return;
         synchronized (SPAN_STATES) { SPAN_STATES.remove(level); }

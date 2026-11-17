@@ -314,7 +314,8 @@ public final class GpuMemoryProbe {
             this.dwordGetValue = dwordGetValue;
         }
 
-        /**
+        /** 平台可用时创建PDH句柄；缺JNA是确定性不可用，避免每次探测反复反射和报错。
+ *
          * @return 可用句柄集合；JNA 不在 classpath（或非 Windows）时返回 {@code null}
          * @throws ClassNotFoundException JNA 确实不可用 —— 调用方据此**永久熔断**
          *         （确定性事实，重试无意义）

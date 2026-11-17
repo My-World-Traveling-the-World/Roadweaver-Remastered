@@ -29,7 +29,7 @@ import net.shiroha233.roadweaver.pathlogic.bridge.CulvertPlanner;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 
-/** Final safety gate preventing ordinary road construction inside surface water. */
+/** 最终水校验阻止普通路面落在表面水中，跨越仍由独立物理跨度处理。 */
 public final class FinalRoadWaterValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
 
@@ -136,13 +136,7 @@ public final class FinalRoadWaterValidator {
         });
     }
 
-    /**
-     * {@return a per-column water probe for {@link CulvertPlanner}}
-     *
-     * <p>Heightmaps only, on purpose: a culvert decision only needs "is this column water, how deep,
-     * and where is its surface", and both heightmaps are already primed by the mod's own chunk writer.
-     * Two lookups per column cost nothing next to the accurate sampler that the full validation runs.
-     */
+    /** 涵洞查询仅读取水面和海床高度图，避免为轻量水深判断触发精确采样。 */
     public static CulvertPlanner.Probe probe(ServerLevel level, TerrainSamplingCache cache,
                                              StreamsReflowingCompat.SamplingSession streams) {
         if (level == null) {
@@ -237,7 +231,8 @@ public final class FinalRoadWaterValidator {
         return ValidationResult.success();
     }
 
-    /**
+    /** 无法桥接的孤立水冲突保留明确不施工站，其他可用站不因一列失败被整路丢弃。
+ *
      * Keep a route when one water column cannot be represented by a bridge or
      * direct crossing. The marked station is intentionally left unbuilt; all
      * other stations remain ordinary road construction.

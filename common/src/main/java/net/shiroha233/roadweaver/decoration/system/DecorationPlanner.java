@@ -86,7 +86,7 @@ public final class DecorationPlanner {
 
         boolean isStartSign = (segmentIndex == 8);
         boolean isEndSign = (segmentIndex == middlePositions.size() - 10);
-        
+
         if (isStartSign || isEndSign) {
             boolean isStart = isStartSign;
             BlockPos shifted = isStart ? placePos.offset(ortho.getX() * sideOffset, 0, ortho.getZ() * sideOffset)
@@ -125,7 +125,8 @@ public final class DecorationPlanner {
         }
     }
 
-    /**
+    /** 在当前区块内寻找接近计划高度且有支撑的路灯座，避免灯落入峡谷或占据路面。
+ *
      * Finds the nearest supported lamp base in the current chunk, beside the
      * road and close to its planned Y level. This handles road edges where
      * the terrain drops away without placing a lamp in the ravine or on the

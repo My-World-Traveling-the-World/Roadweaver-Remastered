@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongFunction;
 import java.util.function.LongPredicate;
 
-/** Replays road construction only for chunks that are already loaded at FULL status. */
+/** 仅对已达到FULL的已加载区块回填，避免后台道路强制加载新区块。 */
 public final class LoadedChunkRoadBackfill {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final long RANDOM_SALT = 0x524F41444241434BL;
@@ -67,7 +67,8 @@ public final class LoadedChunkRoadBackfill {
         return verified;
     }
 
-    /**
+    /** 新路回填只处理调用方给定的已加载区块，不扩大范围或请求加载。
+ *
      * Replays a newly completed route into chunks that are already FULL.
      * This is deliberately exact: it never expands the set and never asks the
      * chunk source to load anything, so manual routes do not defeat the
@@ -86,7 +87,7 @@ public final class LoadedChunkRoadBackfill {
         return placeLoadedChunksExact(level, routeChunks);
     }
 
-    /** Replays a persisted route selected as a supplemental candidate. */
+    /** 补充候选使用同一回填边界，避免保留候选触发额外加载。 */
     public static int placeLoadedConnection(ServerLevel level,
                                             net.minecraft.core.BlockPos from,
                                             net.minecraft.core.BlockPos to) {
@@ -275,7 +276,8 @@ public final class LoadedChunkRoadBackfill {
         return expanded;
     }
 
-    /**
+    /** 保留短期回填重试窗口，覆盖道路晚发布及区块稍后达到FULL的情况。
+ *
      * A road can be persisted after a player already entered its chunk, or a
      * previously partial chunk can become FULL without a player movement.
      * Keep a small retry window rather than treating one unchanged position as

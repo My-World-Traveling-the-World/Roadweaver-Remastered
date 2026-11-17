@@ -42,11 +42,7 @@ import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 
-/**
- * Final-world construction rules used by the RoadWeaver core.  These rules
- * intentionally run only against the worldgen region currently being placed:
- * they do not request chunks and therefore cannot stall C2ME workers.
- */
+/** 最终世界施工只读当前生成区域，禁止为保护或地形检查请求新块。 */
 public final class RoadConstructionSafety {
     public static final int MAX_CUT_DEPTH = 5;
     /**
@@ -83,12 +79,7 @@ public final class RoadConstructionSafety {
     public static final int MAX_LOCAL_CENTER_CUT_DEPTH = 32;
     public static final int MAX_OPEN_CROSS_SECTION_CUT_DEPTH = 64;
     public static final int MAX_FILL_DEPTH = 2;
-    /**
-     * Lateral fill in one road cross-section may extend the short grade
-     * independently of the longitudinal centre fill. The longitudinal route
-     * grade keeps a tight fill budget, while a single side column can absorb a
-     * normal 3..5 block cross-slope without failing the whole station.
-     */
+    /** 横坡侧列可使用独立短挖填预算，避免中心可建却整站被侧坡否决。 */
     private static final int MAX_CROSS_SECTION_FILL_DEPTH = 5;
     private static final int MAX_SHOULDER_DEPTH = 5;
     private static final int RUNTIME_BRIDGE_CHUNK_RADIUS = 5;
@@ -117,7 +108,7 @@ public final class RoadConstructionSafety {
         }
     }
 
-    /** Returns the build Y immediately above solid terrain, never a canopy. */
+    /** 返回实地上方可施工高度，树冠不作为路基。 */
     public static int terrainHeight(WorldGenLevel world, int x, int z) {
         int minY = world.getMinBuildHeight();
         int top = Math.max(
@@ -135,18 +126,7 @@ public final class RoadConstructionSafety {
         return Math.max(minY, top + 1);
     }
 
-    /**
-     * Returns the build Y immediately above <b>solid</b> ground - water does not count.
-     *
-     * <p>{@link #terrainHeight} answers "where would a walker stand", so a water column answers the water
-     * surface plus one. That is right for a road deck and wrong for anything that asks "how much rock is
-     * above me": tunnel overburden used it, so an undersea tunnel counted the whole ocean as rock. The roof
-     * of such a tunnel ended up flush with the seabed - one stone-brick layer with the sea directly on top -
-     * while the log still reported {@code overburden=14..20}, because 14..20 was the water depth.
-     *
-     * <p>Reads the ocean-floor heightmap (the topmost non-air, non-fluid block) and then walks down to the
-     * first ground block, so an aquifer or a kelp column cannot be mistaken for a surface either.
-     */
+    /** 岩层覆土使用海床与实地判据，不把整段水深算成石头厚度。 */
     public static int rockSurfaceHeight(WorldGenLevel world, int x, int z) {
         int minY = world.getMinBuildHeight();
         int top = Math.max(
@@ -172,11 +152,7 @@ public final class RoadConstructionSafety {
     }
 
 
-    /**
-     * Resolves a buildable surface height for an ordinary road column. Tunnel
-     * sections deliberately bypass this clamp after their complete-span
-     * preflight succeeds.
-     */
+    /** 普通路面按可施工地形限幅；完整预检通过的隧道使用独立剖面。 */
     public static int clampTargetHeight(WorldGenLevel world, int x, int z, int plannedY) {
         int terrainY = terrainHeight(world, x, z);
         return Math.max(terrainY - MAX_CUT_DEPTH, Math.min(terrainY + MAX_FILL_DEPTH, plannedY));
@@ -190,25 +166,12 @@ public final class RoadConstructionSafety {
         }
     }
 
-    /**
-     * Keeps one road station on its persisted route-level elevation. Terrain
-     * bounds may shape the shoulder, but must never rewrite the longitudinal
-     * profile one chunk at a time. Doing so recreated cliff-sized steps after
-     * the route planner had already produced a continuous grade.
-     */
+    /** 沿路目标高度属于持久契约，区块不能逐段改写中心纵断面。 */
     public static void resolveRoadCrossSection(int[] profile, int[] terrain) {
         resolveRoadCrossSection(profile, terrain, -1);
     }
 
-    /**
-     * Flattens the cross-section to one height, preferring the column nearest the centre line.
-     *
-     * <p>{@code centreIndex} &lt; 0 keeps the old median. Callers that know the station's {@code middlePos}
-     * should pass it: the median is over cells whose projections onto the centre line differ, so on a slope
-     * - and most visibly on a diagonal - neighbouring stations take turns being one block higher, and the
-     * plate comes out as a 0,1,0,1 staircase instead of a ramp. The centre column is the one the planned
-     * grade was computed for.
-     */
+    /** 横断面优先取中心列目标高程，未知中心才保留中位数，避免斜向相邻站交替抬一格。 */
     public static void resolveRoadCrossSection(int[] profile, int[] terrain, int centreIndex) {
         if (profile == null || terrain == null || profile.length == 0 || profile.length != terrain.length) return;
         int planned = centreIndex >= 0 && centreIndex < profile.length
@@ -227,7 +190,7 @@ public final class RoadConstructionSafety {
                 : sorted[middle];
     }
 
-    /** Applies a bounded cut/fill before the road material is placed. */
+    /** 铺材前限制挖填量，避免局部列绕过路基预算。 */
     public static GradePreparation prepareRoadGrade(WorldGenLevel world, RoadData road,
             BlockPos center, List<BlockPos> positions, int[] profile, int[] terrain) {
         if (!matching(positions, profile, terrain)) {
@@ -355,13 +318,7 @@ public final class RoadConstructionSafety {
         return GradePreparation.success();
     }
 
-    /**
-     * The route center decides whether an ordinary segment is a surface road
-     * or should have been planned as a tunnel. Once the center is valid, the
-     * rest of the road width may cut farther into a side slope so one steep
-     * cross-section cannot leave terrain columns inside an otherwise paved
-     * station.
-     */
+    /** 中心决定普通地表或隧道归类，侧坡允许更深横向开挖，避免一侧残留泥墙。 */
     static boolean isRoadFootprintCutPermitted(int centerCutDepth, int columnCutDepth) {
         return centerCutDepth <= MAX_CUT_DEPTH
                 && columnCutDepth <= MAX_OPEN_CROSS_SECTION_CUT_DEPTH;
@@ -378,7 +335,7 @@ public final class RoadConstructionSafety {
                 || (extendedCenterGrade && columnFillDepth <= MAX_LOCAL_CENTER_GRADE_DEPTH);
     }
 
-    /** {@return the column index nearest {@code center}, or -1} (package-visible: the paver uses it too) */
+    /** 查找最近中心列并返回索引，找不到为负；铺路与安全判定共用同一列。 */
     public static int nearestColumnIndex(List<BlockPos> positions, BlockPos center) {
         if (positions == null || positions.isEmpty() || center == null) return -1;
         int nearest = -1;
@@ -398,7 +355,7 @@ public final class RoadConstructionSafety {
         return nearest;
     }
 
-    /** Builds a compact 1:1 cut/fill shoulder without blocking streams. */
+    /** 构建紧凑一比一路肩时避免截流水道；保留实现不代表当前启用路肩。 */
     public static void gradeShoulders(WorldGenLevel world, RoadData road,
                                       List<BlockPos> roadPositions, int[] profile,
                                       int segmentIndex, List<BlockPos> centers) {
@@ -416,11 +373,7 @@ public final class RoadConstructionSafety {
         gradeShoulderSide(world, road, roadPositions, profile, dz, -dx);
     }
 
-    /**
-     * Streams Reflowing may change final water after the route was planned.
-     * Promote the whole final crossing to a bridge range before any column is
-     * paved, instead of filling one side of a riverbed.
-     */
+    /** 最终河流可能晚于规划改变水列，先提升整个跨越再铺路，避免一边填河一边架桥。 */
     public static BridgeRangeCalculator.RangeResult promoteRuntimeBridges(WorldGenLevel world,
             ChunkPos processingChunk, RoadData road, List<BlockPos> centers,
             BridgeRangeCalculator.RangeResult original) {
@@ -525,7 +478,7 @@ public final class RoadConstructionSafety {
         RUNTIME_BRIDGES.clear();
     }
 
-    /** A construction block must not replace an existing protected structure/tree block. */
+    /** 写入前尊重结构与巨树保护，不能凭规划时安全跳过最终检查。 */
     public static boolean isProtectedColumn(WorldGenLevel world, BlockPos pos) {
         if (pos == null) return true;
         if (HugeTreeReservation.isReserved(world.getLevel(), pos)) return true;
@@ -540,7 +493,7 @@ public final class RoadConstructionSafety {
         return isProtectedColumn(world, pos) || shouldAvoidConstruction(world, pos, road);
     }
 
-    /** Exact bridge/template protection without the legacy vertical structure band. */
+    /** 桥和模板体积使用精确保护检查，避免桥侧件越出中心保护带。 */
     public static boolean isProtectedExactConstructionBlock(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (world == null || pos == null) return true;
         return HugeTreeReservation.isReserved(world.getLevel(), pos)
@@ -549,13 +502,13 @@ public final class RoadConstructionSafety {
                 || shouldAvoidPreparedExact(world, pos, road);
     }
 
-    /** Exact block-volume protection using only the planning snapshot. */
+    /** 只依据规划快照查询精确体积保护，不把未解码包围盒当作精确方块证据。 */
     public static boolean isProtectedPreparedBlock(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (world == null || pos == null) return true;
         return isProtectedPreparedLocation(world, pos, road) || isProtectedState(world.getBlockState(pos));
     }
 
-    /** Planning-owned spatial protection without classifying the current block state. */
+    /** 检查规划归属的空间保护，不以当前方块材质替代归属判据。 */
     public static boolean isProtectedPreparedLocation(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (world == null || pos == null) return true;
         return HugeTreeReservation.isReserved(world.getLevel(), pos)
@@ -563,19 +516,7 @@ public final class RoadConstructionSafety {
                 || shouldAvoidPreparedExact(world, pos, road);
     }
 
-    /**
-     * Hard excavation protection for one tunnel volume (bore, wall or roadbed).
-     * The huge-tree reservation is two-dimensional, but trunk blocks always sit
-     * at or above the terrain surface build Y of their column, so a volume
-     * below that surface can only contain ordinary terrain. Consulting the
-     * reservation there rejected deep mountain bores whose actual blocks were
-     * plain stone and stuck the whole tunnel in a construction-retry loop.
-     * Confirmed structure template blocks, sanctuaries and hard block states
-     * (bedrock, block entities, FEATURES_CANNOT_REPLACE) still block at every
-     * depth; {@code columnTerrainY} is the already-sampled surface build Y of
-     * the volume's column (pass the surface of a filled portal column so the
-     * trunk reservation keeps applying above ground).
-     */
+    /** 隧道深处的普通岩石不受二维树干预留误拦；已确认结构、实体方块、基岩及硬保护仍在所有高度生效。 */
     public static boolean isProtectedTunnelVolume(WorldGenLevel world, BlockPos pos, RoadData road,
                                                   BlockState state, int columnTerrainY) {
         if (world == null || pos == null) return true;
@@ -608,11 +549,7 @@ public final class RoadConstructionSafety {
     }
 
 
-    /**
-     * An external road junction may enter the endpoint structure owned by the
-     * other road, but it must not weaken huge-tree, sanctuary, block-entity or
-     * other hard construction protection.
-     */
+    /** 外部路口只放宽对方端点结构归属，不放宽巨树、圣地、实体方块或硬保护。 */
     public static boolean isClearableExternalJunctionStructureBlock(
             WorldGenLevel world, BlockPos pos, RoadData road) {
         if (world == null || pos == null
@@ -624,17 +561,12 @@ public final class RoadConstructionSafety {
         return shouldAvoidPreparedExact(world, pos, road);
     }
 
-    /** Final generated water state; safe for bridge and retaining-wall construction checks. */
+    /** 读取当前生成区域最终水状态，供桥梁及挡水检查使用。 */
     public static boolean isWatercourse(WorldGenLevel world, BlockPos pos) {
         return pos != null && hasWatercourseNearby(world, pos);
     }
 
-    /**
-     * Resolves the bridge walking surface from the final water blocks visible
-     * to the current worldgen region. The result depends only on this route
-     * segment, so a bridge does not change height when another chunk later
-     * discovers a longer part of the same crossing.
-     */
+    /** 桥面由当前路线段可见的最终水体确定，不随邻区块发现更长水域而重新定高。 */
     public static int bridgeDeckSurfaceY(WorldGenLevel world, List<BlockPos> centers,
                                          int index, int clearance, int fallback) {
         if (world == null || centers == null || index < 0 || index >= centers.size()) return fallback;
@@ -659,11 +591,7 @@ public final class RoadConstructionSafety {
                 : fallback;
     }
 
-    /**
-     * Raises one narrow, shallow crossing into a covered water channel.  The
-     * existing water blocks are left untouched, so Streams Reflowing keeps
-     * its final flow instead of being replaced by road fill.
-     */
+    /** 浅窄跨越保留原水格形成涵洞，避免填土替换河流实际流向。 */
     public static void prepareCulvertDeck(WorldGenLevel world, List<BlockPos> positions, int[] profile,
                                           int segmentIndex, List<BlockPos> centers) {
         if (world == null || positions == null || positions.isEmpty() || profile == null

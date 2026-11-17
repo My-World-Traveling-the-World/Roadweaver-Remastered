@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
-/** Structural validation applied after all route merging and before persistence. */
+/** 合流后、落盘前检查最终结构约束，不能拿合流前结果替代。 */
 public final class RoadDataValidator {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int FINAL_HEIGHT_REPAIR_LOOKBEHIND = 16;
@@ -32,7 +32,7 @@ public final class RoadDataValidator {
     private static final int FINAL_HEIGHT_REPAIR_MAX_WINDOW = 128;
     private static final int MAX_PROTECTED_HEIGHT_GAP_DELTA = 3;
     private static final int MAX_GLOBAL_HEIGHT_SMOOTH_PASSES = 4096;
-    /** Bounded memory-cache of structural validation results keyed by immutable RoadData contents. */
+    /** 按RoadData内容缓存校验结果；嵌套铺装列未深拷贝，发布后须保持不变，不能把record当深不可变保证。 */
     private static final ConcurrentHashMap<RoadData, ValidationResult> VALIDATION_RESULTS = new ConcurrentHashMap<>();
     private static final int MAX_CACHED_VALIDATIONS = 4096;
 
@@ -235,7 +235,8 @@ public final class RoadDataValidator {
         return ValidationResult.success();
     }
 
-    /**
+    /** 只修路口连接带来的局部坡差，不重新搜索整条路线。
+ *
      * Junction and reuse post-processing can join otherwise valid profiles at
      * heights one block too far apart. Repair only that final local profile;
      * this is deliberately not a new route search.
@@ -400,7 +401,7 @@ public final class RoadDataValidator {
                 road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    /** Marks repeated X/Z stations from network reuse as explicit junction anchors. */
+    /** 共用网络的重复XZ站显式标锚点，使重用与非法重复可区分。 */
     public static RoadData normalizeDuplicateJunctions(RoadData road) {
         if (road == null || road.roadSegmentList() == null || road.targetY() == null
                 || road.targetY().size() != road.roadSegmentList().size()) return road;
@@ -447,7 +448,8 @@ public final class RoadDataValidator {
         }
     }
 
-    /**
+    /** 旧数据缺目标高度时允许补齐；新路或替换路仍必须通过完整终态校验。
+ *
      * Accepts structurally usable roads written by older releases and fills
      * the construction profile that predates target_y. New and replacement
      * roads must still pass {@link #isValidFinalRoad(RoadData)}.

@@ -97,7 +97,7 @@ final class RoadPhysicalReuseNormalizer {
         return List.copyOf(normalized);
     }
 
-    /** ★ 2026-10-15: see {@link #verifySurrenderedReuse}. Total, for the rate-limited log. */
+    /** 让出共用段的总量仅作节流诊断，实际归属仍由逐站掩码决定。 */
     static final java.util.concurrent.atomic.AtomicLong RECLAIMED_REUSE_STATIONS =
             new java.util.concurrent.atomic.AtomicLong();
     static volatile long lastReclaimLogNanos;
@@ -163,7 +163,7 @@ final class RoadPhysicalReuseNormalizer {
                 dropped, total);
     }
 
-    /** Rebuilds the road's NETWORK_REUSE spans from {@code keep}; other span types pass through. */
+    /** 从保留掩码重建NETWORK_REUSE，其他跨度保留，避免归一时丢桥隧信息。 */
     static RoadData rebuildReuseSpans(RoadData road, boolean[] keep) {
         List<RoadSpan> spans = new ArrayList<>();
         for (RoadSpan span : road.spans()) {
@@ -390,7 +390,8 @@ final class RoadPhysicalReuseNormalizer {
         return spanKinds(road, true);
     }
 
-    /**
+    /** 按调用用途解释共用段的物理类别，匹配复用时可看真实表面，所有权分配时不能二次认领。
+ *
      * @param networkReuseIsOther 为 true（原有语义）时 NETWORK_REUSE 站点算
      *        {@link SpanKind#OTHER}，于是既不能当主人、也不能被认领；
      *        为 false 时它们保留物理类别（通常是 ORDINARY）—— 只用于

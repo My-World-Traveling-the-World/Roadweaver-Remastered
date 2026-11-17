@@ -156,7 +156,7 @@ public final class RoadChunkStore implements AutoCloseable {
         }
     }
 
-    /** Adds a batch while rebuilding and publishing the immutable snapshot once. */
+    /** 批量加入道路后仅重建发布一次不可变快照，避免每条路重复全量索引。 */
     public void addRoads(Collection<RoadData> roads) {
         if (roads == null || roads.isEmpty()) return;
         mutationLock.lock();
@@ -359,7 +359,8 @@ public final class RoadChunkStore implements AutoCloseable {
         publish(previous, next, nextGeneration, null);
     }
 
-    /**
+    /** 发布新旧快照时只刷新已知变化区块，未知范围必须遍历完整差集。
+ *
      * @param affectedChunks A3：已知引用发生变化的区块集合；{@code null} 表示未知，
      *                       退化为 previous ∪ next 全量遍历（保持旧行为）。
      */
@@ -706,7 +707,8 @@ public final class RoadChunkStore implements AutoCloseable {
         persistSnapshot(previous, next, targetGeneration, forceMetadata, null);
     }
 
-    /**
+    /** 持久化的变化区块集合必须完整，不能为减少扫描漏掉旧分片引用。
+ *
      * @param affectedChunks A3 优化：调用方已知引用发生变化的区块集合。
      *                       <p>为 {@code null} 时退化为 {@code previous ∪ next} 全量遍历（旧行为）。
      *                       非 null 时只遍历该集合——其完备性由调用方保证：只有 entry 增删

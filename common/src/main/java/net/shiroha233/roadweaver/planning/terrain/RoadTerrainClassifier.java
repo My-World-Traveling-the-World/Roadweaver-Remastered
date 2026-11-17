@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Classifies coarse samples into the terrain labels used by the auto profile. */
+/** 粗地形分类标签服务AUTO策略与诊断，不代表最终施工跨度。 */
 final class RoadTerrainClassifier {
     private RoadTerrainClassifier() {
     }
@@ -24,7 +24,8 @@ final class RoadTerrainClassifier {
         return classifyRoute(path, terrain, null);
     }
 
-    /**
+    /** 河流实际改道后仍识别活水道，不能只依赖原生river群系。
+ *
      * Route classification with an optional Streams session. A rerouted
      * Streams channel often leaves the vanilla river biome, so routes that
      * cross the live channel must still count as RIVER and resolve the route

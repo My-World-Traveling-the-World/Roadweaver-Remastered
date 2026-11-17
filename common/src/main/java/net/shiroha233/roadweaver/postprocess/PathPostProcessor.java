@@ -26,13 +26,8 @@ import static net.shiroha233.roadweaver.postprocess.BridgeMaskTool.*;
  */
 public final class PathPostProcessor {
     static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("roadweaver");
-    /**
-     * How far the planned road may stand above the sampled ground before the span counts as a viaduct.
-     *
-     * <p>Sixteen matches the depth the span extractor already uses to force a dry depression into a
-     * bridge, so the post-processor and the span classifier agree on what a gorge is.
-     */
-    /** Columns the height backend refused; see the guard in detectBridgeMask. */
+
+    /** 记录高度后端拒绝的列，避免把缺样列当作已知陆地。 */
     static final java.util.concurrent.atomic.AtomicLong MISSING_HEIGHTS =
             new java.util.concurrent.atomic.AtomicLong();
 
@@ -362,7 +357,7 @@ public final class PathPostProcessor {
         return dense;
     }
 
-    /** Preserves the accepted A* corridor when curved smoothing would cut through an obstacle. */
+    /** 曲线平滑侵入障碍时保留已接受规划走廊，不把原A*名称当作当前算法。 */
     public static List<RoadSegmentPlacement> processUnrelaxedLinear(List<BlockPos> rawPath,
                                                                     int width,
                                                                     ServerLevel level,

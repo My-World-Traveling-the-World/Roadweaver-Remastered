@@ -71,7 +71,7 @@ final class PathControlRelaxer {
         return relax(nodes, bridgeMask);
     }
 
-    /**
+    /*
      * 多轮 1-2-1 加权平滑，带逐点累计位移上限。
      *
      * <p>端点、桥段点、以及紧邻桥的点一律不动（保持桥面直线与端点对齐）；桥头外侧

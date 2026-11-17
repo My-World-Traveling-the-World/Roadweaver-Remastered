@@ -15,9 +15,9 @@ import java.util.Map;
 public final class OpenCLAccurateBatchPlanner {
     private static final long MIN_DEVICE_BUDGET = 16L * 1024L * 1024L;
     private static final int WATCHDOG_SAFE_MAX_CHUNKS = 128;
-    /** Must stay in sync with OpenCLAccurateProgram.HEIGHT_PARALLEL_LANES. */
+    /** 并行采样通道数必须与GPU程序一致，避免工作区步长错位。 */
     private static final int PARALLEL_HEIGHT_LANES = 64;
-    /** Upper bound of sample columns a single chunk can request at any step. */
+    /** 按区块可请求的采样列数上界分配，防止步长变化导致越界。 */
     private static final int MAX_COLUMNS_PER_CHUNK = 256;
 
     private OpenCLAccurateBatchPlanner() {}

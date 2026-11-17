@@ -41,7 +41,7 @@ class RoadIndex {
         this.xzToIndex = indices;
     }
 
-    /** Union of every span of {@code type}, materialised once per type. */
+    /** 各跨度类型掩码只构建一次，调用方只读以避免相互污染。 */
     boolean[] spanMask(SpanType type) {
         boolean[] cached = masks.get(type);
         if (cached != null) return cached;

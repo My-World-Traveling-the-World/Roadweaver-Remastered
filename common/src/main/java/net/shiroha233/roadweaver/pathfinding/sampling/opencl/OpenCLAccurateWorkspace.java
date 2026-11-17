@@ -71,7 +71,8 @@ final class OpenCLAccurateWorkspace implements AutoCloseable {
         motionBlocking.close();
     }
 
-    /**
+    /** 自适应重试前释放本批设备缓冲，避免旧大缓冲占用导致小批仍分配失败。
+ *
      * Releases all per-batch allocations before an adaptive retry.  A failed
      * large allocation can leave several other large reusable buffers alive;
      * keeping them would make the smaller retry fail for the same global

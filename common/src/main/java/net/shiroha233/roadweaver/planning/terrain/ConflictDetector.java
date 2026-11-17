@@ -110,7 +110,8 @@ final class ConflictDetector {
         return null;
     }
 
-    /**
+    /** 附近真实建筑碰撞作为局部簇处理，避免绕开一栋后立刻回撞邻楼。
+ *
      * Nearby real-building collisions are repaired as one local cluster. This
      * prevents a successful detour around one building from being immediately
      * pulled back into another building a few blocks later.
@@ -173,7 +174,8 @@ final class ConflictDetector {
         return distance;
     }
 
-    /**
+    /** 按顺序生成有限端点保持窗口，既照顾近端点失败又不越过局部搜索半径。
+ *
      * Produces a small ordered set of endpoint-preserving windows for one
      * structure conflict. The first window is the normal local context; the
      * others are tighter alternatives for conflicts close to an endpoint or
@@ -553,7 +555,8 @@ final class ConflictDetector {
         return result;
     }
 
-    /**
+    /** 河流窗口可跨邻近湿段与短干岸，但新增站数有界，避免绕流无限扩张。
+ *
      * Extends a river repair window across nearby wet runs (bridging short dry
      * banks between them) so one route crossing the same channel several times
      * is rerouted as a single bounded detour. The window never grows beyond

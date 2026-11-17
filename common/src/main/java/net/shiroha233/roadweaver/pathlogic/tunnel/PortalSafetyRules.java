@@ -79,12 +79,13 @@ final class PortalSafetyRules {
         return false;
     }
 
-    /** Water cells removed from inside a sealed bore. */
+    /** 统计密封洞内实际移除的水格，不能将探测量当作处理量。 */
     static final AtomicLong DRIED_BORE_CELLS = new AtomicLong();
-    /** Water cells in the shell that the lining replaced. */
+    /** 统计壳层水格被衬砌实际替换的数量，便于区分排水与封水。 */
     static final AtomicLong SEALED_SHELL_CELLS = new AtomicLong();
 
-    /**
+    /** 仅挖成空气不能防回灌；密封段替换壳层水并清洞内水，开放洞口只排水而不封入口。
+ *
      * Keeps the bore of a sealed tunnel dry.
      *
      * <p>Carving the bore to air is not enough. The carve writes air where rock used to be, so any water
@@ -133,14 +134,15 @@ final class PortalSafetyRules {
         return TunnelReadTiming.block(world, pos).getFluidState().is(FluidTags.WATER);
     }
 
-    /** Every direct tunnel write goes through the same wall veto; planning is never consulted here. */
+    /** 隧道直接落块统一经过长城否决，不在写入时重新查询规划链。 */
     static boolean isWallOwned(BlockPos pos) {
         return pos != null && net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
                 net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
                 pos.getX(), pos.getY(), pos.getZ());
     }
 
-    /**
+    /** 从顶板上方逐格检查开放水，避免从水面上方开始扫描而永远找不到水。
+ *
      * Whether open water sits directly above this column's roof line.
      *
      * <p>Scanned from one block above the roof upwards. The previous version started at the column's
@@ -173,7 +175,8 @@ final class PortalSafetyRules {
                 reason, centers, profile, span.start(), span.end(), segmentIndex);
     }
 
-    /** Geometry/load failures must not split a mountain tunnel; only hard
+    /** 只允许硬结构保护阻断洞体；几何或加载失败不得伪装保护缺口。
+ * Geometry/load failures must not split a mountain tunnel; only hard
      *  structural protection (protected-*) is allowed to stop the bore. */
     static boolean isContinuityOnlyFailure(String reason) {
         if (reason == null) return false;

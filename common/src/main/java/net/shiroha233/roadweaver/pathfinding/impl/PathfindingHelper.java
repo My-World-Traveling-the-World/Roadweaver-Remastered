@@ -43,7 +43,8 @@ public final class PathfindingHelper {
         return Math.floorDiv(v, gridSize) * gridSize;
     }
 
-    /**
+    /** 边跨多格时检查扫掠线，避免只看节点漏掉中间建筑。
+ *
      * A coarse A* edge can skip several sampled columns. This checks the swept
      * line at a finer interval so a building cannot hide between two lattice
      * nodes and only appear as a local repair later.

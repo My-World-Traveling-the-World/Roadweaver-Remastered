@@ -336,7 +336,8 @@ public final class JunctionConnector {
         return created;
     }
 
-    /** Performs one safe reuse replacement. The public wrapper may invoke it
+    /** 单次只提交一个安全共用替换，外层可继续吸收后续独立窗口而不一次越过保护缺口。
+ * Performs one safe reuse replacement. The public wrapper may invoke it
      * again to absorb a later corridor window after a protected building gap
      * or a locally smoothed height transition. */
     public static RoadData connectSecondaryToPrimaryOnce(RoadData primary, RoadData secondary) {
@@ -360,7 +361,8 @@ public final class JunctionConnector {
         return connected;
     }
 
-    /** Keeps building-gap metadata when a detoured secondary route is replaced
+    /** 替换次路走廊时保留建筑缺口语义；桥与跨越几何必须由终态重新提取。
+ * Keeps building-gap metadata when a detoured secondary route is replaced
      * by the donor corridor. Physical bridge and crossing spans are excluded;
      * they must be regenerated only from the final geometry. */
     public static RoadData carryCompatibleNonPhysicalSpans(RoadData source, RoadData target) {
@@ -398,7 +400,8 @@ public final class JunctionConnector {
         return best;
     }
 
-    /**
+    /** 复制锚点后若隧道降高须同步写回真正所有者，避免地图连上而实体主隧道仍在旧高度。
+ *
      * The direct-junction result owns the copied anchor stations, while the
      * earlier road still owns the physical tunnel.  When the copied anchor
      * was lowered to the branch's grade, write the same lower profile back to

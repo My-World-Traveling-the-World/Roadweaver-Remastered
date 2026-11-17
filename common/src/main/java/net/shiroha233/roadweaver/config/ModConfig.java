@@ -105,17 +105,17 @@ public final class ModConfig {
         return roadAppearance.tunnelClearHeight();
     }
 
-    /** Keep a sealed tunnel dry: no water inside the bore, water in its shell replaced by lining. */
+    /** 密封隧道排除洞内积水，并用衬砌替换壳层水格，避免流体回灌。 */
     public boolean tunnelDrySeal() {
         return roadAppearance.tunnelDrySeal();
     }
 
-    /** Measure slopes against the real path length rather than the station index. */
+    /** 按实际水平里程约束坡度，避免斜向站距与轴向站距得到不同坡度口径。 */
     public boolean slopeByArcLength() {
         return roadAppearance.slopeByArcLength();
     }
 
-    /** Cross a narrow watercourse with a culvert instead of a dam or a gap. */
+    /** 窄水道允许使用涵洞，避免普通填土截流或留洞。 */
     public boolean culvertEnabled() {
         return roadAppearance.culvertEnabled();
     }

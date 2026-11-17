@@ -24,7 +24,7 @@ public final class InitialGenerationProgressTracker {
     private InitialGenerationProgressTracker() {}
 
     private static final AtomicReference<InitialGenerationStage> STAGE = new AtomicReference<>(InitialGenerationStage.FINISHED);
-    /** Once route generation starts, background structure refreshes must not rewind the startup UI. */
+    /** 道路生成开始后不允许后台结构刷新倒退启动阶段显示。 */
     private static final AtomicBoolean ROUTE_GENERATION_LOCKED = new AtomicBoolean();
     private static final AtomicLong STARTED_AT = new AtomicLong(0L);
 
@@ -41,7 +41,7 @@ public final class InitialGenerationProgressTracker {
     private static final AtomicInteger[] PHASE_FAILED = phaseCounters();
     private static final AtomicInteger[] PHASE_RETAINED = phaseCounters();
     private static final AtomicInteger[] PHASE_HANDED_OFF = phaseCounters();
-    /** Keeps route phase totals/results visible across retry waves. */
+    /** 跨重试波保留阶段总数与结果，避免进度被重新置零误导玩家。 */
     private static final AtomicBoolean[] PHASE_STARTED = phaseFlags();
     private static final AtomicReference<String>[] PHASE_OPERATION = phaseOperations();
     private static final AtomicInteger[] PHASE_SAMPLING_STEPS = phaseCounters();
@@ -130,7 +130,7 @@ public final class InitialGenerationProgressTracker {
         return flags;
     }
 
-    /** Marks that {@code stage} has published its workload total for this session. */
+    /** 发布本会话某阶段的实际工作量，避免用未知总数冒充已完成。 */
     private static void markPlanned(InitialGenerationStage stage) {
         if (stage != null) STAGE_PLANNED[stage.ordinal()].set(true);
     }
@@ -223,12 +223,12 @@ public final class InitialGenerationProgressTracker {
         ACTIVE_WORKERS.set(Math.max(0, generating));
     }
 
-    /** Starts a visible route phase. Counters are per current attempt wave. */
+    /** 进入新的路线阶段时计数按本次波次重置，历史结果另行保留。 */
     public static void beginRoutePhase(RoutePhase phase, int total) {
         beginRoutePhase(phase, total, "");
     }
 
-    /** Starts a visible route phase and publishes its current operation. */
+    /** 发布路线阶段与当前操作，避免阶段切换时界面显示空闲。 */
     public static void beginRoutePhase(RoutePhase phase, int total, String operation) {
         RoutePhase safe = phase == null ? RoutePhase.ORIGINAL : phase;
         ROUTE_PHASE.set(safe);
@@ -281,12 +281,12 @@ public final class InitialGenerationProgressTracker {
         }
     }
 
-    /** Records a route disposition that is retained or handed to the next phase. */
+    /** 记录路线保留或交给下阶段的处置，不将重试计成最终失败。 */
     public static void routePhaseRetained() {
         PHASE_RETAINED[ROUTE_PHASE.get().ordinal()].incrementAndGet();
     }
 
-    /** Publishes the settled result of a phase after its retry handoff or finalization. */
+    /** 重试移交或收尾后发布阶段结算，避免未结任务混入完成数。 */
     public static void settleRoutePhase(RoutePhase phase, int done, int failed, int retained,
                                          int handedOff, String operation) {
         RoutePhase safe = phase == null ? ROUTE_PHASE.get() : phase;
@@ -303,7 +303,8 @@ public final class InitialGenerationProgressTracker {
         return STAGE.get() == InitialGenerationStage.FINISHED;
     }
 
-    /**
+    /** 待重试与最终失败分开计数，避免在途工作被误报失败。
+ *
      * Publishes routes that are no longer on their first attempt but have not
      * reached a terminal state. These counters are deliberately separate from
      * {@code connectionsFailed}: a retry is pending work, not a final failure.
@@ -351,7 +352,7 @@ public final class InitialGenerationProgressTracker {
         CURRENT_ROAD_TASK.remove();
     }
 
-    /** Publishes the precision currently used by this worker's route attempt. */
+    /** 发布当前工作线程所用精度，避免并行波次共用错误提示。 */
     public static void setCurrentSamplingStep(int step) {
         int safe = step > 0 ? step : -1;
         Long taskId = CURRENT_ROAD_TASK.get();
@@ -488,7 +489,7 @@ public final class InitialGenerationProgressTracker {
         EXACT_PATHS_DONE.updateAndGet(done -> Math.min(EXACT_PATHS_TOTAL.get(), done + 1));
     }
 
-    /** Publishes the real initial-road construction work after planning is final. */
+    /** 规划定案后发布实际道路施工量，不能从规划READY反推落块完工。 */
     public static void setConstructionChunkPlan(int totalChunks, String operation) {
         CONSTRUCTION_CHUNKS_TOTAL.set(Math.max(0, totalChunks));
         markPlanned(InitialGenerationStage.POST_PROCESSING);
@@ -501,7 +502,7 @@ public final class InitialGenerationProgressTracker {
         CONSTRUCTION_CHUNKS_DONE.set(Math.max(0, total <= 0 ? completedChunks : Math.min(total, completedChunks)));
     }
 
-    /** Marks one final-road task complete without replacing a higher completed count. */
+    /** 完成数单调更新，避免并发完成回调覆盖较大的已完成值。 */
     public static void recordFinalRoadDone(int completedRoads) {
         int total = CONSTRUCTION_CHUNKS_TOTAL.get();
         if (total <= 0) {

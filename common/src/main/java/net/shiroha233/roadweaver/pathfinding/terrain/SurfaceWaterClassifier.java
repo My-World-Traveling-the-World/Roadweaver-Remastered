@@ -1,7 +1,8 @@
 /* 文件职责：用两张世界生成高度图（地表 / 海底）判定地表水列。 */
 package net.shiroha233.roadweaver.pathfinding.terrain;
 
-/**
+/** 由世界生成高度图判别表面水列，避免以群系名称代替实际水深。
+ *
  * Classifies surface-water columns from the two world-generation heightmaps.
  */
 public final class SurfaceWaterClassifier {

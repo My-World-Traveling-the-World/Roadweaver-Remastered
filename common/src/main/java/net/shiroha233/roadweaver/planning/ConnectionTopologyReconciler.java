@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Prevents pending direct edges from duplicating an already completed network path. */
+/** 待建直连边不能重复已完成网络通路，避免在同一连通网重复铺路。 */
 public final class ConnectionTopologyReconciler {
     private ConnectionTopologyReconciler() {
     }

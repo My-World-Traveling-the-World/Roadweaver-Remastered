@@ -25,7 +25,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Persists roadside content until its owning chunk receives the structure starts. */
+/** 路边内容持久等待所属区块结构起点可写，避免过早放置或重启丢失。 */
 public final class PendingRoadsideContentFileStorage {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();

@@ -7,7 +7,7 @@ import net.shiroha233.roadweaver.core.model.SpanType;
 import java.util.Arrays;
 import java.util.Comparator;
 
-/** Applies one fixed bridge deck elevation and land-side approach ramps. */
+/** 统一桥面标高与陆侧接近坡，避免各区块单独定高。 */
 public final class BridgeDeckProfile {
     private static final int STABLE_SEARCH_SEGMENTS = 32;
     private static final int STABLE_WINDOW_SEGMENTS = 4;
@@ -23,7 +23,8 @@ public final class BridgeDeckProfile {
     private BridgeDeckProfile() {
     }
 
-    /**
+    /** 持久跨度已选定岸端，施工直接消费同一范围，不再次搜索河岸。
+ *
      * Applies one persisted crossing range without searching for its banks a
      * second time. The caller already resolved stable land endpoints during
      * planning, so every generated chunk receives the same deck and ramps.
@@ -145,7 +146,8 @@ public final class BridgeDeckProfile {
         }
     }
 
-    /**
+    /** 由稳定岸端连线控制桥面，最低处仍满足甲板下界，不能沿河床起伏。
+ *
      * Spans a river or canyon between stable inland road heights. The bridge
      * never follows the riverbed; unequal banks are joined by a smooth linear
      * grade whose lowest point remains above the requested minimum deck.

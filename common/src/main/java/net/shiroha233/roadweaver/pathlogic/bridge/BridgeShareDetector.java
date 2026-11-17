@@ -41,7 +41,8 @@ public final class BridgeShareDetector {
 
     private BridgeShareDetector() {}
 
-    /**
+    /** 桥共享报告同时保留距离与连续重叠证据，避免单布尔值掩盖拒绝原因。
+ *
      * @param shares         是否应吸附成一条桥
      * @param minDistance    两条折线的 XZ 最短距离（格，四舍五入），无站时为 {@link Integer#MAX_VALUE}
      * @param overlapStations 沿路方向的重叠里程（站数）

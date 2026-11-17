@@ -140,7 +140,7 @@ final class LocalRouteSearch {
                 allowTunnel, structureClearance, conflictBox, tunnelFloorY, null);
     }
 
-    /** Local 3D route search bounded by a circular conflict-centered radius. */
+    /** 局部三维搜索限定冲突圆窗，防止修一个断口扩大到整个世界。 */
     static List<BlockPos> findLocalRoute(List<BlockPos> original,
                                                   AccurateHeightSampler sampler,
                                                   PathfindingCostConfig config,
@@ -156,13 +156,7 @@ final class LocalRouteSearch {
                 allowTunnel, structureClearance, conflictBox, tunnelFloorY, conflictCenter, false);
     }
 
-    /**
-     * 0.8.326：{@code localStructureDetour=true} 时给隧道搜索用"普通搜索预算"
-     * （{@link #repairWindowStateLimit()}，默认 9 万，可配置）而不是 24 万的
-     * 放大上限。真机 20260909 16.15 存档 {@code (288,-256)->(880,208)} 的局部修复
-     * 重生成阶段，三次结构绕行的 tunnel 搜索各花 20~29 秒且全部 {@code no_path}，
-     * 白烧约 74 秒/局（该阶段总耗时 91 秒）。
-     */
+
     /**
      * 0.9.050（D-10）：走廊附近有没有"湿列"。
      *

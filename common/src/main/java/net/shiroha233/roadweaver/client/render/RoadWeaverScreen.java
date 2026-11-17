@@ -5,7 +5,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 
-/**
+/** 统一自定义界面的背景行为，避免1.21默认模糊干扰地图与配置界面。
+ *
  * Shared screen base that keeps RoadWeaver UI backgrounds deterministic and non-blurred on 1.21.
  */
 public abstract class RoadWeaverScreen extends Screen {

@@ -12,7 +12,7 @@ import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
 
-/** Prevents a topology replacement from cutting a road component off from spawn. */
+/** 替代连接前保留出生点连通性，避免局部改接切断全网入口。 */
 public final class SpawnConnectivityValidator {
     private static final int SPAWN_HORIZONTAL_RADIUS = 128;
     private static final int SPAWN_VERTICAL_RADIUS = 96;
@@ -58,7 +58,8 @@ public final class SpawnConnectivityValidator {
         return componentContainingSpawn(level, roads).contains(route);
     }
 
-    /**
+    /** 比较有向路线，反向延续不能当作同向重复边删掉，否则会断开出生点一侧。
+ *
      * Compare the directed route vectors. A reversed vector is deliberately
      * different: an endpoint-changing candidate can be the continuation of an
      * original route, and treating that U-turn as "same direction" would

@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
-/** Low-overhead aggregate timings for the initial detailed-road phase. */
+/** 汇总初始精细道路各阶段耗时，避免逐列日志干扰热点。 */
 public final class DetailedRoadGenerationStats {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
 
@@ -28,7 +28,7 @@ public final class DetailedRoadGenerationStats {
     private static final LongAdder STREAMS_PREWARM_NANOS = new LongAdder();
     private static final LongAdder SPAN_EXTRACTION_NANOS = new LongAdder();
     private static final LongAdder TARGET_HEIGHT_NANOS = new LongAdder();
-    /** Between the target-height computation and final validation: conflict repair, consistency, volume. */
+    /** 单独计入目标高度之后、最终校验之前的冲突修复与一致性耗时。 */
     private static final LongAdder PLANNING_REPAIR_NANOS = new LongAdder();
     /**
      * 0.9.013：{@code planningRepairMs} 内部的两个大子项。
@@ -42,7 +42,7 @@ public final class DetailedRoadGenerationStats {
      */
     private static final LongAdder WATER_VALIDATION_NANOS = new LongAdder();
     private static final LongAdder HEIGHT_STEP_REPAIR_NANOS = new LongAdder();
-    /** The closing validation pass, measured per route before but never surfaced in this line. */
+    /** 单列最终校验耗时，避免逐路已计时却在汇总中漏报。 */
     private static final LongAdder FINAL_VALIDATION_NANOS = new LongAdder();
     private static final LongAdder ROADSIDE_STRUCTURE_NANOS = new LongAdder();
     private static final LongAdder ROADSIDE_VILLAGE_NANOS = new LongAdder();
@@ -186,7 +186,8 @@ public final class DetailedRoadGenerationStats {
         counter.add(nanos);
     }
 
-    /**
+    /** 游玩期最多每十分钟汇总有变化的阶段计时；wallMs不在这里推断整条道路墙钟耗时。
+ *
      * Runtime observability: logs the same per-stage summary as
      * {@link #logSummary(long)} at most every 10 minutes, and only when at
      * least one stage timer moved since the previous summary (wallMs is 0 —

@@ -3,7 +3,7 @@ package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;
 
-/** Reuses the large mutable buffers used by consecutive coarse GPU batches. */
+/** 复用相邻粗GPU批次的大缓冲，减少设备分配次数。 */
 final class OpenCLCoarseWorkspace implements AutoCloseable {
     private final ReusableBuffer params = new ReusableBuffer(OpenCLBridge.BufferAccess.READ_ONLY);
     private final ReusableBuffer scratch = new ReusableBuffer(OpenCLBridge.BufferAccess.READ_WRITE);

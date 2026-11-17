@@ -26,7 +26,7 @@ public final class StructureSelectionConfig {
     private static StructureSelectionConfig INSTANCE = null;
 
     private final Set<String> enabledStructures = new LinkedHashSet<>();
-    /** Explicit per-structure exclusions that override enabled tags. */
+    /** 明确排除项优先于已启用标签，避免标签重新引入用户禁用的结构。 */
     private final Set<String> disabledStructures = new LinkedHashSet<>();
     private final Set<String> enabledTags = new LinkedHashSet<>();
     private boolean useTagMode = true;

@@ -23,19 +23,13 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
  *   middlePositions      = segments.map(middlePos)              // O(站数)
  *   plannedBridgeResult  = BridgeRangeCalculator.compute(...)   // O(站数)，扫全条路
  * </pre>
- * <p>而这两个东西<b>对同一条路永远算出一样的结果</b> —— 输入是 {@code data.spans()} 与
- * {@code data.width()}，路一旦落盘就不再变。于是出现 {@code O(区块数 × 站数)}：
- * 一条 2000 站的路铺满 30×30 区块，桥范围判定要把 2000 个站扫 900 次。</p>
+ * <p>中心、站序、跨度及桥参数相同时可以复用；路线重建后重新核对缓存键与站序，
+ * 不能认为同一持久道路永远不再修改。中心提取与范围运算按路复用，减少逐区块重复扫描。</p>
  *
- * <h2>为什么可以缓存（正确性依据）</h2>
- * <ul>
- *   <li>{@code BridgeRangeCalculator.compute(positions, spans, cfg)} 是<b>纯函数</b>：
- *       不读世界、不写参数、没有随机；</li>
- *   <li>缓存先按道路指纹、站序首尾、跨度和精确桥参数定位桶，再用正向站序验证命中。
- *       存储使用无方向的指纹来定位道路；施工掩码里的索引则与站点顺序绑定。</li>
- *   <li>路数据是<b>不可变</b>的（{@code RoadData} 是 record 且紧凑构造器做了
- *       {@code List.copyOf}），不存在「同一条路被就地改写」。</li>
- * </ul>
+ * <h2>缓存输入边界</h2>
+ * <p>桥范围运算只读取站中心、跨度和桥参数，不读取嵌套铺装列。RoadData仅冻结外层列表，
+ * RoadSegmentPlacement.positions未深拷贝，因此不能用record推导整个对象图深度不可变。
+ * 指纹负责分桶，桥参数与跨度进入键，正向中心站序仍须匹配；修改缓存依赖输入应创建新道路。</p>
  *
  * <h2>★ 为什么必须深拷贝出去</h2>
  * <p>{@code RangeResult} 里装的是 {@code boolean[]} 与 {@code List<int[]>} ——
@@ -48,9 +42,9 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
  * 但换来的是「共享的是不可变值」这条硬保证。</p>
  *
  * <h2>缓存容量</h2>
- * <p>上限 {@value #MAX_ENTRIES} 条路，超了整表清空。<b>不做 LRU</b>：
- * 清空是 O(1) 且不会出现「某条路被淘汰后立刻又要用」的抖动放大；
- * 而区块生成的访问模式本来就是「一段时间专注一片区域」，整表清空的代价可以接受。</p>
+ * <p>容量超过阈值时调用ConcurrentHashMap.clear，保持现有整表淘汰策略。
+ * 清空需要遍历内部桶，不能标为O(1)；并发插入也使该阈值不是严格容量保证。
+ * 再次访问被清条目会重算，本轮未测现场抖动，不对耗时作无依据保证。</p>
  */
 public final class BuildFrame {
 
@@ -71,7 +65,7 @@ public final class BuildFrame {
         }
 
         boolean matches(List<RoadSegmentPlacement> stations) {
-            // 同一不可变道路是热路径：直接命中，并且缓存不会因此保留全路的铺装列。
+            // 同一外层站列表直接命中；只缓存中心与掩码，不依赖可变的嵌套铺装列。
             if (source.get() == stations) return true;
             if (frame.middlePositions().size() != stations.size()) return false;
             for (int i = 0; i < stations.size(); i++) {

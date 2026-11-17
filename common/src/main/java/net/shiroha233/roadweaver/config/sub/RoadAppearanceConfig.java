@@ -23,21 +23,15 @@ public final class RoadAppearanceConfig implements SubConfig {
     private boolean preventTreesOnRoad = true;
     private int maxSlopeStepPerTwoSegments = RoadConstants.DEFAULT_MAX_SLOPE_STEP;
     private boolean slopeLimitEnabled = true;
-    /** Keep a sealed tunnel dry: no water inside the bore, water in the shell replaced by lining. */
+    /** 密封隧道清除洞内水并封闭壳层水，避免挖空后流体重新灌入。 */
     private boolean tunnelDrySeal = true;
-    /** Cross a narrow watercourse with a culvert instead of filling it into a dam or leaving a gap. */
+    /** 窄水道优先涵洞，保持通水而不把水道填成堤坝。 */
     private boolean culvertEnabled = true;
-    /** A watercourse wider than this many stations is a bridge job, not a culvert. */
+    /** 超过该站数的水道交给桥梁处理，避免涵洞承担长跨越。 */
     private int culvertMaxStations = 6;
-    /** Deeper water needs walls a culvert cannot carry; leave it to the bridge. */
+    /** 深水需要独立桥梁支撑，不能用浅水涵洞替代。 */
     private int culvertMaxWaterDepth = 2;
-    /**
-     * Measure a slope against the real length of the path instead of the station index.
-     *
-     * <p>A diagonal station is {@code sqrt(2)} blocks from its predecessor, an axial one 1.0, so the
-     * per-station limit makes the same road steeper on the diagonals. Off by default: turning it on
-     * re-computes every grade in the world.
-     */
+    /** 按水平里程而非站号计坡；开关变化会影响重新规划的纵断面，不主动重建所有既有道路。 */
     private boolean slopeByArcLength = false;
     /**
      * 0.9.005：净空清理遇到「受保护方块」时是否**强行清掉**（默认 true = 保底）。
@@ -50,8 +44,8 @@ public final class RoadAppearanceConfig implements SubConfig {
      */
     private boolean forcedClearProtected = true;
 
-    /** 0.9.005-A：地表/桥面「凸起削平」总开关。关掉即完全不削（回到 0.9.004 行为）。 */
-    /** 0.9.005-B: on-land tunnel switch (ignore bridge veto when overburden is enough). default true. */
+
+    /** 陆地覆土充分时允许隧道候选，不被水跨越的桥判据一并否决。 */
     private boolean landTunnelEnabled = true;
     private boolean bumpCutEnabled = true;
     /** 单列最多削掉多少格（默认 5）；≥6 格一律不削，交给「陆上隧道」判定（见 landTunnelEnabled）。 */
@@ -154,8 +148,8 @@ public final class RoadAppearanceConfig implements SubConfig {
     /** 净空清理是否强行清掉受保护方块（保底档）。见字段注释。 */
     public boolean forcedClearProtected() { return forcedClearProtected; }
     public void setForcedClearProtected(boolean v) { this.forcedClearProtected = v; }
-    /** 凸起削平总开关。见字段注释。 */
-    /** On-land tunnel switch. */
+
+    /** 控制陆地隧道候选入口，与水下隧道转换分开。 */
     public boolean landTunnelEnabled() { return landTunnelEnabled; }
     public void setLandTunnelEnabled(boolean v) { this.landTunnelEnabled = v; }
     public boolean bumpCutEnabled() { return bumpCutEnabled; }

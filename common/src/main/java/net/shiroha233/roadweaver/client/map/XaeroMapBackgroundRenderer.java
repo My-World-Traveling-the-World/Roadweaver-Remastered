@@ -14,7 +14,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/** Uses Xaero's existing map session as the terrain background. */
+/** 复用Xaero当前地图会话作为地形背景，避免另建一套地形读取链。 */
 final class XaeroMapBackgroundRenderer {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final String XAERO_MOD_ID = "xaeroworldmap";

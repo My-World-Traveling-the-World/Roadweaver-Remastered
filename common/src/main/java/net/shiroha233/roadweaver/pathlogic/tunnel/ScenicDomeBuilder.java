@@ -66,7 +66,7 @@ final class ScenicDomeBuilder {
         return false;
     }
 
-    /** Longitudinal length of a plan's interior, for normalising the glass gradient. */
+    /** 观景壳按完整洞体长度归一渐变，避免分块断色。 */
     static double scenicSpanLength(TunnelPlan plan) {
         if (plan == null || plan.interior().size() < 2) return 0.0D;
         List<BlockPos> interior = plan.interior();
@@ -79,14 +79,15 @@ final class ScenicDomeBuilder {
         return length;
     }
 
-    /** How far along the span this column sits, as 0..1 along the centre line. */
+    /** 把当前列投影到中心线进度，避免仅按区块局部坐标决定颜色。 */
     static double scenicProgress(BlockPos column, BlockPos start, double spanLength) {
         if (column == null || start == null || spanLength <= 0.0D) return 0.0D;
         double along = Math.hypot(column.getX() - start.getX(), column.getZ() - start.getZ());
         return along / spanLength;
     }
 
-    /**
+    /** 观景壳复用共享渐变，输入进度限于0到1，避免桥隧色调跳变。
+ *
      * Glass colour for one point along a glazed tunnel, as a round-trip gradient.
      *
      * <p>Delegates to the shared shell so a submerged bridge deck and a bored tunnel use the

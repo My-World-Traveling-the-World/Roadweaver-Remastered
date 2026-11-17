@@ -121,7 +121,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
                 }
             }
             return result;
-        
+
         }
     }
 
@@ -155,7 +155,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
                 }
             }
             return result;
-        
+
         }
     }
 
@@ -189,7 +189,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
                     writeTile(tileCoord, tile);
                 }
             }
-        
+
         }
     }
 
@@ -223,7 +223,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
                     writeTile(tileCoord, tile);
                 }
             }
-        
+
         }
     }
 
@@ -260,7 +260,7 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
                     writeTile(tileCoord, tile);
                 }
             }
-        
+
         }
     }
 
@@ -293,13 +293,14 @@ public final class FileBackedAccurateSampleStore implements AccurateSampleStore 
         }
     }
 
-    /** Superseded fingerprint namespaces kept around so an A -> B -> A round trip still hits. */
+    /** 保留最近旧指纹命名空间，配置从A切B再回A仍可复用采样。 */
     private static final int RETAINED_NAMESPACES = 3;
 
-    /** A fingerprint namespace is exactly this shape; nothing else in this directory is ours to delete. */
+    /** 只管理符合采样指纹格式的目录，不能清理同目录下其他组件的数据。 */
     private static final java.util.regex.Pattern NAMESPACE_NAME = java.util.regex.Pattern.compile("[0-9a-f]{64}");
 
-    /**
+    /** 仅清理超过保留数的旧指纹目录并记录结果，避免构造时无差别递归删除全部非当前目录。
+ *
      * Drops the oldest superseded sample namespaces, keeping {@link #RETAINED_NAMESPACES}.
      *
      * <p>Three deliberate narrowings over the previous version, which recursively deleted every directory

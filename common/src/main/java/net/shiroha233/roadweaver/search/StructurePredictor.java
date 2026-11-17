@@ -41,7 +41,8 @@ import java.util.Locale;
  * 结构位置预测服务
  */
 public final class StructurePredictor {
-    /**
+    /** 结构群系判据按三维采样，固定Y64会漏掉高海拔合法村庄。
+ *
      * Structure biome predicates are evaluated in 3D.  Sampling only Y=64
      * rejects valid high-altitude structures such as CTOV mountain villages,
      * whose terrain surface can be far above that level.
@@ -153,7 +154,8 @@ public final class StructurePredictor {
                 biomePrefilter, whitelist, blacklist, false);
     }
 
-    /**
+    /** 保留结构集合来源以使用原生结构选择；预测不等同生成真实区块。
+ *
      * Predicts same-dimension structure-set candidates for route avoidance.
      * Keeping the originating set lets the exact resolver run Minecraft's
      * native structure selection without generating a real chunk.

@@ -9,7 +9,7 @@ public enum ConnectionStatus {
     GENERATING,
     COMPLETED,
     FAILED,
-    /** Road exists on both sides but a verified building protection gap remains. */
+    /** 两侧道路存在但仍有已确认建筑保护缺口，不能作为全路完工的同义词。 */
     PROTECTED_GAP,
     /**
      * 规划前过滤：一端是未知端点且落在村庄 V 的结构聚合盒内，另一端恰好是 V。

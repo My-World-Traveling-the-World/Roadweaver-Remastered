@@ -106,7 +106,8 @@ final class EndpointApproachConnector {
         return best;
     }
 
-    /**
+    /** 一条隧道来路与地表来路可在共享端点用有界洞口过渡连接，特殊跨度和端点保护仍保留。
+ *
      * Fallback for a shared endpoint where one route reaches the node through
      * a tunnel and the other reaches it on the surface. The normal junction
      * search intentionally requires matching grades; this variant keeps the
@@ -157,7 +158,8 @@ final class EndpointApproachConnector {
         return best;
     }
 
-    /**
+    /** 普通路大高差最后接入仅限端点接近段，桥、水跨越及保护站不能套用此放宽。
+ *
      * Last-resort endpoint join for two ordinary routes whose shared crossing
      * has a large Y mismatch. It is deliberately limited to the endpoint
      * approach and never admits bridge/crossing/protected stations.
@@ -246,7 +248,8 @@ final class EndpointApproachConnector {
         }
     }
 
-    /**
+    /** 隧道丁字路口以较低转弯隧道为锚，局部降低高主干并逐站接坡，避免上下叠两层地板。
+ *
      * A lower turning tunnel is the preferred grade at a tunnel T/plus
      * junction. Lower the higher trunk locally instead of leaving two floors
      * stacked above one another. The transition is limited to the junction
@@ -384,7 +387,8 @@ final class EndpointApproachConnector {
         return centerStep > RoadConstants.MAX_CENTER_STEP || footprintsConnect(primarySegment, secondarySegment);
     }
 
-    /**
+    /** 仅在已确认安全且同高的近距普通路边界插入连续短接，不能穿过已排除的水桥。
+ *
      * Inserts a narrow, continuous approach from the current output endpoint
      * to the first segment that remains on the secondary route.  It is used
      * only after {@link #safeBoundary} has proven a close, grade-compatible

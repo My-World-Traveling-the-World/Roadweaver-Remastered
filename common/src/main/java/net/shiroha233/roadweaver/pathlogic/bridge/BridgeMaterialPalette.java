@@ -8,7 +8,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.shiroha233.roadweaver.core.model.RoadData;
 
-/** Material projection of the bundled wooden bridge templates. */
+/** 从内置木桥模板提取材料，避免程序化支撑与模板主体颜色脱节。 */
 public record BridgeMaterialPalette(
         BlockState deck,
         BlockState accentDeck,
@@ -31,7 +31,8 @@ public record BridgeMaterialPalette(
         return fromTemplatePath(pathFor(road));
     }
 
-    /**
+    /** 根据所属路面选择内置桥体；没有石桥模板时取深色木体，不伪造不存在的模板。
+ *
      * {@return the bundled body that matches the road surface this bridge belongs to}
      *
      * <p>There is no stone body among the bundled templates, so stone and gravel roads take the darkest

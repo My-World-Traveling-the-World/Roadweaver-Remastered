@@ -22,7 +22,7 @@ public final class RoadConstants {
     public static final int ASTAR_MAX_STEPS_MIN = 3_000;
     public static final int ASTAR_MAX_STEPS_MAX = 200_000;
     public static final int ASTAR_STEP_MAX = 128;
-    /** A smaller lattice step is a finer route sample; local repair uses the 1-block floor. */
+    /** 局部修复允许降至一格采样，避免粗格漏过狭小通路。 */
     public static final int ASTAR_STEP_MIN = 1;
 
     public static final int DEFAULT_PLAN_MAX_EDGE_LEN_BLOCKS = 2048;
@@ -66,7 +66,7 @@ public final class RoadConstants {
     public static final int DEFAULT_BRIDGE_DECK_CLEARANCE = 2;
     public static final int BRIDGE_DECK_CLEARANCE_MIN = 1;
     public static final int BRIDGE_DECK_CLEARANCE_MAX = 8;
-    /** Zero means unlimited; long ocean crossings must remain bridges. */
+    /** 零表示不限制桥长，长海峡仍保留桥梁能力。 */
     public static final int DEFAULT_BRIDGE_MAX_LENGTH_BLOCKS = 0;
     public static final int BRIDGE_MAX_LENGTH_MAX = 10_000;
     public static final int DEFAULT_BUOY_INTERVAL_BLOCKS = 32;
@@ -92,16 +92,16 @@ public final class RoadConstants {
     public static final int DEFAULT_BRIDGE_MERGE_GAP = 8;
     public static final int BRIDGE_MERGE_GAP_MIN = 1;
     public static final int BRIDGE_MERGE_GAP_MAX = 32;
-    /** Replace one bridge-deck center block with a sea lantern at this spacing. */
+    /** 桥面中心灯按跨度里程布置，避免依赖区块生成顺序。 */
     public static final int DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS = 16;
-    /** Only long water spans receive a small plan-view bend. */
+    /** 仅长水桥施加平面正弦弯，短桥保持直接连接。 */
     public static final int BRIDGE_CURVE_MIN_LENGTH_BLOCKS = 96;
-    /** Maximum lateral offset of a curved bridge from its chord. */
+    /** 限制桥曲线偏离弦线的幅度，保留端点归零的长桥弯。 */
     public static final double BRIDGE_CURVE_MAX_OFFSET_BLOCKS = 5.0D;
 
     public static final int DEFAULT_ROAD_WIDTH = 3;
     public static final int ROAD_WIDTH_MAX = 15;
-    /** Target horizontal distance between ordinary roadside lamps. */
+    /** 普通路灯按水平里程间隔选座，避免每站重复放置。 */
     public static final int DEFAULT_LAMP_INTERVAL = 32;
     public static final int LAMP_INTERVAL_MIN = 1;
     public static final int LAMP_INTERVAL_MAX = 2048;

@@ -39,7 +39,7 @@ public final class PlannedPathCache {
     private static final int PATH_WORLDGEN_SCHEMA = 1;
     private static final Map<ServerLevel, ConcurrentHashMap<PlannedPathKey, Entry>> BY_LEVEL =
             Collections.synchronizedMap(new IdentityHashMap<>());
-    /** Reuse ownership produced by the planning pass, kept beside the path cache. */
+    /** 规划共用归属与粗路线同生命周期保存，避免路线存在而所有者信息丢失。 */
     private static final Map<ServerLevel, ConcurrentHashMap<PlannedPathKey, List<ReuseRange>>> REUSE_BY_LEVEL =
             Collections.synchronizedMap(new IdentityHashMap<>());
 
@@ -55,14 +55,7 @@ public final class PlannedPathCache {
                 level.dimension().location());
     }
 
-    /**
-     * Memory writes are synchronous and authoritative; persistence is fanned
-     * out to a small bounded executor (one worker per initial-generation lane,
-     * capped at four) so registering a large planning batch never blocks the
-     * planning thread on disk. A failed save keeps the in-memory path and
-     * logs; the next planning pass of the same connection rewrites it.
-     * Package-private for the batch-write regression.
-     */
+    /** 粗路径内存发布同步，持久写走有限IO执行器；写失败保留内存并告警，不可把内存命中当落盘保证。 */
     static void registerInternal(ConcurrentHashMap<PlannedPathKey, Entry> memory,
                                  PlannedPathStore store,
                                  String fingerprint,
@@ -123,7 +116,7 @@ public final class PlannedPathCache {
         }
     }
 
-    /** Fixed writer count, bounded by the initial-generation lane budget. */
+    /** 写线程受开局通道预算及固定上限约束，避免规划批次创建无界线程。 */
     static int writeExecutorCapacity() {
         writeExecutor();
         return WRITE_EXECUTOR_CAPACITY;
@@ -221,7 +214,8 @@ public final class PlannedPathCache {
         }
     }
 
-    /**
+    /** 共用走廊水平距离与全局吸附口径一致，避免两阶段对同路给出不同归属。
+ *
      * 0.8.368 (T1): how far a secondary station may sit from the primary
      * corridor and still count as sharing it. Matches the global road-snap
      * reach ({@code RoadConstants.ROAD_SNAP_THRESHOLD}) so "these two roads run
@@ -229,51 +223,25 @@ public final class PlannedPathCache {
      */
     private static final int REUSE_MATCH_TOLERANCE =
             Math.max(1, net.shiroha233.roadweaver.core.constants.RoadConstants.ROAD_SNAP_THRESHOLD);
-    /**
-     * 0.8.369 (T1b): wider reach used only when the strict pass finds no run at
-     * all. The planned path is recorded before four geometry passes and a
-     * boundary trim reshape the final corridor, so a genuinely shared stretch
-     * can end up further apart than the snap reach; a real save lost 5 of 9
-     * ranges that way. Escalating only on a total miss cannot adopt a
-     * coincidental crossing, because such a crossing still yields no run at the
-     * strict reach and its geometry stays unaligned at the wider one too.
-     */
+    /** 严格匹配完全无共享段时才扩大到兼容容差，仍须方向、高度及最短连续段校验。 */
     private static final int REUSE_MATCH_WIDE_TOLERANCE =
             Math.max(REUSE_MATCH_TOLERANCE, REUSE_MATCH_TOLERANCE * 3);
-    /**
+    /** 共享路面还须高度接近，避免把上下立交当作同一物理走廊。
+ *
      * Only the same surface counts as a shared corridor; a grade-separated
      * crossing keeps its own pavement. Mirrors
      * {@code RoadSnapService.REUSE_EXTEND_MAX_HEIGHT_DELTA}.
      */
     private static final int REUSE_MATCH_MAX_HEIGHT_DELTA = 1;
-    /**
+    /** 至少连续若干站才形成共用段，避免偶然交叉就让出路面。
+ *
      * At least this many consecutive stations must lie in the corridor before a
      * stretch is treated as shared, so a coincidental crossing is never skipped.
      * Mirrors {@code RoadSnapService.REUSE_EXTEND_MIN_RUN}.
      */
     private static final int REUSE_MATCH_MIN_RUN = 3;
 
-    /**
-     * Records that a planned secondary path must reuse an already planned corridor.
-     *
-     * <p>0.8.368 (T1): this used to take two {@link BlockPos} taken from the
-     * <b>primary</b> path and file them under the <b>secondary</b> key. The
-     * consumer then looked those coordinates up in the secondary's own segment
-     * list, where they cannot exist — the two routes only share their first few
-     * stations, so everything past the shared endpoint lies elsewhere. Real
-     * saves showed the recorded range covering a completely disjoint area
-     * (primary X -864..-816 Z 712..752 vs the secondary actually spanning
-     * X -406..97 Z 119..410) and <b>11 of 11 ranges were dropped</b>, so no
-     * planned corridor reuse ever reached construction.</p>
-     *
-     * <p>The record now stores the primary's <b>identity</b> instead. The
-     * consumer reads the primary's planned path back out of {@link #BY_LEVEL}
-     * (both maps share a lifetime: {@code discard}, {@code clear} and
-     * {@code clearAll} remove them together) and matches geometrically against
-     * the final segment list. That keeps planning's decision — which two routes
-     * share a trunk — and only fixes how it is projected onto the geometry that
-     * construction actually paves.</p>
-     */
+    /** 记录主路身份而非主路坐标冒充次路站点；消费时按次路真实最终几何匹配。 */
     public static void recordReuse(ServerLevel level, StructureConnection connection,
                                    PlannedPathKey primaryKey, List<BlockPos> primaryPath) {
         if (level == null || connection == null || primaryKey == null) return;
@@ -302,26 +270,7 @@ public final class PlannedPathCache {
         }
     }
 
-    /**
-     * Converts planning-time ownership into physical NETWORK_REUSE spans.
-     *
-     * <p>0.8.368 (T1): the ranges now name the <b>primary</b> route rather than
-     * carrying its coordinates, so this walks the primary's planned path and
-     * marks the secondary stations that actually lie inside that corridor. The
-     * earlier exact-coordinate lookup could never succeed — {@code recordReuse}
-     * stored primary coordinates under the secondary key — and it also could not
-     * survive the four geometry passes in {@code Road.generateRoad} plus the
-     * {@code trimPathNearStructure} prefix/suffix removal, which move and delete
-     * stations.</p>
-     *
-     * <p>Matching is deliberately conservative: a station counts as shared only
-     * when it sits within {@link #REUSE_MATCH_TOLERANCE} blocks (Chebyshev) of a
-     * primary station <em>and</em> its height agrees within
-     * {@link #REUSE_MATCH_MAX_HEIGHT_DELTA}, and only runs of
-     * {@link #REUSE_MATCH_MIN_RUN} consecutive stations or longer become spans.
-     * A coincidental crossing therefore cannot become a reused corridor, so this
-     * cannot silently skip paving a stretch the planner never shared.</p>
-     */
+    /** 从规划归属映射到最终次路的NETWORK_REUSE跨度，距离、高度与连续段均须满足。 */
     public static List<RoadSpan> plannedReuseSpans(ServerLevel level,
                                                    StructureConnection connection,
                                                    List<RoadSegmentPlacement> segments) {
@@ -385,7 +334,8 @@ public final class PlannedPathCache {
         return List.copyOf(result);
     }
 
-    /**
+    /* 共用匹配同时检查水平距离与高度，避免立交仅因XZ接近被合并。
+ *
      * Marks every secondary station that lies inside the primary's corridor.
      * A station is shared when some primary station is within
      * {@link #REUSE_MATCH_TOLERANCE} blocks horizontally and its recorded height
@@ -393,7 +343,7 @@ public final class PlannedPathCache {
      * keeps a grade-separated crossing (underpass, flyover) from counting as a
      * shared surface corridor.
      */
-    /** Package-private for {@code PlannedReuseMatchTest}. */
+    /** 包内匹配端口供回归直接验证，避免依赖世界对象间接覆盖。 */
     static boolean[] sharedStations(List<BlockPos> primary,
                                     List<RoadSegmentPlacement> segments) {
         boolean[] shared = new boolean[segments.size()];
@@ -413,7 +363,7 @@ public final class PlannedPathCache {
         return shared;
     }
 
-    /** True when the mask holds at least one run long enough to become a span. */
+    /** 掩码须包含达到最短长度的连续段，孤立真值不能持久为共用跨度。 */
     private static boolean hasRun(boolean[] mask) {
         int run = 0;
         for (boolean value : mask) {
@@ -467,7 +417,7 @@ public final class PlannedPathCache {
         }
     }
 
-    /** Packs already-divided grid coordinates. Callers must pass cell indices. */
+    /** 输入已是分桶格坐标，不能再次按世界坐标缩放。 */
     private static long cellKey(int gridX, int gridZ) {
         return ((long) gridX << 32) ^ (gridZ & 0xffffffffL);
     }
@@ -478,18 +428,7 @@ public final class PlannedPathCache {
         }
     }
 
-    /**
-     * 0.8.369 (T1b): names the primary route whose corridor the secondary must
-     * reuse, together with a <b>snapshot of that route's planned path</b>.
-     *
-     * <p>0.8.368 stored only the key and read the path back from
-     * {@link #BY_LEVEL} at consumption time. Real saves showed that lookup
-     * failing for 4 of 9 ranges ({@code noPrimaryPath}), because the primary's
-     * own route is generated — and its entry discarded — before the secondary
-     * asks. Holding the coordinates here keeps the decision self-contained: it
-     * is taken while both routes are live, and no later eviction can empty
-     * it.</p>
-     */
+    /** 保留主路身份及其规划坐标快照，避免主路生成后缓存驱逐让次路丢失共用决策。 */
     public record ReuseRange(PlannedPathKey primaryKey, List<BlockPos> primaryPath) {
         public ReuseRange {
             primaryPath = primaryPath == null ? List.of() : List.copyOf(primaryPath);

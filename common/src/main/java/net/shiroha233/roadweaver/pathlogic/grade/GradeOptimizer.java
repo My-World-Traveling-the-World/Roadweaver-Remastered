@@ -55,7 +55,8 @@ public final class GradeOptimizer {
         return solveOptimalGradeProfile(targetY, splitMask, maxStepPerTwoSegments, null);
     }
 
-    /**
+    /** 洞身偏离期望高度按对称代价求解，避免填方惩罚反向鼓励洞口台阶。
+ *
      * @param flatCostMask 洞身站点：偏离期望高度按对称单价计费（上/下同价），
      *                     否则"洞顶高于洞身"会被当成昂贵填方，洞口坡道反而比台阶更贵。
      */
@@ -66,7 +67,8 @@ public final class GradeOptimizer {
         return solveOptimalGradeProfile(targetY, splitMask, maxStepPerTwoSegments, flatCostMask, null);
     }
 
-    /**
+    /** 允许以真实水平站距限制坡度；未提供时保留按站号计的兼容行为。
+ *
      * @param stationSpacing 相邻站真实距离（索引 i 是 i-1→i 的距离；{@code null} = 按站号计）
      */
     public static int[] solveOptimalGradeProfile(int[] targetY,
@@ -206,7 +208,8 @@ public final class GradeOptimizer {
         return fill <= 2 ? fill * 3 : 6 + (fill - 2) * 10;
     }
 
-    /**
+    /** 双向坡限内能以普通挖方穿越的山段不升级隧道，候选判据须与最终坡限一致。
+ *
      * True when the mountain run between the two anchors can be crossed by an
      * ordinary surface cut: the slope-limited terrain-following profile stays
      * within the short-grade cut budget ({@link #TUNNEL_SURFACE_CUT_BUDGET}).

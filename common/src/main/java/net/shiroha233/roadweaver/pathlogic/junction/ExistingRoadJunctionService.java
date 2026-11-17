@@ -48,7 +48,7 @@ import net.shiroha233.roadweaver.pathlogic.core.Road;
 import net.shiroha233.roadweaver.postprocess.JunctionTrimOps;
 import static net.shiroha233.roadweaver.pathlogic.junction.ParallelOverlapResolver.*;
 
-/** Reuses a completed road when a new road reaches its already-connected network. */
+/** 新路接入已完成路网时复用既有走廊，避免重复施工。 */
 public final class ExistingRoadJunctionService {
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     static final double MAX_JUNCTION_CONSTRUCTION_OVERHEAD =
@@ -149,11 +149,12 @@ public final class ExistingRoadJunctionService {
     record MergeResult(int index, RoadData secondary, RoadData candidate, RoadData donor) {
     }
 
-    /** Final merged batch plus the fingerprints of roads already continuity-repaired during refinement. */
+    /** 返回最终合流批次及已精修路标识，避免后续再次对同一路做连续性修复。 */
     public record MergeBatchResult(List<RoadData> roads, Set<Long> refinedRoadFingerprints) {
     }
 
-    /**
+    /** 初始成功路线落盘前与附近旧路及前序批次道路合流；桥隧主体不能作为新路口锚点。
+ *
      * Connects the final successful routes before the initial batch is
      * persisted. Nearby persisted roads and earlier routes in this batch may
      * supply the shared corridor; bridge/tunnel segments are never selected as
@@ -163,11 +164,7 @@ public final class ExistingRoadJunctionService {
         return connectPlannedBatch(null, roads);
     }
 
-    /**
-     * Forms the final road network before any new road in the batch is
-     * persisted. Persisted roads and earlier batch entries are immutable;
-     * only the later route may be shortened or redirected onto them.
-     */
+    /** 批次按既定顺序选主；公共端口编排和捐赠路写回须保持原归属，不按测试需要改几何。 */
     public static List<RoadData> connectPlannedBatch(ServerLevel level, List<RoadData> roads) {
         return connectPlannedBatchDetailed(level, roads).roads();
     }
@@ -215,26 +212,8 @@ public final class ExistingRoadJunctionService {
         }
     }
 
-    /**
-     * 0.9.018（D2 平行双桥「方案 C：后者整体改道」）：全批次两两预检并让后者改道。
-     *
-     * <h2>为什么不能复用已有的麻花判定</h2>
-     * <p>{@code RoadSnapService.detectsBraid} 只在 {@code tryConnect} 里跑，而
-     * {@code tryConnect} 的前提是先有一条路的端点被另一条吸引过来。两条各走各的
-     * 平行路永远走不到那段判定（真机 49 条路只 {@code merged=12}），于是各修各的桥。
-     * 这里改成不依赖端点吸引的无条件两两扫描。</p>
-     *
-     * <h2>顺序与不可变性</h2>
-     * <p>批次内的路按列表顺序处理：下标靠后的是「后者」，可以改；下标靠前的是
-     * 「前者」，本次不动。<b>持久化过的路一律不动</b>——它们已经写进存档，改它们
-     * 等于改写历史地形。所以 {@code persisted} 只作为「前者」参与判定。</p>
-     *
-     * <h2>为什么先包围盒预筛</h2>
-     * <p>逐站判定是 O(站数 × 桶内站数)。一个批次几十条路、每条千级站，
-     * 无预筛的两两扫描要上亿次比较；而两条路的包围盒差得远超站距上限时根本不可能
-     * 并排，用 {@code RoadBounds.gap} 一行就能剔掉绝大多数组合。</p>
-     */
-    /** Connects one runtime-planned road to the completed network before saving it. */
+
+    /** 游玩期新路保存前接入已完成网络，避免落盘后才发现重复走廊。 */
     public static RoadData connectToExistingNetwork(ServerLevel level, RoadData road) {
         TerrainSamplingCache cache = new TerrainSamplingCache();
         try {
@@ -268,7 +247,8 @@ public final class ExistingRoadJunctionService {
         return best;
     }
 
-    /**
+    /** 所有捐赠路均对原始候选评价，只提交最佳单一合流，避免逐捐赠路改写产生多重锚点。
+ *
      * A road may physically join one existing corridor, not a chain of
      * corridors.  Evaluating later donors against a route that was already
      * shortened by an earlier donor creates several overlapping anchor and
@@ -348,7 +328,8 @@ public final class ExistingRoadJunctionService {
         return true;
     }
 
-    /** Per-donor prefilter: keep only donors whose bounding box lies within
+    /** 只排除包围盒明显超出吸附距离的捐赠路，不改变余下候选次序。
+ * Per-donor prefilter: keep only donors whose bounding box lies within
      * snap reach.  A donor outside that reach can never satisfy any junction
      * mode in {@link RoadSnapService#connectSecondaryToPrimary}; this is a
      * pure geometric early-out and does not change candidate ordering. */
@@ -409,7 +390,8 @@ public final class ExistingRoadJunctionService {
         return trimmed;
     }
 
-    /**
+    /** 保守占地截断仍继承捐赠路最终高度，附近逐站接坡后回归原剖面，避免隐藏错台。
+ *
      * The legacy footprint stop is retained as a conservative fallback, but
      * its endpoint must still inherit the completed road's final construction
      * height. The widening envelope enforces one vertical block per two road

@@ -43,7 +43,8 @@ public final class ExistingRoadAttachment {
     private ExistingRoadAttachment() {
     }
 
-    /**
+    /** 只有找到可用既有道路接入点才返回改接连接，无候选保留原失败状态。
+ *
      * @return 改接后的连接；{@code null} 表示没有可用的接入点（保持原失败状态）
      */
     public static StructureConnection find(ServerLevel level, StructureConnection original, int maxRadius) {

@@ -82,7 +82,8 @@ public final class RoadOverlapTruncator {
     private RoadOverlapTruncator() {
     }
 
-    /**
+    /** 输出旧连接到新连接的替换映射，空结果明确表示没有合并。
+ *
      * @return 旧连接 → 新连接 的替换映射（没有可合并的时候返回空 Map）
      */
     public static Map<StructureConnection, StructureConnection> findReplacements(

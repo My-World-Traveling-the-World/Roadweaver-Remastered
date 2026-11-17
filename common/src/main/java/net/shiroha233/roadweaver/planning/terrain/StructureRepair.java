@@ -79,7 +79,8 @@ public final class StructureRepair {
                 accuratePath, level, sampler, config, connection, STRUCTURE_SEARCH_MARGIN_BLOCKS);
     }
 
-    /**
+    /** 精确结构修复只处理首个冲突附近窗口，由调用方控制横向预算，不全路重搜。
+ *
      * Repairs only the window around the first exact structure conflict. The
      * caller controls the lateral detour allowance; this never re-plans the
      * full endpoint-to-endpoint connection.
@@ -94,7 +95,8 @@ public final class StructureRepair {
                 localDetourBlocks, STRUCTURE_AHEAD_CLEARANCE_BLOCKS);
     }
 
-    /**
+    /** 最终建筑精修允许贴近真实轮廓，路面本体仍不得进入解码建筑列。
+ *
      * Final building-only precision pass.  The search stays local to the
      * conflicting building but permits grazing its real footprint; only the
      * actual road corridor may not overlap decoded template blocks.
@@ -110,14 +112,15 @@ public final class StructureRepair {
                 accuratePath, level, sampler, config, connection, localDetourBlocks).path();
     }
 
-    /** Outcome of one exact-clearance building repair pass. */
+    /** 精确建筑修复结果保留失败位置与原因，便于有界升级及诊断。 */
     public record ExactStructureRepairOutcome(List<BlockPos> path,
                                               BlockPos lastRejectedCenter,
                                               int lastRejectedIndex,
                                               String lastRejectionReason) {
     }
 
-    /**
+    /** 返回无法绕行的冲突中心，避免同冲突在每个半径重复无效尝试。
+ *
      * Same as {@link #repairStructureIntersectionsAtExactClearance} but also
      * reports the conflict centre that could not be rerouted, so callers can
      * stop escalating the detour radius when the same conflict already failed
@@ -402,7 +405,8 @@ public final class StructureRepair {
         return "rejected_by_acceptance_policy";
     }
 
-    /**
+    /** 无XZ替代路时只在有界窗口调整Y且保留端点，不能以全路降高掩盖失败。
+ *
      * Force a local, endpoint-preserving height profile when no alternate X/Z
      * route can be found.  The caller has already bounded the input to the
      * height-repair window; only Y values are changed here.

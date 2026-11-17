@@ -448,7 +448,8 @@ public final class PathFinalizeOps {
         return path;
     }
 
-    /**
+    /** 仅在跨度提取后的水冲突失败时局部改线，不能主动把可行桥梁全部绕走。
+ *
      * Late water fallback used after span extraction.  This is intentionally
      * separate from normal path finalization so valid short crossings and long
      * bridges are not proactively rerouted around their rivers.

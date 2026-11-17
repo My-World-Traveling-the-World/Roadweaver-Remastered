@@ -77,7 +77,8 @@ public record SurfaceGradeLimits(int plainCut,
         }
     }
 
-    /**
+    /** 以本连接有效模式取得挖填限制，不回写全局或其他连接。
+ *
      * Captures limits for an explicit effective mode — the global mode, or
      * the route-level AUTO tendency resolved by {@code RouteProfileTendency}
      * for this connection. Never writes anything back to config.

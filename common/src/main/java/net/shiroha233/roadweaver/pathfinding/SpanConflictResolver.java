@@ -109,7 +109,8 @@ public final class SpanConflictResolver {
         return resolveOverlappingWaterSpans(result, centers, centerIndex);
     }
 
-    /**
+    /** 同物理类型的重叠或相邻跨度合并后统一插值，避免共享站被两次剖面覆盖产生错层。
+ *
      * T-26: merges every overlapping-or-adjacent range of one physical type into
      * a single span.
      *
@@ -149,7 +150,8 @@ public final class SpanConflictResolver {
         if (start >= 0) result.add(new RoadSpan(centers.get(start), centers.get(end), type));
     }
 
-    /**
+    /** 桥、短跨越与隧道按站序互斥；隧道优先后保留水跨度的非重叠部分。
+ *
      * Physical-span mutual exclusion (T5): a station may carry only one of
      * bridge / crossing / tunnel. Tunnel selection is based on the real
      * overburden profile and the undersea conversion is a deliberate
@@ -231,7 +233,8 @@ public final class SpanConflictResolver {
         return result;
     }
 
-    /**
+    /** 只有完整隧道净空低于河床时才移除水跨越，仍接触水列的路保留原水跨度判定。
+ *
      * Removes a surface-water crossing when the complete tunnel clearance is
      * below the river bed. Crossing width and bridge selection stay unchanged
      * for roads whose construction volume actually reaches the water column.

@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/** Persists which road fingerprints have already been constructed in each full chunk. */
+/** 施工台账记录区块内已施工道路版本，规划READY与台账完成是不同状态。 */
 public final class RoadConstructionLedger {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int SCHEMA = 3;

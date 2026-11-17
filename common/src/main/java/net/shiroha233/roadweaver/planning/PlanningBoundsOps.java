@@ -256,7 +256,8 @@ public final class PlanningBoundsOps {
                 connections, epoch, null);
     }
 
-    /**
+    /** 准备快照后的地形规划保留核心与尾段分别计时，不改变规划调用与结果。
+ *
      * @param partsOut 可选，长度 ≥2 的 long[]：{@code [0]=coreNanos}（{@code TERRAIN_PLANNING.plan} 本体）、
      *                 {@code [1]=tailNanos}（过滤 + 共享端点复用 + 缓存登记）。0.9.038 只读观测。
      */

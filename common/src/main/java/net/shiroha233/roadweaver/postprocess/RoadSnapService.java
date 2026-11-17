@@ -47,7 +47,7 @@ import static net.shiroha233.roadweaver.postprocess.JunctionConnector.*;
 import static net.shiroha233.roadweaver.postprocess.JunctionTrimOps.*;
 import static net.shiroha233.roadweaver.postprocess.EndpointConnectOps.*;
 
-/** Connects a later road to an earlier completed road without modifying the earlier road. */
+/** 后建道路接入先建道路时保持主路归属；需捐赠路降高的特殊场景由显式写回链处理。 */
 public final class RoadSnapService {
     private RoadSnapService() {
     }
@@ -67,11 +67,11 @@ public final class RoadSnapService {
     static final int MAX_REPEATED_TARGETS = 2;
     static final int JUNCTION_ANCHOR_SEGMENTS = 10;
     static final int MAX_TUNNEL_JUNCTION_ANCHOR_SEGMENTS = 64;
-    /** Maximum vertical offset accepted before a tunnel junction is graded. */
+    /** 隧道路口允许的初始高度偏差有上界，后续接坡仍须校验。 */
     static final int MAX_TUNNEL_JUNCTION_GRADE_DELTA = 8;
-    /** A close parallel approach may receive a real short connector before reuse. */
+    /** 近平行接近允许有限短接后复用，不能只因距离近就吞掉次路。 */
     static final int MAX_APPROACH_CONNECTOR_DISTANCE = SNAP_THRESHOLD;
-    /** A long, nearly parallel run is a shared corridor, not two roads. */
+    /** 足够长且同向的走廊才判复用，避免偶然交叉被当作重复路。 */
     static final int OVERLAP_MERGE_MIN_RUN = 6;
     /** A building gap or grade transition can split one physical corridor into
      * several valid reuse windows. Keep the pass bounded while allowing the
@@ -91,35 +91,29 @@ public final class RoadSnapService {
     // more than one road width.
     static final int OVERLAP_MERGE_MAX_DISTANCE = SNAP_THRESHOLD;
     static final double OVERLAP_MERGE_MIN_DIRECTION_DOT = 0.75D;
-    /**
+    /** 弯长共享段按多站多数方向判定，避免单中点采样误拒整段。
+ *
      * 0.8.369 (T2b): a long shared corridor bends, so its heading is sampled at
      * several stations and accepted on a majority vote. One midpoint sample made
      * a 216-station overlap fail the parallel test and kept the braid.
      */
     static final int PARALLEL_CORRIDOR_HEADING_SAMPLES = 5;
-    /**
+    /** 共享段允许有限离群站，避免单站偏移否定长段；真正交叉仍有大部分站超距。
+ *
      * 0.8.369 (T2b): fraction of stations allowed to fall outside the merge
      * distance before the whole run is rejected. A single outlier used to drop
      * an entire overlap; a genuine crossing still fails, because there almost
      * every station is out of range.
      */
     static final double PARALLEL_CORRIDOR_OUTLIER_FRACTION = 0.1D;
-    /**
-     * 0.8.369 (T2b): how close the two runs' lengths must be before their
-     * stations are put in correspondence. Superseded in 0.8.370 by pairing
-     * through the real nearest-neighbour map ({@code targets}), which needs no
-     * length-ratio gate because every station is matched to the primary station
-     * it actually sits closest to.
-     */
+    /** 历史长度比例门已由真实最近站映射替代；保留常量不能误写成现行准入条件。 */
     static final double PARALLEL_CORRIDOR_MIN_LENGTH_RATIO = 0.6D;
     static final long SNAP_DIST2 = (long) SNAP_THRESHOLD * SNAP_THRESHOLD;
     static final long SPLIT_DIST2 = (long) SPLIT_THRESHOLD * SPLIT_THRESHOLD;
-    /** Generous reach so a pair that could still connect is never skipped. The
-     *  real snap reach is ~24 blocks (grid radius + road width); we reject only
-     *  roads whose bounding boxes are clearly farther apart than that. */
+    /** 包围盒只提前排除明显超出最大吸附范围的路对，实际连接仍用精确规则。 */
     static final int SPATIAL_REJECT_MARGIN = SNAP_THRESHOLD * 4;
     static final Object RECONCILIATION_LOCK = new Object();
-    /** Only reconciliation passes slower than this are logged at INFO. */
+    /** 仅慢协调输出INFO，普通批次留DEBUG，避免路对数放大日志负担。 */
     static final long SNAP_TIMING_LOG_MS = 250L;
 
     public static void snapAllRoads(ServerLevel level, int minX, int minZ, int maxX, int maxZ) {
@@ -178,7 +172,7 @@ public final class RoadSnapService {
                 }));
     }
 
-    /** Reconciles all persisted routes once, without loading any chunk. */
+    /** 持久道路协调不加载新区块，避免后台合流改变世界加载范围。 */
     public static CompletableFuture<Void> snapAllRoadsAsync(ServerLevel level) {
         if (level == null || RoadLifecycle.isStopping()) return CompletableFuture.completedFuture(null);
         var server = level.getServer();
@@ -329,8 +323,7 @@ public final class RoadSnapService {
         logSnapTiming(roads.size(), replacements.size(), (System.nanoTime() - snapStartedAt) / 1_000_000L);
     }
 
-    /** Runtime reconciliation runs once per completed road, so only a slow pass
-     *  is worth an INFO line; the rest stays at debug level. */
+    /** 每条路完成都会协调，只有慢过程升INFO以控制日志量。 */
     static void logSnapTiming(int roads, int replaced, long elapsedMs) {
         if (elapsedMs < SNAP_TIMING_LOG_MS) {
             LOGGER.debug("【已存道路协调数量与耗时】 " + "RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
@@ -341,7 +334,8 @@ public final class RoadSnapService {
                 roads, replaced, elapsedMs);
     }
 
-    /**
+    /** 只有能证明安全直连时返回次路替换；不安全返回无候选，不先修改主路。
+ *
      * Returns a replacement for {@code secondary}, or {@code null} when a safe
      * direct junction cannot be proven. {@code primary} is never modified.
      */
@@ -385,7 +379,8 @@ public final class RoadSnapService {
         return List.copyOf(repaired);
     }
 
-    /**
+    /** 仅去掉类型及站区间完全相同的重复跨度，真正物理重叠仍交给校验拒绝。
+ *
      * Junction assembly can inherit a span from the secondary route and then
      * add the same semantic span while marking the new anchor.  The duplicate
      * carries no extra construction information, but the final validator must
@@ -428,7 +423,8 @@ public final class RoadSnapService {
                 road.roadSegmentList(), unique, road.targetY(), road.ownerA2dKey(), road.ownerB2dKey());
     }
 
-    /**
+    /** NETWORK_REUSE已归属主路；删除次路对应物理跨度，避免复制桥面、桥墩或洞体。
+ *
      * A NETWORK_REUSE span copies exact stations from an earlier, already
      * owned road.  It is not a second construction corridor.  Drop secondary
      * bridge/tunnel/crossing spans that intersect it before the road is saved,
@@ -506,7 +502,8 @@ public final class RoadSnapService {
         return false;
     }
 
-    /**
+    /** 次路起点已在主路且一路同行时保留实际主路片段，避免锚点后残留平行双材质路。
+ *
      * A later edge may already start on an earlier road and remain in the same
      * corridor until their shared destination. In that case the whole owner
      * slice is the physical road; retaining a short anchor plus a parallel
@@ -526,7 +523,8 @@ public final class RoadSnapService {
         return dot > 0.3D;
     }
 
-    /**
+    /** 长短差异大时使用首尾单位方向，不能把逐站对应强套不同长度区间。
+ *
      * 0.8.369 (T2b): unit direction from the run's first to its last station.
      * Used when the two ranges differ too much in length to pair stations
      * individually — the overall travel direction is still meaningful there.
@@ -596,14 +594,7 @@ public final class RoadSnapService {
         return runs;
     }
 
-    /**
-     * P0-2: the segment grid only depends on a road's own XZ layout, and
-     * {@link RoadData} is deeply immutable, so one grid per road instance is
-     * enough. {@code connectSecondaryToPrimary} replays up to
-     * {@link #MAX_REUSE_WINDOWS_PER_PAIR} windows over the same primary, and
-     * {@code snapRoadList} reuses that primary for every later secondary; the
-     * grid is therefore built O(k) times per pass instead of O(k^2 * W).
-     */
+    /** 网格只依赖中心XZ，按RoadData实例复用；外层站序发布后不改，嵌套positions未深拷贝但此网格不读取它。 */
     static final ThreadLocal<IdentityHashMap<RoadData, SegmentGrid>> GRID_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
 
@@ -657,7 +648,8 @@ public final class RoadSnapService {
         return special;
     }
 
-    /** Physical water spans cannot host a new junction; building gaps and
+    /** 物理水跨度不能作新路口；缺口与已有复用可参与共用中段，锚点本身仍须安全校验。
+ * Physical water spans cannot host a new junction; building gaps and
      * existing reuse runs remain continuous evidence for a middle corridor.
      * The actual junction index is still checked separately by
      * {@link #isSafeJunctionIndex(RoadData, int)}. */
@@ -687,16 +679,7 @@ public final class RoadSnapService {
         return result;
     }
 
-    /**
-     * P0-1: derived per-road lookup tables, built at most once per RoadData
-     * instance. {@link RoadData} is deeply immutable (its compact constructor
-     * copies every list and both element types are records), so caching derived
-     * indices by instance identity can never observe a stale road. The previous
-     * implementation rebuilt the whole xz-&gt;index map inside every
-     * {@code isIndexInSpan} call; {@code gradeCompatibleAtJunction} alone calls
-     * that seven times per station, which made a single road pair O(S^2) in the
-     * segment count.
-     */
+    /** 索引读取中心与跨度并按实例缓存；record并不保证嵌套铺装列深不可变，发布后不得改动缓存所依赖输入。 */
     static final int ROAD_INDEX_CACHE_CAP = 512;
     static final ThreadLocal<IdentityHashMap<RoadData, RoadIndex>> ROAD_INDEX_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
@@ -759,7 +742,8 @@ public final class RoadSnapService {
     }
 
 
-    /**
+    /** 坡差所需过渡窗按实际高度扩展且封顶，避免畸形输入造成无限隧道重写。
+ *
      * Expands the transition window only as far as the vertical difference
      * requires.  The cap keeps malformed data from turning one junction into
      * an unbounded rewrite of the tunnel.
@@ -770,7 +754,8 @@ public final class RoadSnapService {
                 Math.max(JUNCTION_ANCHOR_SEGMENTS, delta + 2));
     }
 
-    /**
+    /** 隧道接头采用受限坡度预算；普通路保持水平距离规则，不能复用放宽入口。
+ *
      * A tunnel connector may use the same dynamically expanded grade budget
      * as its anchor.  Ordinary roads continue to use the horizontal-distance
      * rule and never call this method.
@@ -939,16 +924,11 @@ public final class RoadSnapService {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
-    /**
-     * P0-post B1: the junction donor pre-filter asks for a road's bounding box
-     * once per candidate pair, and {@code RoadBounds.of} scans every station.
-     * {@link RoadData} is deeply immutable, so one box per instance is enough —
-     * this removes the O(n^2 * S) term from the initial network merge.
-     */
+    /** 包围盒只依赖站中心，按实例缓存减少候选路对重复扫描；不能据此声称整份RoadData深不可变。 */
     static final ThreadLocal<IdentityHashMap<RoadData, RoadBounds>> BOUNDS_CACHE =
             ThreadLocal.withInitial(IdentityHashMap::new);
 
-    /** Public accessor used by the junction donor pre-filter. */
+    /** 向捐赠路预筛提供同一中心包围盒，避免另一实现出现边界漂移。 */
     public static RoadBounds roadBounds(RoadData road) {
         if (road == null) return null;
         IdentityHashMap<RoadData, RoadBounds> cache = BOUNDS_CACHE.get();
@@ -959,7 +939,8 @@ public final class RoadSnapService {
         return computed;
     }
 
-    /**
+    /** 跨度掩码向合流只读共享，调用方不能原地修改数组。
+ *
      * P0-post B2: read-only view of a road's span mask, shared with the junction
      * service so it no longer rebuilds the xz-&gt;index map per construction-length
      * query. Callers must not mutate the returned array.
@@ -969,7 +950,7 @@ public final class RoadSnapService {
         return roadIndex(road).spanMask(type);
     }
 
-    /** Axis-aligned bounding box of a road's station centres. */
+    /** 路界限为站中心轴对齐盒，不等价于完整施工占地。 */
     public record RoadBounds(int minX, int minZ, int maxX, int maxZ) {
         static RoadBounds of(RoadData road) {
             if (road == null || road.roadSegmentList() == null) return null;
@@ -988,7 +969,7 @@ public final class RoadSnapService {
             return any ? new RoadBounds(minX, minZ, maxX, maxZ) : null;
         }
 
-        /** Max-norm gap between this box and another; 0 when they overlap. */
+        /** 盒间最大范数距离为零仅表示盒相交，不代表真实道路已相交。 */
         public int gap(RoadBounds other) {
             if (other == null) return Integer.MAX_VALUE;
             int dx = Math.max(0, Math.max(minX, other.minX) - Math.min(maxX, other.maxX));

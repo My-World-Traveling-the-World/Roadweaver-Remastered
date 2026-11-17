@@ -103,7 +103,8 @@ public final class PlannedSectionBuilder {
                 List.copyOf(shell.values()), road.get(road.size() / 2));
     }
 
-    /**
+    /** 斜向截面法线须映射到两轴相邻列，避免单格步进跨掉侧壁。
+ *
      * Adds the clearance and wall cells one lateral step out from a roadway column.
      *
      * <p>Axis-aligned routes step once along the normal. Diagonal routes step along both axes for the same

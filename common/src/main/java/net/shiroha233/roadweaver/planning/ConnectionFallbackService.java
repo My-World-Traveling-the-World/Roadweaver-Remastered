@@ -23,12 +23,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
-/**
+/** 自动连接可用有界拓扑候选；手绘端点不允许偷偷换点，默认是否调用仍受上层开关控制。
+ *
  * Bounded topology fallback for automatically planned edges. Manual map
  * endpoints are intentionally never replaced.
  */
 public final class ConnectionFallbackService {
-    /** One deterministic fallback per failed route; later retries caused topology races. */
+    /** 每条失败路只选确定的替代候选，避免多轮换点与并发拓扑竞争。 */
     public static final int MAX_CANDIDATES = 1;
     private static final int SEARCH_RADIUS_BLOCKS = 1024;
 
@@ -78,7 +79,8 @@ public final class ConnectionFallbackService {
         return List.copyOf(pending);
     }
 
-    /**
+    /** 先移除失败边再计算分量，避免替代边被原失败边制造的虚假连通性排除。
+ *
      * Pure topology selection used by production and regression tests. The
      * failed edge is removed before component analysis, so an alternate path
      * cannot be turned into a redundant cycle.
@@ -212,7 +214,7 @@ public final class ConnectionFallbackService {
         ranked.add(new Candidate(replacement, priority, displacement, sidePriority));
     }
 
-    /** 0 = same-side continuation, 1 = same-side lateral, 2 = opposite side. */
+    /** 候选方向分级区分同侧延续、同侧横向与对侧，保持确定排序。 */
     private static int directionSidePriority(StructureConnection failed,
                                              BlockPos looseEndpoint,
                                              BlockPos candidate) {
@@ -232,7 +234,7 @@ public final class ConnectionFallbackService {
         return 2;
     }
 
-    /** Keeps the endpoint already attached to more viable edges as the network anchor. */
+    /** 优先保留已有可行连接更多的一端为网络锚点，降低替换造成的断网风险。 */
     private static BlockPos selectLooseEndpoint(StructureConnection failed, List<StructureConnection> existing) {
         int fromDegree = viableDegree(failed.from(), failed, existing);
         int toDegree = viableDegree(failed.to(), failed, existing);

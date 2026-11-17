@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 import java.util.function.Consumer;
 
-/** Left-hand mod navigator for the structure selection screen. */
+/** 结构选择界面的左侧模组导航，让筛选范围与右侧条目同步。 */
 public final class ModPickerListWidget extends RoadWeaverSelectionList<ModPickerListWidget.Entry> {
     private static final int ROW_HEIGHT = 28;
 

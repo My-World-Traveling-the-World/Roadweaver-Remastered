@@ -122,7 +122,7 @@ public final class IdleRoadGenerationService {
         RUNNING.set(0);
     }
 
-    /** Pauses only runtime road construction while the player is outside the Overworld. */
+    /** 玩家不在主世界时暂停道路后台施工，不暂停其他模组。 */
     public static void setRuntimePausedForDimension(boolean paused) {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;

@@ -89,7 +89,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         return placeChunk(world, server, new ChunkPos(ctx.origin()), ctx.random());
     }
 
-    /** Shared construction entry for normal worldgen and late-published roads in already-full chunks. */
+    /** 世界生成和已加载区块回填共用施工入口，避免两条规则链漂移。 */
     public static boolean placeChunk(WorldGenLevel world,
                                      ServerLevel server,
                                      ChunkPos currentChunk,
@@ -433,7 +433,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     roadType, currentChunk, roadFingerprint);
             return false;
         }
-        
+
         int roadWidth = Math.max(1, data.width());
         List<BlockState> materials = data.materials();
         List<BlockState> slabMaterials = data.slabMaterials();
@@ -495,7 +495,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         BridgeSegment bridgeSegment = new BridgeSegment(isBridge, segments, baseYArr);
         int deckY = server.getSeaLevel() + cfg.bridgeDeckClearance();
         BridgeSegmentPlanner.Context bridgeCtx = BridgeSegmentPlanner.newContext();
-        
+
         for (int localIndex = 0; localIndex < slice.segmentCount(); localIndex++) {
             int i = slice.segmentIndexAt(localIndex);
             // Shared stations are navigation data for this later road only.

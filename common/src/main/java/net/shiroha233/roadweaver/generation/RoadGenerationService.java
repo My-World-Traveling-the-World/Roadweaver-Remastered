@@ -63,7 +63,7 @@ import static net.shiroha233.roadweaver.generation.RoadQueueOps.*;
  * 道路生成调度器，管理 Path 队列的 tick 驱动异步生成
  */
 public final class RoadGenerationService {
-    /** Keep failures on the original edge for diagnosis; no topology fallback. */
+    /** 原始连接失败保持可诊断，拓扑候选开关不在这里隐式放宽。 */
     static final boolean TOPOLOGY_CANDIDATES_ENABLED = false;
     private RoadGenerationService() {}
 
@@ -72,7 +72,7 @@ public final class RoadGenerationService {
     static final ConcurrentLinkedQueue<StructureConnection> QUEUE = new ConcurrentLinkedQueue<>();
     static final ConcurrentHashMap<PlannedPathKey, Boolean> PROCESSED = new ConcurrentHashMap<>();
     static final AtomicInteger RUNNING_COUNT = new AtomicInteger();
-    /** Default maximum total runtime road generations, including the idle lane. */
+    /** 普通与空闲通道共用总在途额度，避免两个入口分别突破上限。 */
     static final int DEFAULT_RUNTIME_GENERATIONS = 3;
     static final AtomicInteger RUNTIME_SLOTS = new AtomicInteger(DEFAULT_RUNTIME_GENERATIONS);
     static final Set<Future<?>> ALL_RUNNING = ConcurrentHashMap.newKeySet();
@@ -81,14 +81,9 @@ public final class RoadGenerationService {
     static final int PLAYER_LIST_REFRESH_TICKS = 5;
     static volatile boolean runtimePausedForDimension;
     static long CURRENT_TICK = 0L;
-    /** P1-4: one-shot off-thread warm of the planned paths the queue will read. */
+    /** 在IO通道预热即将被队列读取的持久粗路径，降低首批tick同步读盘。 */
     static final AtomicBoolean PLANNED_PATH_PREWARM_STARTED = new AtomicBoolean();
-    /**
-     * P0-9: the topology reconcile result is a pure function of the connection
-     * table content, yet {@code refreshQueue} ran it on every tick. Cache the
-     * last input/result pair (main-thread only, like {@link #CURRENT_TICK}) so
-     * an unchanged table skips the quadratic pass entirely.
-     */
+    /** 拓扑协调结果仅在连接表变化时重算；缓存按主线程生命周期使用，避免每tick重复全表协调。 */
     static ServerLevel reconciledLevel;
     static List<StructureConnection> reconciledInput;
     static ConnectionTopologyReconciler.Result reconciledResult;
@@ -152,12 +147,12 @@ public final class RoadGenerationService {
         RoadPathCalculator.clearRuntimeHints();
     }
 
-    /** Compatibility entry point for non-Fabric loaders; Fabric owns the reset at SERVER_STARTING. */
+    /** 非Fabric入口兼容重置；Fabric在SERVER_STARTING负责同一生命周期。 */
     public static void onServerStarted() {
         onServerStarting();
     }
 
-    /** Runtime road work is only enabled while a player is in the Overworld. */
+    /** 只有玩家位于主世界时才允许普通道路后台工作。 */
     public static void setRuntimePausedForDimension(boolean paused) {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;
@@ -248,17 +243,13 @@ public final class RoadGenerationService {
         releaseRuntimeSlot();
     }
 
-    // ==================== 纯生成逻辑（无副作用） ====================
+    // ==================== 生成与持久化编排：失败和副作用由各入口契约区分 ====================
 
     public static boolean generateTask(ServerLevel level, StructureConnection conn) {
         return generateTaskWithFallback(level, conn, true).outcome().success();
     }
 
-    /**
-     * Generates a connection and retains the effective endpoint selected by
-     * bounded topology fallback. Callers that own status persistence must use
-     * this instead of the boolean convenience method.
-     */
+    /** 返回有效连接及道路供调用方持久化；失败后仍可尝试已有路短接，不应把禁用的拓扑换点描述为默认必走。 */
     public static GenerationResult generateTaskResult(ServerLevel level, StructureConnection conn) {
         GenerationAttempt attempt = generateTaskWithFallback(level, conn, true);
         if (attempt.outcome().success()) {
@@ -269,7 +260,7 @@ public final class RoadGenerationService {
         // 真机取证：23 条连接里 3 条报 all precision tiers / local repair / fallbacks exhausted，
         // 但它们两端距最近已有道路只有 0 / 16.6 / 49.2 / 55.0 / 64.3 格（只有一条终点在 872 格外）。
         // 也就是说路早就修到旁边了 —— 缺的不是「可行路线」，而是「允许它接进现有路网」。
-        // 改接后生成的是几十格接入短段，几乎必然成功。
+        // 改接只缩短候选，仍须完整生成与校验；失败保留原始失败结果。
         GenerationAttempt attached = tryAttachAndRegenerate(level, conn, true);
         if (attached != null) {
             return new GenerationResult(true, attached.connection(), attached.outcome().road());
@@ -277,15 +268,7 @@ public final class RoadGenerationService {
         return new GenerationResult(false, attempt.connection(), attempt.outcome().road());
     }
 
-    /**
-     * 就近接入已有道路并重新生成；不适用时返回 {@code null}（保持原失败结果）。
-     *
-     * <p><b>0.9.082：两个生成入口共用的底层实现。</b>原来只挂在
-     * {@link #generateTaskResult} 上，而初始生成走的是
-     * {@link #generateInitialRoad} / {@link #generateInitialRoadAtStep} ——
-     * 真机日志 {@code attaching failed connection} 恰好 0 次就是这么来的：
-     * 24 条初始连接失败 4 条，接入逻辑一次都没被执行过。</p>
-     */
+
     /**
      * 若该连接来自玩家手绘路线，则用玩家意图覆盖管线产出。
      *
@@ -306,6 +289,7 @@ public final class RoadGenerationService {
      * （而不是留下必然失败的数据）。回退意味着高度/类型以算法为准，
      * 但至少路能建出来 —— 比静默消失好。</p>
      */
+    /** 一次生成结果区分失败、无需新路的成功和产生道路的成功，避免空道路被统一解释为失败。 */
     record GenerationOutcome(boolean success, RoadData road) {
         static GenerationOutcome failed() {
             return new GenerationOutcome(false, null);
@@ -349,11 +333,7 @@ public final class RoadGenerationService {
         }
     }
 
-    /**
-     * Initial generation must leave every connection in a terminal state before
-     * world entry. The Road implementation already prefers the persisted coarse
-     * path and falls back to the detailed planner when that path is unavailable.
-     */
+    /* 初始任务由协调器负责重试及结案；本入口优先消费已有粗走廊，不能把无路径误报为已建。 */
     /** <b>⚠️ 死代码：只被 {@link #generateInitialRoad} 调用，而后者零调用点。</b> */
     public static InitialTaskResult generateInitialTask(ServerLevel level, StructureConnection conn) {
         return generateInitialRoad(level, conn).result();
@@ -402,7 +382,8 @@ public final class RoadGenerationService {
         }
     }
 
-    /**
+    /** 仅运行指定精度的一次开局尝试，不在此处偷偷切换精度或拓扑候选。
+ *
      * Runs exactly one initial-generation attempt at the supplied precision.
      * Startup coordination owns the retry tiers; this method must never fall
      * through to another precision or topology candidate.
@@ -412,11 +393,7 @@ public final class RoadGenerationService {
         return generateInitialRoadAtStep(level, conn, step, false);
     }
 
-    /**
-     * Runs one startup retry. A local-only retry must already have a rebound
-     * path cache entry; otherwise fail the retry rather than silently starting
-     * a full endpoint-to-endpoint coarse scan.
-     */
+
     /**
      * 0.8.325：局部修复重生成是否有可用的 rebound 路径（= 局部 splice 是否真的产出过结果）。
      * 没有的话重生成会立刻失败，调用方应在提交前就跳过，而不是白排一次任务。
@@ -551,7 +528,8 @@ public final class RoadGenerationService {
         }
     }
 
-    /**
+    /** 回填前协调同批已保存路网；范围限于路线附近，不能为合流主动加载区块。
+ *
      * Reconcile this completed route with roads saved by sibling workers before
      * replaying construction. The reconciliation is local to the route bounds,
      * never loads chunks, and is retried for a supplemental candidate when the
@@ -637,7 +615,7 @@ public final class RoadGenerationService {
                 completed.from(), completed.to());
     }
 
-    /** A candidate only counts as connected when it touches a persisted road other than the deferred original. */
+    /** 候选必须接触除被替换原路之外的已存道路，避免以原路自证连通。 */
     static boolean candidateConnectsToExistingNetwork(ServerLevel level,
                                                               RoadData candidate,
                                                               RoadData deferredOriginal) {
@@ -679,7 +657,8 @@ public final class RoadGenerationService {
 
     // ==================== 队列刷新 ====================
 
-    /**
+    /** 重开后的粗路径预热走IO通道并使用相同模式指纹，避免首批tick逐文件冷读。
+ *
      * P1-4: after a world reload the in-memory planned-path map is empty, so the
      * first ticks would read one file per pending connection on the server
      * thread. Warm exactly the entries {@code refreshQueue} is about to ask for,
@@ -731,21 +710,7 @@ public final class RoadGenerationService {
         }
     }
 
-    /**
-     * 当前暂停原因**是否属于手绘优先模式的豁免集合**（★ 2026-09-26 修 W-2）。
-     *
-     * <h2>为什么这样做才符合红线 6</h2>
-     * 红线 6：「与 Chunky / Streams / Voxy 的资源协调**只走配置层**」。
-     * 0.8.397 直接在 tick 里一刀切地推翻暂停语义（连 CHUNKY 都豁免）—— 越线。
-     * 现在改成：**读配置的豁免集合 → 与当前暂停原因比较**，
-     * 代码只做查表，协调策略完全由配置决定。
-     *
-     * <p>配置项：{@code performance.playerRoutePriorityExemptPauseReasons}
-     * （逗号分隔的 {@code PauseKind} 名字）。默认
-     * {@code PLAYER_INTERACTION,RECOVERY,PLAYER_TRAVEL}。</p>
-     *
-     * @return true 表示当前暂停原因在豁免集合内（可以为手绘施工开路）
-     */
+
     /**
      * 优先模式的并发上限（★ 2026-09-26 修 W-5）。
      *

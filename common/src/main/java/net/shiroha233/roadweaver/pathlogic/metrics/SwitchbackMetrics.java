@@ -52,7 +52,8 @@ public final class SwitchbackMetrics {
     private SwitchbackMetrics() {
     }
 
-    /**
+    /** 折返报告区分曲率、腿长与坡度，避免一个发卡弯计数替代完整质量评价。
+ *
      * @param hairpins        发卡弯数量
      * @param hairpinRadiusP50 弯心曲率半径的中位数（格，三站外接圆半径；退化成直线的样本不计）
      * @param hairpinLegP50   回头线腿长的中位数（站；一个弯的两条腿取平均）

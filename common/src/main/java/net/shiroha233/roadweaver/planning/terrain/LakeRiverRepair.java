@@ -127,7 +127,8 @@ public final class LakeRiverRepair {
         return List.copyOf(working);
     }
 
-    /**
+    /** 仅在物理跨越无法保留时局部绕河；使用道路宽度与有界窗口，不重搜全端点。
+ *
      * Repairs only river-channel conflicts.  A bridge/crossing span is still
      * preferred by the normal span extractor; this pass is the bounded
      * fallback when that physical crossing cannot be retained.  It deliberately

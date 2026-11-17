@@ -58,7 +58,7 @@ public final class SawtoothMetric {
     public static final double LEG_FACTOR = 2.0D;
     /** 弧长下限 = 步距 × 此系数（太短的点列没有统计意义）。 */
     public static final double MIN_ARC_FACTOR = 3.0D;
-    /** 横向速度的死区（格）：小于它的变化当作采样噪声，不计入翻转。 */
+
     /**
      * 局部弦窗口的半宽（站）。横向坐标改为相对**局部弦**而不是首末大弦 —— 见 {@link #measure}。
      */

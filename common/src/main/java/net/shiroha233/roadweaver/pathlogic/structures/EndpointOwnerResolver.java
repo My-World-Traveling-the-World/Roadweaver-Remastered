@@ -151,13 +151,8 @@ public final class EndpointOwnerResolver {
         return resolveEndpointOwnersFromInfos(connection, infos, boxes);
     }
 
-    /**
-     * True when the endpoint is a real village intersection. Only these use the
-     * precise crossing terrain height. Spawn and non-village endpoints keep the
-     * structure bounding-box height so the road climbs to the structure instead
-     * of dipping to a lower crossing column (which broke the connection).
-     */
-    /** True when this endpoint is a known (named/village) structure location, regardless of snapshot timing. */
+
+    /** 已知命名结构/村庄端点由身份判定，不因当前快照尚未就绪而变成未知端点。 */
     public static boolean isKnownStructureEndpoint(ServerLevel level, StructureConnection connection, boolean from) {
         if (level == null || connection == null) return false;
         BlockPos endpoint = from ? connection.from() : connection.to();

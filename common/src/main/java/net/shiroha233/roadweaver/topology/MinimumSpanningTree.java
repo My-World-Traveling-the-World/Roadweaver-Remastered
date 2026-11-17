@@ -125,7 +125,8 @@ public final class MinimumSpanningTree {
             return x;
         }
 
-        /** @return 是否真的合并了两个不同分量（＝这条边不构成环） */
+        /** 仅合并不同分量，保证Kruskal接受的边不会制造环。
+ * @return 是否真的合并了两个不同分量（＝这条边不构成环） */
         boolean union(int a, int b) {
             int ra = find(a);
             int rb = find(b);

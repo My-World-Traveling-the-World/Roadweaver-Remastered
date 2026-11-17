@@ -17,27 +17,12 @@ public final class PlanningConfig implements SubConfig {
      */
     public enum PlanningAlgorithm {
         /**
-         * 新三层内核的<b>测地距离</b>最小生成树（2026-11-13 新增，实验性）。
-         *
-         * <p>与 {@link #MST} 的区别只有一条，但很关键：MST 用<b>直线距离</b>建树，
-         * 本项用<b>测地距离</b> —— 也就是「绕开山和水实际要走多远」。两座结构直线
-         * 200 格、中间隔一道山脊时，直线距离看不出问题，测地距离会说实话。</p>
-         *
-         * <p>实现见 {@code PipelinePlanner}。它只接管<b>拓扑</b>，具体走线仍由
-         * 后续 A* 算（{@code RoadPipeline} 顺带算出的弹性带曲线暂不消费 ——
-         * 生成链没有接收预计算曲线的入口）。</p>
+         * 测地代价最小生成树拓扑，当前唯一生产选项。有限长度先筛候选，再评价实际下发图；
+         * 具体路线由后续BAND链生成，不能沿用“后续仍走旧A*”的历史说明。
          */
         PIPELINE
     }
-    /**
-     * Terrain profile mode. Three distinct behaviors: AUTO is the balanced
-     * baseline (legacy BALANCED saves load as AUTO), TUNNEL_FIRST keeps the
-     * fill budget but tightens cut to 3 and also runs the 3D height-aware
-     * search on mountain-heavy routes, BRIDGE_FIRST tightens fill to 1 and
-     * lets water crossings ignore the bridge depth threshold, and LIGHT_CUT
-     * tightens cut to 3 AND fill to 1 without changing any search behavior —
-     * it is a grading-only profile, not a tunnel/bridge preference.
-     */
+    /** 地形模式分为AUTO、偏隧道、偏桥与轻挖填四种；LIGHT_CUT仅收紧挖填，不等同偏桥或偏隧道。 */
     public enum TerrainProfileMode { AUTO, TUNNEL_FIRST, BRIDGE_FIRST, LIGHT_CUT }
 
     private int initialPlanRadiusChunks = RoadConstants.DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS;
@@ -46,46 +31,46 @@ public final class PlanningConfig implements SubConfig {
     private int dynamicPlanStrideChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_STRIDE_CHUNKS;
     private PlanningAlgorithm planningAlgorithm = PlanningAlgorithm.PIPELINE;
     private TerrainSamplingMode terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
-    /** Radius of the conflict-centred circle used by local route repair. */
+    /** 局部修复以冲突为圆心限制搜索范围，避免升级为全路重搜。 */
     private int localConflictRadiusBlocks = 100;
-    /** Building detour radius expands outward from this base in fixed steps. */
+    /** 建筑绕行从基础半径逐步外扩，给多轮重试明确边界。 */
     private int structureDetourRadiusStartBlocks = 50;
     private int structureDetourRadiusStepBlocks = 50;
     private int structureDetourRadiusMaxBlocks = 400;
-    /** Lake detour radius expands outward from 10/20/50 up to this ceiling. */
+    /** 湖泊绕行半径的上限约束局部搜索工作量。 */
     private int lakeDetourRadiusMaxBlocks = 100;
-    /** A vertical change above this many blocks is treated as a tunnel candidate. */
+    /** 高度突变超过阈值时进入隧道候选判断，不直接代表最终会挖隧道。 */
     private int heightTunnelThresholdBlocks = 10;
-    /** Local height-repair context length on each side of a conflict. */
+    /** 冲突两侧的局部高度修复上下文，避免只修单站形成断坡。 */
     private int heightRepairContextBlocks = 50;
-    /** Maximum tunnel depth the coarse/repair profile may lower a sustained hump. */
+    /** 粗规划及修复可向下调整的隧道深度预算，不代替最终覆土校验。 */
     private int tunnelDepthBlocks = 12;
-    /** Runs the expensive 3D height-aware coarse candidate when needed. */
+    /** 控制是否启用成本较高的三维高度候选，避免所有路都无条件扩大状态空间。 */
     private boolean coarseHeightAwareEnabled = true;
     private TerrainProfileMode terrainProfileMode = TerrainProfileMode.AUTO;
-    /** Ordinary surface grading may cut at most this many blocks below terrain. */
+    /** 普通地表道路挖方上限；物理跨度有独立约束。 */
     private int surfaceCutMaxBlocks = 5;
-    /** Ordinary surface grading may fill at most this many blocks above terrain. */
+    /** 普通地表道路填方上限，避免把深谷当普通路填平。 */
     private int surfaceFillMaxBlocks = 2;
-    /** A dry depression deeper than this many blocks is bridged instead of filled. */
+    /** 干凹地达到桥接深度时交给桥/跨越分类，与普通填方预算分开。 */
     private int dryDepressionBridgeDepth = 6;
     /** T-23: 对沿途非端点村庄聚合盒执行分段裁剪(站点落为保护缺口)。默认启用。 */
     private boolean passThroughVillageClipping = true;
-    /** Sustained overburden above this many blocks classifies a station as mountain. */
+    /** 连续覆土达到此阈值才视为山地候选，避免单点噪声触发隧道。 */
     private int mountainOverburdenBlocks = 8;
-    /** A tunnel run must contain at least this many consecutive stations. */
+    /** 隧道候选至少连续若干站，避免把短暂高度噪声分类为隧道。 */
     private int tunnelMinRun = 3;
-    /** 0=straightest, 100=most winding mountain switchback search. */
+    /** 盘山折返强度范围0到100，用于控制绕坡倾向。 */
     private int switchbackStrength = 40;
-    /** Expanded-state ceiling for the expensive 3D coarse candidate. */
+    /** 三维高度搜索展开状态上限，限制病态窗口的计算量。 */
     private int heightAwareStateLimit = 260_000;
-    /** Per-request cap on waiting for another thread's in-flight sampling job. */
+    /** 等待其他线程采样所有者的单次上限，避免在途任务永久挂起。 */
     private int samplingInFlightTimeoutMs = 3_000;
-    /** AUTO: mountain share at or above this fraction biases the route toward tunnels. */
+    /** AUTO按山地占比决定是否偏向隧道，显式模式不使用此自动选择。 */
     private double autoMountainThresholdFraction = 0.30D;
-    /** AUTO: water share at or above this fraction biases the route toward bridges. */
+    /** AUTO按水域占比决定是否偏向桥梁，显式模式不使用此自动选择。 */
     private double autoWaterThresholdFraction = 0.25D;
-    /** Base A* state ceiling for one local grade-repair window. */
+    /** 单个局部修坡窗口的状态预算，避免一路冲突无限展开。 */
     private int gradeRepairWindowStateLimit = 60_000;
     /**
      * 0.9.001：单个局部修坡窗口的 A* 墙钟预算（毫秒，默认 20_000）。
@@ -167,19 +152,15 @@ public final class PlanningConfig implements SubConfig {
     private double wideWaterBase = 600.0D;
     /** 0.9.011：宽水每湿步代价。默认 80 ⇒ 40 格 = 600+3200 = 3800。仅 landDetourFactor &gt; 0 时生效。 */
     private double wideWaterPerStation = 80.0D;
-    /**
+    /** 粗路径和过渡校验共用最大坡度比例，避免搜索接受后又被同口径校验拒绝。
+ *
      * Maximum vertical rise per horizontal block accepted anywhere in the
      * coarse path search and the post-hoc transition check. One shared value
      * keeps the two stages from disagreeing: at the default 0.5 a cliff must
      * be crossed with a ramp (or a tunnel/bridge), never a near-vertical shaft.
      */
     private double maxGradeFraction = 0.5D;
-    /**
-     * Parallelism for the local grade-repair window pool. 0 = auto: derived
-     * from the CPU count and the current road-worker budget (never below 4,
-     * never above the available processors). The old fixed pool of 4 left
-     * most road workers blocked in future.get() while cores idled.
-     */
+    /** 局部修坡并行度的零值表示自动；此池有独立预算，不能据此承诺全项目不超额占核。 */
     private int gradeRepairParallelism = 0;
     /**
      * 0.8.340：粗规划路径搜索的等待方式。默认 <b>false</b> = 旧行为（逐个 future.get()
@@ -220,7 +201,8 @@ public final class PlanningConfig implements SubConfig {
      */
     private int coarsePathWaitTimeoutMs = 180_000;
 
-    /**
+    /** 控制保护缺口是否继续尝试局部绕行；关闭时保留明确缺口，不凭空认定道路完整。
+ *
      * Only routes whose building conflict cannot be avoided go through the
      * local-repair wave (default true, the historical behavior). When false a
      * protected-gap route is retained as-is right after the initial batch and

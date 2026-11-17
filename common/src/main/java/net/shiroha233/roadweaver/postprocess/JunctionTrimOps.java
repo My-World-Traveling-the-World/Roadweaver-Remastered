@@ -240,13 +240,14 @@ public final class JunctionTrimOps {
         return false;
     }
 
-    /** Modes whose junction is an endpoint attachment; reuse-corridor modes keep their tails. */
+    /** 只有端点吸附模式裁尾，共用中段模式保留离开主路后的次路尾部。 */
     public static boolean isEndpointAttachmentMode(String mode) {
         return "spatial-start".equals(mode) || "spatial-end".equals(mode)
                 || "shared-endpoint".equals(mode) || "endpoint-corridor".equals(mode);
     }
 
-    /**
+    /** 裁掉路口之后完全叠在主路上的尾站时同步裁高度和跨度；带复用/锚点元数据或校验失败则保留原候选。
+ *
      * After a secondary road is attached to a primary, its rebuilt segment list
      * can still end with stations that lie on top of the primary corridor past
      * the junction. Find the trailing run of stations whose x/z sits on the
@@ -363,7 +364,8 @@ public final class JunctionTrimOps {
                 constructionLength, networkReuseStationCount(normalized)));
     }
 
-    /**
+    /** 记录合流坐标及双方目标高程，便于定位路口错台；不以日志替代实际坡差校验。
+ *
      * Logs the exact X/Z where a secondary road is attached to a primary road
      * and both roads' target heights at that junction. This makes a staircase
      * or height-mismatch at a road crossing directly traceable: a large
@@ -419,7 +421,7 @@ public final class JunctionTrimOps {
         return count;
     }
 
-    /** P0-post B2: delegates to the per-road cached mask; read-only. */
+    /** 只读复用按路缓存掩码，禁止调用方改写共享数组。 */
     public static boolean[] spanMask(RoadData road, SpanType type) {
         if (road == null || type == null) return new boolean[0];
         return roadIndex(road).spanMask(type);

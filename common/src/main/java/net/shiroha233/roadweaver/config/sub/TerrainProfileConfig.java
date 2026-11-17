@@ -3,7 +3,7 @@ package net.shiroha233.roadweaver.config.sub;
 
 import net.shiroha233.roadweaver.config.SubConfig;
 
-/** Per-terrain overrides for the automatic terrain profile. */
+/** 自动地形配置按地形类别覆盖默认值，不回写其他类别。 */
 public final class TerrainProfileConfig implements SubConfig {
     private int mountainSurfaceCutMaxBlocks = 3;
     private int mountainSurfaceFillMaxBlocks = 1;

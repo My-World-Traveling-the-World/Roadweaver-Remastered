@@ -45,7 +45,8 @@ public final class SampledTerrainField {
      */
     @FunctionalInterface
     public interface GridSampler {
-        /**
+        /** 矩形高度采样必须返回完整宽乘深数组，避免索引与坐标边界错位。
+ *
          * @param minX   区域最小 x
          * @param minZ   区域最小 z
          * @param width  区域宽（格）

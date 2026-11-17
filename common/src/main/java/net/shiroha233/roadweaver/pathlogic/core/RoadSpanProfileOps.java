@@ -120,7 +120,8 @@ public final class RoadSpanProfileOps {
         return false;
     }
 
-    /**
+    /** 仅未知且非村庄/出生点的端点参与共享高度协商，避免改写既有固定入口。
+ *
      * True only for unknown (unnamed) structure nodes: the snapshot lists an
      * endpoint with no known structure id, it is not a village and not the
      * shared spawn. Only these endpoints choose their shared height by
@@ -179,7 +180,8 @@ public final class RoadSpanProfileOps {
         return result;
     }
 
-    /** Closes the short boundary where a tunnel ends immediately before or after a water crossing.
+    /** 水跨度相邻的隧道侧只降不升接坡，不改跨越甲板本身，避免桥隧交界断阶。
+ * Closes the short boundary where a tunnel ends immediately before or after a water crossing.
      * The two profiles are normally independent: prefer-cut skips crossing stations, so the
      * tunnel-side bank can remain several blocks above the ford/bridge deck. This pass lowers the
      * higher tunnel-side stations toward the crossing endpoint one block per station without ever
@@ -219,7 +221,8 @@ public final class RoadSpanProfileOps {
         return result;
     }
 
-    /** Lowers elevated tunnel/bridge stations away from a water-span endpoint. `boundary` is the
+    /** 从水端点向外压低邻近高跨度；普通缓冲站仅在满足一格坡差时降低。
+ * Lowers elevated tunnel/bridge stations away from a water-span endpoint. `boundary` is the
      * crossing endpoint index; the adjacent side is boundary + direction. A short run of ordinary
      * buffer stations is allowed between the water span and the elevated physical span, but the
      * ordinary buffer itself is only lowered if doing so follows the one-block-per-station grade.
@@ -314,7 +317,8 @@ public final class RoadSpanProfileOps {
         }
     }
 
-    /**
+    /** 涉水甲板按水位与净空确定，邻岸只降不升接入，避免误用高桥甲板把浅滩两岸抬成台阶。
+ *
      * Task 5 / T-21: clears only the ford stations that would dip below the
      * water surface, then seats both banks onto the deck. The ford deck target
      * is {@code highestWater + FORD_DECK_CLEARANCE} (a wadable 1..2 blocks
@@ -361,7 +365,7 @@ public final class RoadSpanProfileOps {
         rampOntoBank(profile, range.end() + 1, +1, ramp);
     }
 
-    /** Walks away from a lifted span end, raising the bank at most 1 block per station. */
+    /** 从已抬跨度向陆侧逐站接坡，每站最多一格，避免桥头突然断高。 */
     public static void rampOntoBank(int[] profile, int from, int direction, int ramp) {
         int previousIndex = from - direction;
         if (previousIndex < 0 || previousIndex >= profile.length) return;

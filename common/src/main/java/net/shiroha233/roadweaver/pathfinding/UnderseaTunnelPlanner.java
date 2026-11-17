@@ -155,7 +155,7 @@ public final class UnderseaTunnelPlanner {
         return index;
     }
 
-    /** Lowers converted ocean-tunnel stations below the sampled sea floor. */
+    /** 海底转换后的目标高度必须低于已采海床，不能只从水面量深度。 */
     public static List<Integer> applyUnderseaTunnelProfile(
             List<Integer> targetY,
             List<RoadSpan> spans,
@@ -214,7 +214,8 @@ public final class UnderseaTunnelPlanner {
         return List.copyOf(result);
     }
 
-    /**
+    /** 海床高度图给出首个水格；扣除顶板偏移和岩层覆土后求路面上界，避免顶板浮在海床水中。
+ *
      * The deck level for an undersea tunnel station, from the ocean floor's first water block.
      *
      * <p>{@code oceanFloorWg} is "topmost solid block + 1", so the topmost solid block is

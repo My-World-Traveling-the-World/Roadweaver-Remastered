@@ -16,7 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 地形采样缓存
  */
 public final class TerrainSamplingCache {
-    /**
+    /** 粗采样按四格量化单元复用，键与后端真实取样对齐后才可共享。
+ *
      * P0-8: every sampler behind these maps quantises to a 4-block cell
      * ({@link FastHeightSampler#sampleHeight} aligns to {@code (x >> 2) << 2} and
      * {@code getNoiseBiome} is evaluated at {@code x >> 2}), so keying by the
@@ -39,12 +40,12 @@ public final class TerrainSamplingCache {
         return ((long) x << 32) | (z & 0xffffffffL);
     }
 
-    /** Key of the 4-block sampling cell that {@code (x, z)} belongs to. */
+    /** 打包所属四格采样单元，避免同单元重复建键。 */
     private static long hashCell(int x, int z) {
         return hashXZ(x >> 2, z >> 2);
     }
 
-    /** Safety valve so a pathological route cannot grow a map without bound. */
+    /** 为病态长路设置缓存容量阀，防止单路线无限持有样本。 */
     private static <V> void putBounded(ConcurrentHashMap<Long, V> map, long key, V value) {
         if (map.size() >= MAX_CACHE_ENTRIES) {
             map.clear();

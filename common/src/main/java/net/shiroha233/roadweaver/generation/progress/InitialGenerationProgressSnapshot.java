@@ -55,7 +55,7 @@ public record InitialGenerationProgressSnapshot(
         RoutePhaseProgress localRepairRoutes,
         RoutePhaseProgress candidateRoutes
 ) {
-    /** Human-readable per-stage sub-progress, for a finer second line under the stage bar. */
+    /** 提供当前阶段的可读子进度，让界面区分等待和实际工作。 */
     public String subProgressLabel() {
         return switch (stage) {
             case PLANNING -> planningStartsTotal > 0

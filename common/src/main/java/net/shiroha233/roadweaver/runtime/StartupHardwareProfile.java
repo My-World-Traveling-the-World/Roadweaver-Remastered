@@ -1,7 +1,7 @@
 /* 文件职责：按硬件缩放开局并发，并带堆内存护栏防止开局打爆内存。 */
 package net.shiroha233.roadweaver.runtime;
 
-/** Hardware-scaled startup concurrency with a heap guard for heavy road tasks. */
+/** 开局并发随硬件及堆预算缩放，仍不能替代真实工作集内存验收。 */
 public record StartupHardwareProfile(
         int processors,
         long maxHeapMiB,

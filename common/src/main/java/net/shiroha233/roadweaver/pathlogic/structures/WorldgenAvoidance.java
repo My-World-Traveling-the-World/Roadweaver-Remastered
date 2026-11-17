@@ -147,7 +147,7 @@ public final class WorldgenAvoidance {
         return false;
     }
 
-    /** Construction-time check using the same endpoint StructureStart ownership as planning. */
+    /** 施工复用规划时的端点结构归属，避免端点在两个阶段得到不同豁免。 */
     public static boolean shouldAvoidConstruction(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (!ConfigService.get().structureAvoidanceEnabled() || world == null || pos == null) return false;
         ServerLevel level = world.getLevel();
@@ -163,7 +163,7 @@ public final class WorldgenAvoidance {
         return false;
     }
 
-    /** Structure-only lookup for route-wide tunnel approval; never touches chunks. */
+    /** 全路隧道准入只查结构快照，不触发区块加载。 */
     public static boolean shouldAvoidPrepared(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (!ConfigService.get().structureAvoidanceEnabled() || world == null || pos == null) return false;
         ChunkEntry entry = StructureAvoidanceCache.CHUNK_BBOX_CACHE.get(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4));
@@ -177,7 +177,7 @@ public final class WorldgenAvoidance {
         return false;
     }
 
-    /** Exact construction-volume lookup with endpoint ownership, without a vertical safety band. */
+    /** 精确施工体积按所属端点查询，不叠加旧的垂直结构安全带。 */
     public static boolean shouldAvoidPreparedExact(WorldGenLevel world, BlockPos pos, RoadData road) {
         if (!ConfigService.get().structureAvoidanceEnabled() || world == null || pos == null) return false;
         ChunkEntry entry = StructureAvoidanceCache.CHUNK_BBOX_CACHE.get(ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4));
@@ -191,7 +191,8 @@ public final class WorldgenAvoidance {
         return false;
     }
 
-    /**
+    /** 只有已解码模板体素才算确认建筑；回落盒需进一步解析，不能直接制造施工缺口。
+ *
      * Returns true only when the planning snapshot has decoded actual template
      * blocks at this position.  A fallback bounding box is deliberately not
      * treated as a confirmed building: it must not create a construction gap
@@ -271,7 +272,8 @@ public final class WorldgenAvoidance {
         }
     }
 
-    /**
+    /** 将已解析道路走廊标为可判定区域，避免普通空块被反复视作未解析。
+ *
      * Planning has already indexed every known structure box for this route.
      * Mark the exact construction corridor as resolved so feature workers do
      * not treat an ordinary empty chunk as an unresolved structure query.
@@ -296,7 +298,7 @@ public final class WorldgenAvoidance {
         }
     }
 
-    /** Reads only chunks already exposed by the current worldgen region. */
+    /** 仅读取当前生成区域已暴露区块，不为保护检查请求新区块。 */
     static ChunkEntry resolveWorldgenEntry(WorldGenLevel world, int cx, int cz) {
         try {
             if (!(world.getLevel() instanceof ServerLevel level)) return null;

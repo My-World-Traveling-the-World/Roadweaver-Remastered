@@ -30,7 +30,8 @@ public final class BridgeShareAbsorber {
 
     private BridgeShareAbsorber() {}
 
-    /**
+    /** 向共享桥面接坡必须两侧都有足够合法过渡长度，无解不提交吸附。
+ *
      * @return 新 targetY；两侧过渡不足（无法在 ≤1 格/站内回到原剖面）返回 {@code null} = 放弃吸附
      */
     public static int[] blendToDeckY(List<Integer> targetY, int fromStation, int toStation, int deckY) {

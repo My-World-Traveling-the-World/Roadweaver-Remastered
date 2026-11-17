@@ -49,7 +49,8 @@ import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 public final class StructureAvoidanceService {
     private StructureAvoidanceService() {}
 
-    /**
+    /** 端点村庄的独立建筑部件保持有界归属组，避免其被误作沿路普通障碍。
+ *
      * Buildings belonging to the selected village endpoint can be emitted as
      * separate verified pieces. Keep the endpoint protection group bounded so
      * those pieces do not become ordinary mid-route obstacles.
@@ -79,18 +80,19 @@ public final class StructureAvoidanceService {
     static final int PATH_CORRIDOR_MARGIN_CHUNKS = 1;
     static final int AVOIDANCE_PREDICTION_TILE_CHUNKS = 16;
     static final int STRUCTURE_START_BATCH_SIZE = 16;
-    /** Runtime keeps a small window; startup may use the prepared structure lanes. */
+    /** 游玩期保留较小预测窗口；开局可用准备好的结构通道，避免无界运行扫描。 */
     static final int STRUCTURE_START_BATCH_WINDOW = 2;
     static final int MAX_PENDING_REQUESTS = 32;
     static final TicketType<Unit> STRUCTURE_SNAPSHOT_TICKET =
             TicketType.create("roadweaver_structure_snapshot", (left, right) -> 0);
     static final int PLANNING_SNAPSHOT_CACHE_CAPACITY = 2048;
     static final int PREPARED_START_CACHE_CAPACITY = 32768;
-    /** Preserve the old cached world area after reducing prediction tiles from 64x64 to 16x16. */
+    /** 预测瓦片缩小时保持原缓存覆盖面积，不能因单位变化意外缩小可复用范围。 */
     static final int OBSTACLE_TILE_CACHE_CAPACITY = 8192;
-    /** Maximum displacement between a selected structure origin and its actual replacement start. */
+    /** 限制所选结构原点与实际替换起点的位移，避免远处结构误认领端点。 */
     static final int ENDPOINT_REPLACEMENT_MATCH_BLOCKS = 24;
-    /**
+    /** 模板部件归属修正只做近距离且唯一所有者匹配，不能滥用大范围候选半径。
+ *
      * A generated template piece can sit several blocks inside the selected
      * structure origin. Keep this local and require a unique verified owner;
      * this is not the broad candidate/replacement radius.
@@ -100,47 +102,10 @@ public final class StructureAvoidanceService {
     static final String BIOME_PROBE_PROPERTY = "roadweaver.biomePrefilterProbe";
 
 
-    /**
-     * 0.9.059（①）：{@code terrainSnapshotPrepMs} 的子段计时（纯观测，<b>零行为</b>）。
-     *
-     * <p>真机一局 {@code terrainSnapshotPrepMs=72,670}（占 terrainPlanning 的 61%，也是
-     * async planning 的最大单项），而它内部一直只有一个总数。这里把同一个时间窗口按
-     * <b>串行、互不重叠</b>的段落拆开，逐段累加到本对象，最后由
-     * {@code RoadPlanningService} 打一行 {@code [PLAN-SNAPSHOT-BREAKDOWN]}。</p>
-     *
-     * <h2>四段的真实归属（照代码写，不按名字猜）</h2>
-     * <ul>
-     *   <li>{@code tileSampleMs} —— {@code predictObstacleCandidates(...)}（本文件 2252 行）。
-     *       它按 {@code AVOIDANCE_PREDICTION_TILE_CHUNKS=16} 个区块为一格瓦片，把走廊
-     *       覆盖到的瓦片一次性预测出结构候选（{@code StructurePredictor.predictAvoidanceStructuresInRect}）。
-     *       <b>注意口径</b>：这是"结构预测瓦片"，不是地形采样；地形采样在
-     *       {@code terrainCoreMs} 里（{@code TERRAIN_PLANNING.plan}）。</li>
-     *   <li>{@code structureOverlayMs} —— {@code resolvePreparedStartsAsync(...)} 整段
-     *       （逐起点解析精确结构盒 = 结构占用叠加），也就是真机
-     *       {@code resolutionMs=64,709} 的那一段。</li>
-     *   <li>{@code cacheWriteMs} —— 解析结果并进 {@code StructureAvoidanceCache.PLANNING_SNAPSHOTS} +
-     *       {@code indexConstructionBoxes} + {@code putBounded} 的收尾段。</li>
-     *   <li>{@code corridorSnapshotMs} —— <b>本窗口恒为 0</b>：真机口径的
-     *       {@code preparePathCorridorSnapshotsNow}(833 行) <b>不在这条调用路径上</b>，
-     *       它由 {@code preparePlanningSnapshotsForPathsAsync} 在地形规划之后调用，
-     *       记在 {@code structureSnapshotsMs}(18,167) 里。这里如实写 0，不硬塞。</li>
-     *   <li>{@code serverInitMs} / {@code startKeyMs} —— 额外两段：前者是服务器线程上
-     *       取结构快照与计数器的前缀，后者是逐连接枚举候选起点的循环。</li>
-     * </ul>
-     *
-     * <p>{@code threads=} 是这段窗口里真实观察到的 worker 线程名个数，{@code columns=} 是
-     * 结构起点解析提交的并发列宽（{@code STRUCTURE_START_BATCH_SIZE × windowBatches}）——
-     * 两个数一起用来判断"是不是单线程在扛"。</p>
-     */
 
-    /**
-     * Captures real structure-piece boxes on the server thread before a route
-     * is searched by workers. Selected structures remain connection nodes;
-     * every other same-dimension structure candidate near the route is only
-     * an obstacle. Starts load no further than STRUCTURE_STARTS, so workers
-     * never schedule a server task or request a chunk while pathfinding.
-     */
-    /** 规划前过滤结果：kept 保留参与规划，filtered 被标记为不参与规划/施工/局部修复。 */
+
+
+
     /** 一轮过滤超过这个条数就整体放弃（只告警），避免一次砍掉太多路。 */
     static final int UNKNOWN_ENDPOINT_FILTER_MAX_PER_ROUND = 4;
 
@@ -261,12 +226,13 @@ public final class StructureAvoidanceService {
         return PlanningSnapshotPreparation.preparePlanningSnapshotsOnServerThread(level, connections, timing);
     }
 
-    /** Activates the immutable snapshot for the current pathfinding worker. */
+    /** 为当前工作线程激活路线快照，离开作用域须恢复上一层，避免并发路线串扰。 */
     public static PlanningScope activatePlanningSnapshot(ServerLevel level, StructureConnection connection) {
         return activatePlanningSnapshot(level, connection, 0);
     }
 
-    /**
+    /** 终态宽度证明额外触列时临时扩张占地半径；作用域退出后恢复，不能永久放大后续路线。
+ *
      * Activates the immutable route snapshot with a temporary extra footprint
      * radius. This is used only after exact post-processing proves that the
      * rasterized road is one column wider than the center-path approximation.
@@ -286,12 +252,12 @@ public final class StructureAvoidanceService {
         return StructureAvoidanceCache.shouldAvoidPlanning(pos);
     }
 
-    /** Checks a planning position with an explicit horizontal safety margin. */
+    /** 用显式水平余量检查规划位置，避免调用方各自追加不同安全带。 */
     public static boolean shouldAvoidPlanning(BlockPos pos, int horizontalClearance) {
         return StructureAvoidanceCache.shouldAvoidPlanning(pos, horizontalClearance);
     }
 
-    /**
+    /*
      * 规划期建筑障碍强度。
      *
      * <p>{@link #PENALTY} 是历史行为：已验证建筑在 A* 里只是高代价，可以穿过，
@@ -316,7 +282,7 @@ public final class StructureAvoidanceService {
         void close();
     }
 
-    /** Validates spline/raster post-processing against the same immutable obstacle snapshot. */
+    /** 样条和栅格产物使用同一保护快照复验，避免后处理切入保护列。 */
     public static PlanningSnapshot requirePlanningSnapshot(ServerLevel level, StructureConnection connection) {
         if (level == null || connection == null) {
             throw new PlanningSnapshotUnavailableException("Missing level or structure connection");
@@ -352,7 +318,8 @@ public final class StructureAvoidanceService {
         StructureAvoidanceCache.PLANNING_SNAPSHOTS.computeIfPresent(key, (ignored, snapshot) -> snapshot.forceVerticalOwner(owner));
     }
 
-    /**
+    /** 最终施工体积含侧列与壳层；只有已确认非端点建筑冲突才可转换内部保护缺口。
+ *
      * Final construction validation uses the full road shoulder volume, so it
      * can find a building block that the centre-line pass did not sample. The
      * caller may convert that internal station into a protected gap, but only
@@ -642,7 +609,8 @@ public final class StructureAvoidanceService {
      */
     static final AtomicLong PREPARED_CACHE_EVICTIONS = new AtomicLong(0);
 
-    /**
+    /** 保护按实际三维施工走廊相交判定，避免地下房间或空中结构仅因XZ相同拦路。
+ *
      * A road only avoids a structure when its actual construction corridor
      * overlaps the piece.  Underground rooms and sky structures at the same
      * X/Z no longer create a false road gap.

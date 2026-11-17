@@ -22,7 +22,8 @@ import java.util.List;
 import java.util.Map;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 
-/**
+/** 每次路口或修复改线后从最终几何和剖面重分类物理跨度，避免沿用旧桥隧坐标。
+ *
  * Final consistency gate for a road plan. It reclassifies physical spans from
  * the final geometry and height profile after every junction/repair rewrite.
  */
@@ -160,7 +161,8 @@ public final class RoadPlanConsistencyService {
         return RoadDataValidator.repairFinalHeightSteps(reconciled);
     }
 
-    /**
+    /** 端点与弯道少列本身有效；空列或畸形占地才拒绝，避免强制每站满宽。
+ *
      * Endpoint and curved stations may contain fewer columns than the full
      * road width. The paver already handles those narrow footprints; only an
      * empty or malformed footprint is invalid here.
@@ -196,7 +198,8 @@ public final class RoadPlanConsistencyService {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
-    /**
+    /** 同类跨度重叠按站序而非空间盒判断，避免折返路两个相近桥被误当同桥。
+ *
      * T-26: true when two spans of the same physical type share at least one
      * station.
      *

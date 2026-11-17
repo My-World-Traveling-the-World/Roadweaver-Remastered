@@ -130,7 +130,8 @@ public final class SnapshotOrchestrator {
         return result;
     }
 
-    /**
+    /** 仅解析可达既有粗路线走廊的结构起点，不重新扫描端点到端点地形。
+ *
      * Resolves exact structure starts only for chunks that can reach the
      * already-computed road paths. Terrain pathfinding therefore remains
      * unchanged and no endpoint-to-endpoint scan is performed.
@@ -147,7 +148,7 @@ public final class SnapshotOrchestrator {
         return preparePlanningSnapshotsForPathsAsync(level, paths, true, requestedRole);
     }
 
-    /** Incremental corridor refresh used after grade or structure rerouting. */
+    /** 局部改线后增量刷新走廊快照，避免每轮重新构建全域快照。 */
     public static CompletableFuture<Void> ensurePlanningSnapshotForPathAsync(
             ServerLevel level, StructureConnection connection, List<BlockPos> path) {
         if (connection == null || path == null || path.isEmpty()) {
@@ -158,21 +159,17 @@ public final class SnapshotOrchestrator {
                 ThreadPoolManager.TaskRole.SNAPSHOT);
     }
 
-    /**
-     * Loads structure starts covering a local conflict circle. The synthetic
-     * probe path is used only to enumerate chunks; it is never persisted as a
-     * road path. This keeps local building discovery independent from the
-     * terrain sampling mask and guarantees that every chunk intersecting the
-     * radius-100 repair area is inspected before rerouting.
-     */
-    /**
+
+    /** 冲突圆窗的区块探测数有上限，避免扩大绕行半径独占快照通道。
+ *
      * Upper bound on probe chunks for one conflict-circle snapshot prediction.
      * A radius-200 circle probes ~490 chunks and monopolized the snapshot lane
      * when local detours escalated through every radius step.
      */
     public static final int MAX_CIRCLE_PROBE_CHUNKS = 256;
 
-    /**
+    /** 按区块中心枚举方式限制圆窗半径，使探测量不超过既定上限。
+ *
      * Largest radius whose circle probe set stays within
      * {@link #MAX_CIRCLE_PROBE_CHUNKS} (probes ≈ π·r²/256, matching the chunk
      * centre enumeration below).

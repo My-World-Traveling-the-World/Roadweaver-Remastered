@@ -205,7 +205,7 @@ public final class RuntimeLoadPolicy {
         return chunkyExclusiveActive;
     }
 
-    /** True while Chunky owns or is preparing a generation task. */
+    /** Chunky已运行或正在准备时使用其生命周期信号，避免启动空档被误判普通游玩。 */
     public static boolean isChunkyActive() {
         return chunkyPreflightActive || chunkyExclusiveActive || CHUNKY_ACTIVE.invoke();
     }
@@ -269,21 +269,21 @@ public final class RuntimeLoadPolicy {
         return System.nanoTime() - last >= TimeUnit.MILLISECONDS.toNanos(minimum);
     }
 
-    /** Foreground pressure used by adaptive GPU coarse sampling. */
+    /** 粗GPU自适应读取前台压力，不从单一线程数推断全机空闲。 */
     public static boolean isForegroundPressureActive() {
         return CRUISE_ACTIVE.invoke()
                 || INTERACTION_ACTIVE.invoke()
                 || RuntimePlayerActivity.isActive();
     }
 
-    /** True only for ordinary gameplay foreground protection, never startup or Chunky. */
+    /** 普通游玩才用前台保护分支，开局与Chunky按各自上下文预算。 */
     public static boolean isGameplayForegroundProtected() {
         return !InitialGenManager.isActive()
                 && !isChunkyActive()
                 && isForegroundPressureActive();
     }
 
-    /** Tick hook used to apply the gameplay-only Streams override even when no road task is running. */
+    /** 即使没有道路任务也每tick更新河流游玩覆盖，避免旧覆盖状态残留。 */
     public static void tickGameplayPolicy() {
         refreshRoadWorkerBudget();
     }
@@ -292,7 +292,8 @@ public final class RuntimeLoadPolicy {
         return ThreadPoolManager.maxRuntimeRoadThreads();
     }
 
-    /**
+    /** Chunky预检在实际任务启动前允许有限规划供给，不可当作无界普通后台工作。
+ *
      * A manual Chunky request may need a narrow planning safety band before
      * generation can begin. This is not normal background work: it has no
      * active Chunky task yet and must finish before that task can start.
@@ -304,7 +305,7 @@ public final class RuntimeLoadPolicy {
         }
     }
 
-    /** Chunky owns world-generation threads after the road/river preflight. */
+    /** 道路/河流预检后由Chunky拥有世界生成预算，道路只遵守协作限制。 */
     public static void setChunkyExclusiveActive(boolean active) {
         chunkyExclusiveActive = active;
         chunkyExclusiveSinceMs = active ? System.currentTimeMillis() : 0L;
@@ -401,7 +402,8 @@ public final class RuntimeLoadPolicy {
         return InitialGenManager.isActive() || chunkyPreflightActive;
     }
 
-    /**
+    /** Chunky预检保持开局质量，但只在真实生成尚未开始时使用该工作档。
+ *
      * Chunky preflight must use the same planning-quality path as initial
      * generation, but only before a real Chunky task has started.
      */
@@ -434,11 +436,7 @@ public final class RuntimeLoadPolicy {
         awaitRuntimePermit(cancelled);
     }
 
-    /**
-     * Yield point for long-running runtime work. Initial world planning stays
-     * unrestricted; dynamic and map sampling re-check foreground pressure at
-     * every bounded unit instead of only once when the outer task starts.
-     */
+    /** 长后台循环在有界工作单元复查压力与停止条件；开局豁免游玩节流不代表没有其他预算。 */
     public static void beforeBackgroundUnit(boolean initialGeneration) {
         beforeBackgroundUnit(initialGeneration, () -> false);
     }

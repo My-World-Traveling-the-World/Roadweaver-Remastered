@@ -41,7 +41,7 @@ import net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 
-/** Pure geometry for every block column a finalized road can modify. */
+/** 统一枚举最终道路可能修改的列，供保护与施工体积校验共用。 */
 public final class RoadConstructionVolumePlanner {
     private static final int BRIDGE_BODY_PERIOD = 7;
     private static final int BRIDGE_SUPPORT_PHASE = 3;
@@ -78,7 +78,7 @@ public final class RoadConstructionVolumePlanner {
 
     @FunctionalInterface
     public interface VolumeVisitor {
-        /** Return false to stop visiting. */
+        /** 访问者返回false立即停止，避免已找到冲突后仍遍历全路。 */
         boolean visit(ColumnVolume volume);
     }
 
@@ -243,7 +243,8 @@ public final class RoadConstructionVolumePlanner {
         }
     }
 
-    /**
+    /** 预取校验实际会访问的路面、洞口、壳层及侧探列，纯几何枚举不触发区块Future。
+ *
      * Enumerates every X/Z column whose terrain height may be consulted while
      * validating a road. This is geometry-only and deliberately does not read
      * the world or invoke a chunk future. It covers tunnel portals/shells and

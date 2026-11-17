@@ -12,12 +12,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Read-only geometry view used by the map and overlay paths. */
+/** 向地图提供只读物理路线视图，避免显示逻辑与施工另算一套。 */
 public final class RoadMapGeometry {
     private RoadMapGeometry() {
     }
 
-    /**
+    /** NETWORK_REUSE属于捐赠路；返回独立线段且不跨越被让出的区间，避免地图重复铺线。
+ *
      * Returns only the physical route owned by this road. A NETWORK_REUSE
      * station belongs to the donor road and must not be drawn a second time.
      * Each returned run is an independent polyline; reused intervals are not

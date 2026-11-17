@@ -8,15 +8,15 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
  * 性能与线程配置
  */
 public final class PerformanceConfig implements SubConfig {
-    /** Zero lets the runtime hardware profile choose the normal worker cap. */
+    /** 零值交给硬件策略选择普通工作线程上限，避免把自动预算误作禁用。 */
     private int sharedWorkerThreads = 0;
-    /** Zero follows the external Chunky/QoS recommendation; otherwise caps road supply during Chunky. */
+    /** 零值跟随外部Chunky/QoS建议；非零值限制道路供给，不代表全模组线程总数。 */
     private int chunkyRoadThreadCap = 1;
-    /** Zero selects the hardware-adaptive startup profile. */
+    /** 零值使用硬件自适应开局预算，避免写死某台机器的并行度。 */
     private int initialGenerationThreads = 0;
-    /** Maximum normal road tasks in flight after startup. */
+    /** 限制开局结束后的普通道路在途任务数，控制后台工作积压。 */
     private int maxConcurrentGenerations = 3;
-    /** Maximum low-priority idle road tasks in flight. */
+    /** 单独限制空闲低优先级任务，避免其占满普通道路通道。 */
     private int idleConcurrentGenerations = 1;
 
     // ═══════════ 手绘路线「施工优先」配置（★ 2026-09-26 修 W-2：收回配置层）═══════════
@@ -74,15 +74,15 @@ public final class PerformanceConfig implements SubConfig {
     private int idleThreadDutyCycle = 20;
     // Accurate height sampling uses the same guarded OpenCL backend as coarse
     // sampling. Runtime pressure and validation still provide safe fallback.
-    /** OpenCL coarse sampling uses the runtime pressure budget by default. */
+    /** 粗采样GPU入口仍受运行压力预算约束；不要与已废弃的精确GPU开关混淆。 */
     private boolean openclCoarseSamplingEnabled = true;
     private boolean openclAccurateSamplingEnabled = true;
     private String openclDevicePreference = "AUTO";
     private int openclMinSamples = 1024;
     private boolean openclValidateSamples = false;
-    /** Normal gameplay-only cap for RoadWeaver OpenCL coarse requests; zero is automatic. */
+    /** 游玩期粗采样GPU请求上限；零值由运行策略决定。 */
     private int openclCoarseGpuConcurrencyCap = 0;
-    /** During ordinary gameplay (not startup / Chunky), coarse sampling uses CPU to avoid stalling the player with a GPU burst. */
+    /** 普通游玩默认用CPU粗采样，避免GPU突发影响前台；开局和Chunky走各自预算。 */
     private boolean runtimeCoarseUseCpuInGameplay = true;
     /**
      * 四态策略 · 挂机(idle)态 GPU 粗采样并发上限;0 = 沿用硬件/自动推导。

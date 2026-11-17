@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 
 import java.util.concurrent.CompletableFuture;
 
-/** Fabric production mapping for the non-blocking main-thread chunk submission method. */
+/** Fabric映射非阻塞区块提交端口，避免公共层直接绑定私有平台实现。 */
 @Mixin(ServerChunkCache.class)
 public interface ServerChunkCacheFutureInvoker extends NonBlockingChunkFutureAccess {
     @Override
