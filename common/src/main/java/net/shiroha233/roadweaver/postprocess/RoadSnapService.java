@@ -35,7 +35,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
+import net.shiroha233.roadweaver.util.WeakIdentityCache;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -594,13 +594,13 @@ public final class RoadSnapService {
         return runs;
     }
 
-    /** 网格只依赖中心XZ，按RoadData实例复用；外层站序发布后不改，嵌套positions未深拷贝但此网格不读取它。 */
-    static final ThreadLocal<IdentityHashMap<RoadData, SegmentGrid>> GRID_CACHE =
-            ThreadLocal.withInitial(IdentityHashMap::new);
+    /** 网格只依赖冻结的中心XZ；弱身份键避免线程池长期持有整条道路。 */
+    static final ThreadLocal<WeakIdentityCache<RoadData, SegmentGrid>> GRID_CACHE =
+            ThreadLocal.withInitial(() -> new WeakIdentityCache<>(512));
 
     static SegmentGrid buildGrid(RoadData road, boolean[] excluded) {
         if (excluded != null) return buildGridUncached(road, excluded);
-        IdentityHashMap<RoadData, SegmentGrid> cache = GRID_CACHE.get();
+        WeakIdentityCache<RoadData, SegmentGrid> cache = GRID_CACHE.get();
         SegmentGrid cached = cache.get(road);
         if (cached != null) return cached;
         if (cache.size() >= ROAD_INDEX_CACHE_CAP) cache.clear();
@@ -679,13 +679,13 @@ public final class RoadSnapService {
         return result;
     }
 
-    /** 索引读取中心与跨度并按实例缓存；record并不保证嵌套铺装列深不可变，发布后不得改动缓存所依赖输入。 */
+    /** 索引读取冻结的中心与跨度；派生值不反向持有道路键，弱键回收后可安全重建。 */
     static final int ROAD_INDEX_CACHE_CAP = 512;
-    static final ThreadLocal<IdentityHashMap<RoadData, RoadIndex>> ROAD_INDEX_CACHE =
-            ThreadLocal.withInitial(IdentityHashMap::new);
+    static final ThreadLocal<WeakIdentityCache<RoadData, RoadIndex>> ROAD_INDEX_CACHE =
+            ThreadLocal.withInitial(() -> new WeakIdentityCache<>(512));
 
     static RoadIndex roadIndex(RoadData road) {
-        IdentityHashMap<RoadData, RoadIndex> cache = ROAD_INDEX_CACHE.get();
+        WeakIdentityCache<RoadData, RoadIndex> cache = ROAD_INDEX_CACHE.get();
         RoadIndex view = cache.get(road);
         if (view == null) {
             if (cache.size() >= ROAD_INDEX_CACHE_CAP) cache.clear();
@@ -924,14 +924,14 @@ public final class RoadSnapService {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
 
-    /** 包围盒只依赖站中心，按实例缓存减少候选路对重复扫描；不能据此声称整份RoadData深不可变。 */
-    static final ThreadLocal<IdentityHashMap<RoadData, RoadBounds>> BOUNDS_CACHE =
-            ThreadLocal.withInitial(IdentityHashMap::new);
+    /** 包围盒只依赖冻结的站中心；按弱实例缓存减少扫描且不延长道路存活。 */
+    static final ThreadLocal<WeakIdentityCache<RoadData, RoadBounds>> BOUNDS_CACHE =
+            ThreadLocal.withInitial(() -> new WeakIdentityCache<>(512));
 
     /** 向捐赠路预筛提供同一中心包围盒，避免另一实现出现边界漂移。 */
     public static RoadBounds roadBounds(RoadData road) {
         if (road == null) return null;
-        IdentityHashMap<RoadData, RoadBounds> cache = BOUNDS_CACHE.get();
+        WeakIdentityCache<RoadData, RoadBounds> cache = BOUNDS_CACHE.get();
         if (cache.containsKey(road)) return cache.get(road);
         if (cache.size() >= ROAD_INDEX_CACHE_CAP) cache.clear();
         RoadBounds computed = RoadBounds.of(road);

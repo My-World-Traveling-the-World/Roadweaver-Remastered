@@ -21,8 +21,14 @@ final class RoutePreloadWork<C> {
         Request request(long key);
         C loaded(long key);
         Set<Long> place(Map<Long, C> ready);
+        /** 兼容离线端口；生产区分预算等待与已尝试未结案。 */
+        default Placement placeBatch(Map<Long, C> ready) {
+            return new Placement(place(ready), Set.copyOf(ready.keySet()));
+        }
         void failed(long key, RuntimeException failure, boolean finalAttempt);
     }
+
+    record Placement(Set<Long> settled, Set<Long> attempted) {}
 
     private record Task(long key, int attempt) {}
 
@@ -85,14 +91,18 @@ final class RoutePreloadWork<C> {
         }
         if (!ready.isEmpty()) {
             // 保持票据直到施工返回；异常也要释放，不得把已加载误报成已处理。
-            Set<Long> settled;
+            Placement placement;
             try {
-                settled = access.place(confirmedLoaded);
-            } finally {
+                placement = access.placeBatch(confirmedLoaded);
+            } catch (RuntimeException | Error failure) {
                 for (Task task : ready) inFlight.remove(task).release().run();
+                throw failure;
             }
             for (Task task : ready) {
-                if (settled.contains(task.key())) {
+                // 让出预算保留原票据，下个tick重查FULL；不重发、不扣尝试。
+                if (!placement.attempted().contains(task.key())) continue;
+                inFlight.remove(task).release().run();
+                if (placement.settled().contains(task.key())) {
                     processed++;
                 } else {
                     // “加载且已尝试”不能算完工：只重试没结案的块，不重新发送成功块。

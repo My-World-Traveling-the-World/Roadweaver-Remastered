@@ -500,6 +500,9 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.DirectionalCandidateStudyTest"),
                 // 分页场必须同时证明近目标少分配、远端不断路和稠密访问数值不漂移。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmPagedWorkspaceTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.core.model.RoadPublicationTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.util.WeakIdentityCacheTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.postprocess.RoadSnapCacheLifecycleTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。

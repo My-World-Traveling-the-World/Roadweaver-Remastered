@@ -13,6 +13,30 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class RoutePreloadWorkTest {
+    @Test
+    void timeDeferredChunksKeepTicketsAndDoNotSpendSingleAttempt() {
+        var work = new RoutePreloadWork<Full>(List.of(1L,2L,3L),3,1);
+        var fake = new Fake();
+        var access = new RoutePreloadWork.Access<Full>() {
+            public RoutePreloadWork.Request request(long key) { return fake.request(key); }
+            public Full loaded(long key) { return fake.loaded(key); }
+            public Set<Long> place(Map<Long,Full> ready) { throw new AssertionError("应使用含尝试集合端口"); }
+            public RoutePreloadWork.Placement placeBatch(Map<Long,Full> ready) {
+                long key = ready.keySet().iterator().next();
+                return new RoutePreloadWork.Placement(fake.place(Map.of(key,ready.get(key))),Set.of(key));
+            }
+            public void failed(long key, RuntimeException failure, boolean last) { fail("预算等待不能失败"); }
+        };
+        work.tick(access);
+        for(long key=1;key<=3;key++) fake.ready(key);
+        work.tick(access);
+        assertEquals(1,work.processed()); assertEquals(Set.of(2L,3L),fake.tickets);
+        work.tick(access); work.tick(access);
+        assertEquals(List.of(1L,2L,3L),fake.placed);
+        assertEquals(fake.placed,fake.requested);
+        assertEquals(0,work.failures()); assertTrue(work.done()); assertTrue(fake.tickets.isEmpty());
+    }
+
     /** 直接守住生产使用的三参入口，避免只测可注入预算却漏掉默认接线。 */
     @Test
     void productionConstructorConsumesAtMostEightReadyChunksPerTick() {

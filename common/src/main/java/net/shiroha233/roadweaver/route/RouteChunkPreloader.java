@@ -343,6 +343,13 @@ public final class RouteChunkPreloader {
         }
 
         @Override
+        public RoutePreloadWork.Placement placeBatch(Map<Long, LevelChunk> ready) {
+            var attempted = new java.util.HashSet<Long>();
+            Set<Long> settled = LoadedChunkRoadBackfill.placePreloadedChunks(level, ready, attempted);
+            return new RoutePreloadWork.Placement(settled, attempted);
+        }
+
+        @Override
         public void failed(long key, RuntimeException failure, boolean finalAttempt) {
             if (finalAttempt) {
                 LOGGER.warn("RouteWeaver 手绘预加载区块重试用尽 route={} chunk={}", routeId, new ChunkPos(key), failure);

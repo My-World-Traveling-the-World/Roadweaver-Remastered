@@ -119,7 +119,7 @@ pathlogic -> runtime                            18
 pathlogic -> search                             10
 pathlogic -> spec                               1
 pathlogic -> structures                         8
-pathlogic -> util                               6
+pathlogic -> util                               7
 pathlogic -> worldgen                           3
 persistence -> config                             2
 persistence -> core                               18
@@ -192,3 +192,6 @@ worldgen -> persistence                        4
 
 # 2026-11-15：删掉 18 个 [A] 死代码类后，map -> pathfinding / map -> search /
 # map -> util 这三条边自然消失（撑起它们的是 map/tile 下的几个死类），已移除。
+# 2026-11-17：冻结模型后共享弱身份缓存与区块时间预算，均无反向依赖；避免复制缓存实现。
+postprocess -> util 1
+generation -> util 1

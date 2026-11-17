@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongFunction;
 import java.util.function.LongPredicate;
+import net.shiroha233.roadweaver.util.ConstructionTimeBudget;
 
 /** 仅对已达到FULL的已加载区块回填，避免后台道路强制加载新区块。 */
 public final class LoadedChunkRoadBackfill {
@@ -57,13 +58,23 @@ public final class LoadedChunkRoadBackfill {
 
     // 只接受当前同步 drain 的结果，不能跨 tick 保留作为已加载证明。
     static int placeSelectedLoadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded) {
-        return placeLoadedChunks(level, knownLoaded.keySet(), false, MAX_BACKFILL_CHUNKS_PER_INVOCATION, knownLoaded);
+        return placeSelectedLoadedChunks(level, knownLoaded, new HashSet<>());
+    }
+
+    static int placeSelectedLoadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded, Set<Long> attempted) {
+        return placeLoadedChunks(level, knownLoaded.keySet(), false, MAX_BACKFILL_CHUNKS_PER_INVOCATION,
+                knownLoaded, null, attempted);
     }
 
     /** 手绘在本次 tick 已确认 FULL；回传台账结案和空计划，区别施工还需重试。 */
     public static Set<Long> placePreloadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded) {
+        return placePreloadedChunks(level, knownLoaded, new HashSet<>());
+    }
+
+    /** 回传真正尝试过的键；预算让出的区块仍由原任务持票等待，不消费重试。 */
+    public static Set<Long> placePreloadedChunks(ServerLevel level, Map<Long, LevelChunk> knownLoaded, Set<Long> attempted) {
         Set<Long> verified = new HashSet<>();
-        placeLoadedChunks(level, knownLoaded.keySet(), false, knownLoaded.size(), knownLoaded, verified);
+        placeLoadedChunks(level, knownLoaded.keySet(), false, knownLoaded.size(), knownLoaded, verified, attempted);
         return verified;
     }
 
@@ -148,6 +159,12 @@ public final class LoadedChunkRoadBackfill {
     private static int placeLoadedChunks(ServerLevel level, Collection<Long> candidateChunkKeys,
                                          boolean expandNeighbors, int budget, Map<Long, LevelChunk> knownLoaded,
                                          Set<Long> verified) {
+        return placeLoadedChunks(level, candidateChunkKeys, expandNeighbors, budget, knownLoaded, verified, null);
+    }
+
+    private static int placeLoadedChunks(ServerLevel level, Collection<Long> candidateChunkKeys,
+                                         boolean expandNeighbors, int budget, Map<Long, LevelChunk> knownLoaded,
+                                         Set<Long> verified, Set<Long> attempted) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())
                 || candidateChunkKeys == null || candidateChunkKeys.isEmpty()) return 0;
         if (!level.getServer().isSameThread()) {
@@ -160,7 +177,9 @@ public final class LoadedChunkRoadBackfill {
                 key -> DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, key)
                         || DeferredInitialRoadConstructionService.isConstructionComplete(level, new ChunkPos(key)),
                 (key, chunk) -> PathFeature.replayLoadedChunk(level, chunk.getPos(),
-                        level.getSeed() ^ key ^ RANDOM_SALT), verified);
+                        level.getSeed() ^ key ^ RANDOM_SALT), verified, attempted,
+                new ConstructionTimeBudget(System::nanoTime,
+                        ConstructionTimeBudget.DEFAULT_NANOS));
         if (!pass.noConstruction().isEmpty()) {
             DeferredInitialRoadConstructionService.markNoConstructionRequired(level, pass.noConstruction());
             if (verified != null) verified.addAll(pass.noConstruction());
@@ -190,17 +209,25 @@ public final class LoadedChunkRoadBackfill {
     static <T> BackfillPass runBackfill(Collection<Long> keys, int budget, Map<Long, T> knownLoaded,
                                          LongFunction<T> loadedNow, LongPredicate settled, Replay<T> replay,
                                          Set<Long> verified) {
-        // 只有手绘进度需要每个块的终态；被动调用维持原预算和查询成本。
+        return runBackfill(keys, budget, knownLoaded, loadedNow, settled, replay, verified, null, null);
+    }
+
+    static <T> BackfillPass runBackfill(Collection<Long> keys, int budget, Map<Long, T> knownLoaded,
+                                         LongFunction<T> loadedNow, LongPredicate settled, Replay<T> replay,
+                                         Set<Long> verified, Set<Long> attempted,
+                                         ConstructionTimeBudget timeBudget) {
+        // 预算只改变本轮推进量，未尝试的键由调用方保留，不能当作失败或已完成。
         List<Long> replayed = verified == null ? null : new ArrayList<>();
         int loaded = 0, processed = 0, placed = 0, fullLookups = 0;
         int limit = Math.max(1, budget);
         List<Long> noConstruction = new ArrayList<>();
         for (long key : keys) {
-            if (processed >= limit) break;
+            if (processed >= limit || (loaded + fullLookups > 0 && timeBudget != null && timeBudget.exhausted())) break;
             if (knownLoaded == null) fullLookups++;
             T chunk = knownLoaded == null ? loadedNow.apply(key) : knownLoaded.get(key);
             if (chunk == null) continue;
             loaded++;
+            if (attempted != null) attempted.add(key);
             // 前一块可能写台账或保护缺口；只能复用 FULL 句柄，不能复用排队时的施工资格。
             if (settled.test(key)) {
                 if (verified != null) verified.add(key);

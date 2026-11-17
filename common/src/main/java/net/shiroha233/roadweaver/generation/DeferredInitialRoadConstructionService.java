@@ -28,7 +28,7 @@ public final class DeferredInitialRoadConstructionService {
     /**
      * 两次采样之间至少间隔的 tick 数。单次施工最多 {@link DeferredChunkQueue#BUILD_LIMIT}
      * 个区块，所以 10 tick(=0.5 秒)一次 ≈ 16 区块/秒 —— 足够在预生成期间追上
-     * 进度，又不会把主线程铺满。
+     * 进度；另用区块边界耗时预算限制连续施工，单块本身仍可能超时。
      */
     private static final int DRAIN_INTERVAL_TICKS = 10;
     /**
@@ -127,10 +127,13 @@ public final class DeferredInitialRoadConstructionService {
             logDrainedIfIdle(level, state, 0, settled);
             return 0;
         }
-        int placed = LoadedChunkRoadBackfill.placeSelectedLoadedChunks(level, loadedForThisDrain);
+        var attempted = new java.util.HashSet<Long>();
+        int placed = LoadedChunkRoadBackfill.placeSelectedLoadedChunks(level, loadedForThisDrain, attempted);
         int settledNow = 0;
         int abandoned = 0;
         for (long key : sample) {
+            // 预算等待仍保留队列，不继承尚未发生的施工失败。
+            if (!attempted.contains(key)) { state.pending.hint(key); continue; }
             if (isMarkedNoConstructionRequired(level, key)
                     || isComplete(level, key)) {
                 if (state.pending.remove(key)) {

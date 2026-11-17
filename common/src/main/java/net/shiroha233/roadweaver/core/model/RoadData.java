@@ -23,7 +23,7 @@ public record RoadData(
 ) {
     public static final long NO_OWNER_2D = Long.MIN_VALUE;
 
-    /** 目标高度是道路后续施工的契约；规划后各阶段须消费同一剖面，局部改线则创建一致的新路数据。 */
+    /** 目标高度是施工契约；外层列表和分站/跨度坐标均冻结，局部改线须创建一致的新道路。 */
     public RoadData {
         materials = List.copyOf(materials == null ? List.of() : materials);
         slabMaterials = List.copyOf(slabMaterials == null ? List.of() : slabMaterials);

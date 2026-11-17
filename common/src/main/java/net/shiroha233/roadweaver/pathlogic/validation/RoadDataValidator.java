@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import net.shiroha233.roadweaver.util.WeakIdentityCache;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,9 +32,8 @@ public final class RoadDataValidator {
     private static final int FINAL_HEIGHT_REPAIR_MAX_WINDOW = 128;
     private static final int MAX_PROTECTED_HEIGHT_GAP_DELTA = 3;
     private static final int MAX_GLOBAL_HEIGHT_SMOOTH_PASSES = 4096;
-    /** 按RoadData内容缓存校验结果；嵌套铺装列未深拷贝，发布后须保持不变，不能把record当深不可变保证。 */
-    private static final ConcurrentHashMap<RoadData, ValidationResult> VALIDATION_RESULTS = new ConcurrentHashMap<>();
-    private static final int MAX_CACHED_VALIDATIONS = 4096;
+    /** 模型冻结后按实例复用，避免热命中仍扫描整路内容；弱键不延长道路生命周期。 */
+    private static final WeakIdentityCache<RoadData, ValidationResult> VALIDATION_RESULTS = new WeakIdentityCache<>(4096);
 
     private RoadDataValidator() {
     }
@@ -51,9 +50,6 @@ public final class RoadDataValidator {
         ValidationResult cached = VALIDATION_RESULTS.get(road);
         if (cached != null) return cached;
         ValidationResult computed = validateFinalRoadUncached(road);
-        if (VALIDATION_RESULTS.size() >= MAX_CACHED_VALIDATIONS) {
-            VALIDATION_RESULTS.clear();
-        }
         VALIDATION_RESULTS.put(road, computed);
         return computed;
     }

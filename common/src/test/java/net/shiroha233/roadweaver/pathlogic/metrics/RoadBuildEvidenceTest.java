@@ -100,7 +100,7 @@ class RoadBuildEvidenceTest {
                 List.of(new RoadSegmentPlacement(new BlockPos(0, 64, 0), columns)), List.of(), List.of(64), 1, 2);
         String first = RoadBuildEvidence.content(data);
         columns.add(new BlockPos(0, 64, 2));
-        assertNotEquals(first, RoadBuildEvidence.content(data), "不能按RoadData对象身份缓存可变嵌套列");
+        assertEquals(first, RoadBuildEvidence.content(data), "发布后调用方工作列表不再改变道路内容");
     }
 
     @Test

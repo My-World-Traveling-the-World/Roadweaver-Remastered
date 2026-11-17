@@ -157,6 +157,32 @@ class DeferredChunkQueueTest {
         assertEquals(0, pass.fullLookups());
     }
 
+    @Test
+    void elapsedBudgetStopsBetweenChunksAndReportsOnlyAttemptedKeys() {
+        long[] clock = {0};
+        var time = new net.shiroha233.roadweaver.util.ConstructionTimeBudget(() -> clock[0], 4);
+        var attempted = new HashSet<Long>();
+        var verified = new HashSet<Long>();
+        var placed = new ArrayList<Long>();
+        var pass = LoadedChunkRoadBackfill.runBackfill(List.of(1L,2L,3L),8,
+                Map.of(1L,"one",2L,"two",3L,"three"), key -> { throw new AssertionError(); },
+                key -> false, (key,chunk) -> {
+                    placed.add(key); clock[0] += 7;
+                    return LoadedPlacement.EMPTY_PLAN;
+                }, verified, attempted, time);
+        assertEquals(List.of(1L),placed);
+        assertEquals(Set.of(1L),attempted);
+        assertTrue(verified.isEmpty());
+        assertEquals(new LoadedChunkRoadBackfill.BackfillPass(1,1,0,List.of(1L),0),pass);
+        // 新回合重新确认句柄并继续，不因前一块超预算永久饥饿。
+        var next = LoadedChunkRoadBackfill.runBackfill(List.of(2L,3L),8,
+                Map.of(2L,"new-two",3L,"new-three"), key -> null, key -> false,
+                (key,chunk) -> { assertTrue(chunk.startsWith("new-")); return LoadedPlacement.PLACED; },
+                verified,attempted,new net.shiroha233.roadweaver.util.ConstructionTimeBudget(() -> clock[0],4));
+        assertEquals(2,next.placed());
+        assertEquals(Set.of(1L,2L,3L),attempted);
+    }
+
     private static DeferredChunkQueue pending(int count) {
         var queue = new DeferredChunkQueue();
         for (long key = 0; key < count; key++) assertTrue(queue.add(key));

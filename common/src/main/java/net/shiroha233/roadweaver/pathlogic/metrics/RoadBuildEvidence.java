@@ -91,7 +91,7 @@ public final class RoadBuildEvidence {
                 point(out, span.start()); point(out, span.end()); text(out, span.type().name());
             }
             out.flush();
-            // 不按对象身份缓存：分站内的列列表未承诺深不可变，否则会记录过期内容。
+            // 诊断仍按发布的完整产物计算；调用方工作列表和可变坐标已在模型构造时冻结。
             // 生产调用受buildabilityShadow开关控制；开启时为每条证据扫描输入，不改变默认游玩开销。
             return "c1-" + HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException | IOException failure) {

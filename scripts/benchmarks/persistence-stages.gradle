@@ -5,13 +5,13 @@ gradle.projectsEvaluated {
     def compile = p.tasks.register('compilePersistenceStageProbe', JavaCompile) {
         dependsOn p.tasks.named('testClasses')
         source p.rootProject.files('scripts/benchmarks/ReadinessActiveProbe.java',
-            'scripts/benchmarks/ReadinessWriteProbe.java', 'scripts/benchmarks/ConstructionLedgerProbe.java')
+            'scripts/benchmarks/ReadinessWriteProbe.java', 'scripts/benchmarks/ConstructionLedgerProbe.java', 'scripts/benchmarks/RoadValidationCacheProbe.java')
         classpath = p.sourceSets.test.runtimeClasspath
         destinationDirectory.set(out)
         options.encoding = 'UTF-8'
     }
     [readinessActiveProbe: 'planning.ReadinessActiveProbe', readinessWriteProbe: 'planning.ReadinessWriteProbe',
-        constructionLedgerProbe: 'persistence.ConstructionLedgerProbe'].each { name, cls ->
+        constructionLedgerProbe: 'persistence.ConstructionLedgerProbe', roadValidationCacheProbe: 'pathlogic.validation.RoadValidationCacheProbe'].each { name, cls ->
         p.tasks.register(name, JavaExec) {
             dependsOn compile
             classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
