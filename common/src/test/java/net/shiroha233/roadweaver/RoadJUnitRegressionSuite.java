@@ -29,6 +29,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.architecture.ChineseLogGuardTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.FileStorageLogTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.ReadinessOrderingReuseTest"),
                         // 配置元数据表 ↔ 配置类双向一致性（M1 起）：
                         // 表里的键必须在类里有字段、类里的字段必须在表里有条目，
                         // 且类型与默认值逐项相等。已废弃/未接线的键必须写明原因。

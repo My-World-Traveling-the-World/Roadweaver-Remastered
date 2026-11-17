@@ -47,6 +47,8 @@ final class ReadinessCoverageStore {
     private final Set<Long> ready = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private IOException readFailure;
+    // 只保留成功提交的排序结果；查询仍走原并发集合，重开时不额外建立树索引。
+    private List<Long> committedOrder;
 
     static ReadinessCoverageStore open(Path path, String fingerprint) {
         return open(path, fingerprint, FileStorageIO::writeStringAtomic);
@@ -80,10 +82,12 @@ final class ReadinessCoverageStore {
             if (readFailure != null) throw new IOException("Cannot safely update unreadable readiness coverage: " + path, readFailure);
         }
         if (ready.contains(region)) return false;
-        persist(region);
-        // 提交成功才对查询发布；关闭期间完成的旧写入也不能复活旧会话的 READY。
+        Long boxedRegion = region;
+        List<Long> nextOrder = persist(boxedRegion);
+        // 提交成功才同时发布快照和READY；失败不得污染下一次重试的排序输入。
         ensureOpen();
-        ready.add(region);
+        committedOrder = nextOrder;
+        ready.add(boxedRegion);
         return true;
     }
 
@@ -99,6 +103,7 @@ final class ReadinessCoverageStore {
 
     private void load() {
         readFailure = null;
+        committedOrder = null;
         try {
             if (!Files.readAttributes(path, BasicFileAttributes.class).isRegularFile()) {
                 throw new IOException("Readiness coverage is not a regular file: " + path);
@@ -135,13 +140,20 @@ final class ReadinessCoverageStore {
         }
     }
 
-    private void persist(long region) throws IOException {
-        // 保持原排序、编码与同步写入节奏；失败交回规划重试，不能只记录日志。
+    private List<Long> persist(Long region) throws IOException {
+        // 首次写入仍按原规则排序；后续复制已提交快照并二分插入，避免每个区域重复全表排序。
         long buildStart = timing != null ? System.nanoTime() : 0L;
-        List<Long> ordered = new ArrayList<>(ready);
-        ordered.add(region);
+        List<Long> previous = committedOrder;
+        List<Long> ordered = new ArrayList<>(previous == null ? ready : previous);
         long gathered = timing != null ? System.nanoTime() : 0L;
-        ordered.sort(Long::compare);
+        if (previous == null) {
+            ordered.add(region);
+            ordered.sort(Long::compare);
+        } else {
+            int index = java.util.Collections.binarySearch(ordered, region);
+            if (index >= 0) throw new IllegalStateException("READY有序快照与查询集合不一致");
+            ordered.add(-index - 1, region);
+        }
         long sorted = timing != null ? System.nanoTime() : 0L;
         StringBuilder output = new StringBuilder("# RoadWeaver Chunky planning coverage\n");
         output.append("schema=").append(SCHEMA).append('\n');
@@ -164,5 +176,6 @@ final class ReadinessCoverageStore {
                         sorted - gathered, writing - sorted, System.nanoTime() - writing));
             }
         }
+        return ordered;
     }
 }
