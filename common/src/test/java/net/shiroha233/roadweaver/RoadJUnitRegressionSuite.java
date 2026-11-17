@@ -509,6 +509,7 @@ public final class RoadJUnitRegressionSuite {
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.chunk.RoadShardRepairTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasksTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.bridge.BridgeSegmentIndexTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.worldgen.road.CompilePreparationTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.chunk.RoadShardDocumentReaderTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();

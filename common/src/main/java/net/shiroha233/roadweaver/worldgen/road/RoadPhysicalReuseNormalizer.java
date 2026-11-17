@@ -83,6 +83,7 @@ final class RoadPhysicalReuseNormalizer {
         List<RoadData> ordered = new ArrayList<>(roads);
         ordered.sort(Comparator.comparingLong(RoadFingerprint::compute));
         List<RoadData> normalized = new ArrayList<>(roads.size());
+        Preparation preparation = new Preparation();
         for (RoadData secondary : ordered) {
             if (secondary == null || secondary.roadSegmentList() == null
                     || secondary.roadSegmentList().size() < PHYSICAL_REUSE_MIN_RUN) {
@@ -90,9 +91,9 @@ final class RoadPhysicalReuseNormalizer {
                 continue;
             }
             boolean[] reused = new boolean[secondary.roadSegmentList().size()];
-            for (RoadData primary : normalized) markPhysicalReuse(primary, secondary, reused);
+            for (RoadData primary : normalized) markPhysicalReuse(primary, secondary, reused, false, preparation);
             RoadData body = hasTrue(reused) ? withPhysicalReuseSpans(secondary, reused) : secondary;
-            normalized.add(verifySurrenderedReuse(body, secondary, ordered, reused));
+            normalized.add(verifySurrenderedReuse(body, secondary, ordered, reused, preparation));
         }
         return List.copyOf(normalized);
     }
@@ -132,6 +133,11 @@ final class RoadPhysicalReuseNormalizer {
      */
     static RoadData verifySurrenderedReuse(RoadData body, RoadData original,
                                                    List<RoadData> all, boolean[] reused) {
+        return verifySurrenderedReuse(body, original, all, reused, new Preparation());
+    }
+
+    private static RoadData verifySurrenderedReuse(RoadData body, RoadData original,
+            List<RoadData> all, boolean[] reused, Preparation preparation) {
         if (original.spans() == null || original.spans().isEmpty()) return body;
         boolean[] surrendered = RoadChunkPlanCompiler.buildSpanMask(
                 original.roadSegmentList(), original.spans(), SpanType.NETWORK_REUSE);
@@ -139,7 +145,7 @@ final class RoadPhysicalReuseNormalizer {
         boolean[] claimed = new boolean[surrendered.length];
         for (RoadData other : all) {
             if (other == null || other == original) continue;
-            markPhysicalReuse(other, original, claimed, true);
+            markPhysicalReuse(other, original, claimed, true, preparation);
         }
         boolean[] keep = new boolean[surrendered.length];
         int dropped = 0;
@@ -213,6 +219,11 @@ final class RoadPhysicalReuseNormalizer {
      */
     static void markPhysicalReuse(RoadData primary, RoadData secondary, boolean[] reused,
                                           boolean matchReuseStations) {
+        markPhysicalReuse(primary, secondary, reused, matchReuseStations, new Preparation());
+    }
+
+    private static void markPhysicalReuse(RoadData primary, RoadData secondary, boolean[] reused,
+            boolean matchReuseStations, Preparation preparation) {
         if (primary == null || secondary == null || reused == null
                 || primary.roadSegmentList() == null || primary.roadSegmentList().size() < 2
                 || primary.roadType() != secondary.roadType()) return;
@@ -220,11 +231,12 @@ final class RoadPhysicalReuseNormalizer {
         // owned by an earlier road and may be used as the canonical owner.
         // A secondary NETWORK_REUSE span is already non-owning and must not be
         // claimed again by another later route.
-        var owners = indexPrimaryStations(primary);
+        var owners = preparation.owner(primary);
         if (owners.buckets.isEmpty()) return;
-        boolean[] secondaryBlocked = physicalReuseBlocked(secondary, !matchReuseStations);
+        SecondaryPrepared prepared = preparation.secondary(secondary, !matchReuseStations);
+        boolean[] secondaryBlocked = prepared.blocked();
         List<RoadSegmentPlacement> sec = secondary.roadSegmentList();
-        SpanKind[] secondaryKinds = spanKinds(secondary, !matchReuseStations);
+        SpanKind[] secondaryKinds = prepared.kinds();
         int[] matches = new int[sec.size()];
         boolean[] corridorMatches = new boolean[sec.size()];
         Arrays.fill(matches, -1);
@@ -260,6 +272,23 @@ final class RoadPhysicalReuseNormalizer {
             previousPrimary = current;
         }
     }
+
+    /** 只活在一次归一化调用中；归属依赖本次道路集合，不能跨编译缓存。 */
+    static final class Preparation {
+        private final Map<RoadData, OwnerStationIndex> owners = new java.util.IdentityHashMap<>();
+        private final Map<RoadData, SecondaryPrepared[]> secondaries = new java.util.IdentityHashMap<>();
+        OwnerStationIndex owner(RoadData road) {
+            return owners.computeIfAbsent(road, RoadPhysicalReuseNormalizer::indexPrimaryStations);
+        }
+        SecondaryPrepared secondary(RoadData road, boolean blockReuse) {
+            SecondaryPrepared[] modes = secondaries.computeIfAbsent(road, ignored -> new SecondaryPrepared[2]);
+            int slot = blockReuse ? 1 : 0;
+            if (modes[slot] == null) modes[slot] = new SecondaryPrepared(
+                    physicalReuseBlocked(road, blockReuse), spanKinds(road, blockReuse));
+            return modes[slot];
+        }
+    }
+    private record SecondaryPrepared(boolean[] blocked, SpanKind[] kinds) {}
 
     private static OwnerStationIndex indexPrimaryStations(RoadData road) {
         List<RoadSegmentPlacement> stations = road.roadSegmentList();

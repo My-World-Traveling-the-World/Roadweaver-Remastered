@@ -61,7 +61,10 @@ public final class RoadChunkPlanCompiler {
         List<RasterSegment> terrainStampExclusions = new ArrayList<>();
         List<RoadChunkSlice> slices = new ArrayList<>();
         boolean[] occupied = new boolean[COLUMN_COUNT];
-        List<JunctionMarker> tunnelJunctions = collectTunnelJunctions(validRoads);
+        // 同次编译按归一化后的实例准备，不能跨道路集合缓存物理归属。
+        var spanInputs = new java.util.IdentityHashMap<RoadData, ExactSpans>();
+        for (RoadData road : validRoads) spanInputs.put(road, new ExactSpans(road.roadSegmentList(), road.spans()));
+        List<JunctionMarker> tunnelJunctions = collectTunnelJunctions(validRoads, spanInputs);
         for (RoadData road : validRoads) {
             List<RoadSegmentPlacement> placements = road.roadSegmentList();
             if (placements == null || placements.size() < 2) continue;
@@ -74,16 +77,13 @@ public final class RoadChunkPlanCompiler {
             // 编译结果不变。
             if (!RoadChunkIntersection.roadTouchesChunk(placements, chunkPos, halfWidth)) continue;
 
-            boolean[] bridgeMask = buildSpanMask(placements, road.spans(), SpanType.BRIDGE);
-            boolean[] directCrossingMask = buildSpanMask(
-                    placements, road.spans(), SpanType.ROAD_CROSSING);
-            boolean[] networkReuseMask = buildSpanMask(
-                    placements, road.spans(), SpanType.NETWORK_REUSE);
-            boolean[] protectedGapMask = buildSpanMask(
-                    placements, road.spans(), SpanType.PROTECTED_GAP);
-            boolean[] tunnelJunctionMask = buildSpanMask(
-                    placements, road.spans(), SpanType.TUNNEL_JUNCTION);
-            boolean[] tunnelMask = buildSpanMask(placements, road.spans(), SpanType.TUNNEL);
+            ExactSpans spans = spanInputs.get(road);
+            boolean[] bridgeMask = spans.mask(SpanType.BRIDGE);
+            boolean[] directCrossingMask = spans.mask(SpanType.ROAD_CROSSING);
+            boolean[] networkReuseMask = spans.mask(SpanType.NETWORK_REUSE);
+            boolean[] protectedGapMask = spans.mask(SpanType.PROTECTED_GAP);
+            boolean[] tunnelJunctionMask = spans.mask(SpanType.TUNNEL_JUNCTION);
+            boolean[] tunnelMask = spans.mask(SpanType.TUNNEL);
             int[] externalTunnelJunctions = externalTunnelJunctionIndices(
                     road, placements, tunnelMask, tunnelJunctions);
             int[] allTunnelJunctions = mergeMarkedIndices(tunnelJunctionMask, externalTunnelJunctions);
@@ -369,11 +369,12 @@ public final class RoadChunkPlanCompiler {
 
     /** 施工占地重叠按统一所有权规则消解，避免两个道路分片重复铺设。 */
 
-    private static List<JunctionMarker> collectTunnelJunctions(List<RoadData> roads) {
+    private static List<JunctionMarker> collectTunnelJunctions(List<RoadData> roads,
+            Map<RoadData, ExactSpans> spanInputs) {
         List<JunctionMarker> markers = new ArrayList<>();
         for (RoadData road : roads) {
             List<RoadSegmentPlacement> placements = road.roadSegmentList();
-            boolean[] mask = buildSpanMask(placements, road.spans(), SpanType.TUNNEL_JUNCTION);
+            boolean[] mask = spanInputs.get(road).mask(SpanType.TUNNEL_JUNCTION);
             if (mask == null) continue;
             for (int i = 0; i < placements.size(); i++) {
                 if (!mask[i]) continue;
@@ -475,27 +476,46 @@ public final class RoadChunkPlanCompiler {
     static boolean[] buildSpanMask(List<RoadSegmentPlacement> segments,
                                            List<RoadSpan> spans,
                                            SpanType type) {
-        if (spans == null || spans.isEmpty()) return null;
-        Map<Long, Integer> indexByPosition = new HashMap<>(segments.size() * 2);
-        for (int i = 0; i < segments.size(); i++) {
-            RoadSegmentPlacement segment = segments.get(i);
-            if (segment != null && segment.middlePos() != null) {
-                indexByPosition.put(RoadPhysicalReuseNormalizer.xzKey(segment.middlePos()), i);
+        return new ExactSpans(segments, spans).mask(type);
+    }
+
+    /** 编译器只接受精确XZ；未命中返回null，与施工4格近站规则严格分开。 */
+    static final class ExactSpans {
+        private final List<RoadSegmentPlacement> segments;
+        private final List<RoadSpan> spans;
+        private final Map<SpanType, boolean[]> masks = new java.util.EnumMap<>(SpanType.class);
+        private Map<Long, Integer> indices;
+        ExactSpans(List<RoadSegmentPlacement> segments, List<RoadSpan> spans) {
+            this.segments = segments; this.spans = spans;
+        }
+        boolean[] mask(SpanType type) {
+            if (spans == null || spans.isEmpty()) return null;
+            if (masks.containsKey(type)) return masks.get(type);
+            // 无关类型不必建表；首次真正用到时只建一次，重复XZ保留最后站。
+            if (spans.stream().noneMatch(span -> span != null && span.type() == type)) {
+                masks.put(type, null); return null;
             }
+            if (indices == null) {
+                indices = new HashMap<>(segments.size() * 2);
+                for (int i = 0; i < segments.size(); i++) {
+                    RoadSegmentPlacement segment = segments.get(i);
+                    if (segment != null && segment.middlePos() != null)
+                        indices.put(RoadPhysicalReuseNormalizer.xzKey(segment.middlePos()), i);
+                }
+            }
+            boolean[] mask = new boolean[segments.size()]; boolean found = false;
+            for (RoadSpan span : spans) {
+                if (span == null || span.type() != type || span.start() == null || span.end() == null) continue;
+                Integer start = indices.get(RoadPhysicalReuseNormalizer.xzKey(span.start()));
+                Integer end = indices.get(RoadPhysicalReuseNormalizer.xzKey(span.end()));
+                if (start == null || end == null) continue;
+                int from = Math.max(0, Math.min(start, end)), to = Math.min(mask.length - 1, Math.max(start, end));
+                for (int i = from; i <= to; i++) mask[i] = true;
+                found = true;
+            }
+            masks.put(type, found ? mask : null);
+            return found ? mask : null;
         }
-        boolean[] mask = new boolean[segments.size()];
-        boolean found = false;
-        for (RoadSpan span : spans) {
-            if (span == null || span.type() != type || span.start() == null || span.end() == null) continue;
-            Integer start = indexByPosition.get(RoadPhysicalReuseNormalizer.xzKey(span.start()));
-            Integer end = indexByPosition.get(RoadPhysicalReuseNormalizer.xzKey(span.end()));
-            if (start == null || end == null) continue;
-            int from = Math.max(0, Math.min(start, end));
-            int to = Math.min(mask.length - 1, Math.max(start, end));
-            for (int i = from; i <= to; i++) mask[i] = true;
-            found = true;
-        }
-        return found ? mask : null;
     }
 
     private static Projection project(int x, int z, RasterSegment segment) {
