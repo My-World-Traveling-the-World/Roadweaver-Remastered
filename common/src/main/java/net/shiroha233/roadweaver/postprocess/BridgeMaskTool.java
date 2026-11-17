@@ -3,7 +3,6 @@ package net.shiroha233.roadweaver.postprocess;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;

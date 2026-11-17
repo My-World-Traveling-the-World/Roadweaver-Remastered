@@ -132,7 +132,7 @@ class PathCurveRasterParityTest {
     @Test
     void repeatedRoundedCentersAreSkippedButTheLastDistinctEndpointRemains() {
         var samples = List.of(new Vec2d(0, 0), new Vec2d(0.1, 0),
-                new Vec2d(0.2, 0), new Vec2d(1, 0), new Vec2d(2, 0));
+                new Vec2d(0.2, 0), new Vec2d(1, 0), new Vec2d(2, 0), new Vec2d(2.1, 0));
         var distances = new ArrayList<Double>();
         var centers = PathPostProcessor.extractCenters(samples, List.of(p(0, 0), p(2, 0)), new int[]{64, 64}, distances);
         assertEquals(List.of(p(0, 0), p(1, 0), p(2, 0)), centers);

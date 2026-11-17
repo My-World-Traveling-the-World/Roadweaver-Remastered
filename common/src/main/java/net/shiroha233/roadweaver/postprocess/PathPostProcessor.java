@@ -312,17 +312,8 @@ public final class PathPostProcessor {
      * <p>路面覆盖范围不变：栅格化仍是"多段折线 ± 半宽"的并集，只是分段归属按站点算。</p>
      */
     public static List<RoadSegmentPlacement> rasterizeStations(List<BlockPos> stations, int width) {
-        if (stations == null || stations.size() < 2) return new ArrayList<>();
-        List<Vec2d> points = new ArrayList<>(stations.size());
-        List<Double> centerDists = new ArrayList<>(stations.size());
-        double distance = 0.0D;
-        for (int index = 0; index < stations.size(); index++) {
-            BlockPos station = stations.get(index);
-            points.add(new Vec2d(station.getX(), station.getZ()));
-            if (index > 0) distance += points.get(index).dist(points.get(index - 1));
-            centerDists.add(distance);
-        }
-        return rasterizeSegments(points, stations, centerDists, width);
+        // 剖面重建仍一站一段；复用同一落列实现，避免门面保存另一套宽度算法。
+        return PathWidthRasterizer.rasterizeStations(stations, width);
     }
 
     /**
@@ -393,204 +384,27 @@ public final class PathPostProcessor {
         return produced;
     }
 
-    /** 第 {@code i} 条腿（控制点 i → i+1）是否属于桥面（任一端点在桥上）。 */
-    static boolean bridgeTouching(boolean[] bridgeMask, int i) {
-        if (bridgeMask == null || i < 0 || i >= bridgeMask.length - 1) return false;
-        return bridgeMask[i] || bridgeMask[i + 1];
+    // 保留包内调用入口；几何参数、里程和列归属都原样交给纯计算组件。
+    static boolean bridgeTouching(boolean[] bridgeMask, int index) {
+        return PathSplineSampler.bridgeTouching(bridgeMask, index);
     }
 
-    static List<Vec2d> generateSplinePoints(List<BlockPos> controlPoints,
-                                                     boolean[] bridgeMask, CurveMode curveMode) {
-        List<BlockPos> ext = new ArrayList<>();
-        ext.add(controlPoints.get(0));
-        ext.addAll(controlPoints);
-        ext.add(controlPoints.get(controlPoints.size() - 1));
-
-        // 0.9.068（C3）：急弯段用直线代替 Catmull-Rom，避免锐角（发卡弯）外冲。
-        // C2 只保护了 relax 阶段；这里在样条阶段对转向角 >= 阈值的控制点两端改用 lerp，
-        // 发卡弯顶点不再被 CR 的切线 (P_{i+1}-P_{i-1})/2 甩出去。
-        int nCtrl = controlPoints.size();
-        boolean[] sharpAt = new boolean[nCtrl];
-        for (int k = 1; k < nCtrl - 1; k++) {
-            BlockPos ca = controlPoints.get(k - 1), cb = controlPoints.get(k), cc = controlPoints.get(k + 1);
-            sharpAt[k] = turningAngleDeg(ca.getX(), ca.getZ(), cb.getX(), cb.getZ(), cc.getX(), cc.getZ())
-                    >= SHARP_TURN_FREEZE_DEG;
-        }
-
-        List<Vec2d> splinePoints = new ArrayList<>();
-        for (int i = 0; i < controlPoints.size() - 1; i++) {
-            BlockPos p0 = ext.get(i), p1 = ext.get(i + 1), p2 = ext.get(i + 2), p3 = ext.get(i + 3);
-            double dist = Math.sqrt(p1.distSqr(p2));
-            int steps = Math.max(1, (int) Math.ceil(dist * 4.0));
-            boolean bridgeSeg = bridgeTouching(bridgeMask, i);
-            // 0.9.019（O-04）：桥头切线对齐。
-            //
-            // 桥段用 lerp（直线）、桥外仍用 Catmull-Rom，于是桥界两侧的**切向不连续**：
-            // CR 在结点处的切向取 (P_{i+1} − P_{i-1})/2，桥面离开结点时沿
-            // (P_{i+1} − P_i)，两者之差就是 (P_i − P_{i-1}) —— 分册实测桥头外侧
-            // 航向突变 −30.82°/+30.82°。修法：把桥段**前后各一条腿**也用直线，
-            // 这样两边都是直线、切向自然一致。密化之后每条腿 ≤ 步距，
-            // 所以每个桥头最多只直 8~16 格，桥面本身一格不动。
-            boolean tangentAligned = bridgeSeg
-                    || bridgeTouching(bridgeMask, i - 1)
-                    || bridgeTouching(bridgeMask, i + 1);
-            // 0.9.068（C3）：急弯段（任一端点转向角超阈值）用直线，不跑 CR。
-            boolean sharpSeg = sharpAt[i] || sharpAt[i + 1];
-
-            for (int s = 0; s < steps; s++) {
-                double t = (double) s / steps;
-                Vec2d pt;
-                if (tangentAligned || sharpSeg || curveMode == CurveMode.LINEAR) {
-                    pt = lerp2d(p1.getX(), p1.getZ(), p2.getX(), p2.getZ(), t);
-                } else if (curveMode == CurveMode.BEZIER_CASTELJAU) {
-                    pt = catmullRomBezierCasteljau(p0.getX(), p0.getZ(), p1.getX(), p1.getZ(),
-                            p2.getX(), p2.getZ(), p3.getX(), p3.getZ(), t);
-                } else {
-                    pt = catmullRomSpline(p0.getX(), p0.getZ(), p1.getX(), p1.getZ(),
-                            p2.getX(), p2.getZ(), p3.getX(), p3.getZ(), t);
-                }
-                splinePoints.add(pt);
-            }
-        }
-        BlockPos last = controlPoints.get(controlPoints.size() - 1);
-        splinePoints.add(new Vec2d(last.getX(), last.getZ()));
-        return splinePoints;
+    static List<Vec2d> generateSplinePoints(List<BlockPos> controls, boolean[] mask, CurveMode mode) {
+        return PathSplineSampler.generateSplinePoints(controls, mask, mode);
     }
 
-    static List<BlockPos> extractCenters(List<Vec2d> splinePoints,
-                                                  List<BlockPos> rawPath, int[] rawTargetY,
-                                                  List<Double> outCenterDists) {
-        List<BlockPos> centers = new ArrayList<>();
-        double currentDist = 0;
-        double nextCenterDist = 0;
-        int rawSegmentHint = 0;
-
-        for (int i = 0; i < splinePoints.size(); i++) {
-            Vec2d p = splinePoints.get(i);
-            if (i > 0) currentDist += p.dist(splinePoints.get(i - 1));
-
-            if (currentDist + 0.5 >= nextCenterDist || i == splinePoints.size() - 1) {
-                int cx = (int) Math.round(p.x());
-                int cz = (int) Math.round(p.z());
-                HeightProjection projection = interpolateYNearPathOrder(
-                        cx, cz, rawPath, rawTargetY, rawSegmentHint);
-                int y = projection.y();
-                rawSegmentHint = projection.segmentIndex();
-                BlockPos centerPos = new BlockPos(cx, y, cz);
-                if (centers.isEmpty() || !centers.get(centers.size() - 1).equals(centerPos)) {
-                    centers.add(centerPos);
-                    outCenterDists.add(currentDist);
-                    nextCenterDist = currentDist + 1.0;
-                }
-            }
-        }
-        return centers;
+    static List<BlockPos> extractCenters(List<Vec2d> points, List<BlockPos> raw, int[] targetY, List<Double> distances) {
+        return PathSplineSampler.extractCenters(points, raw, targetY, distances);
     }
 
-    static HeightProjection interpolateYNearPathOrder(int cx,
-                                                               int cz,
-                                                               List<BlockPos> rawPath,
-                                                               int[] rawTargetY,
-                                                               int hint) {
-        double bestDistSq = Double.MAX_VALUE;
-        double bestT = 0;
-        int bestSeg = Math.max(0, Math.min(rawPath.size() - 2, hint));
-        int searchStart = bestSeg;
-        int searchEnd = Math.min(rawPath.size() - 2, bestSeg + 32);
-
-        for (int i = searchStart; i <= searchEnd; i++) {
-            BlockPos a = rawPath.get(i);
-            BlockPos b = rawPath.get(i + 1);
-            double ax = a.getX(), az = a.getZ();
-            double dx = b.getX() - ax, dz = b.getZ() - az;
-            double lenSq = dx * dx + dz * dz;
-            double t = (lenSq < 1e-9) ? 0.0
-                    : Math.max(0.0, Math.min(1.0, ((cx - ax) * dx + (cz - az) * dz) / lenSq));
-            double projX = ax + t * dx, projZ = az + t * dz;
-            double dSq = (cx - projX) * (cx - projX) + (cz - projZ) * (cz - projZ);
-            if (dSq < bestDistSq) {
-                bestDistSq = dSq;
-                bestT = t;
-                bestSeg = i;
-            }
-        }
-        int y0 = rawTargetY[bestSeg];
-        int y1 = rawTargetY[Math.min(bestSeg + 1, rawTargetY.length - 1)];
-        return new HeightProjection(
-                (int) Math.round(y0 + (y1 - y0) * bestT), bestSeg);
+    static List<RoadSegmentPlacement> rasterizeSegments(List<Vec2d> points, List<BlockPos> centers,
+                                                       List<Double> distances, int width) {
+        return PathWidthRasterizer.rasterizeSegments(points, centers, distances, width);
     }
 
-    private record HeightProjection(int y, int segmentIndex) {
-    }
-
-    static List<RoadSegmentPlacement> rasterizeSegments(List<Vec2d> splinePoints,
-                                                                 List<BlockPos> centers,
-                                                                 List<Double> centerDists,
-                                                                 int width) {
-        Map<Integer, Set<BlockPos>> segmentedBlocks = new HashMap<>();
-        for (int i = 0; i < centers.size(); i++) segmentedBlocks.put(i, new HashSet<>());
-
-        double halfWidth = width / 2.0;
-        double halfWidthSq = halfWidth * halfWidth;
-        double pathDist = 0;
-        int currentCenterIdx = 0;
-
-        for (int i = 0; i < splinePoints.size() - 1; i++) {
-            Vec2d pStart = splinePoints.get(i), pEnd = splinePoints.get(i + 1);
-            pathDist += pStart.dist(pEnd);
-            while (currentCenterIdx < centerDists.size() - 1 && centerDists.get(currentCenterIdx + 1) < pathDist) {
-                currentCenterIdx++;
-            }
-
-            int minX = (int) Math.floor(Math.min(pStart.x(), pEnd.x()) - halfWidth - 1);
-            int maxX = (int) Math.ceil(Math.max(pStart.x(), pEnd.x()) + halfWidth + 1);
-            int minZ = (int) Math.floor(Math.min(pStart.z(), pEnd.z()) - halfWidth - 1);
-            int maxZ = (int) Math.ceil(Math.max(pStart.z(), pEnd.z()) + halfWidth + 1);
-
-            for (int x = minX; x <= maxX; x++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    if (distToSegmentSq(x, z, pStart, pEnd) <= halfWidthSq) {
-                        assignToNearestCenter(x, z, centers, currentCenterIdx, segmentedBlocks);
-                    }
-                }
-            }
-        }
-
-        List<RoadSegmentPlacement> out = new ArrayList<>();
-        for (int i = 0; i < centers.size(); i++) {
-            BlockPos center = centers.get(i);
-            Set<BlockPos> blocks = segmentedBlocks.get(i);
-            if (blocks.isEmpty()) blocks.add(new BlockPos(center.getX(), 0, center.getZ()));
-            out.add(new RoadSegmentPlacement(center, new ArrayList<>(blocks)));
-        }
-        return out;
-    }
-
-    static void assignToNearestCenter(int x, int z, List<BlockPos> centers,
-                                               int hint, Map<Integer, Set<BlockPos>> segmentedBlocks) {
-        int bestIdx = hint;
-        double bestDistSq = Double.MAX_VALUE;
-        int searchStart = Math.max(0, hint - 2);
-        int searchEnd = Math.min(centers.size() - 2, hint + 2);
-
-        for (int seg = searchStart; seg <= searchEnd; seg++) {
-            BlockPos a = centers.get(seg), b = centers.get(seg + 1);
-            double ax = a.getX(), az = a.getZ(), dx = b.getX() - ax, dz = b.getZ() - az;
-            double lenSq = dx * dx + dz * dz;
-            double t = (lenSq < 1e-9) ? 0.0
-                    : Math.max(0.0, Math.min(1.0, ((x - ax) * dx + (z - az) * dz) / lenSq));
-            double projX = ax + t * dx, projZ = az + t * dz;
-            double dSq = (x - projX) * (x - projX) + (z - projZ) * (z - projZ);
-            int candidateIndex = (t < 0.5) ? seg : Math.min(seg + 1, centers.size() - 1);
-            int currentDistance = Math.abs(bestIdx - hint);
-            int candidateDistance = Math.abs(candidateIndex - hint);
-            if (dSq < bestDistSq - 1.0E-9D
-                    || (Math.abs(dSq - bestDistSq) <= 1.0E-9D && candidateDistance < currentDistance)) {
-                bestDistSq = dSq;
-                bestIdx = candidateIndex;
-            }
-        }
-        segmentedBlocks.get(bestIdx).add(new BlockPos(x, 0, z));
+    static void assignToNearestCenter(int x, int z, List<BlockPos> centers, int hint,
+                                      Map<Integer, Set<BlockPos>> blocks) {
+        PathWidthRasterizer.assignToNearestCenter(x, z, centers, hint, blocks);
     }
 
     // 保留包内入口供现有几何调用方使用；参数和产物完全透传到对应职责的纯计算类。

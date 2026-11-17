@@ -34,7 +34,8 @@ class PostProcessedRoadProductTest {
         var routes = List.of(
                 List.of(new BlockPos(-24, 66, -8), new BlockPos(-16, 68, -6), new BlockPos(-8, 70, -2),
                         new BlockPos(0, 72, 0), new BlockPos(8, 71, 1), new BlockPos(16, 70, 0)),
-                List.of(pos(0, 0), pos(8, 8), pos(16, 16), pos(8, 24), pos(0, 32)));
+                List.of(pos(0, 0), pos(8, 8), pos(16, 16), pos(8, 24), pos(0, 32)),
+                List.of(pos(0, 0), pos(8, 4), pos(16, 6), pos(24, 4), pos(32, 0)));
         int compared = 0;
         for (var input : routes) for (boolean wet : new boolean[]{false, true}) for (int width : new int[]{1, 2, 5}) {
             var expectedSampler = new AccurateHeightSampler(null, new FlatHeight(), AccurateSampleStore.noop());
@@ -49,7 +50,7 @@ class PostProcessedRoadProductTest {
             assertEquals(input.getLast(), actual.getLast().middlePos());
             compared++;
         }
-        assertEquals(12, compared, "必须实际执行两路形×水陆×三档宽度，不能空集合跳过");
+        assertEquals(18, compared, "必须实际执行三路形×水陆×三档宽度，不能空集合跳过");
     }
 
     @Test

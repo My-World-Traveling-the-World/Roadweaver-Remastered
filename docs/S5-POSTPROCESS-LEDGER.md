@@ -1,6 +1,6 @@
 # S5 台账：后处理降级为「网络缝合器」
 
-> **相关文档**：本文是**文件级**分类（20 个文件留还是删）。
+> **相关文档**：本文是**文件级**分类，受管文件以末尾机器可读台账为准。
 > 方法级删除边界见 [`S5-METHOD-MAP.md`](S5-METHOD-MAP.md)（当前 39 个受管方法里 33 个待旧链路下线后删除）；
 > 历史切换方案见 [`S7-SWITCH-CHECKLIST.md`](archive/S7-SWITCH-CHECKLIST.md)，现行验证见[手册](VALIDATION.md)。
 
@@ -57,6 +57,8 @@ S5|postprocess/NetworkReuseMerger.java|KEEP_SEAM|复用既有路网，避免重�
 S5|postprocess/PathPostProcessor.java|KEEP_INPUT|raw path → 站点 → 栅格化的几何流水线|—
 S5|postprocess/PathControlSimplifier.java|KEEP_INPUT|控制点简化与原始点密度补点；从门面等价迁出，不改变容差或顺序|—
 S5|postprocess/PathControlRelaxer.java|KEEP_INPUT|控制点限幅松弛，统一保留桥头及急弯冻结约束；未移除第二次松弛|—
+S5|postprocess/PathSplineSampler.java|KEEP_INPUT|控制点样条与按站序投影目标高度；等价迁出以独立守住桥头、急弯和交叉高程，不取代DP|—
+S5|postprocess/PathWidthRasterizer.java|KEEP_INPUT|共享宽度落列与站点归属；曲线和剖面重建共用同一实现，保留闭区间边界和空站锚点|—
 S5|postprocess/RoadIndex.java|KEEP_SEAM|既有路的空间索引|—
 S5|postprocess/RoadSnapService.java|KEEP_SEAM|把新路端点吸附到既有路|—
 S5|postprocess/SawtoothMetric.java|KEEP_INPUT|锯齿度量，仅用于诊断|—
