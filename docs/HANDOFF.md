@@ -2119,3 +2119,6 @@ Gson Reader可能包装IO为RuntimeException，索引先readString才能区分�
 ### 六、我踩到但已解决的坑
 
 xzKey同时被RefusalAccumulator使用，初搬误删后编译报错，恢复该处helper，编译失败不算变异红。偏一列的Chebyshev近站会与前站等距，最早站为6并非原站7；旧算法反例纠正夹具，未修改生产选择。迁出模型引用196超过旧195，架构守卫确实红，明确登记同层模型依赖；后续util从8到9同理，不关守卫。目标高度在隧道拒绝分支原地写，不能被“只读缓存”误共享。代码newlines显式LF，replace均断言锚点。首轮分阶段结果受JIT波动，掩码收益以九交替对照为准，不挑最低数字外推。
+
+
+第49轮远端同步结果：收尾pull --rebase成功（Current branch main is up to date），push成功，远端main从9fa7b6e推进至2ce2443，含两步源码/守卫和文档。随后补本同步记录再提交推送；未打包部署。最终1631/0/0/0及Fabric通过，11项变异恢复，工作区清洁。
