@@ -2,10 +2,12 @@
 package net.shiroha233.roadweaver.planning;
 
 import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IfTree;
 import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.JavacTask;
@@ -33,6 +35,17 @@ class ReadinessPersistenceWiringTest {
         assertEquals(Tree.Kind.CONDITIONAL_AND, verification.getKind());
         assertEquals("failure == null", verification.getLeftOperand().toString());
         assertEquals("regionPlanningDataReady", name(assertInstanceOf(MethodInvocationTree.class, verification.getRightOperand())));
+        // 仅找到调用仍会放过 false && finishPlanning；条件必须直接使用提交结果，才不会短路跳过。
+        var resultGuards = new ArrayList<IfTree>();
+        new TreeScanner<Void, Void>() {
+            @Override public Void visitIf(IfTree branch, Void ignored) {
+                ExpressionTree condition = branch.getCondition();
+                while (condition instanceof ParenthesizedTree wrapped) condition = wrapped.getExpression();
+                if (condition == finish) resultGuards.add(branch);
+                return super.visitIf(branch, ignored);
+            }
+        }.scan(task, null);
+        assertEquals(1, resultGuards.size(), "生产完成条件必须直接使用持久化结果，不允许隐藏短路");
         assertEquals(1, calls(start, "finishPlanning").size());
         assertEquals(1, calls(start, "whenComplete").size());
         assertEquals(0, calls(start, "transition").stream()
