@@ -506,7 +506,7 @@ public final class InitialGenManager {
         try {
             GreatWallPrewarmCompat.awaitPrewarmForInitialGeneration(level).join();
         } catch (Throwable failure) {
-            LOGGER.warn("【长城旧预热门执行失败，后续启动仍须遵守前置条件】 " + "RoadWeaver Great Wall gate failed; continuing with initial generation.", failure);
+            LOGGER.warn("【长城兼容等待失败，恢复当前流程；本条未确认长城就绪】 " + "RoadWeaver Great Wall compatibility wait failed; resuming this flow without confirming wall readiness.", failure);
         } finally {
             InitialGenerationProgressTracker.enterStage(
                     InitialGenerationStage.ROAD_GENERATION, "generating_roads");

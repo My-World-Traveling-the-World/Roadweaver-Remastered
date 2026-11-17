@@ -84,7 +84,7 @@ public final class GreatWallPrewarmCompat {
             case ABSENT -> { /* 没有长城就没有等待阶段，不打印虚假的完成日志。 */ }
             case READY -> LOGGER.info("【长城预热门已释放，进入后续启动检查】 " + "Great Wall prewarm gate resolved; RoadWeaver initial generation may start.");
             case TIMEOUT, STALLED, ABSOLUTE_CAP, POLLER_UNAVAILABLE -> LOGGER.warn(
-                    "【长城预热门未确认就绪便结束，后续仍须检查前置条件】 " + "Great Wall prewarm gate released without confirmed readiness: reason={}; RoadWeaver initial generation may start.", reason);
+                    "【长城预热门未确认就绪便结束，后续仍须检查前置条件】 " + "Great Wall prewarm gate ended without confirmed readiness: reason={}; strict startup prerequisites still apply.", reason);
         }
     }
 

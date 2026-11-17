@@ -46,6 +46,9 @@ final class ChineseLogGuardTest {
         assertFalse(calls.isEmpty(), "解析器没有识别任何日志调用");
         var failures = calls.stream().filter(c -> !c.chinese()).toList();
         assertEquals(List.of(), failures, "日志格式参数必须有中文主说明，不能靠异常参数、注释或类名蒙混");
+        System.out.println("CHINESE_LOG_AUDIT sources=" + sources.size() + " loggerFiles="
+                + calls.stream().map(Call::file).distinct().count() + " calls=" + calls.size()
+                + " chinese=" + calls.stream().filter(Call::chinese).count());
     }
 
     @Test
@@ -86,6 +89,19 @@ final class ChineseLogGuardTest {
         assertTrue(calls.getFirst().chinese());
     }
 
+    @Test
+    void declaredLoggerAliasesAndDirectFactoriesCannotEscapeTheScan() throws IOException {
+        var calls = snippet("""
+            class Example { void run(org.slf4j.Logger sink) {
+                sink.info("failed", "中文参数");
+                org.slf4j.Logger output = null; output.warn("读取失败");
+                org.slf4j.LoggerFactory.getLogger("road").error("failed");
+            }}
+            """);
+        assertEquals(3, calls.size());
+        assertEquals(List.of(false, true, false), calls.stream().map(Call::chinese).toList());
+    }
+
     private static List<Call> snippet(String text) throws IOException {
         return parse(List.of(), new SimpleJavaFileObject(URI.create("string:///Example.java"), JavaFileObject.Kind.SOURCE) {
             @Override public CharSequence getCharContent(boolean ignored) { return text; }
@@ -102,11 +118,20 @@ final class ChineseLogGuardTest {
             var task = (JavacTask) compiler.getTask(null, files, diagnostics, List.of("-proc:none"), null, inputs);
             var positions = com.sun.source.util.Trees.instance(task).getSourcePositions();
             for (var unit : task.parse()) {
+                var aliases = new java.util.HashSet<String>();
+                // 按声明类型补上非LOGGER命名的参数/字段，避免仅凭变量名漏掉sink等别名。
+                new TreeScanner<Void, Void>() {
+                    @Override public Void visitVariable(VariableTree variable, Void unused) {
+                        String type = variable.getType() == null ? "" : variable.getType().toString();
+                        if (type.equals("Logger") || type.endsWith(".Logger")) aliases.add(variable.getName().toString());
+                        return super.visitVariable(variable, unused);
+                    }
+                }.scan(unit, null);
                 new TreeScanner<Void, Void>() {
                     @Override public Void visitMethodInvocation(MethodInvocationTree call, Void unused) {
                         if (call.getMethodSelect() instanceof MemberSelectTree method
                                 && LEVELS.contains(method.getIdentifier().toString())
-                                && loggerReceiver(method.getExpression().toString())) {
+                                && loggerReceiver(method.getExpression(), aliases)) {
                             long line = unit.getLineMap().getLineNumber(positions.getStartPosition(unit, call));
                             String message = call.getArguments().isEmpty() ? "" : description(call.getArguments().getFirst());
                             calls.add(new Call(unit.getSourceFile().getName(), line, method.getIdentifier().toString(), message));
@@ -121,9 +146,14 @@ final class ChineseLogGuardTest {
         return List.copyOf(calls);
     }
 
-    private static boolean loggerReceiver(String receiver) {
-        String tail = receiver.substring(receiver.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-        return tail.equals("log") || tail.contains("logger") || tail.startsWith("log_");
+    private static boolean loggerReceiver(ExpressionTree receiver, Set<String> aliases) {
+        if (receiver instanceof MethodInvocationTree factory && factory.getMethodSelect() instanceof MemberSelectTree method)
+            return method.getIdentifier().contentEquals("getLogger")
+                    && method.getExpression().toString().endsWith("LoggerFactory");
+        String raw = receiver.toString();
+        String name = raw.substring(raw.lastIndexOf('.') + 1);
+        String tail = name.toLowerCase(Locale.ROOT);
+        return aliases.contains(name) || tail.equals("log") || tail.contains("logger") || tail.startsWith("log_");
     }
 
     private static String description(ExpressionTree expression) {

@@ -1,6 +1,8 @@
 /* 文件职责：路段跨度与纵断面观感 —— 交叉口剖面、隧道口水面闭合、端点坡道约束。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 诊断保留桥面判据字段，中文说明避免将最低桥面误读成实际落块高度。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
@@ -291,7 +293,7 @@ public final class RoadSpanProfileOps {
             int highestWater = hwByRange[ri];
             int minimumDeck = deckByRange[ri];
             org.slf4j.LoggerFactory.getLogger(Road.class).info(
-                    "RoadWeaver [ROAD-BRIDGE-DECK] range={}..{} type={} highestWater={} minimumDeck={}"
+                    "【桥面高度下界及水位净空判定】 " + "RoadWeaver [ROAD-BRIDGE-DECK] range={}..{} type={} highestWater={} minimumDeck={}"
                             + " stationYStart={} stationYEnd={} clearance={}",
                     range.start(), range.end(), range.type(),
                     highestWater == Integer.MIN_VALUE ? "none" : highestWater,

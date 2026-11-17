@@ -108,12 +108,12 @@ public final class AbObservingPathfinder implements Pathfinder {
                         "(" + start.getX() + "," + start.getZ() + ")->("
                                 + end.getX() + "," + end.getZ() + ")",
                         toSolution(authoritative), toSolution(observed));
-                LOGGER.info("【新旧选线诊断对照结果】 " + "[ROAD-AB] #{} verdict={}\n{}",
+                LOGGER.info("【主选线与影子选线诊断对照】 " + "[ROAD-AB] #{} verdict={}\n{}",
                         n, report.verdict(), String.join("\n", report.diffs()));
             }
         } catch (Throwable t) {
             if (log) {
-                LOGGER.warn("[ROAD-AB] #{} 新链观察失败（已忽略，旧链结果照常生效）：{}", n, t.toString());
+                LOGGER.warn("[ROAD-AB] #{} 影子选线观察失败（忽略本次观测，主结果照常生效）：{}", n, t.toString());
             }
         }
         return authoritative;
