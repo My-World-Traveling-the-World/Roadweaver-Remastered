@@ -30,6 +30,10 @@ import net.shiroha233.roadweaver.runtime.RoadLifecycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Entry;
+import net.shiroha233.roadweaver.planning.ReadinessRegionTable.State;
+import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Snapshot;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -61,7 +65,8 @@ public final class RoadPlanningReadinessIndex {
     private static final String READY_FILE = "chunky-ready-regions-v2.txt";
 
     private static final Map<WorldKey, WorldState> WORLDS = new ConcurrentHashMap<>();
-    private static final Map<RegionKey, RegionEntry> ENTRIES = new ConcurrentHashMap<>();
+    private static final ReadinessRegionTable<RegionKey, WorldKey> ENTRIES =
+            new ReadinessRegionTable<>(RegionKey::world);
     private static final Map<WorldKey, Map<ConnectionKey, CachedPath>> PLANNED_PATHS =
             new ConcurrentHashMap<>();
     private static final ConcurrentLinkedQueue<RegionKey> QUEUE = new ConcurrentLinkedQueue<>();
@@ -122,13 +127,13 @@ public final class RoadPlanningReadinessIndex {
         //
         // ⚠️ 必须保留 FAILED 且 attempts < MAX_PLAN_ATTEMPTS 的重排分支
         //    （原逻辑在此处把失败项重新入队）。
-        RegionEntry existing = ENTRIES.get(key);
+        Entry existing = ENTRIES.get(key);
         if (existing != null) {
-            if (existing.state == State.FAILED && existing.attempts < MAX_PLAN_ATTEMPTS) {
-                existing.state = State.QUEUED;
+            if (existing.state() == State.FAILED && existing.attempts < MAX_PLAN_ATTEMPTS) {
+                ENTRIES.transition(key, existing, State.QUEUED);
                 QUEUE.add(key);
             }
-            return existing.state.name();
+            return existing.state().name();
         }
 
         // 饱和短路：队列已满且是**新** region ⇒ 不做 adoption（省掉最贵的一步），
@@ -139,17 +144,17 @@ public final class RoadPlanningReadinessIndex {
 
         if (adoptCompletedInitialCoverage(level, regionX, regionZ)) return State.READY.name();
 
-        RegionEntry created = new RegionEntry(State.QUEUED);
-        RegionEntry entry = ENTRIES.putIfAbsent(key, created);
+        Entry created = new Entry(State.QUEUED);
+        Entry entry = ENTRIES.putIfAbsent(key, created);
         if (entry == null) {
             QUEUE.add(key);
             entry = created;
             LOGGER.info("RoadWeaver queued Chunky readiness region [{},{}].", regionX, regionZ);
-        } else if (entry.state == State.FAILED && entry.attempts < MAX_PLAN_ATTEMPTS) {
-            entry.state = State.QUEUED;
+        } else if (entry.state() == State.FAILED && entry.attempts < MAX_PLAN_ATTEMPTS) {
+            ENTRIES.transition(key, entry, State.QUEUED);
             QUEUE.add(key);
         }
-        return entry.state.name();
+        return entry.state().name();
     }
 
     // ─────────────────── 入队侧护栏（审计 P1-2）───────────────────
@@ -226,13 +231,13 @@ public final class RoadPlanningReadinessIndex {
         int n = 0;
         for (RegionKey k : ACTIVE) {
             if (!k.world.equals(world)) continue;
-            RegionEntry e = ENTRIES.get(k);
-            if (e != null && (e.state == State.PLANNING || e.state == State.QUEUED)) n++;
+            Entry e = ENTRIES.get(k);
+            if (e != null && (e.state() == State.PLANNING || e.state() == State.QUEUED)) n++;
         }
         for (RegionKey k : QUEUE) {
             if (!k.world.equals(world)) continue;
-            RegionEntry e = ENTRIES.get(k);
-            if (e != null && e.state == State.QUEUED) n++;
+            Entry e = ENTRIES.get(k);
+            if (e != null && e.state() == State.QUEUED) n++;
             if (n >= MAX_BACKLOG_REGIONS) return true;
         }
         return n >= MAX_BACKLOG_REGIONS;
@@ -244,36 +249,22 @@ public final class RoadPlanningReadinessIndex {
             return State.UNSUPPORTED.name();
         }
         if (worldState(level).ready.contains(packRegion(regionX, regionZ))) return State.READY.name();
-        RegionEntry entry = ENTRIES.get(key(level, regionX, regionZ));
-        return entry == null ? State.UNPLANNED.name() : entry.state.name();
+        Entry entry = ENTRIES.get(key(level, regionX, regionZ));
+        return entry == null ? State.UNPLANNED.name() : entry.state().name();
     }
 
     public static String progressSummary(Object levelObject) {
         if (!(levelObject instanceof ServerLevel level)) return "RoadWeaver unavailable";
         WorldKey worldKey = worldKey(level);
-        int queued = 0;
-        int planning = 0;
-        int readyAhead = 0;
-        int failed = 0;
-        for (Map.Entry<RegionKey, RegionEntry> entry : ENTRIES.entrySet()) {
-            if (!entry.getKey().world.equals(worldKey)) continue;
-            switch (entry.getValue().state) {
-                case QUEUED -> queued++;
-                case PLANNING -> planning++;
-                case READY -> {
-                    if (!entry.getValue().dispatched) readyAhead++;
-                }
-                case FAILED -> failed++;
-                default -> { }
-            }
-        }
+        // 进度与调度读取同一口径，避免两个独立扫描在并发转换间互相矛盾。
+        Snapshot supply = supplySnapshot(worldKey);
         return "ready=" + worldState(level).ready.size()
-                + ", queued=" + queued
-                + ", planning=" + planning
-                + ", readyAhead=" + readyAhead
+                + ", queued=" + supply.queued()
+                + ", planning=" + supply.planning()
+                + ", readyAhead=" + supply.readyAhead()
                 + ", lanes=" + currentSupplyLanes
                 + ", streams=" + currentStreamsThreads
-                + ", failed=" + failed;
+                + ", failed=" + supply.failed();
     }
 
     /** Reflection-friendly lifecycle signal from PlainCraft Chunky AutoGen. */
@@ -289,8 +280,7 @@ public final class RoadPlanningReadinessIndex {
     /** Reflection-friendly notification after Chunky accepts a ready region. */
     public static void markRegionDispatched(Object levelObject, int regionX, int regionZ) {
         if (!(levelObject instanceof ServerLevel level) || !Level.OVERWORLD.equals(level.dimension())) return;
-        RegionEntry entry = ENTRIES.get(key(level, regionX, regionZ));
-        if (entry != null) entry.dispatched = true;
+        ENTRIES.markDispatched(key(level, regionX, regionZ));
     }
 
     public static void tick(ServerLevel level) {
@@ -305,7 +295,7 @@ public final class RoadPlanningReadinessIndex {
         // 每 20 个 tick 取一份样本，避免计时期间的日志本身占满 tick。
         boolean sampleScan = READINESS_TIMINGS && tick % 20L == 0L;
         long scanStart = sampleScan ? System.nanoTime() : 0L;
-        SupplySnapshot supply = supplySnapshot(world);
+        Snapshot supply = supplySnapshot(world);
         if (sampleScan) {
             long scanUs = (System.nanoTime() - scanStart) / 1000;
             LOGGER.info("[CHUNKY-READINESS-TIMING] phase=scan tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
@@ -320,8 +310,8 @@ public final class RoadPlanningReadinessIndex {
         while (activeForWorld < desiredLanes) {
             RegionKey activeKey = pollForWorld(world);
             if (activeKey == null) return;
-            RegionEntry entry = ENTRIES.get(activeKey);
-            if (entry == null || entry.state != State.QUEUED || !ACTIVE.add(activeKey)) continue;
+            Entry entry = ENTRIES.get(activeKey);
+            if (entry == null || entry.state() != State.QUEUED || !ACTIVE.add(activeKey)) continue;
             startPlanning(level, activeKey, entry);
             activeForWorld++;
         }
@@ -363,15 +353,15 @@ public final class RoadPlanningReadinessIndex {
         WorldKey world = worldKey(level);
         for (RegionKey activeKey : ACTIVE) {
             if (!activeKey.world.equals(world)) continue;
-            RegionEntry entry = ENTRIES.get(activeKey);
-            if (entry != null && entry.state == State.PLANNING
+            Entry entry = ENTRIES.get(activeKey);
+            if (entry != null && entry.state() == State.PLANNING
                     && connectionTouchesRegion(level, connection, activeKey)) return true;
         }
         return false;
     }
 
     public static void clearRuntime() {
-        for (RegionEntry entry : ENTRIES.values()) {
+        for (Entry entry : ENTRIES.values()) {
             CompletableFuture<Void> future = entry.planningFuture;
             if (future != null) future.cancel(true);
         }
@@ -397,24 +387,25 @@ public final class RoadPlanningReadinessIndex {
             LOGGER.info("RoadWeaver Chunky readiness planning resumed in minecraft:overworld.");
             return;
         }
-        for (RegionEntry entry : ENTRIES.values()) {
+        for (Map.Entry<RegionKey, Entry> candidate : ENTRIES.entrySet()) {
+            Entry entry = candidate.getValue();
             CompletableFuture<Void> future = entry.planningFuture;
             if (future != null) future.cancel(true);
             entry.planningFuture = null;
-            if (entry.state == State.PLANNING) entry.state = State.QUEUED;
+            if (entry.state() == State.PLANNING) ENTRIES.transition(candidate.getKey(), entry, State.QUEUED);
         }
         ACTIVE.clear();
         QUEUE.clear();
-        for (Map.Entry<RegionKey, RegionEntry> queued : ENTRIES.entrySet()) {
-            if (queued.getValue().state == State.QUEUED) QUEUE.add(queued.getKey());
+        for (Map.Entry<RegionKey, Entry> queued : ENTRIES.entrySet()) {
+            if (queued.getValue().state() == State.QUEUED) QUEUE.add(queued.getKey());
         }
         ThreadPoolManager.setChunkySupplyThreads(0);
         RuntimeLoadPolicy.setStreamsSupplyThreads(0);
         LOGGER.info("RoadWeaver Chunky readiness planning paused outside minecraft:overworld.");
     }
 
-    private static void startPlanning(ServerLevel level, RegionKey key, RegionEntry entry) {
-        entry.state = State.PLANNING;
+    private static void startPlanning(ServerLevel level, RegionKey key, Entry entry) {
+        ENTRIES.transition(key, entry, State.PLANNING);
         entry.attempts++;
         int minChunkX = key.regionX * REGION_CHUNKS - PLAN_MARGIN_CHUNKS;
         int minChunkZ = key.regionZ * REGION_CHUNKS - PLAN_MARGIN_CHUNKS;
@@ -441,7 +432,7 @@ public final class RoadPlanningReadinessIndex {
                 if (failure == null && regionPlanningDataReady(level, key.regionX, key.regionZ)) {
                     markReady(level, key, entry);
                 } else if (entry.attempts < MAX_PLAN_ATTEMPTS) {
-                    entry.state = State.QUEUED;
+                    ENTRIES.transition(key, entry, State.QUEUED);
                     QUEUE.add(key);
                     ACTIVE.remove(key);
                     LOGGER.warn("RoadWeaver planning retry for Chunky region [{},{}].",
@@ -450,7 +441,7 @@ public final class RoadPlanningReadinessIndex {
                                     ? new IllegalStateException("final persisted path verification failed")
                                     : failure);
                 } else {
-                    entry.state = State.FAILED;
+                    ENTRIES.transition(key, entry, State.FAILED);
                     ACTIVE.remove(key);
                     LOGGER.error("RoadWeaver could not prepare Chunky region [{},{}].",
                             key.regionX, key.regionZ, failure);
@@ -616,31 +607,21 @@ public final class RoadPlanningReadinessIndex {
         WorldState world = worldState(level);
         boolean added = world.ready.add(packRegion(regionX, regionZ));
         if (added) persistReady(level, world);
-        RegionEntry entry = ENTRIES.get(key(level, regionX, regionZ));
-        if (entry != null) entry.state = State.READY;
+        Entry entry = ENTRIES.get(key(level, regionX, regionZ));
+        if (entry != null) ENTRIES.transition(key(level, regionX, regionZ), entry, State.READY);
         return added;
     }
 
-    private static void markReady(ServerLevel level, RegionKey key, RegionEntry entry) {
-        entry.state = State.READY;
+    private static void markReady(ServerLevel level, RegionKey key, Entry entry) {
+        ENTRIES.transition(key, entry, State.READY);
         markCoverageReady(level, key.regionX, key.regionZ);
         ACTIVE.remove(key);
         LOGGER.info("RoadWeaver Chunky region READY [{},{}]; {}.",
                 key.regionX, key.regionZ, progressSummary(level));
     }
 
-    private static SupplySnapshot supplySnapshot(WorldKey world) {
-        int queued = 0;
-        int planning = 0;
-        int readyAhead = 0;
-        for (Map.Entry<RegionKey, RegionEntry> candidate : ENTRIES.entrySet()) {
-            if (!candidate.getKey().world.equals(world)) continue;
-            RegionEntry entry = candidate.getValue();
-            if (entry.state == State.QUEUED) queued++;
-            else if (entry.state == State.PLANNING) planning++;
-            else if (entry.state == State.READY && !entry.dispatched) readyAhead++;
-        }
-        return new SupplySnapshot(queued, planning, readyAhead);
+    private static Snapshot supplySnapshot(WorldKey world) {
+        return ENTRIES.snapshot(world);
     }
 
     private static int activeCount(WorldKey world) {
@@ -651,7 +632,7 @@ public final class RoadPlanningReadinessIndex {
         return count;
     }
 
-    private static void applySupplyCapacity(int desiredLanes, SupplySnapshot supply) {
+    private static void applySupplyCapacity(int desiredLanes, Snapshot supply) {
         int roadThreads = Math.max(0, desiredLanes);
         // ★ 0.8.401：预热期把 streams 供给**解耦**到 ≤4，不再紧贴 lanes。
         //
@@ -829,8 +810,6 @@ public final class RoadPlanningReadinessIndex {
         return ((long) regionX << 32) ^ (regionZ & 0xffffffffL);
     }
 
-    private enum State { UNPLANNED, QUEUED, PLANNING, READY, FAILED, UNSUPPORTED }
-
     private record WorldKey(String dimension, long seed) { }
     private record RegionKey(WorldKey world, int regionX, int regionZ) { }
     private record ConnectionKey(
@@ -846,20 +825,4 @@ public final class RoadPlanningReadinessIndex {
     }
     private record CachedPath(List<BlockPos> path, long retryAfterMillis) { }
     private record WorldState(Set<Long> ready, String fingerprint) { }
-    private record SupplySnapshot(int queued, int planning, int readyAhead) {
-        int pending() {
-            return queued + planning;
-        }
-    }
-
-    private static final class RegionEntry {
-        volatile State state;
-        volatile int attempts;
-        volatile CompletableFuture<Void> planningFuture;
-        volatile boolean dispatched;
-
-        private RegionEntry(State state) {
-            this.state = state;
-        }
-    }
 }

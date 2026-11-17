@@ -40,6 +40,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.metric.GridTerrainFieldTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.SampledTerrainFieldTest"),
+                        // 区域状态转换与统计独立于世界读写，防止计数优化绕过行为守卫。
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessRegionTableTest"),
                         // 真正跨瓦片对拍场值与落选边；新类必须显式登记，避免守卫从未运行。
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.TiledTerrainFieldTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.TiledTerrainFmmTest"),
