@@ -36,6 +36,11 @@ class BridgePairIndexTest {
         assertTrue(new BridgePairIndex(List.of()).after(0,24).isEmpty());
     }
     @Test void sparsePairsReduceChecksAndRetainExactRadiusBoundary() {
+        // 必须让临界桥落在另一叶子；同叶命中只测到旧精判，抓不到树剪枝的开区间错误。
+        var boundary=new ArrayList<BridgeShareDetector.Bounds>();
+        boundary.add(new BridgeShareDetector.Bounds(0,0,20,20));
+        for(int i=0;i<8;i++) boundary.add(new BridgeShareDetector.Bounds(44,0,64,20));
+        assertEquals(List.of(1,2,3,4,5,6,7,8),new BridgePairIndex(boundary).after(0,24));
         var boxes=new ArrayList<BridgeShareDetector.Bounds>();
         for(int i=0;i<1024;i++) boxes.add(new BridgeShareDetector.Bounds(i*1000,-100,i*1000+20,-80));
         boxes.set(1,new BridgeShareDetector.Bounds(44,-100,64,-80));
