@@ -21,6 +21,34 @@ def validation(stage="validated", safe="true"):
 
 
 class EvidenceSummaryTest(unittest.TestCase):
+    def test_summary_retains_counts_latest_failure_and_version_boundaries(self):
+        content = "c1-" + "a" * 64
+        events = [validation(safe="false") + " content=" + content]
+        events += [validation() + " content=" + content] * 1000
+        events += [chunk("ABANDONED") + " content=" + content, chunk() + " content=" + content]
+        report = summarize([("s", "a", iter(events))], history_limit=2)
+        route = report["routes"][0]
+        for target in (route,route["versionsByContent"][content]):
+            self.assertEqual(2,len(target["validation"]["validated"]))
+            self.assertEqual(1001,target["observationCountsByStage"]["validated"])
+            self.assertEqual(1,target["failedObservationsByStage"]["validated"])
+            self.assertFalse(target["latestFailuresByStage"]["validated"]["safe"])
+            self.assertTrue(target["latestValidationPassed"]["validated"])
+            self.assertEqual(["ABANDONED","COMPLETED"],target["chunksByFingerprint"]["-99"]["-1,2"]["observedOutcomes"])
+            self.assertEqual("not-proven",target["roadCompletion"])
+        self.assertEqual(0,report["errorCount"])
+        detail = summarize([("s","a",events)])
+        self.assertEqual(1001,len(detail["routes"][0]["validation"]["validated"]))
+        self.assertEqual(route["chunkOutcomeCountsByFingerprint"],detail["routes"][0]["chunkOutcomeCountsByFingerprint"])
+
+    def test_summary_error_and_unlinked_samples_are_bounded_but_totals_are_exact(self):
+        events = [line("stage=bad")] * 99 + [chunk().replace(ROUTE,"missing-owner-pair")] * 101
+        report = summarize([("s","a",events)],history_limit=3)
+        self.assertEqual(99,report["errorCount"]); self.assertEqual(3,len(report["errors"]))
+        self.assertEqual(101,report["unlinkedCount"]); self.assertEqual(3,len(report["unlinked"]))
+        self.assertEqual([],report["routes"])
+        with self.assertRaises(ValueError): summarize([],0)
+
     def report(self, *lines):
         return summarize([("world-new", "test.log", lines)])
 

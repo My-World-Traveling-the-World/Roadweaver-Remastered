@@ -92,22 +92,43 @@ def finish_product(target, stages):
         for fingerprint, chunks in target["chunksByFingerprint"].items()}
 
 
-def summarize(sources):
+def summarize(sources, history_limit=None):
     """sources 为(session, 文件名, 行迭代器)，调用顺序就是同会话的观测顺序。"""
+    if history_limit is not None and history_limit < 1:
+        raise ValueError("history_limit must be positive")
     routes, errors, unlinked = {}, [], []
+    error_count = unlinked_count = 0
+
+    def keep(history, event):
+        history.append(event)
+        if history_limit is not None and len(history) > history_limit:
+            del history[0]
+
+    def observe(target, stage, event):
+        counts = target.setdefault("observationCountsByStage", {})
+        counts[stage] = counts.get(stage, 0) + 1
+        history = target["coarse"] if stage == "coarse" else target["validation"].setdefault(stage, [])
+        keep(history, event)
+        # 最新失败及累计失败数独立于尾部样本，重复成功不能把失败痕迹冲掉。
+        if stage in VALIDATIONS and not event["safe"]:
+            failures = target.setdefault("failedObservationsByStage", {})
+            failures[stage] = failures.get(stage, 0) + 1
+            target.setdefault("latestFailuresByStage", {})[stage] = event
     for session, name, lines in sources:
         for number, line in enumerate(lines, 1):
             location = {"session": session, "file": str(name), "line": number}
             try:
                 event = parse(line)
             except (ValueError, KeyError) as failure:
-                errors.append({**location, "error": str(failure)})
+                error_count += 1
+                keep(errors, {**location, "error": str(failure)})
                 continue
             if event is None:
                 continue
             if event["id"] == "missing-owner-pair":
                 # 多条旧路共享这个占位文本，绝不能把它们合并成一条完整道路。
-                unlinked.append({**location, "event": event})
+                unlinked_count += 1
+                keep(unlinked, {**location, "event": event})
                 continue
             key = (session, event["id"])
             route = routes.setdefault(key, {"session": session, "id": event["id"],
@@ -118,9 +139,9 @@ def summarize(sources):
             route["observations"] += 1
             stage = event["stage"]
             if stage == "coarse":
-                route["coarse"].append(event)
+                observe(route, stage, event)
             elif stage in VALIDATIONS:
-                route["validation"].setdefault(stage, []).append(event)
+                observe(route, stage, event)
             else:
                 add_chunk(route, event)
             if stage != "coarse":
@@ -133,13 +154,16 @@ def summarize(sources):
                     if stage == "chunk":
                         add_chunk(version, event)
                     else:
-                        version["validation"].setdefault(stage, []).append(event)
+                        observe(version, stage, event)
     for route in routes.values():
         finish_product(route, ("coarse", *VALIDATIONS, "chunk"))
         for version in route["versionsByContent"].values():
             finish_product(version, (*VALIDATIONS, "chunk"))
     # 同一坐标的重复日志只增加观测数，不增加完工区块数；无尝试ID时不虚构尝试次数。
     return {"routes": list(routes.values()), "unlinked": unlinked, "errors": errors,
+            "errorCount": error_count, "unlinkedCount": unlinked_count,
+            "historyMode": "detail" if history_limit is None else "summary",
+            "historyLimit": history_limit,
             "semantics": "input-order observations; explicit content versions isolated; legacy identity summaries are not version correlation; road completion not proven"}
 
 
@@ -149,20 +173,25 @@ def main(argv=None):
                         metavar=("NAME", "LOG"), help="重复指定；同存档副本/重开日志须显式区分会话")
     parser.add_argument("--encoding", default="utf-8-sig", help="GBK控制台日志可指定gb18030")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--mode", choices=("detail", "summary"), default="detail",
+                        help="summary只限历史样本，保留全计数、最新失败、全部道路/内容版本/区块")
+    parser.add_argument("--history-limit", type=int, default=16)
     args = parser.parse_args(argv)
+    if args.history_limit < 1:
+        parser.error("--history-limit must be positive")
     # 用生成器逐行消费大日志；明确解码错误，避免替换字符让路由身份悄悄改变。
     def sources():
         for session, name in args.session:
             with Path(name).open(encoding=args.encoding) as stream:
                 yield session, name, stream
-    result = summarize(sources())
+    result = summarize(sources(), args.history_limit if args.mode == "summary" else None)
     encoded = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False)
     if args.output:
         args.output.write_text(encoded + "\n", encoding="utf-8", newline="\n")
     else:
         print(encoded)
     # 保留部分有效报告，同时让自动化明确看到有格式不兼容，不能仅凭JSON存在判成功。
-    return 1 if result["errors"] else 0
+    return 1 if result["errorCount"] else 0
 
 
 if __name__ == "__main__":
