@@ -113,6 +113,42 @@ class RoadBuildEvidenceTest {
                 RoadBuildEvidence.ChunkOutcome.COMPLETED, false).endsWith(" content=" + content));
     }
 
+    @Test
+    void spanContentDistinguishesStartEndTypeAndOrderWithoutChangingCount() {
+        var r = road(); var first = r.spans().getFirst();
+        var changed = List.of(new RoadSpan(first.start().offset(1, 0, 0), first.end(), first.type()),
+            new RoadSpan(first.start(), first.end().offset(0, 0, 1), first.type()),
+            new RoadSpan(first.start(), first.end(), SpanType.ROAD_CROSSING));
+        assertEquals(3, changed.size());
+        var versions = new HashSet<String>(); versions.add(RoadBuildEvidence.content(r));
+        for (var span : changed) {
+            var spans = new ArrayList<>(r.spans()); spans.set(0, span);
+            var data = new RoadData(5, 0, List.of(), List.of(), r.roadSegmentList(), spans, r.targetY(), r.ownerA2dKey(), r.ownerB2dKey());
+            assertTrue(versions.add(RoadBuildEvidence.content(data)), "等长跨度必须区分起止和类型");
+        }
+        var reversed = new ArrayList<>(r.spans()); Collections.reverse(reversed);
+        assertTrue(versions.add(RoadBuildEvidence.content(new RoadData(5, 0, List.of(), List.of(),
+                r.roadSegmentList(), reversed, r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()))));
+    }
+
+    @Test
+    void stationAndColumnCoordinatesAndPartitionBoundariesAllAffectContent() {
+        var r = road(); var a = r.roadSegmentList().getFirst(); var b = r.roadSegmentList().getLast();
+        var variants = new ArrayList<List<RoadSegmentPlacement>>();
+        for (var delta : List.of(new BlockPos(1, 0, 0), new BlockPos(0, 1, 0), new BlockPos(0, 0, 1))) {
+            variants.add(List.of(new RoadSegmentPlacement(a.middlePos().offset(delta), a.positions()), b));
+            var columns = new ArrayList<>(a.positions()); columns.set(0, columns.getFirst().offset(delta));
+            variants.add(List.of(new RoadSegmentPlacement(a.middlePos(), columns), b));
+        }
+        // 扁平列序列相同但分站不同，仍会影响目标高度与施工阶段，不能省略列表长度。
+        variants.add(List.of(new RoadSegmentPlacement(a.middlePos(), List.of(a.positions().getFirst())),
+            new RoadSegmentPlacement(b.middlePos(), List.of(a.positions().getLast(), b.positions().getFirst()))));
+        assertEquals(7, variants.size());
+        var versions = new HashSet<String>(); versions.add(RoadBuildEvidence.content(r));
+        for (var stations : variants) assertTrue(versions.add(RoadBuildEvidence.content(new RoadData(5, 0,
+            List.of(), List.of(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()))));
+    }
+
     private static RoadData road() {
         BlockPos a = new BlockPos(0, 64, 0), b = new BlockPos(1, 64, 0);
         return new RoadData(5, 0, List.of(), List.of(), List.of(
