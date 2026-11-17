@@ -3,7 +3,6 @@ package net.shiroha233.roadweaver.pathlogic.core;
 
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
-import net.shiroha233.roadweaver.pathlogic.grade.SlopeContinuityEnforcer;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
@@ -228,165 +227,35 @@ public final class TargetYComputation {
             smoothed = dpProfile.get();
             legacySnapshot = null;
         } else {
-            // ════════════════════════════════════════════════════════════════
-            // 待删（批1）：旧纵断面 pass 编排层。
-            //
-            // 它在默认配置下**一行都不跑** —— 只有两种「DP 本来就不适用」的情形
-            // 会进到这里：
-            //   · profileSolver 不是 DP（显式 -Droadweaver.profileSolver=legacy）
-            //   · 玩家关掉坡度限制（旧 pass 也不夹坡，DP 的硬约束会打架）
-            //
-            // 删除条件（与 pathlogic/grade 那三个类同一批，三条全满足）：
-            //   ① pathlogic/profile 的 DP 内核有独立测试且全绿；
-            //   ② 这两条 legacy 入口被正式移除（或改成抛异常提示已废弃）；
-            //   ③ 删完回归全绿。
-            //
-            // 为什么不现在搬成独立文件：它用了 19 个局部变量 + 本类的
-            // applyCrossingProfiles / closeTunnelWaterBoundary 两个私有方法，
-            // 搬走要么造 19 字段的参数对象、要么把私有方法也拖出去。
-            // 按 REFACTOR.md 的铁律「重制期间旧实现原地保留、打标记、进台账」，
-            // 原地标记就够了 —— 搬迁属于可选的结构整理，不改变它的性质。
-            // ════════════════════════════════════════════════════════════════
-            // ── 旧 pass 区（逐行沿用，仅整体缩进 4 格）──────────────────────
-            int[] tunnelProfile;
-            if (crossingRanges.isEmpty()) {
-                tunnelProfile = RoadGradePlanner.applyProactiveTunnelProfile(
-                        smoothed, terrainY, isCrossing,
-                        cfg.slopeLimitEnabled(), cfg.maxSlopeStepPerTwoSegments(), pinnedMask);
-            } else {
-                // A hillside next to a bridge/road-crossing span must stay a
-                // surface climb: pressing it into a tunnel mixes "bridge first,
-                // then tunnel" into alternating crossings and tunnels that braid
-                // around the river. The guard only protects the tunnel decision;
-                // the ordinary grade constraints keep using the strict mask.
-                final int riversideTunnelGuard = Math.max(2, cfg.bridgeRampSegments() + 4);
-                boolean[] tunnelGuard = isCrossing.clone();
-                for (SpanRange range : crossingRanges) {
-                    int from = Math.max(0, range.start() - riversideTunnelGuard);
-                    int to = Math.min(n - 1, range.end() + riversideTunnelGuard);
-                    for (int k = from; k <= to; k++) tunnelGuard[k] = true;
-                }
-                tunnelProfile = RoadGradePlanner.applyProactiveTunnelProfile(
-                        smoothed, terrainY, tunnelGuard,
-                        cfg.slopeLimitEnabled(), cfg.maxSlopeStepPerTwoSegments(), pinnedMask);
-            }
-            if (!Arrays.equals(smoothed, tunnelProfile)) {
-                int changed = 0;
-                for (int i = 0; i < smoothed.length; i++) {
-                    if (smoothed[i] != tunnelProfile[i]) changed++;
-                }
-                LOGGER.info("RoadWeaver proactive tunnel planning selected mountain profile: changedStations={} totalStations={}",
-                        changed, smoothed.length);
-                smoothed = tunnelProfile;
-            }
-            if (structureGradesLocked) {
-                if (startVillage || startUnknown) {
-                    if (startSharedProfile != null && startSharedProfile.length > 0) {
-                        applySharedApproachProfile(smoothed, 0, startSharedProfile);
-                    } else if (startUnknown) {
-                        applyPreferCutBoundaryGrade(smoothed, 0, startBoundary);
-                    } else {
-                        applySingleBoundaryGrade(smoothed, 0, startBoundary);
-                    }
-                }
-                if (endVillage || endUnknown) {
-                    if (endSharedProfile != null && endSharedProfile.length > 0) {
-                        applySharedApproachProfile(smoothed, smoothed.length - 1, endSharedProfile);
-                    } else if (endUnknown) {
-                        applyPreferCutBoundaryGrade(smoothed, smoothed.length - 1, endBoundary);
-                    } else {
-                        applySingleBoundaryGrade(smoothed, smoothed.length - 1, endBoundary);
-                    }
-                }
-                BlockPos startCross = connection.from();
-                BlockPos endCross = connection.to();
-                LOGGER.info("RoadWeaver structure boundary grades locked connection={}->{} startY={} endY={} "
-                                + "terrainStartY={} terrainEndY={} startCross=({},{}) endCross=({},{}) stations={} "
-                                + "startLocked={} endLocked={} startUnknown={} endUnknown={}",
-                        connection.from(), connection.to(), startBoundary, endBoundary,
-                        terrainY[0], terrainY[terrainY.length - 1],
-                        startCross == null ? "?" : startCross.getX(), startCross == null ? "?" : startCross.getZ(),
-                        endCross == null ? "?" : endCross.getX(), endCross == null ? "?" : endCross.getZ(),
-                        smoothed.length,
-                        startVillage, endVillage, startUnknown, endUnknown);
-            }
-            // 0.8.368 (T2 diagnosis): the boundary log above prints startBoundary /
-            // endBoundary — the values the lock *asked* for — not what the profile
-            // actually holds. A route whose endpoint sits inside a TUNNEL span came
-            // out with targetY[0]=389 against a locked 407 (terrain 407), while the
-            // other endpoint landed exactly on its lock. The suspected cause is that
-            // "lower, never raise" passes overwrite the lock. These lines print the
-            // real profile ends at three points so one run shows whether the lock
-            // survives, is dropped here, or is lost later in
-            // repairFinalHeightConflict. Diagnosis only; no height is changed.
-            logEndpointProfile("after-structure-lock", connection, smoothed, terrainY, n, startBoundary, endBoundary);
-            applyCrossingProfiles(level, cache, terrain, segments, centers, smoothed, crossingRanges, cfg,
-                    streams, bridgeMinWaterDepth);
-            List<RoadSpan> underseaSpans = UnderseaTunnelPlanner.convertLongOceanBridgesToUnderseaTunnels(
-                    spans, segments, level, cache, footprintSamples);
-            if (underseaSpans != spans && spans != null) {
-                try {
-                    spans.clear();
-                    spans.addAll(underseaSpans);
-                } catch (UnsupportedOperationException ignored) {
-                    // Provisional immutable span lists contain no bridge ownership;
-                    // the normal generation path supplies a mutable list.
-                }
-            }
-            smoothed = UnderseaTunnelPlanner.applyUnderseaTunnelProfile(
-                    toIntegerList(smoothed), spans, segments, level, cache, footprintSamples,
-                    cfg.tunnelClearHeight())
-                    .stream().mapToInt(Integer::intValue).toArray();
-
-            // Tunnel chords, structure boundary locks and crossing profiles can
-            // each leave a one-block discontinuity behind. Run the final
-            // one-block-per-station closure here so late tunnel reclassification
-            // and validation always see a walkable grade. Bridges/crossings keep
-            // their own deck profile; ordinary and tunnel stations are only
-            // lowered, never raised into a sky road.
-            smoothed = SlopeContinuityEnforcer.enforceContinuousSlopePreferCut(
-                    smoothed, isCrossing, cfg.maxSlopeStepPerTwoSegments(), pinnedMask,
-                    SlopeContinuityEnforcer.configuredStationSpacing(centers));
-
-            smoothed = closeTunnelWaterBoundary(smoothed, centers, spans);
-
-            smoothed = RoadGradePlanner.removeSingleStationSpikes(smoothed, tunnelMask);
-
-            // 0.8.369 (T2): re-seat the locked boundary after EVERY pass that can
-            // move a station — this must run after removeSingleStationSpikes too,
-            // and before the profile is copied into the returned list below.
-            // Keeping the pinned station immovable is only half the contract: the
-            // slope closure sweeps from both ends and would otherwise leave
-            // neighbour 1 sitting near the tunnel chord while the pinned station
-            // stays on the village surface — an 18-block cliff at the entrance
-            // (measured prof-lock = -19 on a real save). Seating the ramp earlier
-            // would simply be undone by the passes in between.
-            //
-            // Re-running the boundary grade rebuilds the legal one-block ramp from
-            // the lock inward using the same code path the original lock uses. The
-            // ramp is anchored at the real sampled surface and descends from it, so
-            // interior stations only move toward the lock height, never above it.
-            if (structureGradesLocked) {
-                if (pinnedMask[0]) {
-                    if (startSharedProfile != null && startSharedProfile.length > 0) {
-                        applySharedApproachProfile(smoothed, 0, startSharedProfile);
-                    } else if (startUnknown) {
-                        applyPreferCutBoundaryGrade(smoothed, 0, startBoundary);
-                    } else {
-                        applySingleBoundaryGrade(smoothed, 0, startBoundary);
-                    }
-                }
-                if (pinnedMask[n - 1]) {
-                    if (endSharedProfile != null && endSharedProfile.length > 0) {
-                        applySharedApproachProfile(smoothed, n - 1, endSharedProfile);
-                    } else if (endUnknown) {
-                        applyPreferCutBoundaryGrade(smoothed, n - 1, endBoundary);
-                    } else {
-                        applySingleBoundaryGrade(smoothed, n - 1, endBoundary);
-                    }
-                }
-            }
-
+            // 只对DP明确不适用的入口运行保留模式；DP不可行仍由新版约束回落处理。
+            smoothed = LegacyTargetProfile.apply(smoothed,
+                    new LegacyTargetProfile.Stations(centers, terrainY, isCrossing, tunnelMask, pinnedMask, crossingRanges),
+                    spans, cfg, new LegacyTargetProfile.BoundaryLocks(structureGradesLocked,
+                            startVillage, endVillage, startUnknown, endUnknown,
+                            startSharedProfile, endSharedProfile, startBoundary, endBoundary), connection,
+                    new LegacyTargetProfile.WorldPasses() {
+                        @Override
+                        public void crossing(int[] profile) {
+                            applyCrossingProfiles(level, cache, terrain, segments, centers, profile, crossingRanges,
+                                    cfg, streams, bridgeMinWaterDepth);
+                        }
+                        @Override
+                        public int[] undersea(int[] profile) {
+                            List<RoadSpan> underseaSpans = UnderseaTunnelPlanner.convertLongOceanBridgesToUnderseaTunnels(
+                                    spans, segments, level, cache, footprintSamples);
+                            if (underseaSpans != spans && spans != null) {
+                                try {
+                                    spans.clear();
+                                    spans.addAll(underseaSpans);
+                                } catch (UnsupportedOperationException ignored) {
+                                    // 临时不可变列表不携带桥归属；生产列表可写，保持旧模式的容错语义。
+                                }
+                            }
+                            return UnderseaTunnelPlanner.applyUnderseaTunnelProfile(
+                                    toIntegerList(profile), spans, segments, level, cache, footprintSamples,
+                                    cfg.tunnelClearHeight()).stream().mapToInt(Integer::intValue).toArray();
+                        }
+                    });
             legacySnapshot = smoothed.clone();
         }
 
