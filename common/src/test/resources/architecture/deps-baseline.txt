@@ -10,6 +10,9 @@
 # 2026-11-16：两轮粗路径通过 BackgroundCpuWork 复用预算；普通父用 INITIAL 子池，同池父用已有公共池。
 # 要消除某条边：改代码，然后把该行从本文件删掉。
 # 要合法地加一条 import：必须同时把这里的次数 +1 并说明理由。
+# 2026-11-17：三通道瓦片适配器增加 bridge->metric 3 次、bridge->pathfinding 2 次；
+# 规划采样端口用 GridLayout 增加 planning->metric 1 次，瓦片观测增加 planning->bridge 1 次。
+# 仍保持原有层依赖方向，不增加反向白名单。
 
 apiimpl -> api                                13
 apiimpl -> core                               4
@@ -22,8 +25,8 @@ apiimpl -> postprocess                        1
 bridge -> band                               1
 bridge -> config                             2
 bridge -> core                               1
-bridge -> metric                             12
-bridge -> pathfinding                        11
+bridge -> metric                             15
+bridge -> pathfinding                        13
 bridge -> pathlogic                          5
 bridge -> pipeline                           5
 bridge -> topology                           1
@@ -129,13 +132,13 @@ persistence -> worldgen                           4
 pipeline -> band                               5
 pipeline -> metric                             6
 pipeline -> topology                           10
-planning -> bridge                             1
+planning -> bridge                             2
 planning -> compat                             11
 planning -> config                             74
 planning -> core                               94
 planning -> generation                         30
 planning -> map                                5
-planning -> metric                             3
+planning -> metric                             4
 planning -> network                            5
 planning -> pathfinding                        53
 planning -> pathlogic                          84

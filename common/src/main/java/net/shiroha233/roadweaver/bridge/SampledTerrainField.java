@@ -1,9 +1,10 @@
-/* 文件职责：把现有高度采样接成度量层要的地形场（bridge 层，唯一同时认识两边的类）。 */
+/* 文件职责：把现有高度采样接成度量层地形场，并按规模选择整场或瓦片读入。 */
 package net.shiroha233.roadweaver.bridge;
 
 import net.shiroha233.roadweaver.metric.GridTerrainField;
 import net.shiroha233.roadweaver.metric.GridLayout;
 import net.shiroha233.roadweaver.metric.DenseGridWorkload;
+import net.shiroha233.roadweaver.metric.FastMarchingSolver;
 import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGrid;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGridRequest;
@@ -12,14 +13,9 @@ import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 /**
  * 用现有精确采样喂饱度量层的 {@link TerrainField}。
  *
- * <h2>为什么不在调用时逐点采样</h2>
- * <p>度量层一次求解要查询上万个点（Fast Marching 每个格点都要高度与梯度）。
- * 逐点调用采样器会反复穿越 1090 行的缓存逻辑，而且<b>梯度需要邻域</b> ——
- * 逐点查询意味着同一列被查 3 次。</p>
- *
- * <p>所以做法是<b>一次取整块</b>：把矩形区域一次性采成数组，之后所有查询都是
- * 纯内存读。{@code AccurateHeightSampler.sampleGrid} 本来就是按矩形设计的，
- * 而且它内部有列缓存 —— 一次性请求能让缓存命中率最高。</p>
+ * <h2>为什么按规模选择批次</h2>
+ * <p>小域一次取整块，梯度直接读数组；大域用有界瓦片，避免在早停传播之前
+ * 先分配全域三张高度图。两种策略都经同一精确采样入口，不另造采样线程或高度近似。</p>
  *
  * <h2>用哪张高度图</h2>
  * <p>用 {@code motionBlocking}（含障碍物、不含树叶）—— 那是<b>行走面</b>，
@@ -148,6 +144,21 @@ public final class SampledTerrainField {
         return DenseGridWorkload.estimate(grid, keepAllHeightMaps, false, targetCount);
     }
 
+    /** 网络规划的规模选择入口；瓦片化只搬读入边界，不缩减全局绕行范围。 */
+    public static SurfaceGrid planningSurface(GridLayout layout, TiledTerrainField.GridSampler sampler) {
+        layout.arrayLength();
+        if (FastMarchingSolver.usesPagedStorage(layout)) {
+            TiledTerrainField terrain = new TiledTerrainField(layout, sampler);
+            return new SurfaceGrid(terrain, terrain::waterProxy);
+        }
+        AccurateHeightGridRequest request = new AccurateHeightGridRequest(layout.minX(), layout.minZ(),
+                layout.columns(), layout.rows(), layout.step());
+        AccurateHeightGrid heights = sampler.sample(request);
+        if (!request.equals(heights.request())) throw new IllegalArgumentException("sampled grid request mismatch");
+        return new SurfaceGrid(new GridTerrainField(layout.minX(), layout.minZ(), layout.columns(),
+                layout.rows(), layout.step(), heights.motionBlocking()), heights);
+    }
+
     // 影子回溯只读这次采样已有的高度差，避免为了日志再采一块地形或加载区块。
     public static SurfaceGrid sampleSurface(AccurateHeightSampler sampler, int minX, int minZ,
                                             int blockWidth, int blockDepth, int step) {
@@ -174,11 +185,15 @@ public final class SampledTerrainField {
 
     public static final class SurfaceGrid {
         private final TerrainField terrain;
-        private final AccurateHeightGrid heights;
+        private final java.util.function.IntBinaryOperator water;
 
         SurfaceGrid(TerrainField terrain, AccurateHeightGrid heights) {
+            this(terrain, (x, z) -> waterProxy(heights, x, z));
+        }
+
+        private SurfaceGrid(TerrainField terrain, java.util.function.IntBinaryOperator water) {
             this.terrain = terrain;
-            this.heights = heights;
+            this.water = water;
         }
 
         public TerrainField terrain() {
@@ -186,13 +201,18 @@ public final class SampledTerrainField {
         }
 
         public int waterProxy(int x, int z) {
+            return water.applyAsInt(x, z);
+        }
+
+        private static int waterProxy(AccurateHeightGrid heights, int x, int z) {
             var request = heights.request();
-            int dx = x - request.minX(), dz = z - request.minZ();
+            // 与瓦片分支一致先升 long，跨零点的大步长请求也不能错判为越界。
+            long dx = (long) x - request.minX(), dz = (long) z - request.minZ();
             int step = request.step();
             // 高度图能提供湿列的代理证据，但高度相等不等于确认干列（这里没有群系和流体）。
             if (dx < 0 || dz < 0 || dx % step != 0 || dz % step != 0
                     || dx / step >= request.width() || dz / step >= request.height()) return -1;
-            int i = dx / step + dz / step * request.width();
+            int i = (int) (dx / step + dz / step * request.width());
             int gap = heights.worldSurface()[i] - heights.oceanFloor()[i];
             return gap > 0 ? gap : -1;
         }

@@ -56,6 +56,11 @@ public final class FastMarchingSolver {
         this(metric, PAGED_THRESHOLD);
     }
 
+    /** 采样适配器与传播共用规模分界，避免稠密预计算把按需瓦片立即扫满。 */
+    public static boolean usesPagedStorage(GridLayout grid) {
+        return grid.arrayLength() >= PAGED_THRESHOLD;
+    }
+
     /** 包内入口让离线对拍能在小夹具强制两种存储；生产不增加配置或改变搜索域。 */
     FastMarchingSolver(FinslerMetric metric, int pagedThreshold) {
         if (metric == null) throw new IllegalArgumentException("metric 不能为 null");

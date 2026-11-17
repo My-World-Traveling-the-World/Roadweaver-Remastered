@@ -40,6 +40,10 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.metric.GridTerrainFieldTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.bridge.SampledTerrainFieldTest"),
+                        // 真正跨瓦片对拍场值与落选边；新类必须显式登记，避免守卫从未运行。
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.TiledTerrainFieldTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.TiledTerrainFmmTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.impl.PipelinePlannerSamplingTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.topology.MinimumSpanningTreeTest"),
                         DiscoverySelectors.selectClass(
