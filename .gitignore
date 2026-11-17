@@ -104,3 +104,7 @@ roadweaver-后期重构路线图.md
 
 # 离线证据工具的解释器缓存不是源码，普通unittest执行也不污染工作区。
 /scripts/evidence/__pycache__/
+
+# 功能契约/性能探针运行产生的解释器缓存不属于交付源码。
+/scripts/parity/__pycache__/
+/scripts/benchmarks/__pycache__/

@@ -37,6 +37,10 @@ class RoadSnapCacheLifecycleTest {
             var validation = RoadDataValidator.validateFinalRoad(road);
             assertTrue(validation.valid());
             assertSame(validation,RoadDataValidator.validateFinalRoad(road));
+            var changed = new RoadData(road.width(),road.roadType(),road.materials(),road.slabMaterials(),
+                    road.roadSegmentList(),road.spans(),List.of(64,64,90,64,64),1,2);
+            assertFalse(RoadDataValidator.validateFinalRoad(changed).valid(),"新产物必须独立校验，不能继承旧对象结果");
+            assertTrue(RoadDataValidator.validateFinalRoad(road).valid());
         } finally {
             RoadSnapService.GRID_CACHE.remove(); RoadSnapService.ROAD_INDEX_CACHE.remove(); RoadSnapService.BOUNDS_CACHE.remove();
         }
