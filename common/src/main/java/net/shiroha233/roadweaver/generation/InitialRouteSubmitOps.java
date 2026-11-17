@@ -1,6 +1,8 @@
 /* 文件职责：初始路线批次的提交与收集 —— 分步提交、增量收集、预取高度。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
 import net.shiroha233.roadweaver.planning.RouteRefinementOps;
 import net.shiroha233.roadweaver.planning.ConflictWindowOps;
@@ -127,7 +129,7 @@ public final class InitialRouteSubmitOps {
                             // 91s/7 条，只有这里能看出每条实际花了多少、谁在拖。
                             // 0.9.092：改名 fine regenerate —— 原 "local repair" 与
                             // RoadPathCalculator 里真正的冲突窗口半径采样修复同名。
-                            LOGGER.info("RoadWeaver fine regenerate timing: step={} wallMs={} result={} "
+                            LOGGER.info("【精细重算耗时与产物站数】 " + "RoadWeaver fine regenerate timing: step={} wallMs={} result={} "
                                             + "stations={} connection={}->{}",
                                     step, elapsedMs(taskStartedAt), result,
                                     generated.road() == null ? -1
@@ -244,7 +246,7 @@ public final class InitialRouteSubmitOps {
         AccurateHeightSampler sampler = AccurateHeightSampler.create(level);
         final int batchCount = (prefetchPositions.size() + INITIAL_HEIGHT_PREFETCH_BATCH_COLUMNS - 1)
                 / INITIAL_HEIGHT_PREFETCH_BATCH_COLUMNS;
-        LOGGER.info("RoadWeaver initial precise height prefetch start: step={} routes={} uniqueColumns={} "
+        LOGGER.info("【初始精确高度预取开始】 " + "RoadWeaver initial precise height prefetch start: step={} routes={} uniqueColumns={} "
                         + "batches={} batchColumns={} reusedPrewarm={} backend={} device={}",
                 prefetchStep, routeCount, prefetchPositions.size(), batchCount,
                 INITIAL_HEIGHT_PREFETCH_BATCH_COLUMNS, reusePrewarm,
@@ -258,12 +260,12 @@ public final class InitialRouteSubmitOps {
             prefetchFutures.add(ThreadPoolManager.submit(ThreadPoolManager.TaskRole.INITIAL, () -> {
                 long batchStarted = System.nanoTime();
                 sampler.samplePositions(slice, progress -> LOGGER.info(
-                        "RoadWeaver initial precise height prefetch batch progress: step={} batch={}/{} columns={} "
+                        "【初始精确高度预取批次进度】 " + "RoadWeaver initial precise height prefetch batch progress: step={} batch={}/{} columns={} "
                                 + "elapsedMs={} backend={} device={}",
                         prefetchStep, batchNumber, batchCount, progress.completedColumns(),
                         (System.nanoTime() - batchStarted) / 1_000_000L,
                         sampler.backendName(), sampler.deviceName()));
-                LOGGER.info("RoadWeaver initial precise height prefetch batch complete: step={} batch={}/{} "
+                LOGGER.info("【初始精确高度预取批次完成】 " + "RoadWeaver initial precise height prefetch batch complete: step={} batch={}/{} "
                                 + "batchColumns={} elapsedMs={} backend={} device={}",
                         prefetchStep, batchNumber, batchCount, slice.size(),
                         (System.nanoTime() - batchStarted) / 1_000_000L,
@@ -280,7 +282,7 @@ public final class InitialRouteSubmitOps {
                 throw new IllegalStateException("Initial precise height prefetch batch failed", failure.getCause());
             }
         }
-        LOGGER.info("RoadWeaver initial precise height prefetch complete: step={} routes={} uniqueColumns={} elapsedMs={} backend={} device={}",
+        LOGGER.info("【初始精确高度预取结束】 " + "RoadWeaver initial precise height prefetch complete: step={} routes={} uniqueColumns={} elapsedMs={} backend={} device={}",
                 prefetchStep, routeCount, prefetchPositions.size(),
                 (System.nanoTime() - startedAt) / 1_000_000L,
                 sampler.backendName(), sampler.deviceName());

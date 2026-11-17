@@ -1,6 +1,8 @@
 /* 文件职责：简单模板结构片段的实现。 */
 package net.shiroha233.roadweaver.structures.pieces;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.mojang.serialization.DataResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -130,7 +132,7 @@ public class SimpleTemplatePiece extends TemplateStructurePiece {
                            ChunkPos chunkPos,
                            BlockPos pivot) {
         if (overlapsWallGuard(level)) {
-            LOGGER.warn("RoadWeaver template skipped: wall guard overlap template={} at {}",
+            LOGGER.warn("【模板占地与长城保护范围重叠，跳过模板】 " + "RoadWeaver template skipped: wall guard overlap template={} at {}",
                     templateId, templatePosition);
             return;
         }

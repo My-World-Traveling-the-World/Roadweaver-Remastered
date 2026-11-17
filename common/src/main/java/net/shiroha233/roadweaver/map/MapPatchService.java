@@ -1,6 +1,8 @@
 /* 文件职责：地图增量补丁的生成与应用。 */
 package net.shiroha233.roadweaver.map;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -92,7 +94,7 @@ public final class MapPatchService {
                 })
                 .exceptionally(failure -> {
                     if (ThreadPoolManager.isEpoch(epoch) && !RoadLifecycle.isStopping()) {
-                        LOGGER.warn("RoadWeaver could not publish an asynchronous road map patch", failure);
+                        LOGGER.warn("【异步地图补丁发布失败】 " + "RoadWeaver could not publish an asynchronous road map patch", failure);
                     }
                     return null;
                 });

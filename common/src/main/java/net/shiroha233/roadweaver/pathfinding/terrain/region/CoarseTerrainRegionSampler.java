@@ -1,6 +1,8 @@
 /* 文件职责：按固定地形瓦片并行构建规划区域的粗采样视图。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PerformanceConfig;
@@ -83,7 +85,7 @@ public final class CoarseTerrainRegionSampler {
                 CoarseTerrainTileCache.timingSnapshot().minus(timingBefore);
         CoarseTerrainTileSampler.TimingSnapshot samplerTiming =
                 CoarseTerrainTileSampler.timingSnapshot().minus(samplerTimingBefore);
-        LOGGER.info("RoadWeaver coarse terrain load timing: phase={} tiles={} resolved={} memoryHits={} diskHits={} sampled={} diskLoadWorkerMs={} sampleWorkerMs={} persistWorkerMs={} heightBatchWorkerMs={} biomeWorkerMs={} nearWaterWorkerMs={} colorWorkerMs={} wallMs={}",
+        LOGGER.info("【粗地形瓦片读取、计算和持久化耗时】 " + "RoadWeaver coarse terrain load timing: phase={} tiles={} resolved={} memoryHits={} diskHits={} sampled={} diskLoadWorkerMs={} sampleWorkerMs={} persistWorkerMs={} heightBatchWorkerMs={} biomeWorkerMs={} nearWaterWorkerMs={} colorWorkerMs={} wallMs={}",
                 initialGeneration ? "initial" : "runtime", keys.size(), tiles.size(),
                 timing.memoryHits(), timing.diskHits(), timing.sampled(),
                 nanosToMillis(timing.diskLoadNanos()), nanosToMillis(timing.sampleNanos()),
@@ -113,7 +115,7 @@ public final class CoarseTerrainRegionSampler {
         long seq = REGION_LOG_SEQ.incrementAndGet();
         if (seq <= 8 || tileCount >= 1024) {
             int expandedSamples = expandedSamplesPerTile(tileSizeChunks, bounds.step());
-            LOGGER.info("RoadWeaver coarse terrain batches: phase={} radiusApproxChunks={} tiles={} tileSizeChunks={} samples={} step={} expandedSamplesPerTile={} maxTiles={}",
+            LOGGER.info("【粗地形采样批次规模】 " + "RoadWeaver coarse terrain batches: phase={} radiusApproxChunks={} tiles={} tileSizeChunks={} samples={} step={} expandedSamplesPerTile={} maxTiles={}",
                     initialGeneration ? "initial" : "runtime",
                     approximateRadiusChunks(bounds),
                     tileCount,
@@ -302,7 +304,7 @@ public final class CoarseTerrainRegionSampler {
         int resolved = resolveTileLoadParallelism(
                 tileCount, sharedThreads, initialThreads, initialGeneration);
         if (LAST_PARALLELISM_LOGGED.getAndSet(resolved) != resolved) {
-            LOGGER.info("RoadWeaver coarse tile parallelism: phase={} workers={} tiles={}",
+            LOGGER.info("【粗地形瓦片实际并行度】 " + "RoadWeaver coarse tile parallelism: phase={} workers={} tiles={}",
                     initialGeneration ? "initial" : "runtime", resolved, tileCount);
         }
         return resolved;

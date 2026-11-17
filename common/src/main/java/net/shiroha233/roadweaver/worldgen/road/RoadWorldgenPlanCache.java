@@ -1,6 +1,8 @@
 /* 文件职责：按世界会话缓存不可变道路区块计划，隔离持久化与世界生成热路径。 */
 package net.shiroha233.roadweaver.worldgen.road;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
@@ -109,7 +111,7 @@ public final class RoadWorldgenPlanCache {
                         }
                     }
                 }
-                LOGGER.info("RoadWeaver worldgen plan chunk={},{} roads={} slices={} revision={}",
+                LOGGER.info("【区块世界生成计划编译结果】 " + "RoadWeaver worldgen plan chunk={},{} roads={} slices={} revision={}",
                         chunkPos.x, chunkPos.z, roads.size(), plan.slices().size(), revision);
                 if (!plan.slices().isEmpty() && carveColumns == 0) {
                     // Task 4: carve=0 is expected when every slice station is a
@@ -118,7 +120,7 @@ public final class RoadWorldgenPlanCache {
                     // happens per station in PathFeature and does not need the
                     // density carve. Keep the diagnostic at info with that
                     // semantics instead of a misleading warning.
-                    LOGGER.info("RoadWeaver chunk={},{} has {} slice(s) but 0 carve column(s); "
+                    LOGGER.info("【区块无需地形雕刻，桥隧及其他跨度仍按站点施工】 " + "RoadWeaver chunk={},{} has {} slice(s) but 0 carve column(s); "
                                     + "expected when all stations are tunnel/bridge/reuse/gap spans, "
                                     + "paving is station-based and unaffected",
                             chunkPos.x, chunkPos.z, plan.slices().size());

@@ -1,6 +1,8 @@
 /* 文件职责：使用粗地形高度场规划道路，避免在线阶段重复构造原版 NoiseChunk。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
@@ -108,7 +110,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                 logPathReuse(CrossingNegotiation.stats(agreement, paths));
             }
             long pathfindingMillis = elapsedMillis(pathfindingStartedAt);
-            LOGGER.info("RoadWeaver coarse planning timing: dimension={} step={} samples={} connections={} resolvedPaths={} samplingMs={} pathfindingMs={} totalMs={}",
+            LOGGER.info("【粗规划采样与寻路阶段耗时】 " + "RoadWeaver coarse planning timing: dimension={} step={} samples={} connections={} resolvedPaths={} samplingMs={} pathfindingMs={} totalMs={}",
                     request.level().dimension().location(),
                     step,
                     terrain.bounds().sampleCount(),
@@ -190,7 +192,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
             // 第二遍只是「优化尝试」：它失败不该把一整批已经能建的路拖垮。
             // CancellationException 不走这里，中断仍然向上传播。
             cancelAll(futures);
-            LOGGER.warn("[PATH-REUSE] second pass aborted, keeping first-pass paths", failure);
+            LOGGER.warn("【道路复用第二轮已中止，保留首轮路径】 " + "[PATH-REUSE] second pass aborted, keeping first-pass paths", failure);
             return;
         }
         for (StructureConnection connection : request.connections()) {
@@ -216,7 +218,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
      * 两个不同的数字说明两条路<b>不会</b>再各架各的桥。</p>
      */
     static void logPathReuse(CrossingNegotiation.Stats stats) {
-        LOGGER.info("[PATH-REUSE] clusters={} sharedPoints={} sharedDeckY(min..max)={} roads={} "
+        LOGGER.info("【道路复用共用桥面和吸引站数统计】 " + "[PATH-REUSE] clusters={} sharedPoints={} sharedDeckY(min..max)={} roads={} "
                         + "attractedStations={} totalStations={} ratio={}",
                 stats.clusters(), stats.sharedPoints(), stats.sharedDeckRange(),
                 stats.roads(), stats.attractedStations(), stats.totalStations(),

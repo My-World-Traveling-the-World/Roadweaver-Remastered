@@ -1,6 +1,8 @@
 /* 文件职责：桥面掩码与拉直 —— 判断哪一段要走桥、并把桥面拉直。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
@@ -68,7 +70,7 @@ public final class BridgeMaskTool {
                 ground = sampler.worldSurfaceWg(p.getX(), p.getZ());
             } catch (RuntimeException missingHeight) {
                 if (MISSING_HEIGHTS.getAndIncrement() < 8L) {
-                    LOGGER.warn("Height backend refused column {},{}; treating the ground as level and "
+                    LOGGER.warn("【高度后端拒绝该列，按既有规则视作平地并保留路线】 " + "Height backend refused column {},{}; treating the ground as level and "
                             + "keeping the route", p.getX(), p.getZ(), missingHeight);
                 }
                 ground = p.getY();
@@ -103,7 +105,7 @@ public final class BridgeMaskTool {
             if (overDryDepression) dryViaduct++;
         }
         if (dryViaduct > 0) {
-            LOGGER.info("RoadWeaver DRY_VIADUCT stations={} minDrop={} of={}",
+            LOGGER.info("【干地高架桥的离地高度判定】 " + "RoadWeaver DRY_VIADUCT stations={} minDrop={} of={}",
                     dryViaduct, DRY_VIADUCT_MIN_DROP, n);
         }
         return mask;

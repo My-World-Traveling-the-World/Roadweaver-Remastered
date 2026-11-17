@@ -1,6 +1,8 @@
 /* 文件职责：池替换先在管理锁内发布新引用，旧结果的取消回调等最外层管理操作退出后再运行。 */
 package net.shiroha233.roadweaver.runtime;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayDeque;
 import java.util.concurrent.ExecutorService;
 import org.slf4j.Logger;
@@ -30,6 +32,6 @@ final class PoolRetirements {
 
     private static void close(ExecutorService pool) {
         try { pool.shutdownNow(); }
-        catch (Throwable failure) { LOGGER.warn("RoadWeaver could not stop a retired worker pool", failure); }
+        catch (Throwable failure) { LOGGER.warn("【退役工作线程池停止失败】 " + "RoadWeaver could not stop a retired worker pool", failure); }
     }
 }

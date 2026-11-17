@@ -1,6 +1,8 @@
 /* 文件职责：铺设道路段的基础路面。 */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathlogic.tunnel.PlannedSectionBuilder;
 import net.minecraft.core.BlockPos;
@@ -233,7 +235,7 @@ public final class SegmentPaver {
                 // while this station is still unbuilt.
                 if ("fill-too-deep".equals(preparation.reason())
                         || "fill-too-deep-center".equals(preparation.reason())) {
-                    LOGGER.warn("RoadWeaver rejected terrain construction gap road={} segment={} pos={} depth={}",
+                    LOGGER.warn("【地形施工深度不安全，拒绝该缺口】 " + "RoadWeaver rejected terrain construction gap road={} segment={} pos={} depth={}",
                             road != null && road.hasOwnerPair()
                                     ? road.ownerA2dKey() + "->" + road.ownerB2dKey() : "unknown",
                             segmentIndex, preparation.position(), preparation.depth());
@@ -261,7 +263,7 @@ public final class SegmentPaver {
                     RoadConstructionSafety.isProtectedPreparedBlock(world, pos, road),
                     RoadConstructionSafety.isProtectedPreparedBlock(world, pos.below(), road));
             if (columnAction == ColumnAction.SKIP) {
-                LOGGER.debug("RoadWeaver preserved construction column road={} segment={} pos={}",
+                LOGGER.debug("【施工列受保护，本次保留原方块】 " + "RoadWeaver preserved construction column road={} segment={} pos={}",
                         road != null && road.hasOwnerPair()
                                 ? road.ownerA2dKey() + "->" + road.ownerB2dKey() : "unknown",
                         segmentIndex, pos);
@@ -301,7 +303,7 @@ public final class SegmentPaver {
                     world.setBlock(pos, baseMats.get(random.nextInt(baseMats.size())), 3);
                     long paved = PAVED_OVER_PROTECTED_ROADBED.incrementAndGet();
                     if (paved <= 8 || paved % 64 == 0) {
-                        LOGGER.info("RoadWeaver filled road surface over a protected roadbed road={} "
+                        LOGGER.info("【受保护路基上已补铺道路表面】 " + "RoadWeaver filled road surface over a protected roadbed road={} "
                                         + "segment={} pos={} count={}",
                                 road != null && road.hasOwnerPair()
                                         ? road.ownerA2dKey() + "->" + road.ownerB2dKey() : "unknown",
@@ -326,7 +328,7 @@ public final class SegmentPaver {
                     world.setBlock(under, baseMats.get(random.nextInt(baseMats.size())), 3);
                     long supports = SHOULDER_SUPPORTS.incrementAndGet();
                     if (supports <= 16 || supports % 256 == 0) {
-                        LOGGER.debug("RoadWeaver supported a road lip segment={} pos={} count={}",
+                        LOGGER.debug("【道路边缘已补充支撑】 " + "RoadWeaver supported a road lip segment={} pos={} count={}",
                                 segmentIndex, under, supports);
                     }
                 }
@@ -377,7 +379,7 @@ public final class SegmentPaver {
             String reason, BlockPos position, int depth) {
         long count = UNSUPPORTED_STATIONS.incrementAndGet();
         if (count <= 16 || count % 128 == 0) {
-            LOGGER.warn("RoadWeaver skipped unsafe ordinary road station road={} segment={} reason={} pos={} depth={} count={}",
+            LOGGER.warn("【普通道路站点不安全，本次跳过】 " + "RoadWeaver skipped unsafe ordinary road station road={} segment={} reason={} pos={} depth={} count={}",
                     road != null && road.hasOwnerPair()
                             ? road.ownerA2dKey() + "->" + road.ownerB2dKey() : "unknown",
                     segmentIndex, reason, position, depth, count);

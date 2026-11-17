@@ -1,6 +1,8 @@
 /* 文件职责：路牌文本服务。 */
 package net.shiroha233.roadweaver.decoration.text;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -82,7 +84,7 @@ public final class SignTextService {
             SignTextShardStorage.upsert(sLevel, pos, SignTextShardStorage.TYPE_DISTANCE, safeText);
             markChunkDirty(sLevel, pos.getX() >> 4, pos.getZ() >> 4);
         } catch (Throwable t) {
-            LOGGER.warn("Queue distance sign text failed at {}", pos, t);
+            LOGGER.warn("【距离路牌文字任务入队失败】 " + "Queue distance sign text failed at {}", pos, t);
         }
     }
 
@@ -118,7 +120,7 @@ public final class SignTextService {
             SignTextShardStorage.upsert(sLevel, pos, SignTextShardStorage.TYPE_SEA_QUESTION, "");
             markChunkDirty(sLevel, pos.getX() >> 4, pos.getZ() >> 4);
         } catch (Throwable t) {
-            LOGGER.warn("Queue sea-question sign text failed at {}", pos, t);
+            LOGGER.warn("【海洋问号路牌文字任务入队失败】 " + "Queue sea-question sign text failed at {}", pos, t);
         }
     }
 

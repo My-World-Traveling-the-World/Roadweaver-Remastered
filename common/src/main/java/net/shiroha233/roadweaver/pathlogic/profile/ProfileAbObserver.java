@@ -1,6 +1,8 @@
 /* 文件职责：剖面 AB 双跑观察器 —— 只观察、只记日志，绝不改变返回的剖面。 */
 package net.shiroha233.roadweaver.pathlogic.profile;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -117,11 +119,11 @@ public final class ProfileAbObserver {
                 TIES.incrementAndGet();
             }
             if (call <= 8 || call % 16 == 0) {
-                LOGGER.info("[PROFILE-AB] #{} stations={} tag={} legacy[{}] dp[{}] {}",
+                LOGGER.info("【新旧纵断面诊断对照】 " + "[PROFILE-AB] #{} stations={} tag={} legacy[{}] dp[{}] {}",
                         call, legacyProfile.length, tag, a.line(), b.line(), a.versus(b));
             }
             if (call % 32 == 0) {
-                LOGGER.info("[PROFILE-AB-SUMMARY] {}", summarize());
+                LOGGER.info("【新旧纵断面对照汇总】 " + "[PROFILE-AB-SUMMARY] {}", summarize());
             }
         } catch (Throwable t) {
             // 观察器绝不能影响主流程

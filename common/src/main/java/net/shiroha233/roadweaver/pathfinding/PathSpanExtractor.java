@@ -1,6 +1,8 @@
 /* 文件职责：从道路段中心线中提取桥梁与隧道跨度。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
@@ -275,8 +277,8 @@ public final class PathSpanExtractor {
             // 会跑 4~5 遍，真实地形上这种 1~3 格的小起伏能有几十上百个）。
             // why=no-prominence 仍然会出现 —— 那是「峰值够 4 格、但中位数不够 4 格」的宽缓丘。
             if (candidate.promMax() >= TunnelEnvelopeCriterion.MIN_PROMINENCE_BLOCKS) {
-                LOGGER.info(candidate.logLine());
-                LOGGER.info(candidate.routeChoiceLine());
+                LOGGER.info("【山体包络隧道候选判定】 {}", candidate.logLine());
+                LOGGER.info("【山体包络路线选择结果】 {}", candidate.routeChoiceLine());
             }
             if (!candidate.elected()) continue;
             for (int i = candidate.start(); i <= candidate.end(); i++) {
@@ -352,7 +354,7 @@ public final class PathSpanExtractor {
             }
             if ((!buried || i == centers.size() - 1) && runStart >= 0) {
                 int end = buried && i == centers.size() - 1 ? i : i - 1;
-                LOGGER.info("[ROAD-LANDTUNNEL] seg={}-{} stations={} oldBuried={} newBuried={} "
+                LOGGER.info("【陆地隧道埋深与判定统计】 " + "[ROAD-LANDTUNNEL] seg={}-{} stations={} oldBuried={} newBuried={} "
                                 + "centerOver={}..{} footprintMax={} waterStations={} bridgeMasked={} prom={}..{}",
                         runStart, end, end - runStart + 1, runOld, runNew,
                         runCenterMin == Integer.MAX_VALUE ? "n/a" : String.valueOf(runCenterMin),
@@ -375,7 +377,7 @@ public final class PathSpanExtractor {
             }
         }
         if (sumStations > 0) {
-            LOGGER.info("[ROAD-LANDTUNNEL-SUMMARY] stations={} waterStations={} "
+            LOGGER.info("【陆地隧道判据汇总】 " + "[ROAD-LANDTUNNEL-SUMMARY] stations={} waterStations={} "
                             + "waterCenterOverMin={} waterCenterOverMax={} "
                             + "landCenterOverMin={} landCenterOverMax={} threshold={} landTunnelEnabled={}",
                     sumStations, sumWater,
@@ -518,7 +520,7 @@ public final class PathSpanExtractor {
                         yStart, yEnd, yEnd - yStart, buriedInside, covered ? "yes" : "NO"));
             }
         }
-        LOGGER.info("[ROAD-BUMP-SUMMARY] stations={} bumps={} bumpsMissed={} promMax={} "
+        LOGGER.info("【路面凸起识别与漏检统计】 " + "[ROAD-BUMP-SUMMARY] stations={} bumps={} bumpsMissed={} promMax={} "
                         + "threshold={} window={} climbedOnMissed={}{}",
                 prominence.length, runs, missed,
                 promMax == Integer.MIN_VALUE ? "n/a" : String.valueOf(promMax),
@@ -678,7 +680,7 @@ public final class PathSpanExtractor {
     static void logWaterMaskDiag(int waterStart, int waterEnd, int stations, int footprint,
                                          int fullWet, int partlyWet, int singleColumnWet) {
         if (stations <= 0) return;
-        LOGGER.info("RoadWeaver [ROAD-BRIDGE-MASK] waterRange={}..{} stations={} footprintCols={} "
+        LOGGER.info("【桥掩码湿列分布】 " + "RoadWeaver [ROAD-BRIDGE-MASK] waterRange={}..{} stations={} footprintCols={} "
                         + "stationsFullWet={} stationsPartlyWet={} partlyWetSingleColumn={}",
                 waterStart, waterEnd, stations, footprint, fullWet, partlyWet, singleColumnWet);
     }
@@ -805,7 +807,7 @@ public final class PathSpanExtractor {
         int widthBlocks = crossingWidthBlocks(centers, waterStart, waterEnd);
         SpanType type = crossingTypeForWidth(widthBlocks);
         appendNormalizedWaterSpan(spans, centers, stable[0], stable[1], type);
-        LOGGER.info("RoadWeaver crossing plan type={} widthBlocks={} waterRange={}..{} stableRange={}..{} "
+        LOGGER.info("【过水跨度规划结果】 " + "RoadWeaver crossing plan type={} widthBlocks={} waterRange={}..{} stableRange={}..{} "
                         + "waterSurfaceY={}",
                 type, widthBlocks, waterStart, waterEnd, stable[0], stable[1], waterSurfaceY);
     }

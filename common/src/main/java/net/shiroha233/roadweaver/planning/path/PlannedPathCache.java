@@ -1,6 +1,8 @@
 /* 文件职责：提供待生成路径的内存前台缓存，并协调文件持久层。 */
 package net.shiroha233.roadweaver.planning.path;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -368,14 +370,14 @@ public final class PlannedPathCache {
             }
             if (runs == 0) droppedNoOverlap++;
             if (runs > 0) {
-                LOGGER.info("RoadWeaver planned reuse matched primary={} connection={}->{} "
+                LOGGER.info("【规划路径已匹配既有主路复用段】 " + "RoadWeaver planned reuse matched primary={} connection={}->{} "
                                 + "runs={} stations={} segments={}",
                         range.primaryKey(), connection.from(), connection.to(),
                         runs, stations, segments.size());
             }
         }
         if (droppedNoPrimary > 0 || droppedNoOverlap > 0 || droppedTooShort > 0) {
-            LOGGER.info("RoadWeaver planned reuse dropped ranges={} kept={} noPrimaryPath={} "
+            LOGGER.info("【规划复用范围筛选与丢弃原因统计】 " + "RoadWeaver planned reuse dropped ranges={} kept={} noPrimaryPath={} "
                             + "noOverlap={} shortRuns={} segments={} connection={}->{}",
                     ranges.size(), result.size(), droppedNoPrimary, droppedNoOverlap,
                     droppedTooShort, segments.size(), connection.from(), connection.to());

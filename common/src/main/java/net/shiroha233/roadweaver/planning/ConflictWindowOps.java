@@ -1,6 +1,8 @@
 /* 文件职责：冲突采样窗口 —— 找出需要局部重规划的路段并合并相邻窗口。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
@@ -88,7 +90,7 @@ public final class ConflictWindowOps {
             windows.add(windowForConflictCenter(hintedCenter, padding));
         }
         if (!windows.isEmpty()) {
-            LOGGER.info("RoadWeaver local refinement using persisted protected-gap hints "
+            LOGGER.info("【局部精修使用已保存的保护缺口提示】 " + "RoadWeaver local refinement using persisted protected-gap hints "
                             + "windows={} radius={} connection={}->{}",
                     windows.size(), padding, connection.from(), connection.to());
         }
@@ -145,13 +147,13 @@ public final class ConflictWindowOps {
             BlockPos hintedConflict = RoadPathCalculator.consumeConstructionConflictHint(connection);
             if (hintedConflict != null) {
                 merged = List.of(windowForConflictCenter(hintedConflict, padding));
-                LOGGER.info("RoadWeaver local refinement recovered final construction conflict hint: "
+                LOGGER.info("【局部精修已恢复最终施工冲突提示】 " + "RoadWeaver local refinement recovered final construction conflict hint: "
                                 + "center={} radius={} connection={}->{}",
                         hintedConflict, padding, connection.from(), connection.to());
             }
         }
         if (merged.isEmpty()) {
-            LOGGER.info("RoadWeaver local refinement found no conflict corridor: route={}->{} pathNodes={} "
+            LOGGER.info("【没有识别出局部冲突走廊，跳过额外采样】 " + "RoadWeaver local refinement found no conflict corridor: route={}->{} pathNodes={} "
                             + "action=skip_sampling",
                     connection.from(), connection.to(), path.size());
         }

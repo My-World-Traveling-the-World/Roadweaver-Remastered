@@ -1,6 +1,8 @@
 /* 文件职责：过水代价与临河距离场 —— 只算「过这片水要付多少」。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -168,7 +170,7 @@ final class WaterCostModel {
         long pass1Nanos = WATER_GATE_PASS1_NANOS.addAndGet(Math.max(0L, gateNanos));
         long seen = WATER_GATE_SEEN.incrementAndGet();
         if (seen <= 40 || seen % 200 == 0) {
-            LOGGER.info("[ROAD-WATER-GATE] #{} verdict={} landLen={} direct={} factor={} "
+            LOGGER.info("【道路水域决策的陆路绕行成本对照】 " + "[ROAD-WATER-GATE] #{} verdict={} landLen={} direct={} factor={} "
                             // 0.9.049（D-16）：这两个数**是同一个量**（同一个 gateNanos），
                 // 一个单次、一个累计。原来叫 gateMs/pass1Ms 会让人以为"闸门额外开销"被分开了，
                 // 实际从来没有——闸门的开销就是这一趟 pass1，没有别的部分。改成自解释的名字。

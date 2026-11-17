@@ -1,6 +1,8 @@
 /* 文件职责：配置的加载 / 保存 / 缓存与默认值合并 —— 配置键名即 Java 字段名（GSON 直存），改名等于迁移。 */
 package net.shiroha233.roadweaver.config;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -72,7 +74,7 @@ public final class ConfigService {
             LOGGER.warn("配置校验失败，继续使用原始值", t);
         }
         if (migratedLegacyPerformance) {
-            LOGGER.info("Migrated legacy RoadWeaver performance settings with safe initial limits; guarded OpenCL sampling is enabled.");
+            LOGGER.info("【旧性能配置迁移完成，采用受限启动预算】 " + "Migrated legacy RoadWeaver performance settings with safe initial limits; accurate sampling remains CPU-only.");
         }
         if (migratedGradePenaltyScale) {
             LOGGER.info("[GRADE-PENALTY] 配置迁移：老配置里的坡罚刻度 {}/{} 是 0.9.061 的旧出厂值，"

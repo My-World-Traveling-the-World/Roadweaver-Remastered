@@ -1,6 +1,8 @@
 /* 文件职责：修复结果的接受判据 —— 结构 / 湖 / 河三种，口径各不同。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -99,7 +101,7 @@ final class RepairAcceptance {
         // Logging-only diagnostics: each rejection reason is reported at debug
         // level in the same short-circuit order the combined condition used.
         if (candidate == null || candidate.size() < 2) {
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason={} originalNodes={} candidateNodes={}",
+            LOGGER.debug("【湖泊修复候选为空或过短，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason={} originalNodes={} candidateNodes={}",
                     candidate == null ? "null_candidate" : "path_too_short",
                     original == null ? -1 : original.size(),
                     candidate == null ? -1 : candidate.size());
@@ -107,7 +109,7 @@ final class RepairAcceptance {
         }
         Violation grade = findFirstViolation(candidate);
         if (grade != null) {
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason=grade edge={}..{} rise={} length={} nodes={}",
+            LOGGER.debug("【湖泊修复候选纵坡超限，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason=grade edge={}..{} rise={} length={} nodes={}",
                     grade.start(), grade.end(), grade.rise(), format(grade.length()), candidate.size());
             return false;
         }
@@ -119,19 +121,19 @@ final class RepairAcceptance {
         if (structure != null) {
             BlockPos from = candidate.get(Math.max(0, structure.start()));
             BlockPos to = candidate.get(Math.max(0, Math.min(candidate.size() - 1, structure.end())));
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason=structure_conflict edge={}..{} pos={} nodes={}",
+            LOGGER.debug("【湖泊修复候选与建筑冲突，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason=structure_conflict edge={}..{} pos={} nodes={}",
                     structure.start(), structure.end(), from != null ? from : to, candidate.size());
             return false;
         }
         Violation lake = findFirstLakeConstraintConflict(candidate, roadWidth, lakes, terrain);
         if (lake != null) {
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason=lake_conflict edge={}..{} nodes={}",
+            LOGGER.debug("【湖泊修复候选仍与湖泊冲突，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason=lake_conflict edge={}..{} nodes={}",
                     lake.start(), lake.end(), candidate.size());
             return false;
         }
         Violation mask = findFirstMaskConflict(candidate, lakeClearance);
         if (mask != null) {
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason=lake_clearance_mask edge={}..{} nodes={}",
+            LOGGER.debug("【湖泊修复候选侵入湖泊净距掩码，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason=lake_clearance_mask edge={}..{} nodes={}",
                     mask.start(), mask.end(), candidate.size());
             return false;
         }
@@ -140,7 +142,7 @@ final class RepairAcceptance {
         double maxLength = Math.max(originalLength + 200.0D,
                 originalLength * MAX_ROUTE_LENGTH_MULTIPLIER);
         if (candidateLength > maxLength) {
-            LOGGER.debug("RoadWeaver lake repair candidate rejected: reason=detour_too_long "
+            LOGGER.debug("【湖泊修复候选绕行过长，拒绝该候选】 " + "RoadWeaver lake repair candidate rejected: reason=detour_too_long "
                             + "candidateLength={} maxLength={} originalLength={} nodes={}",
                     format(candidateLength), format(maxLength), format(originalLength), candidate.size());
             return false;

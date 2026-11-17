@@ -1,6 +1,8 @@
 /* 文件职责：山体盘山（之字形回头弯）路线的规划。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -84,7 +86,7 @@ final class MountainSwitchbackPlanner {
                 coarseStateLimit(), coarseTimeBudgetNanos())
                 : findContourRoute(start, goal, terrain, config);
         if (result.path() == null || result.path().size() < 2) {
-            LOGGER.debug("RoadWeaver switchback retry kept the primary route: {}", result.reason());
+            LOGGER.debug("【盘山折返重试未替换主路线】 " + "RoadWeaver switchback retry kept the primary route: {}", result.reason());
             return workingPath;
         }
         GradeStats candidate = measureGrade(result.path(), terrain);
@@ -101,7 +103,7 @@ final class MountainSwitchbackPlanner {
                 && candidate.steepSteps() + 1 > primary.steepSteps())) {
             return workingPath;
         }
-        LOGGER.info("Accepted RoadWeaver {} mountain switchback: maxGrade={} -> {}, steepSteps={} -> {}, length={} -> {}, expanded={}",
+        LOGGER.info("【山地盘山折返已接受】 " + "Accepted RoadWeaver {} mountain switchback: maxGrade={} -> {}, steepSteps={} -> {}, length={} -> {}, expanded={}",
                 coarsePlanning ? "coarse" : "runtime",
                 format(primary.maxGrade()), format(candidate.maxGrade()), primary.steepSteps(), candidate.steepSteps(),
                 format(primary.length()), format(candidate.length()), result.expanded());
@@ -147,7 +149,7 @@ final class MountainSwitchbackPlanner {
             replaced.addAll(working.subList(endIndex + 1, working.size()));
             working = replaced;
             repaired++;
-            LOGGER.info("Accepted local mountain switchback: rise={} over {} blocks, maxGrade={} -> {}, length={} -> {}, expanded={}",
+            LOGGER.info("【局部山地盘山折返已接受】 " + "Accepted local mountain switchback: rise={} over {} blocks, maxGrade={} -> {}, length={} -> {}, expanded={}",
                     window.rise(), format(window.length()), format(originalGrade.maxGrade()),
                     format(candidateGrade.maxGrade()), format(originalGrade.length()),
                     format(candidateGrade.length()), local.expanded());

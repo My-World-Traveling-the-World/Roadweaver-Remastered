@@ -1,6 +1,8 @@
 /* 文件职责：把副线接到主线上（含复用走廊接入）—— 只做连接，不做纵断面平滑。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -88,7 +90,7 @@ public final class JunctionConnector {
             // 结果重复整个候选选择。
             double nextConstructionLength = ordinaryConstructionLength(next);
             if (nextConstructionLength > constructionLength - CONSTRUCTION_LENGTH_MIN_IMPROVEMENT) break;
-            LOGGER.info("RoadWeaver extended shared corridor primary={} secondary={} window={} "
+            LOGGER.info("【共用走廊已延长，减少次路重复施工】 " + "RoadWeaver extended shared corridor primary={} secondary={} window={} "
                             + "reuseStations={} -> {} constructionLength={} -> {}",
                     RoadShardStorage.computeFingerprint(primary), RoadShardStorage.computeFingerprint(secondary),
                     window + 1, reused, nextReused, constructionLength, nextConstructionLength);
@@ -203,7 +205,7 @@ public final class JunctionConnector {
                 candidate.ownerA2dKey(), candidate.ownerB2dKey());
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(extended);
         if (!validation.valid()) {
-            LOGGER.warn("RoadWeaver kept secondary reuse as-is: extended reuse failed validation reason={} "
+            LOGGER.warn("【延长复用段未通过校验，保留次路原复用范围】 " + "RoadWeaver kept secondary reuse as-is: extended reuse failed validation reason={} "
                             + "index={} pos={} detail={} primary={} secondary={} runs={} first={}..{}",
                     validation.reason(), validation.index(), validation.position(), validation.detail(),
                     RoadShardStorage.computeFingerprint(primary),
@@ -215,7 +217,7 @@ public final class JunctionConnector {
         int lastRun = runs.get(runs.size() - 1)[1];
         BlockPos runFrom = secSegs.get(firstRun).middlePos();
         BlockPos runTo = secSegs.get(lastRun).middlePos();
-        LOGGER.info("RoadWeaver extended secondary reuse past junction primary={} secondary={} "
+        LOGGER.info("【次路复用跨度已延长越过路口】 " + "RoadWeaver extended secondary reuse past junction primary={} secondary={} "
                         + "run={}..{} runs={} from=({},{}) to=({},{}) reuseStations={} -> {}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(candidate), firstRun, lastRun, runs.size(),
@@ -316,7 +318,7 @@ public final class JunctionConnector {
                 candidate.ownerA2dKey(), candidate.ownerB2dKey());
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(created);
         if (!validation.valid()) {
-            LOGGER.warn("RoadWeaver kept secondary corridor as-is: new reuse span failed validation reason={} "
+            LOGGER.warn("【新复用跨度未通过校验，保留次路原走廊】 " + "RoadWeaver kept secondary corridor as-is: new reuse span failed validation reason={} "
                             + "index={} pos={} detail={} primary={} secondary={} run={}..{}",
                     validation.reason(), validation.index(), validation.position(), validation.detail(),
                     RoadShardStorage.computeFingerprint(primary),
@@ -325,7 +327,7 @@ public final class JunctionConnector {
         }
         BlockPos from = secSegs.get(bestStart).middlePos();
         BlockPos to = secSegs.get(bestEnd).middlePos();
-        LOGGER.info("RoadWeaver created secondary reuse for shared corridor primary={} secondary={} "
+        LOGGER.info("【已为共用走廊建立次路复用跨度】 " + "RoadWeaver created secondary reuse for shared corridor primary={} secondary={} "
                         + "run={}..{} from=({},{}) to=({},{}) reuseStations=0 -> {}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(candidate), bestStart, bestEnd,
@@ -350,7 +352,7 @@ public final class JunctionConnector {
         connected = RoadDataValidator.repairFinalHeightSteps(connected);
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(connected);
         if (!validation.valid()) {
-            LOGGER.warn("RoadWeaver rejected invalid junction candidate owners={} -> {} reason={} index={} pos={} detail={}",
+            LOGGER.warn("【路口候选道路数据无效，拒绝该候选】 " + "RoadWeaver rejected invalid junction candidate owners={} -> {} reason={} index={} pos={} detail={}",
                     secondary.ownerA2dKey(), secondary.ownerB2dKey(), validation.reason(),
                     validation.index(), validation.position(), validation.detail());
             return null;
@@ -495,7 +497,7 @@ public final class JunctionConnector {
                 primary.slabMaterials(), primary.roadSegmentList(), primary.spans(),
                 result, primary.ownerA2dKey(), primary.ownerB2dKey());
         if (!RoadDataValidator.validateFinalRoad(lowered).valid()) {
-            LOGGER.warn("RoadWeaver kept primary junction grade because the local unified profile is invalid "
+            LOGGER.warn("【局部统一纵断面无效，保留主路原路口高度】 " + "RoadWeaver kept primary junction grade because the local unified profile is invalid "
                             + "owners={} -> {} index={} grade={}",
                     primary.ownerA2dKey(), primary.ownerB2dKey(), junctionIndex, lower);
             return primary;
@@ -505,7 +507,7 @@ public final class JunctionConnector {
             RoadSegmentPlacement jSeg = primary.roadSegmentList().get(junctionIndex);
             if (jSeg != null) jPos = jSeg.middlePos();
         }
-        LOGGER.info("RoadWeaver unified primary junction height owners={} -> {} pos=({},{}) "
+        LOGGER.info("【主路路口高度已统一】 " + "RoadWeaver unified primary junction height owners={} -> {} pos=({},{}) "
                         + "index={} grade={}",
                 primary.ownerA2dKey(), primary.ownerB2dKey(),
                 jPos == null ? "?" : jPos.getX(), jPos == null ? "?" : jPos.getZ(),

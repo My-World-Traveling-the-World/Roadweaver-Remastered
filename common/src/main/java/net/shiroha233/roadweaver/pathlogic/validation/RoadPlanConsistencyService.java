@@ -1,6 +1,8 @@
 /* 文件职责：规划一致性校验：区间与剖面是否自洽 —— 它也会重新提取物理区间，是「反复重算」的来源之一。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
@@ -141,13 +143,13 @@ public final class RoadPlanConsistencyService {
                 merged, centersOf(road.roadSegmentList())));
         if (merged.size() != spanCountBeforeFinalNormalize) {
             org.slf4j.LoggerFactory.getLogger("roadweaver").info(
-                    "RoadWeaver [ROAD-SPAN-NORMALIZE] owner={}->{} spans {} -> {}",
+                    "【道路跨度已规范化】 " + "RoadWeaver [ROAD-SPAN-NORMALIZE] owner={}->{} spans {} -> {}",
                     road.ownerA2dKey(), road.ownerB2dKey(),
                     spanCountBeforeFinalNormalize, merged.size());
         }
         if (staleSpanCount > 0) {
             org.slf4j.LoggerFactory.getLogger("roadweaver").info(
-                    "RoadWeaver [ROAD-SPAN-STALE] owner={}->{} dropped {} stale BRIDGE/ROAD_CROSSING spans",
+                    "【已删除失效桥梁或过路跨度】 " + "RoadWeaver [ROAD-SPAN-STALE] owner={}->{} dropped {} stale BRIDGE/ROAD_CROSSING spans",
                     road.ownerA2dKey(), road.ownerB2dKey(), staleSpanCount);
         }
         RoadData reconciled = new RoadData(
@@ -170,7 +172,7 @@ public final class RoadPlanConsistencyService {
             if (segment == null || segment.middlePos() == null
                     || segment.positions() == null || segment.positions().isEmpty()) {
                 org.slf4j.LoggerFactory.getLogger("roadweaver").warn(
-                        "RoadWeaver consistency rejected empty segment footprint index={} width={}",
+                        "【道路站点占地为空，一致性校验拒绝该路线】 " + "RoadWeaver consistency rejected empty segment footprint index={} width={}",
                         index, road.width());
                 return false;
             }

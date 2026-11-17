@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.pathlogic.junction;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.postprocess.JunctionConnector;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
@@ -307,7 +309,7 @@ public final class ExistingRoadJunctionService {
             }
         }
         if (best != secondary && donor != null) {
-            LOGGER.info("RoadWeaver selected single planned network junction secondary={} donor={} constructionLength={} -> {}",
+            LOGGER.info("【已选取单个规划路网路口】 " + "RoadWeaver selected single planned network junction secondary={} donor={} constructionLength={} -> {}",
                     RoadShardStorage.computeFingerprint(secondary),
                     RoadShardStorage.computeFingerprint(donor), originalCost, bestCost);
         }
@@ -401,7 +403,7 @@ public final class ExistingRoadJunctionService {
                 retained, retainedSpans, retainedTargetY,
                 secondary.ownerA2dKey(), secondary.ownerB2dKey());
         org.slf4j.LoggerFactory.getLogger("roadweaver").info(
-                "RoadWeaver shared-endpoint intersection stop primary={} secondary={} side={} cutIndex={} segments={}->{}",
+                "【共用端点交会处已裁停次路】 " + "RoadWeaver shared-endpoint intersection stop primary={} secondary={} side={} cutIndex={} segments={}->{}",
                 RoadShardStorage.computeFingerprint(primary), RoadShardStorage.computeFingerprint(secondary),
                 joinsEnd ? "end" : "start", intersection, secondarySegments.size(), retained.size());
         return trimmed;
@@ -637,7 +639,7 @@ public final class ExistingRoadJunctionService {
         double candidateCost = constructionLength(candidate);
         double limit = currentCost + MAX_JUNCTION_CONSTRUCTION_OVERHEAD;
         if (candidateCost > limit) {
-            LOGGER.debug("RoadWeaver rejected junction cost owners={} -> {} constructionCost={} limit={}",
+            LOGGER.debug("【路口施工成本超限，拒绝该候选】 " + "RoadWeaver rejected junction cost owners={} -> {} constructionCost={} limit={}",
                     candidate.ownerA2dKey(), candidate.ownerB2dKey(), candidateCost, limit);
             return false;
         }

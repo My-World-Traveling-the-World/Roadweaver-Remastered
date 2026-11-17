@@ -1,6 +1,8 @@
 /* 文件职责：AB 双跑包装器 —— 旧链生效、新链只观察，永不改变输出。 */
 package net.shiroha233.roadweaver.bridge;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
@@ -106,7 +108,7 @@ public final class AbObservingPathfinder implements Pathfinder {
                         "(" + start.getX() + "," + start.getZ() + ")->("
                                 + end.getX() + "," + end.getZ() + ")",
                         toSolution(authoritative), toSolution(observed));
-                LOGGER.info("[ROAD-AB] #{} verdict={}\n{}",
+                LOGGER.info("【新旧选线诊断对照结果】 " + "[ROAD-AB] #{} verdict={}\n{}",
                         n, report.verdict(), String.join("\n", report.diffs()));
             }
         } catch (Throwable t) {

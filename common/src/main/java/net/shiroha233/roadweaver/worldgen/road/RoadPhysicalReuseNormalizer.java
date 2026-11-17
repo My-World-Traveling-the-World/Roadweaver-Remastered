@@ -1,6 +1,8 @@
 /* 文件职责：把互相覆盖的道路归一化成「物理归属唯一」——重复段只留一条路的方块。 */
 package net.shiroha233.roadweaver.worldgen.road;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -156,7 +158,7 @@ final class RoadPhysicalReuseNormalizer {
         long now = System.nanoTime();
         if (now - lastReclaimLogNanos < 10_000_000_000L) return;
         lastReclaimLogNanos = now;
-        LOGGER.info("RoadWeaver reclaimed {} station(s) of NETWORK_REUSE that nobody paves "
+        LOGGER.info("【复用站点没有任何主路负责铺设，已收回并由当前道路施工】 " + "RoadWeaver reclaimed {} station(s) of NETWORK_REUSE that nobody paves "
                         + "(total {} this session); the marking road lays them itself instead of a gap.",
                 dropped, total);
     }

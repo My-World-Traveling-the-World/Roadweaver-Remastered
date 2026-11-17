@@ -1,6 +1,8 @@
 /* 文件职责：道路生成任务的执行骨架 —— 每 tick 推进、单任务生成、失败回退。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.world.level.Level;
@@ -269,23 +271,23 @@ public final class RoadTaskExecutor {
                 if (partial != null
                         && net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator
                                 .validateFinalRoad(partial).valid()) {
-                    LOGGER.info("RoadWeaver player-route override partially reverted at idx={} "
+                    LOGGER.info("【手绘覆盖局部不合法，已撤销对应站点改写】 " + "RoadWeaver player-route override partially reverted at idx={} "
                                     + "connection={}->{} route={} reason={}",
                             validation.index(), conn.from(), conn.to(), route.id(), validation);
                     return partial;
                 }
-                LOGGER.warn("RoadWeaver player-route override produced invalid RoadData; "
+                LOGGER.warn("【手绘覆盖产生无效道路，保留当前规划链结果】 " + "RoadWeaver player-route override produced invalid RoadData; "
                                 + "falling back to pipeline result connection={}->{} route={} reason={}",
                         conn.from(), conn.to(), route.id(), validation);
                 return generated;
             }
 
-            LOGGER.info("RoadWeaver applied player-route overrides connection={}->{} route={} segments={}",
+            LOGGER.info("【手绘路线覆盖已应用】 " + "RoadWeaver applied player-route overrides connection={}->{} route={} segments={}",
                     conn.from(), conn.to(), route.id(), centers.size());
             return patched;
         } catch (Throwable t) {
             // 覆盖失败不能让整条路建不出来 —— 退回管线结果并记日志
-            LOGGER.warn("RoadWeaver player-route override failed; keeping pipeline result connection={}->{}",
+            LOGGER.warn("【手绘覆盖执行失败，保留当前规划链结果】 " + "RoadWeaver player-route override failed; keeping pipeline result connection={}->{}",
                     conn.from(), conn.to(), t);
             return generated;
         }
@@ -305,17 +307,17 @@ public final class RoadTaskExecutor {
         try {
             attached = ExistingRoadAttachment.find(level, conn, radius);
         } catch (Throwable couldNotAttach) {
-            LOGGER.debug("RoadWeaver attachment lookup failed", couldNotAttach);
+            LOGGER.debug("【既有道路挂接查询失败】 " + "RoadWeaver attachment lookup failed", couldNotAttach);
             return null;
         }
         if (attached == null) return null;
         GenerationAttempt retry = generateTaskWithFallback(level, attached, persistImmediately);
         if (!retry.outcome().success()) {
-            LOGGER.info("RoadWeaver attachment retry also failed: {} -> {} (original {} -> {})",
+            LOGGER.info("【挂接既有道路后的重试仍失败】 " + "RoadWeaver attachment retry also failed: {} -> {} (original {} -> {})",
                     attached.from(), attached.to(), conn.from(), conn.to());
             return null;
         }
-        LOGGER.info("RoadWeaver attached to existing road and generated: {} -> {} (original {} -> {}, stations={})",
+        LOGGER.info("【已挂接既有道路并生成连接】 " + "RoadWeaver attached to existing road and generated: {} -> {} (original {} -> {}, stations={})",
                 attached.from(), attached.to(), conn.from(), conn.to(),
                 retry.outcome().road() == null ? -1 : retry.outcome().road().roadSegmentList().size());
         return retry;
@@ -339,26 +341,26 @@ public final class RoadTaskExecutor {
             if (endpointReuse != null
                     && net.shiroha233.roadweaver.route.RouteBuildRegistry
                     .isPlayerRoute(level, connection)) {
-                LOGGER.info("RoadWeaver skipped existing-road endpoint reuse for player-drawn route: {} -> {}",
+                LOGGER.info("【手绘路线跳过既有道路端点复用】 " + "RoadWeaver skipped existing-road endpoint reuse for player-drawn route: {} -> {}",
                         connection.from(), connection.to());
                 endpointReuse = null;
             }
 
             if (endpointReuse != null) {
                 PlannedPathCache.discard(level, connection);
-                LOGGER.info("RoadWeaver trying existing-road endpoint reuse before original generation: "
+                LOGGER.info("【生成前尝试复用既有道路端点】 " + "RoadWeaver trying existing-road endpoint reuse before original generation: "
                                 + "{} -> {} replaced by {} -> {}",
                         connection.from(), connection.to(), endpointReuse.from(), endpointReuse.to());
                 GenerationOutcome reused = generateTaskInternal(
                         level, endpointReuse, persistImmediately, configuredStep);
                 if (reused.success()) {
-                    LOGGER.info("RoadWeaver accepted existing-road endpoint reuse: {} -> {} replaced by {} -> {}",
+                    LOGGER.info("【已接受既有道路端点复用】 " + "RoadWeaver accepted existing-road endpoint reuse: {} -> {} replaced by {} -> {}",
                             connection.from(), connection.to(), endpointReuse.from(), endpointReuse.to());
                     return new GenerationAttempt(endpointReuse, reused);
                 }
                 PlannedPathCache.discard(level, endpointReuse);
                 discardPlanningSnapshot(level, endpointReuse);
-                LOGGER.warn("RoadWeaver existing-road endpoint reuse failed; retaining original connection: "
+                LOGGER.warn("【既有道路端点复用失败，保留原连接】 " + "RoadWeaver existing-road endpoint reuse failed; retaining original connection: "
                                 + "{} -> {}",
                         connection.from(), connection.to());
             }
@@ -372,20 +374,20 @@ public final class RoadTaskExecutor {
             if ((primary.success() && (!primaryProtectedGap || endpointOnlyProtectedGap))
                     || ConnectionDeletionService.shouldAbort(level, connection)) {
                 if (endpointOnlyProtectedGap) {
-                    LOGGER.info("RoadWeaver retained endpoint-only protected gap without topology replacement connection={}->{}",
+                    LOGGER.info("【仅端点存在保护缺口，保留原拓扑连接】 " + "RoadWeaver retained endpoint-only protected gap without topology replacement connection={}->{}",
                             connection.from(), connection.to());
                 }
                 return new GenerationAttempt(connection, primary);
             }
             if (primaryProtectedGap) {
-                LOGGER.info("RoadWeaver primary route has a protected building gap; trying topology candidates before retaining it connection={}->{}",
+                LOGGER.info("【原路存在建筑保护缺口，先尝试拓扑候补】 " + "RoadWeaver primary route has a protected building gap; trying topology candidates before retaining it connection={}->{}",
                         connection.from(), connection.to());
             }
             // ★ 审计 P1-4：手绘路线不 discard 预置路径。
             // 这里 discard 之后再走 topology fallback，重试必然退回 A*，
             // 玩家画的线就丢了。手绘路线宁可直接判定失败，也不静默改成算法路径。
             if (net.shiroha233.roadweaver.route.RouteBuildRegistry.isPlayerRoute(level, connection)) {
-                LOGGER.warn("RoadWeaver player-drawn route failed at step={}; "
+                LOGGER.warn("【手绘路线失败，保留玩家路径且不转用旧寻路】 " + "RoadWeaver player-drawn route failed at step={}; "
                                 + "keeping player path instead of falling back to A*: {} -> {}",
                         configuredStep, connection.from(), connection.to());
                 return new GenerationAttempt(connection, primary);
@@ -393,27 +395,27 @@ public final class RoadTaskExecutor {
             PlannedPathCache.discard(level, connection);
             discardPlanningSnapshot(level, connection);
 
-            LOGGER.warn("RoadWeaver original connection failed at configured precision step={} before topology fallback: {} -> {}",
+            LOGGER.warn("【原连接在配置精度下失败，准备评估拓扑候补】 " + "RoadWeaver original connection failed at configured precision step={} before topology fallback: {} -> {}",
                     configuredStep, connection.from(), connection.to());
 
             if (!TOPOLOGY_CANDIDATES_ENABLED) {
-                LOGGER.warn("RoadWeaver topology candidates disabled; retaining original failure for diagnosis: {} -> {}",
+                LOGGER.warn("【拓扑候补已禁用，保留原失败原因】 " + "RoadWeaver topology candidates disabled; retaining original failure for diagnosis: {} -> {}",
                         connection.from(), connection.to());
                 return new GenerationAttempt(connection, primary);
             }
 
             List<StructureConnection> candidates = ConnectionFallbackService.candidates(level, connection);
             if (candidates.isEmpty()) {
-                LOGGER.warn("RoadWeaver topology fallback has no eligible replacement candidates: {} -> {}",
+                LOGGER.warn("【没有符合条件的拓扑候补】 " + "RoadWeaver topology fallback has no eligible replacement candidates: {} -> {}",
                         connection.from(), connection.to());
             } else {
-                LOGGER.info("RoadWeaver topology fallback candidates={} for {} -> {}",
+                LOGGER.info("【可尝试的拓扑候补数量】 " + "RoadWeaver topology fallback candidates={} for {} -> {}",
                         candidates.size(), connection.from(), connection.to());
             }
             for (int attempt = 0; attempt < candidates.size(); attempt++) {
                 if (ConnectionDeletionService.shouldAbort(level, connection)) break;
                 StructureConnection replacement = candidates.get(attempt);
-                LOGGER.warn("RoadWeaver attempting bounded topology fallback {}/{}: {} -> {} replaced by {} -> {}",
+                LOGGER.warn("【正在尝试有界拓扑候补替换】 " + "RoadWeaver attempting bounded topology fallback {}/{}: {} -> {} replaced by {} -> {}",
                         attempt + 1, candidates.size(), connection.from(), connection.to(),
                         replacement.from(), replacement.to());
                 PlannedPathCache.discard(level, replacement);
@@ -432,7 +434,7 @@ public final class RoadTaskExecutor {
                         boolean sameDirection = SpawnConnectivityValidator.sameOverallDirection(
                                 primary.road(), outcome.road());
                         if (!sameDirection) {
-                            LOGGER.info("RoadWeaver retained different-direction runtime original and candidate original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
+                            LOGGER.info("【游玩期原路与候补方向不同，保留两条连接】 " + "RoadWeaver retained different-direction runtime original and candidate original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
                                     connection.from(), connection.to(), replacement.from(), replacement.to(),
                                     originalSpawnConnected, spawnConnected);
                             return new GenerationAttempt(connection, primary, replacement);
@@ -440,7 +442,7 @@ public final class RoadTaskExecutor {
                         if (persistImmediately && primary.road() != null) {
                             RoadShardStorage.deleteRoad(level, RoadShardStorage.computeFingerprint(primary.road()));
                         }
-                        LOGGER.info("RoadWeaver accepted same-direction runtime candidate replacement original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
+                        LOGGER.info("【已接受游玩期同方向候补替换】 " + "RoadWeaver accepted same-direction runtime candidate replacement original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
                                 connection.from(), connection.to(), replacement.from(), replacement.to(),
                                 originalSpawnConnected, spawnConnected);
                         return new GenerationAttempt(replacement, outcome);
@@ -448,12 +450,12 @@ public final class RoadTaskExecutor {
                     if (primaryProtectedGap && persistImmediately && primary.road() != null) {
                         RoadShardStorage.deleteRoad(level, RoadShardStorage.computeFingerprint(primary.road()));
                     }
-                    LOGGER.info("RoadWeaver accepted runtime topology candidate connection={} -> {} candidate={} -> {} connected={}",
+                    LOGGER.info("【已接受游玩期拓扑候补】 " + "RoadWeaver accepted runtime topology candidate connection={} -> {} candidate={} -> {} connected={}",
                             connection.from(), connection.to(), replacement.from(), replacement.to(), connected);
                     return new GenerationAttempt(replacement, outcome);
                 }
                 StructureFileStorage.recordFailedFallbackAttempt(level, connection, replacement);
-                LOGGER.warn("RoadWeaver recorded failed topology fallback {}/{}: {} -> {} replacement={} -> {}",
+                LOGGER.warn("【本次拓扑候补替换失败，已记录结果】 " + "RoadWeaver recorded failed topology fallback {}/{}: {} -> {} replacement={} -> {}",
                         attempt + 1, candidates.size(), connection.from(), connection.to(),
                         replacement.from(), replacement.to());
             }
@@ -518,7 +520,7 @@ public final class RoadTaskExecutor {
                 removeProcessed(level, conn);
                 return;
             }
-            LOGGER.error("Asynchronous road generation failed for connection {} -> {}", conn.from(), conn.to(), t);
+            LOGGER.error("【异步道路连接生成失败】 " + "Asynchronous road generation failed for connection {} -> {}", conn.from(), conn.to(), t);
             executeOnMainThread(level, epoch, () -> {
                 if (ConnectionDeletionService.shouldAbort(level, conn)) {
                     removeProcessed(level, conn);
@@ -579,7 +581,7 @@ public final class RoadTaskExecutor {
                     || t instanceof java.util.concurrent.CancellationException) {
                 return GenerationOutcome.failed();
             }
-            LOGGER.error("Road generation failed for connection {} -> {}", conn.from(), conn.to(), t);
+            LOGGER.error("【道路连接生成失败】 " + "Road generation failed for connection {} -> {}", conn.from(), conn.to(), t);
             return GenerationOutcome.failed();
         }
     }

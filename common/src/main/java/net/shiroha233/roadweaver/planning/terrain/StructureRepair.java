@@ -1,6 +1,8 @@
 /* 文件职责：结构相交修复 —— 判断路切进建筑后怎么改线，改不动就保持原样。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -251,7 +253,7 @@ public final class StructureRepair {
                     if (isStructureRepairAccepted(slicePath, candidate, collisionClearance)) {
                         selectedSlice = slice;
                         accepted = true;
-                        LOGGER.info("RoadWeaver structure local candidate accepted mode=surface radius={} roadWidth={} "
+                        LOGGER.info("【建筑局部地表绕行候选已接受】 " + "RoadWeaver structure local candidate accepted mode=surface radius={} roadWidth={} "
                                         + "bodyRadius={} conflictEdge={}..{} center={} box={} slice={}..{} nodes={} -> {} {} connection={}->{}",
                                 localDetourBlocks, ConfigService.get().roadAppearance().roadWidth(), roadBodyRadius,
                                 conflict.start(), conflict.end(), searchCenter, conflictBox,
@@ -260,7 +262,7 @@ public final class StructureRepair {
                                 connection.from(), connection.to());
                         break;
                     }
-                    LOGGER.info("RoadWeaver structure local candidate rejected mode=surface radius={} roadWidth={} "
+                    LOGGER.info("【建筑局部地表绕行候选被拒绝】 " + "RoadWeaver structure local candidate rejected mode=surface radius={} roadWidth={} "
                                     + "bodyRadius={} conflictEdge={}..{} center={} box={} slice={}..{} candidateNodes={} reason={} {} connection={}->{}",
                             localDetourBlocks, ConfigService.get().roadAppearance().roadWidth(), roadBodyRadius,
                             conflict.start(), conflict.end(), searchCenter, conflictBox,
@@ -275,7 +277,7 @@ public final class StructureRepair {
                     // slice 再试 surface 往往就成功了。隧道搜索只有在"surface 找得到路
                     // 但过不去"时才值得一试。
                     if (candidate == null || candidate.size() < 2) {
-                        LOGGER.info("RoadWeaver structure local tunnel search skipped: surface found no path "
+                        LOGGER.info("【地表搜索没有路径，跳过当前局部隧道搜索】 " + "RoadWeaver structure local tunnel search skipped: surface found no path "
                                         + "conflictEdge={}..{} center={} slice={}..{} connection={}->{}",
                                 conflict.start(), conflict.end(), searchCenter,
                                 slice.startIndex(), slice.endIndex(), connection.from(), connection.to());
@@ -291,7 +293,7 @@ public final class StructureRepair {
                     if (isStructureRepairAccepted(slicePath, candidate, collisionClearance)) {
                         selectedSlice = slice;
                         accepted = true;
-                        LOGGER.info("RoadWeaver structure local candidate accepted mode=tunnel radius={} roadWidth={} "
+                        LOGGER.info("【建筑局部隧道候选已接受】 " + "RoadWeaver structure local candidate accepted mode=tunnel radius={} roadWidth={} "
                                         + "bodyRadius={} conflictEdge={}..{} center={} box={} slice={}..{} nodes={} -> {} {} connection={}->{}",
                                 localDetourBlocks, ConfigService.get().roadAppearance().roadWidth(), roadBodyRadius,
                                 conflict.start(), conflict.end(), searchCenter, conflictBox,
@@ -300,7 +302,7 @@ public final class StructureRepair {
                                 connection.from(), connection.to());
                         break;
                     }
-                    LOGGER.info("RoadWeaver structure local candidate rejected mode=tunnel radius={} roadWidth={} "
+                    LOGGER.info("【建筑局部隧道候选被拒绝】 " + "RoadWeaver structure local candidate rejected mode=tunnel radius={} roadWidth={} "
                                     + "bodyRadius={} conflictEdge={}..{} center={} box={} slice={}..{} candidateNodes={} reason={} {} connection={}->{}",
                             localDetourBlocks, ConfigService.get().roadAppearance().roadWidth(), roadBodyRadius,
                             conflict.start(), conflict.end(), searchCenter, conflictBox,
@@ -321,7 +323,7 @@ public final class StructureRepair {
                     if (isStructureRepairAccepted(slicePath, candidate, collisionClearance)) {
                         selectedSlice = slice;
                         accepted = true;
-                        LOGGER.info("RoadWeaver structure local candidate accepted mode=hard-detour radius={} "
+                        LOGGER.info("【建筑局部硬绕行候选已接受】 " + "RoadWeaver structure local candidate accepted mode=hard-detour radius={} "
                                         + "conflictEdge={}..{} center={} box={} slice={}..{} nodes={} -> {} {} connection={}->{}",
                                 localDetourBlocks, conflict.start(), conflict.end(), searchCenter, conflictBox,
                                 slice.startIndex(), slice.endIndex(), slicePath.size(), candidate.size(),
@@ -329,7 +331,7 @@ public final class StructureRepair {
                                 connection.from(), connection.to());
                         break;
                     }
-                    LOGGER.info("RoadWeaver structure local candidate rejected mode=hard-detour radius={} "
+                    LOGGER.info("【建筑局部硬绕行候选被拒绝】 " + "RoadWeaver structure local candidate rejected mode=hard-detour radius={} "
                                     + "conflictEdge={}..{} center={} box={} slice={}..{} candidateNodes={} {} connection={}->{}",
                             localDetourBlocks, conflict.start(), conflict.end(), searchCenter, conflictBox,
                             slice.startIndex(), slice.endIndex(), candidate == null ? 0 : candidate.size(),
@@ -338,7 +340,7 @@ public final class StructureRepair {
                 }
             }
             if (!accepted) {
-                LOGGER.warn("RoadWeaver exact structure repair could not reroute conflict edge={}..{} windowNodes={} "
+                LOGGER.warn("【精确建筑修复未找到可用绕行】 " + "RoadWeaver exact structure repair could not reroute conflict edge={}..{} windowNodes={} "
                                 + "slices={} rerouteStep={} clearance={} tunnelSearch={} {}",
                         conflict.start(), conflict.end(), repairSlices.get(0).path().size(), repairSlices.size(),
                         rerouteStep, collisionClearance, tunnelSearchUsed, conflictDetail);
@@ -363,7 +365,7 @@ public final class StructureRepair {
             replaced.addAll(working.subList(endIndex + 1, working.size()));
             working = replaced;
             repaired++;
-            LOGGER.info("Accepted exact local RoadWeaver structure reroute: detour={} clearance={} "
+            LOGGER.info("【精确建筑局部绕行已接受】 " + "Accepted exact local RoadWeaver structure reroute: detour={} clearance={} "
                             + "tunnelSearch={} conflictEdge={}..{} nodes={} -> {}",
                     localDetourBlocks, localDetourBlocks, tunnelSearchUsed,
                     conflict.start(), conflict.end(),

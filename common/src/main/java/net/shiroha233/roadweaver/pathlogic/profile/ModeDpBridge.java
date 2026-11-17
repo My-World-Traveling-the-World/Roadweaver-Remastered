@@ -1,6 +1,8 @@
 /* 文件职责：桥隧联合 DP 与旧判定之间的观测桥 —— 只记录差异，不改任何决策。 */
 package net.shiroha233.roadweaver.pathlogic.profile;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -338,7 +340,7 @@ public final class ModeDpBridge {
                     ? java.util.Optional.of(shared.solution())
                     : ModeDpSolver.solve(terrainY, maxStep, settingsFor(gradeLimits), groundBanned);
             if (solved.isEmpty()) {
-                LOGGER.info("[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
+                LOGGER.info("【桥隧模式DP无可行解的对照证据】 " + "[SPAN-AB] tag={} dp=infeasible stations={} banned={}"
                                 + "(water={} structure={} road={} snapshot={}) legacyCrossing={} legacy={}",
                         tag, n, banned, (bans == null ? 0 : bans.waterStations()), (bans == null ? 0 : bans.structureStations()),
                         (bans == null ? 0 : bans.roadStations()),

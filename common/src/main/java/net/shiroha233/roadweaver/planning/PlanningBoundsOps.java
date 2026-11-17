@@ -1,6 +1,8 @@
 /* 文件职责：规划范围计算 —— 候选边界扩展、边长上限、矩形相交判定。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
@@ -206,7 +208,7 @@ public final class PlanningBoundsOps {
         if (level == null || result == null) return;
         for (StructureConnection removed : result.removed()) {
             MapPatchService.publishConnectionRemoval(level, removed);
-            LOGGER.info("RoadWeaver pruned redundant pending topology edge: {} -> {} status={}",
+            LOGGER.info("【已移除冗余待处理拓扑边】 " + "RoadWeaver pruned redundant pending topology edge: {} -> {} status={}",
                     removed.from(), removed.to(), removed.status());
         }
         for (StructureConnection added : result.added()) {
@@ -236,7 +238,7 @@ public final class PlanningBoundsOps {
                                 level, result.paths()))
                 .exceptionally(failure -> {
                     if (ThreadPoolManager.isEpoch(epoch)) {
-                        LOGGER.error("RoadWeaver terrain or path-corridor structure preparation failed", failure);
+                        LOGGER.error("【地形或路径走廊结构准备失败】 " + "RoadWeaver terrain or path-corridor structure preparation failed", failure);
                     }
                     return null;
                 });

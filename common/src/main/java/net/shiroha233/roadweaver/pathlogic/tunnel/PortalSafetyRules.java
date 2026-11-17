@@ -1,6 +1,8 @@
 /* 文件职责：洞口安全规则 —— 什么时候必须开口、什么时候可以封洞。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -120,7 +122,7 @@ final class PortalSafetyRules {
             long total = DRIED_BORE_CELLS.addAndGet(dried) + SEALED_SHELL_CELLS.addAndGet(sealed);
             if (total <= 64 || total % 512 == 0) {
                 BlockPos sample = plan.interior().get(plan.interior().size() / 2);
-                LOGGER.info("RoadWeaver tunnel sealed bore dried={} shell={} at {},{} y={} total={}",
+                LOGGER.info("【密封隧道排水与壳体处理结果】 " + "RoadWeaver tunnel sealed bore dried={} shell={} at {},{} y={} total={}",
                         dried, sealed, sample.getX(), sample.getZ(), sample.getY(), total);
             }
         }

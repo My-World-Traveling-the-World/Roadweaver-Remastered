@@ -1,6 +1,8 @@
 /* 文件职责：三段式的第①③段与②之间那层胶水——抽过河点、发起协商、按簇给每条路配点吸引。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -201,7 +203,7 @@ final class CrossingNegotiation {
             } catch (java.util.concurrent.CancellationException cancelled) {
                 throw cancelled;
             } catch (RuntimeException failure) {
-                LOGGER.warn("[PATH-REUSE] second pass failed for {}, keeping first-pass path",
+                LOGGER.warn("【道路复用第二轮失败，保留该路首轮路径】 " + "[PATH-REUSE] second pass failed for {}, keeping first-pass path",
                         ownerKey(connection), failure);
             }
         }

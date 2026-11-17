@@ -1,6 +1,8 @@
 /* 文件职责：初始规划的收尾与生命周期 —— 连接状态归一、收尾、日志汇总、中止。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
 import net.shiroha233.roadweaver.planning.RouteRefinementOps;
 import net.shiroha233.roadweaver.planning.ConflictWindowOps;
@@ -117,7 +119,7 @@ public final class InitialPlanLifecycleOps {
                     updated.add(completed);
                     changedConnections.add(new ConnectionChange(null, completed));
                     changed = true;
-                    LOGGER.info("RoadWeaver added retained candidate network edge {} -> {}",
+                    LOGGER.info("【已加入保留的候补路网边】 " + "RoadWeaver added retained candidate network edge {} -> {}",
                             completed.from(), completed.to());
                 }
             }
@@ -144,16 +146,16 @@ public final class InitialPlanLifecycleOps {
             // 0.8.355：每条连接的最终状态单独一行，便于玩家/我们按端点定位到具体哪条路失败。
             if (newStatus == ConnectionStatus.FAILED) {
                 if (result.road() == null) {
-                    LOGGER.warn("RoadWeaver initial connection FAILED (no usable route): {} -> {} "
+                    LOGGER.warn("【初始连接失败，精度层级和局部修复均未得到可用路线】 " + "RoadWeaver initial connection FAILED (no usable route): {} -> {} "
                                     + "[all precision tiers, local repair and fallbacks were exhausted]",
                             original.from(), original.to());
                 } else {
-                    LOGGER.warn("RoadWeaver initial connection FAILED (route computed but not persisted, "
+                    LOGGER.warn("【已算出路线但未持久化，连接标记失败】 " + "RoadWeaver initial connection FAILED (route computed but not persisted, "
                                     + "likely failed a final validator): {} -> {}",
                             original.from(), original.to());
                 }
             } else {
-                LOGGER.info("RoadWeaver initial connection {} : {} -> {} (stations={})",
+                LOGGER.info("【初始道路连接处理结果】 " + "RoadWeaver initial connection {} : {} -> {} (stations={})",
                         newStatus, changedConnection.from(), changedConnection.to(),
                         result.road() == null ? -1 : roadStationCount(result.road()));
             }
@@ -199,7 +201,7 @@ public final class InitialPlanLifecycleOps {
                 .map(connection -> connection.from() + "->" + connection.to())
                 .reduce((a, b) -> a + ", " + b)
                 .orElse("unknown");
-        LOGGER.error("RoadWeaver forcing initial connections to terminal FAILED state before world entry: "
+        LOGGER.error("【进世界前仍未结案的连接被明确标记失败】 " + "RoadWeaver forcing initial connections to terminal FAILED state before world entry: "
                 + pending.size() + " endpoints=" + endpoints);
         List<StructureConnection> updated = new ArrayList<>(current);
         for (int i = 0; i < updated.size(); i++) {
@@ -231,7 +233,7 @@ public final class InitialPlanLifecycleOps {
         RoadPlanningReadinessIndex.markInitialCoverageReady(level);
         compactPreparedStartCacheAfterInitialGeneration();
         InitialGenerationCheckpointStore.markCompleted(level);
-        LOGGER.info("RoadWeaver initial finalizing timing: flushAllMs={} totalMs={}",
+        LOGGER.info("【初始生成收尾持久化耗时】 " + "RoadWeaver initial finalizing timing: flushAllMs={} totalMs={}",
                 flushMs, elapsedMs(startedAt));
         // 0.8.355：收尾汇总 —— 明确写出「本轮一共做了什么、哪些是复用的」，
         // 这是玩家判断「这次有没有白跑」的唯一依据。
@@ -250,7 +252,7 @@ public final class InitialPlanLifecycleOps {
             int filtered = countByStatus(all, ConnectionStatus.FILTERED);
             int stillPending = countByStatus(all, ConnectionStatus.PLANNED)
                     + countByStatus(all, ConnectionStatus.GENERATING);
-            LOGGER.info("RoadWeaver initial generation COMPLETED. Network status: total={} completed={} "
+            LOGGER.info("【初始规划流程结束，连接状态已保存；不等同于全部方块竣工】 " + "RoadWeaver initial generation COMPLETED. Network status: total={} completed={} "
                             + "protectedGap={} failed={} filtered={} pending={}. "
                             + "checkpoint.txt is now state=COMPLETED, so the next world load skips initial "
                             + "generation entirely; only failed routes stay eligible for later repair waves.",
@@ -262,10 +264,10 @@ public final class InitialPlanLifecycleOps {
     }
 
     public static void abort(String phase, Throwable failure) {
-        LOGGER.error("Initial RoadWeaver generation aborted during {}", phase, failure);
+        LOGGER.error("【初始道路生成阶段异常中止】 " + "Initial RoadWeaver generation aborted during {}", phase, failure);
         // 0.8.355：中止时保留 checkpoint（不 markCompleted），下一次世界加载会按
         // phase/done/total 续接，而不是从头重跑。
-        LOGGER.warn("RoadWeaver initial generation aborted; checkpoint kept at the last recorded progress "
+        LOGGER.warn("【保留最近检查点，下次加载继续未完成阶段】 " + "RoadWeaver initial generation aborted; checkpoint kept at the last recorded progress "
                 + "so the next world load can resume instead of restarting. phase={} done={}/{}",
                 phase, done.get(), total.get());
         roadGenerationWorkersActive = false;

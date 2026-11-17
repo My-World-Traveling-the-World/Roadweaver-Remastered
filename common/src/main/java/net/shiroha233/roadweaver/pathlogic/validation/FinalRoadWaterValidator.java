@@ -1,6 +1,8 @@
 /* 文件职责：落盘前的涉水校验：路面不得泡在水里、桥下必须真的有水。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
@@ -92,7 +94,7 @@ public final class FinalRoadWaterValidator {
         }
         // Logging-only diagnostics: sampling-count summary per validate call.
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("RoadWeaver water validation sampling connection={}->{} totalColumns={} cachedColumns={} missingColumns={} backend={} refilled={}",
+            LOGGER.debug("【水域校验采样缓存和缺失列统计】 " + "RoadWeaver water validation sampling connection={}->{} totalColumns={} cachedColumns={} missingColumns={} backend={} refilled={}",
                     road.ownerA2dKey(), road.ownerB2dKey(),
                     positions.size(), known.size(), missing.size(),
                     accurate.backendName(), !missing.isEmpty());
@@ -216,7 +218,7 @@ public final class FinalRoadWaterValidator {
                         : tunnel[index] ? "TUNNEL"
                         : reused[index] ? "NETWORK_REUSE"
                         : protectedGap[index] ? "PROTECTED_GAP" : "ordinary";
-                LOGGER.warn("RoadWeaver water validation failed road={}->{} segment={} station={} pos={} reason=ordinary_construction_in_water "
+                LOGGER.warn("【普通施工列入水，水域校验失败】 " + "RoadWeaver water validation failed road={}->{} segment={} station={} pos={} reason=ordinary_construction_in_water "
                                 + "targetY={} waterSurfaceY={} bedY={} source={} span={} wetColumns={} checkedColumns={}",
                         road.ownerA2dKey(), road.ownerB2dKey(), index,
                         position.getX() + "," + position.getZ(), position,
@@ -228,7 +230,7 @@ public final class FinalRoadWaterValidator {
             }
         }
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("RoadWeaver water validation passed road={}->{} stations={} checkedColumns={} "
+            LOGGER.debug("【水域校验通过，桥梁与涵洞按既有规则豁免】 " + "RoadWeaver water validation passed road={}->{} stations={} checkedColumns={} "
                             + "wetColumns={} (bridgeAndCulvertExempt=true)",
                     road.ownerA2dKey(), road.ownerB2dKey(), size, checkedColumns, wetColumns);
         }

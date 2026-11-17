@@ -1,6 +1,8 @@
 /* 文件职责：多条路共用一座桥时的归属与端点一致性处理。 */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -91,7 +93,7 @@ public final class BridgeShareService {
         boolean logPairs = LOGGER.isDebugEnabled();
         if (logPairs) {
             for (BridgeRef ref : bridges) {
-                LOGGER.debug("[BRIDGE-SHARE] collected road{}#{} st{}..{} n={} head={} tail={}",
+                LOGGER.debug("【共用桥检测收集到的桥段】 " + "[BRIDGE-SHARE] collected road{}#{} st{}..{} n={} head={} tail={}",
                         ref.roadIndex(), ref.spanIndex(), ref.fromStation(), ref.toStation(),
                         ref.stations().size(), ref.stations().getFirst(), ref.stations().getLast());
             }
@@ -111,7 +113,7 @@ public final class BridgeShareService {
                         : BridgeShareDetector.Report.none();
                 if (logPairs) {
                     // 精确航向只为排查关卡失败才额外扫描，平时不为被预筛掉的桥对扫描站点。
-                    LOGGER.debug("[BRIDGE-SHARE-PAIR] a=road{}#{} st{}..{} n={} b=road{}#{} st{}..{} n={} "
+                    LOGGER.debug("【共用桥候选对距离与重叠判据】 " + "[BRIDGE-SHARE-PAIR] a=road{}#{} st{}..{} n={} b=road{}#{} st{}..{} n={} "
                                     + "bbox={} minDist={} overlap={} dot={} shares={}",
                             a.roadIndex(), a.spanIndex(), a.fromStation(), a.toStation(), a.stations().size(),
                             b.roadIndex(), b.spanIndex(), b.fromStation(), b.toStation(), b.stations().size(),
@@ -234,7 +236,7 @@ public final class BridgeShareService {
                 nearestDy = pos.getY() - span.start().getY();
             }
         }
-        LOGGER.warn("RoadWeaver bridge-share could not map span endpoint to a station "
+        LOGGER.warn("【共用桥端点无法映射到道路站点】 " + "RoadWeaver bridge-share could not map span endpoint to a station "
                         + "road={} span={} type={} start={} end={} stations={} "
                         + "nearestChebyshevXz={} nearestDy={} (checked={})",
                 road.hasOwnerPair() ? road.ownerA2dKey() + "->" + road.ownerB2dKey() : "unknown",

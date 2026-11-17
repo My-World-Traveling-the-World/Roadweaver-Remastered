@@ -1,6 +1,8 @@
 /* 文件职责：实现 Fabric 平台道路地图的请求、快照与增量状态网络通信。 */
 package net.shiroha233.roadweaver.network.fabric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -111,7 +113,7 @@ public final class MapNetworkFabric {
                             finishMapRequest(player.getUUID());
                             if (failure != null) {
                                 if (ThreadPoolManager.isEpoch(epoch)) {
-                                    LOGGER.warn("RoadWeaver map snapshot request failed", failure);
+                                    LOGGER.warn("【地图道路快照请求失败】 " + "RoadWeaver map snapshot request failed", failure);
                                 }
                                 return;
                             }
@@ -127,7 +129,7 @@ public final class MapNetworkFabric {
             } catch (RuntimeException submissionFailure) {
                 finishMapRequest(player.getUUID());
                 if (ThreadPoolManager.isEpoch(epoch)) {
-                    LOGGER.warn("RoadWeaver could not submit a map snapshot request", submissionFailure);
+                    LOGGER.warn("【地图道路快照请求提交失败】 " + "RoadWeaver could not submit a map snapshot request", submissionFailure);
                 }
             }
         });

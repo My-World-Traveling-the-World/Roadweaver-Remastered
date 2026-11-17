@@ -8,6 +8,8 @@
  */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
@@ -247,7 +249,7 @@ public final class AccurateGradeRepairPlanner {
                     // 刻意不加 Thread.currentThread().interrupt()：本方法现有的取消语义是
                     // 「该窗口跳过、其余窗口继续」；恢复中断标志会让同一批次里剩下的 future.get()
                     // 立刻失败从而跳过全部剩余窗口，属改变中止行为，需单独决策。
-                    LOGGER.warn("[ROAD-GRADE-POOL] grade repair task failed, window will be skipped: {}",
+                    LOGGER.warn("【纵坡修复任务失败，跳过当前窗口】 " + "[ROAD-GRADE-POOL] grade repair task failed, window will be skipped: {}",
                             e.toString(), e);
                     plans.add(null);
                 }
@@ -318,12 +320,12 @@ public final class AccurateGradeRepairPlanner {
             }
             if (!isAccepted(original, candidate)) {
                 logLocalSearchDiag("grade-rejected");
-                LOGGER.warn("RoadWeaver accurate grade repair could not replace cliff window start={} end={} rise={} length={}",
+                LOGGER.warn("【精确纵坡修复无法替换陡崖窗口】 " + "RoadWeaver accurate grade repair could not replace cliff window start={} end={} rise={} length={}",
                         violation.start(), violation.end(), violation.rise(), format(violation.length()));
                 return null;
             }
             logLocalSearchDiag("grade-accepted");
-            LOGGER.info("Accepted accurate RoadWeaver grade repair: rise={} over {} blocks, nodes={} -> {}",
+            LOGGER.info("【精确纵坡修复已接受】 " + "Accepted accurate RoadWeaver grade repair: rise={} over {} blocks, nodes={} -> {}",
                     violation.rise(), format(violation.length()), original.size(), candidate.size());
             return new GradePlan(startIndex, endIndex, candidate);
         } catch (Throwable failure) {
@@ -410,7 +412,7 @@ public final class AccurateGradeRepairPlanner {
         if (searched != null && searched.size() >= 2) return searched;
         long seen = REPAIR_NULL_SEEN.incrementAndGet();
         if (seen <= 40L || seen % 200L == 0L) {
-            LOGGER.info("[REPAIR-NULL] #{} window={} reason={} keptOriginal={} keptNodes={} searchedNodes={}",
+            LOGGER.info("【局部修复未产生路径及原路保留状态】 " + "[REPAIR-NULL] #{} window={} reason={} keptOriginal={} keptNodes={} searchedNodes={}",
                     seen, window, reason, previous != null,
                     previous == null ? 0 : previous.size(),
                     searched == null ? 0 : searched.size());
@@ -480,7 +482,7 @@ public final class AccurateGradeRepairPlanner {
                 replaced.addAll(candidate);
                 replaced.addAll(path.subList(endIndex + 1, path.size()));
                 logLocalSearchDiag("height-reroute-accepted");
-                LOGGER.info("RoadWeaver accepted pre-construction height reroute conflictSegment={} "
+                LOGGER.info("【施工前高度局部绕行已接受】 " + "RoadWeaver accepted pre-construction height reroute conflictSegment={} "
                                 + "window={}..{} margin={} nodes={} -> {}",
                         conflictSegment, startIndex, endIndex, margin, original.size(), candidate.size());
                 return List.copyOf(replaced);
@@ -488,7 +490,7 @@ public final class AccurateGradeRepairPlanner {
             if (margin >= maxMargin) break;
         }
         logLocalSearchDiag("height-reroute-no-bypass");
-        LOGGER.warn("RoadWeaver construction-height reroute no bypass; keeping original gap "
+        LOGGER.warn("【施工高度绕行未找到旁路，保留原缺口】 " + "RoadWeaver construction-height reroute no bypass; keeping original gap "
                 + "connection={}->{} conflictSegment={} rise={} triedMargin={}..{}",
                 connection.from(), connection.to(), conflictSegment,
                 path.get(conflictSegment).getY(), startMargin, maxMargin);
@@ -748,7 +750,7 @@ public final class AccurateGradeRepairPlanner {
             planned.append(pos.getY());
             terrain.append(surface == Integer.MIN_VALUE ? "?" : Integer.toString(surface));
         }
-        LOGGER.info("RoadWeaver grade violation diagnostics: rise={} over={} window={}..{} "
+        LOGGER.info("【纵坡超限窗口的计划高度与地形高度诊断】 " + "RoadWeaver grade violation diagnostics: rise={} over={} window={}..{} "
                         + "maxDeltaVsTerrain={} plannedY=[{}] terrainY=[{}]",
                 violation.rise(), format(violation.length()), violation.start(), violation.end(),
                 maxDelta, planned, terrain);

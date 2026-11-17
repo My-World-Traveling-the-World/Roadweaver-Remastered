@@ -1,6 +1,8 @@
 /* 文件职责：Fabric 世界数据附件注册（把道路存档数据挂到 ServerLevel 上）。 */
 package net.shiroha233.roadweaver.persistence.attachments;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.mojang.serialization.Codec;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
@@ -65,6 +67,6 @@ public class WorldDataAttachment {
     );
 
     public static void registerWorldDataAttachment() {
-        LOGGER.info("Registering WorldData attachment");
+        LOGGER.info("【注册世界道路数据附加项】 " + "Registering WorldData attachment");
     }
 }

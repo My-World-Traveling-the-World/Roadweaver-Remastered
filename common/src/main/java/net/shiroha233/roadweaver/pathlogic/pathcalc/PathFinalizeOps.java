@@ -1,6 +1,8 @@
 /* 文件职责：路径收尾与冲突修复 —— 最终化、按走廊刷新做结构/湖/河的局部修复、构建站序列。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair.ExactStructureRepairOutcome;
@@ -140,7 +142,7 @@ public final class PathFinalizeOps {
                         finalPath, level, accurate, pathCfg, connection);
             }
             if (finalPath == null) {
-                LOGGER.warn("RoadWeaver local structure/lake detours exhausted; rejecting connection for topology fallback connection={}->{}",
+                LOGGER.warn("【局部建筑和湖泊绕行耗尽，拒绝当前连接并交候补处理】 " + "RoadWeaver local structure/lake detours exhausted; rejecting connection for topology fallback connection={}->{}",
                         connection == null ? null : connection.from(), connection == null ? null : connection.to());
                 return PathCalculationResult.failure();
             }
@@ -189,7 +191,7 @@ public final class PathFinalizeOps {
                         repairedConstruction, level, accurate, pathCfg, connection);
             }
             if (repairedConstruction == null) {
-                LOGGER.warn("RoadWeaver rejected construction-center route after exact lake/structure repair connection={}->{}",
+                LOGGER.warn("【精确湖泊或建筑修复后中心线仍不可施工，拒绝路线】 " + "RoadWeaver rejected construction-center route after exact lake/structure repair connection={}->{}",
                         connection == null ? null : connection.from(), connection == null ? null : connection.to());
                 return PathCalculationResult.failure();
             }
@@ -216,7 +218,7 @@ public final class PathFinalizeOps {
             segments = buildSegments(fallback, width, level, cache, terrain, accurate, null);
             DetailedRoadGenerationStats.recordSegmentBuild(System.nanoTime() - segmentBuildStartedAt);
             if (segments != null) {
-                LOGGER.warn("RoadWeaver accepted path-level upstream fallback while retaining current construction safety connection={}->{}",
+                LOGGER.warn("【保留当前施工安全约束，接受路径级上游结果】 " + "RoadWeaver accepted path-level upstream fallback while retaining current construction safety connection={}->{}",
                         connection == null ? null : connection.from(), connection == null ? null : connection.to());
             }
         }
@@ -226,13 +228,13 @@ public final class PathFinalizeOps {
         if (connection != null
                 && intersectsPreparedRoute(level, connection, segments)
                 && intersectsPreparedRouteWithUnresolvedStructure(level, connection, segments)) {
-            LOGGER.error("RoadWeaver refused to finalize a route whose exact footprint still intersects a protected structure connection={}->{}",
+            LOGGER.error("【精确占地仍侵入保护建筑，拒绝定稿】 " + "RoadWeaver refused to finalize a route whose exact footprint still intersects a protected structure connection={}->{}",
                     connection.from(), connection.to());
             return PathCalculationResult.failure();
         }
         if (connection != null
                 && intersectsPreparedRoute(level, connection, segments)) {
-            LOGGER.info("RoadWeaver retained verified structure protection gaps connection={}->{}; construction will skip only overlapping columns",
+            LOGGER.info("【保留已确认建筑的保护缺口，施工跳过重叠列】 " + "RoadWeaver retained verified structure protection gaps connection={}->{}; construction will skip only overlapping columns",
                     connection.from(), connection.to());
         }
         InitialGenerationProgressTracker.advanceCurrentRoadTask(980, "road_finalizing");
@@ -249,7 +251,7 @@ public final class PathFinalizeOps {
         var server = level == null ? null : level.getServer();
         if (server == null) return null;
         if (server.isSameThread()) {
-            LOGGER.error("RoadWeaver refused synchronous corridor resolution on the server thread connection={}->{}",
+            LOGGER.error("【拒绝在服务端线程同步解析结构走廊】 " + "RoadWeaver refused synchronous corridor resolution on the server thread connection={}->{}",
                     connection.from(), connection.to());
             return null;
         }
@@ -272,7 +274,7 @@ public final class PathFinalizeOps {
             for (int localRepairRadius : LOCAL_STRUCTURE_DETOUR_BLOCKS) {
                 InitialGenerationProgressTracker.advanceCurrentRoadTask(
                         360, "road_structure_local_detour_" + localRepairRadius);
-                LOGGER.info("RoadWeaver starting single building local repair radius={} fine-precision connection={}->{}",
+                LOGGER.info("【开始单处建筑的精细局部修复】 " + "RoadWeaver starting single building local repair radius={} fine-precision connection={}->{}",
                         localRepairRadius, connection.from(), connection.to());
                 refreshPlanningSnapshot(level, connection, working);
                 ExactStructureRepairOutcome outcome =
@@ -286,7 +288,7 @@ public final class PathFinalizeOps {
                     // 直接停止升级并保留原路 + 保护缺口（既有兜底路径），
                     // 避免后面还要为这条超长路重算坡度、验证数万列地形再判失败。
                     if (exact.size() > detourBaselineStations * LOCAL_DETOUR_MAX_LENGTH_RATIO) {
-                        LOGGER.warn("RoadWeaver building local detour stopped early: detour would grow route "
+                        LOGGER.warn("【建筑绕行增长超限，保留建筑保护缺口】 " + "RoadWeaver building local detour stopped early: detour would grow route "
                                         + "beyond {}x baseline ({} -> {} stations, ratio={}) at radius={}; "
                                         + "retaining route with building protection gap connection={}->{}",
                                 LOCAL_DETOUR_MAX_LENGTH_RATIO, detourBaselineStations, exact.size(),
@@ -296,14 +298,14 @@ public final class PathFinalizeOps {
                     }
                     refreshPlanningSnapshot(level, connection, exact);
                     if (!intersectsPreparedPath(level, connection, exact, accurate)) {
-                        LOGGER.info("RoadWeaver accepted single building local repair radius={} fine-precision connection={}->{}",
+                        LOGGER.info("【单处建筑精细局部修复已接受】 " + "RoadWeaver accepted single building local repair radius={} fine-precision connection={}->{}",
                                 localRepairRadius, connection.from(), connection.to());
                         return exact;
                     }
                     working = List.copyOf(exact);
                 }
                 if (!intersectsPreparedPath(level, connection, working, accurate)) {
-                    LOGGER.info("RoadWeaver accepted verified structure protection gap after building radius={} connection={}->{}",
+                    LOGGER.info("【建筑局部修复后保留已确认的保护缺口】 " + "RoadWeaver accepted verified structure protection gap after building radius={} connection={}->{}",
                             localRepairRadius, connection.from(), connection.to());
                     return working;
                 }
@@ -331,7 +333,7 @@ public final class PathFinalizeOps {
                 }
                 if (rejectedCenter != null
                         && RoutePrecisionRetryPolicy.shouldStopIdenticalConflictStreak(identicalConflictStreak, endpointApproach)) {
-                    LOGGER.warn("RoadWeaver building local detour stopped early: identical conflict center=({},{}) "
+                    LOGGER.warn("【同一冲突中心连续修复失败，停止扩大并保留保护缺口】 " + "RoadWeaver building local detour stopped early: identical conflict center=({},{}) "
                                     + "failed at {} consecutive radius steps (last {} -> {}); endpointApproach={}; "
                                     + "retaining route with building protection gap connection={}->{}",
                             rejectedCenter.getX(), rejectedCenter.getZ(), identicalConflictStreak,
@@ -347,7 +349,7 @@ public final class PathFinalizeOps {
                 // (loading screen) is unaffected.
                 if (!InitialGenManager.isActive()
                         && RuntimeLoadPolicy.isGameplayForegroundProtected()) {
-                    LOGGER.info("RoadWeaver deferred building local detour escalation under gameplay pressure "
+                    LOGGER.info("【游玩负载较高，延后扩大建筑局部绕行范围】 " + "RoadWeaver deferred building local detour escalation under gameplay pressure "
                                     + "completedRadius={} connection={}->{}",
                             localRepairRadius, connection.from(), connection.to());
                     break;
@@ -355,11 +357,11 @@ public final class PathFinalizeOps {
             }
             // Every detour radius was exhausted. Keep the original path and
             // leave a building protection gap instead of killing the route.
-            LOGGER.warn("RoadWeaver building local detours exhausted; retaining route with building protection gap connection={}->{}",
+            LOGGER.warn("【建筑局部绕行耗尽，保留保护缺口】 " + "RoadWeaver building local detours exhausted; retaining route with building protection gap connection={}->{}",
                     connection.from(), connection.to());
             return working;
         } catch (RuntimeException failure) {
-            LOGGER.error("RoadWeaver failed to resolve the exact structure corridor connection={}->{}",
+            LOGGER.error("【精确结构走廊解析失败】 " + "RoadWeaver failed to resolve the exact structure corridor connection={}->{}",
                     connection.from(), connection.to(), failure);
             throw failure;
         }
@@ -409,7 +411,7 @@ public final class PathFinalizeOps {
         // Lake detours are exhausted. Bridge first; when no bridge is
         // buildable keep the original corridor and let the final water
         // validator mark the exact wet stations as a protected gap.
-        LOGGER.warn("RoadWeaver exhausted local lake detours; retaining route for bridge/water gap fallback connection={}->{}",
+        LOGGER.warn("【湖泊局部绕行耗尽，保留路线供桥梁或水域缺口处理】 " + "RoadWeaver exhausted local lake detours; retaining route for bridge/water gap fallback connection={}->{}",
                 connection.from(), connection.to());
         return working;
     }
@@ -426,7 +428,7 @@ public final class PathFinalizeOps {
         if ((!streams.isAvailable() && !streams.isFailed())
                 || !AccurateGradeRepairPlanner.intersectsRiver(path, width, streams)) return path;
 
-        LOGGER.info("RoadWeaver starting river local repair window={} connection={}->{}",
+        LOGGER.info("【开始河流局部修复】 " + "RoadWeaver starting river local repair window={} connection={}->{}",
                 RIVER_LOCAL_DETOUR_BLOCKS, connection.from(), connection.to());
         List<BlockPos> repaired = LakeRiverRepair.repairRiverIntersections(
                 path, level, accurate, pathCfg.withAStarStep(1), connection, streams,
@@ -434,14 +436,14 @@ public final class PathFinalizeOps {
         if (repaired != null && !repaired.equals(path)
                 && !AccurateGradeRepairPlanner.intersectsRiver(repaired, width, streams)) {
             refreshPlanningSnapshot(level, connection, repaired);
-            LOGGER.info("RoadWeaver accepted river local repair connection={}->{}",
+            LOGGER.info("【河流局部修复已接受】 " + "RoadWeaver accepted river local repair connection={}->{}",
                     connection.from(), connection.to());
             return repaired;
         }
         // Keep the original path. FinalRoadWaterValidator will mark the exact
         // failing station as PROTECTED_GAP instead of rejecting unrelated road
         // sections or forcing an endpoint candidate solely for a short river.
-        LOGGER.warn("RoadWeaver river local repair unavailable; retaining route for water protection gap "
+        LOGGER.warn("【河流局部修复不可用，保留路线供水域保护缺口处理】 " + "RoadWeaver river local repair unavailable; retaining route for water protection gap "
                         + "connection={}->{}", connection.from(), connection.to());
         return path;
     }
@@ -480,7 +482,7 @@ public final class PathFinalizeOps {
         List<RoadSegmentPlacement> rebuilt = buildSegments(
                 repaired, width, level, cache, null, cache.getAccurateSampler(level), connection);
         if (rebuilt == null || rebuilt.size() < 3) return existing;
-        LOGGER.info("RoadWeaver rebuilt road after river local repair connection={}->{} nodes={} -> {}",
+        LOGGER.info("【河流局部修复后已重建道路】 " + "RoadWeaver rebuilt road after river local repair connection={}->{} nodes={} -> {}",
                 connection.from(), connection.to(), existing.size(), rebuilt.size());
         return rebuilt;
     }

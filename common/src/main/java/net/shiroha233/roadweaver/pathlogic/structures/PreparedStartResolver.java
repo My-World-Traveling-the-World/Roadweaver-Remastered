@@ -1,6 +1,8 @@
 /* 文件职责：把结构起点解析成「已准备」的方块盒 —— 只解析与缓存，不做避让判定。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.level.ChunkPos;
@@ -105,7 +107,7 @@ public final class PreparedStartResolver {
             timing.setColumns(STRUCTURE_START_BATCH_SIZE * batchWindow);
             timing.observeWorkerThread();
         }
-        LOGGER.info("RoadWeaver exact structure start plan: dimension={} total={} cached={} unresolved={} batchSize={} windowBatches={}",
+        LOGGER.info("【精确结构起点解析计划】 " + "RoadWeaver exact structure start plan: dimension={} total={} cached={} unresolved={} batchSize={} windowBatches={}",
                 level.dimension().location(), starts.size(), starts.size() - unresolved.size(),
                 unresolved.size(), STRUCTURE_START_BATCH_SIZE, batchWindow);
         return resolvePreparedStartWindow(
@@ -181,7 +183,7 @@ public final class PreparedStartResolver {
                                             ? starts.size()
                                             : starts.size() * 1000.0D / elapsedMs;
                                     LOGGER.info(
-                                            "RoadWeaver exact structure window timing: dimension={} starts={} windowBatches={} elapsedMs={} startsPerSecond={}",
+                                            "【精确结构起点窗口吞吐与耗时】 " + "RoadWeaver exact structure window timing: dimension={} starts={} windowBatches={} elapsedMs={} startsPerSecond={}",
                                             level.dimension().location(), starts.size(),
                                             batchWindow, elapsedMs,
                                             String.format(java.util.Locale.ROOT, "%.2f", startsPerSecond));
@@ -234,11 +236,11 @@ public final class PreparedStartResolver {
                             || end == starts.size()
                             || offset % (STRUCTURE_START_BATCH_SIZE * 64) == 0;
                     if (milestone) {
-                        LOGGER.info("RoadWeaver exact structure batch timing: dimension={} offset={} size={} attempt={} elapsedMs={} success={}",
+                        LOGGER.info("【精确结构起点批次结果与耗时】 " + "RoadWeaver exact structure batch timing: dimension={} offset={} size={} attempt={} elapsedMs={} success={}",
                                 level.dimension().location(), offset, batch.size(), batchAttempt + 1,
                                 elapsedMillis(batchStartedAt), failure == null);
                     } else {
-                        LOGGER.debug("RoadWeaver exact structure batch timing: dimension={} offset={} size={} attempt={} elapsedMs={} success={}",
+                        LOGGER.debug("【精确结构起点批次结果与耗时】 " + "RoadWeaver exact structure batch timing: dimension={} offset={} size={} attempt={} elapsedMs={} success={}",
                                 level.dimension().location(), offset, batch.size(), batchAttempt + 1,
                                 elapsedMillis(batchStartedAt), failure == null);
                     }
@@ -317,7 +319,7 @@ public final class PreparedStartResolver {
                 }
                 long fallback = StructureAvoidanceDiagnostics.DIRECT_STRUCTURE_FALLBACKS.incrementAndGet();
                 if (fallback <= 8 || fallback % 1000 == 0) {
-                    LOGGER.warn("RoadWeaver native structure prediction failed at {}; falling back to real STRUCTURE_STARTS chunk (count={}): {}",
+                    LOGGER.warn("【原生结构预测失败，改查真实结构起点区块】 " + "RoadWeaver native structure prediction failed at {}; falling back to real STRUCTURE_STARTS chunk (count={}): {}",
                             pos, fallback, cause.toString());
                 }
                 return resolvePredictedChunkBoxesAsync(level, pos);
@@ -659,12 +661,12 @@ public final class PreparedStartResolver {
         }
         StructureAvoidanceCache.STARTUP_PINNED_START_BOXES.clear();
         trimBounded(StructureAvoidanceCache.PREPARED_START_BOXES, StructureAvoidanceCache.PREPARED_START_ORDER, PREPARED_START_CACHE_CAPACITY);
-        LOGGER.info("RoadWeaver exact structure cache compacted after initial generation: before={} pinned={} after={} capacity={}",
+        LOGGER.info("【初始生成结束后精确结构缓存已压缩】 " + "RoadWeaver exact structure cache compacted after initial generation: before={} pinned={} after={} capacity={}",
                 before, pinned, StructureAvoidanceCache.PREPARED_START_BOXES.size(), PREPARED_START_CACHE_CAPACITY);
         // ★ 2026-09-26：把"是否有重复解析"的实测一并打出来。
         //   WorkBuddy §6 的 O-1/O-2（加大缓存 / 持久化解析结果）只有在这条
         //   显示"淘汰数显著"时才值得做 —— 否则纯属改动红线却零收益。
-        LOGGER.info("RoadWeaver prepared-start cache stats: hits={} evictions={} capacity={} size={}",
+        LOGGER.info("【结构起点缓存命中与驱逐统计】 " + "RoadWeaver prepared-start cache stats: hits={} evictions={} capacity={} size={}",
                 StructureAvoidanceDiagnostics.PREPARED_CACHE_HITS.get(), PREPARED_CACHE_EVICTIONS.get(),
                 PREPARED_START_CACHE_CAPACITY, StructureAvoidanceCache.PREPARED_START_BOXES.size());
         // ★ 0.8.402：同时输出诊断汇总（Holder identity 漏命中探测结果）。

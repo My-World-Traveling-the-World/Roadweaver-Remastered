@@ -1,6 +1,8 @@
 /* 文件职责：持久化结构位置、来源和道路连接状态。 */
 package net.shiroha233.roadweaver.persistence.files;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
@@ -217,7 +219,7 @@ public final class StructureFileStorage {
                     || removed.contains(posKey(connection.to())));
         });
         save(level, state);
-        LOGGER.info("RoadWeaver pruned unknown non-spawn endpoints removed={} spawn={}",
+        LOGGER.info("【已清理不属于出生点的未知端点】 " + "RoadWeaver pruned unknown non-spawn endpoints removed={} spawn={}",
                 removed.size(), spawn);
         return removed.size();
     }

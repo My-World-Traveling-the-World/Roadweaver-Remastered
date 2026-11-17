@@ -1,6 +1,8 @@
 /* 文件职责：湖与河的相交修复 —— 与结构修复同一套回退纪律，但判据不同。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -103,7 +105,7 @@ public final class LakeRiverRepair {
             BlockPos collision = working.get(Math.max(0, Math.min(conflict.start(), working.size() - 1)));
             if (!accepted) {
                 logLocalSearchDiag("lake-no-bypass");
-                LOGGER.warn("RoadWeaver lake repair could not reroute local conflict detour={} "
+                LOGGER.warn("【湖泊局部绕行未避开冲突】 " + "RoadWeaver lake repair could not reroute local conflict detour={} "
                                 + "conflictEdge={}..{} pos={} windowNodes={}",
                         localDetourBlocks, conflict.start(), conflict.end(), collision, original.size());
                 break;
@@ -116,7 +118,7 @@ public final class LakeRiverRepair {
             replaced.addAll(working.subList(endIndex + 1, working.size()));
             working = replaced;
             repaired++;
-            LOGGER.info("Accepted local RoadWeaver lake reroute: detour={} clearance={} conflictEdge={}..{} "
+            LOGGER.info("【湖泊局部绕行已接受】 " + "Accepted local RoadWeaver lake reroute: detour={} clearance={} conflictEdge={}..{} "
                             + "pos={} nodes={} -> {}",
                     localDetourBlocks, LAKE_REROUTE_CLEARANCE_BLOCKS,
                     conflict.start(), conflict.end(), collision,
@@ -175,7 +177,7 @@ public final class LakeRiverRepair {
                 Bounds window = Bounds.around(working.subList(startIndex, endIndex + 1), margin, 1, null);
                 if (channelSeparatesWindow(window, channels)) {
                     logLocalSearchDiag("river-skipped");
-                    LOGGER.info("RoadWeaver river local repair skipped: channel crosses the whole window "
+                    LOGGER.info("【河道横穿整个局部窗口，没有旁路，跳过河流绕行】 " + "RoadWeaver river local repair skipped: channel crosses the whole window "
                                     + "(no bypass possible) conflictEdge={}..{} window=[{},{} -> {},{}] "
                                     + "connection={}->{}",
                             conflict.start(), conflict.end(),
@@ -203,7 +205,7 @@ public final class LakeRiverRepair {
             working = replaced;
             repaired++;
             logLocalSearchDiag("river-accepted");
-            LOGGER.info("Accepted local RoadWeaver river detour: window={} conflictEdge={}..{} nodes={} -> {}",
+            LOGGER.info("【河流局部绕行已接受】 " + "Accepted local RoadWeaver river detour: window={} conflictEdge={}..{} nodes={} -> {}",
                     margin, conflict.start(), conflict.end(), original.size(), candidate.size());
         }
         return List.copyOf(working);

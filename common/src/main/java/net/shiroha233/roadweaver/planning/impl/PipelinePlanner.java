@@ -1,6 +1,8 @@
 /* 文件职责：把新三层内核（度量→拓扑）接成路网规划器 —— 第六种 planningAlgorithm。 */
 package net.shiroha233.roadweaver.planning.impl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -163,7 +165,7 @@ public final class PipelinePlanner implements NetworkPlanner {
             var layout = SampledTerrainField.planningLayout(minX, minZ, maxX, maxZ, BOUNDS_PADDING, step);
             var work = SampledTerrainField.estimate(layout, BUILDABILITY_SHADOW, nodes.size());
             // 分页访问比例事前未知，同时给出稠密参考和全访问上界，不能冒充当前堆占用。
-            LOGGER.info("[PLANNING-WORKSET] grid={}x{} step={} cells={} samplingDenseHeightBytes={} "
+            LOGGER.info("【规划工作集估计，不包含其他任务及完整对象开销】 " + "[PLANNING-WORKSET] grid={}x{} step={} cells={} samplingDenseHeightBytes={} "
                             + "retainedDenseHeightBytes={} solverDenseReferenceBytes={} solverPagedFullVisitBytes={} "
                             + "targetBytesUpper={} heapMaxBytes={} excludes=pageDirectories,frontier,objects,samplerCaches,otherTasks",
                     layout.columns(), layout.rows(), step, work.cells(), work.samplingHeightBytes(),
@@ -206,7 +208,7 @@ public final class PipelinePlanner implements NetworkPlanner {
                         maxEdgeLenBlocks <= 0 ? null : (from, to) ->
                                 withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks),
                         shadowSurface::waterProxy, evidence -> LOGGER.info(
-                                "[ROUTE-EVIDENCE] id={} stage=coarse selected={} geodesic={} protection=unprepared detail={}",
+                                "【粗候选路网评分证据，尚未确认保护与可施工性】 " + "[ROUTE-EVIDENCE] id={} stage=coarse selected={} geodesic={} protection=unprepared detail={}",
                                 RouteEvidenceId.of(evidenceDimension, evidenceSeed,
                                         RouteEvidenceId.endpoint(evidence.fromX(), evidence.fromZ()),
                                         RouteEvidenceId.endpoint(evidence.toX(), evidence.toZ())),
@@ -227,7 +229,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         if (terrain instanceof TiledTerrainField tiled) {
             // 统计实际请求与驱逐，不把 3 MiB 瓦片缓存冒充总内存上限。
             var stats = tiled.stats();
-            LOGGER.info("[PLANNING-HEIGHT-TILES] attempts={} loaded={} columns={} evictions={} "
+            LOGGER.info("【规划高度瓦片读取、驱逐及保留载荷】 " + "[PLANNING-HEIGHT-TILES] attempts={} loaded={} columns={} evictions={} "
                             + "retainedTiles={} retainedHeightPayloadBytes={} excludes=samplerCaches,objects,temporaryWork",
                     stats.loadAttempts(), stats.loadedTiles(), stats.loadedColumns(), stats.evictions(),
                     stats.retainedTiles(), stats.retainedHeightPayloadBytes());
@@ -244,9 +246,9 @@ public final class PipelinePlanner implements NetworkPlanner {
         QualityGate.Report report = QualityGate.evaluateTopology(
                 topology, nodes, QualityGate.Thresholds.lenient());
         if (report.passed()) {
-            LOGGER.info("RoadWeaver network topology: {}", report.describe());
+            LOGGER.info("【实际下发路网的拓扑指标】 " + "RoadWeaver network topology: {}", report.describe());
         } else {
-            LOGGER.warn("RoadWeaver network topology below gate (REPORT-ONLY, still adopted): {}",
+            LOGGER.warn("【实际路网低于质量门限，仅报告并仍采用】 " + "RoadWeaver network topology below gate (REPORT-ONLY, still adopted): {}",
                     report.describe());
         }
 

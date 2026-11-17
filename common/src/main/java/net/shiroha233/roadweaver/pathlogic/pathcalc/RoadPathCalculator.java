@@ -1,6 +1,8 @@
 /* 文件职责：组织普通道路的精确量化寻路与最终路径段生成。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair.ExactStructureRepairOutcome;
@@ -196,7 +198,7 @@ public final class RoadPathCalculator {
             ConstructionContinuity continuity = inspectConstructionContinuity(road, level, cache);
             long continuityMs = (System.nanoTime() - continuityStartedAt) / 1_000_000L;
             if (continuity.requiresRepair()) {
-                LOGGER.warn("RoadWeaver overriding long-network merge shortcut for unresolved height conflict "
+                LOGGER.warn("【高度冲突未解决，跳过长路网合并捷径并继续修复】 " + "RoadWeaver overriding long-network merge shortcut for unresolved height conflict "
                                 + "segments={} maxFillDepth={} maxCutDepth={} conflictSegment={} owners={} -> {}",
                         road.roadSegmentList() == null ? 0 : road.roadSegmentList().size(),
                         continuity.maxFillDepth(), continuity.maxCutDepth(), continuity.conflictSegment(),
@@ -240,7 +242,7 @@ public final class RoadPathCalculator {
                 if (!java.util.Objects.equals(before.targetY().get(i), after.targetY().get(i))) changed++;
             }
         }
-        LOGGER.info("RoadWeaver merge repair timing path={} nodes={} -> {} changed={} "
+        LOGGER.info("【合并路线修复各阶段耗时】 " + "RoadWeaver merge repair timing path={} nodes={} -> {} changed={} "
                         + "shortcutMs={} continuityMs={} repairMs={} totalMs={}",
                 path, nodesBefore, nodesAfter, changed, shortcutMs, continuityMs, repairMs, totalMs);
     }
@@ -309,7 +311,7 @@ public final class RoadPathCalculator {
             }
         }
         if (!changed) {
-            LOGGER.info("RoadWeaver checked merged route interfaces locally: interfaces={} window={} segments={} owners={} -> {}",
+            LOGGER.info("【合并路线接口局部检查完成】 " + "RoadWeaver checked merged route interfaces locally: interfaces={} window={} segments={} owners={} -> {}",
                     ordered.size(), NETWORK_MERGE_INTERFACE_WINDOW, size,
                     road.ownerA2dKey(), road.ownerB2dKey());
             return road;
@@ -320,7 +322,7 @@ public final class RoadPathCalculator {
             profile.add(new BlockPos(center.getX(), workingHeights.get(i), center.getZ()));
         }
         RoadData rebuilt = rebuildRoadDataFromProfile(road, profile, level, cache, connection);
-        LOGGER.info("RoadWeaver repaired merged route interfaces locally: interfaces={} window={} segments={} owners={} -> {}",
+        LOGGER.info("【合并路线接口局部修复完成】 " + "RoadWeaver repaired merged route interfaces locally: interfaces={} window={} segments={} owners={} -> {}",
                 ordered.size(), NETWORK_MERGE_INTERFACE_WINDOW, size,
                 road.ownerA2dKey(), road.ownerB2dKey());
         return rebuilt == null ? road : rebuilt;
@@ -350,7 +352,7 @@ public final class RoadPathCalculator {
                 ? null : road.roadSegmentList().get(0).middlePos();
         BlockPos tail = road.roadSegmentList().get(last) == null
                 ? null : road.roadSegmentList().get(last).middlePos();
-        LOGGER.info("RoadWeaver endpoint repair profile stage={} connection={}->{} stations={} "
+        LOGGER.info("【端点修复后的纵断面诊断】 " + "RoadWeaver endpoint repair profile stage={} connection={}->{} stations={} "
                         + "profileStart={} startPos=({},{}) profileEnd={} endPos=({},{})",
                 stage,
                 connection == null ? "?" : connection.from(),
@@ -420,19 +422,19 @@ public final class RoadPathCalculator {
                     if (!reroutedContinuity.requiresRepair()) {
                         CONSTRUCTION_CONFLICT_HINTS.remove(
                                 net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(connection));
-                        LOGGER.info("RoadWeaver accepted pre-construction height reroute "
+                        LOGGER.info("【施工前高度绕行已接受】 " + "RoadWeaver accepted pre-construction height reroute "
                                         + "maxFillDepth={} maxCutDepth={} conflictSegment={}",
                                 continuity.maxFillDepth(), continuity.maxCutDepth(), continuity.conflictSegment());
                         return reroutedRoad;
                     }
-                    LOGGER.warn("RoadWeaver pre-construction height reroute still unsafe "
+                    LOGGER.warn("【施工前高度绕行仍不安全】 " + "RoadWeaver pre-construction height reroute still unsafe "
                                     + "maxFillDepth={} maxCutDepth={} conflictSegment={}",
                             reroutedContinuity.maxFillDepth(), reroutedContinuity.maxCutDepth(),
                             reroutedContinuity.conflictSegment());
                 } else {
                     // Logging-only diagnostic: the detour profile could not be
                     // rebuilt into road segments.
-                    LOGGER.warn("RoadWeaver height reroute rebuild failed conflictSegment={} "
+                    LOGGER.warn("【高度绕行后的道路重建失败】 " + "RoadWeaver height reroute rebuild failed conflictSegment={} "
                                     + "nodes={} reason={} owners={} -> {}",
                             continuity.conflictSegment(), rerouted.size(),
                             consumeRebuildFailureReason(),
@@ -441,7 +443,7 @@ public final class RoadPathCalculator {
             } else {
                 // Logging-only diagnostic: reroute returned null or kept the
                 // original corridor unchanged.
-                LOGGER.warn("RoadWeaver height reroute unavailable conflictSegment={} "
+                LOGGER.warn("【高度绕行未产生可用替代走廊】 " + "RoadWeaver height reroute unavailable conflictSegment={} "
                                 + "reason={} owners={} -> {}",
                         continuity.conflictSegment(),
                         rerouted == null ? "null_reroute" : "unchanged_corridor",
@@ -450,7 +452,7 @@ public final class RoadPathCalculator {
         } else if (continuity.requiresRepair() && conflictIsPhysicalSpan) {
             // Logging-only diagnostic: the conflict sits on a physical span
             // (bridge/tunnel/reuse/gap), so the height reroute is skipped.
-            LOGGER.info("RoadWeaver height reroute skipped: conflict lies on a physical span "
+            LOGGER.info("【冲突位于物理跨度上，跳过高度绕行】 " + "RoadWeaver height reroute skipped: conflict lies on a physical span "
                             + "conflictSegment={} maxFillDepth={} maxCutDepth={} owners={} -> {}",
                     continuity.conflictSegment(), continuity.maxFillDepth(), continuity.maxCutDepth(),
                     road.ownerA2dKey(), road.ownerB2dKey());
@@ -473,7 +475,7 @@ public final class RoadPathCalculator {
                         ? Integer.MAX_VALUE
                         : continuity.minimumTerrainBySegment()[continuity.conflictSegment()];
                 FillConflictWidth width = conflictWidth(road, continuity);
-                LOGGER.info("RoadWeaver continuity preflight: sampledColumns={} maxFillDepth={} maxCutDepth={} "
+                LOGGER.info("【施工连续性预检的挖填与冲突位置】 " + "RoadWeaver continuity preflight: sampledColumns={} maxFillDepth={} maxCutDepth={} "
                             + "conflictSegment={} conflictPos={} targetY={} terrainY={} unsafeFillRange={} "
                             + "unsafeWidthBlocks={} owners={} -> {}",
                         continuity.sampledColumns(), continuity.maxFillDepth(), continuity.maxCutDepth(),
@@ -490,7 +492,7 @@ public final class RoadPathCalculator {
                     CONSTRUCTION_CONFLICT_HINTS.remove(
                             net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(connection));
                     BlockPos bConflict = conflictPosition(road, continuity.conflictSegment());
-                    LOGGER.info("RoadWeaver accepted buildable local centre grade owners={} -> {} "
+                    LOGGER.info("【已接受可施工的局部中心纵坡】 " + "RoadWeaver accepted buildable local centre grade owners={} -> {} "
                                     + "maxCutDepth={} maxFillDepth={} conflictSegment={} conflictPos=({},{})",
                             road.ownerA2dKey(), road.ownerB2dKey(), continuity.maxCutDepth(),
                             continuity.maxFillDepth(), continuity.conflictSegment(),
@@ -499,7 +501,7 @@ public final class RoadPathCalculator {
                     return road;
                 }
                 BlockPos conflict = conflictPosition(road, continuity.conflictSegment());
-                LOGGER.warn("RoadWeaver rejected route with unresolved construction continuity conflict "
+                LOGGER.warn("【施工连续性冲突未解决，拒绝路线】 " + "RoadWeaver rejected route with unresolved construction continuity conflict "
                                 + "owners={} -> {} maxFillDepth={} conflictSegment={} conflictPos={}",
                         road.ownerA2dKey(), road.ownerB2dKey(), continuity.maxFillDepth(),
                         continuity.conflictSegment(), conflict);
@@ -512,7 +514,7 @@ public final class RoadPathCalculator {
         if (candidate == null) {
             // Logging-only diagnostic: the repaired profile could not be
             // rebuilt into road segments; the original road is returned.
-            LOGGER.warn("RoadWeaver continuity repair rebuild failed owners={} -> {} conflictSegment={} "
+            LOGGER.warn("【连续性修复后的道路重建失败】 " + "RoadWeaver continuity repair rebuild failed owners={} -> {} conflictSegment={} "
                             + "nodes={} reason={}",
                     road.ownerA2dKey(), road.ownerB2dKey(), continuity.conflictSegment(), repaired.size(),
                     consumeRebuildFailureReason());
@@ -526,7 +528,7 @@ public final class RoadPathCalculator {
         if (!candidateValidation.valid()) {
             // Logging-only diagnostic: the repaired candidate failed final
             // structural validation.
-            LOGGER.warn("RoadWeaver continuity repair candidate invalid reason={} index={} owners={} -> {}",
+            LOGGER.warn("【连续性修复候选数据无效】 " + "RoadWeaver continuity repair candidate invalid reason={} index={} owners={} -> {}",
                     candidateValidation.reason(), candidateValidation.index(),
                     road.ownerA2dKey(), road.ownerB2dKey());
             return continuity.requiresRepair() ? null : road;
@@ -546,7 +548,7 @@ public final class RoadPathCalculator {
         if (repairedContinuity.requiresRepair()
                 && !isBuildableContinuity(repairedContinuity)
                 && isBuildableContinuity(continuity)) {
-            LOGGER.info("RoadWeaver kept original profile because repair made a buildable route unbuildable "
+            LOGGER.info("【修复使原可施工路线失效，保留原纵断面】 " + "RoadWeaver kept original profile because repair made a buildable route unbuildable "
                             + "owners={} -> {} before(cut={},fill={}) after(cut={},fill={}) conflictSegment={}",
                     road.ownerA2dKey(), road.ownerB2dKey(),
                     continuity.maxCutDepth(), continuity.maxFillDepth(),
@@ -559,7 +561,7 @@ public final class RoadPathCalculator {
                 CONSTRUCTION_CONFLICT_HINTS.remove(
                         net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(connection));
                 BlockPos bConflict = conflictPosition(road, repairedContinuity.conflictSegment());
-                LOGGER.info("RoadWeaver accepted buildable residual local centre grade owners={} -> {} "
+                LOGGER.info("【剩余局部中心纵坡可施工，接受该修复】 " + "RoadWeaver accepted buildable residual local centre grade owners={} -> {} "
                                 + "maxCutDepth={} maxFillDepth={} conflictSegment={} conflictPos=({},{}) nodes={} -> {}",
                         road.ownerA2dKey(), road.ownerB2dKey(),
                         repairedContinuity.maxCutDepth(), repairedContinuity.maxFillDepth(),
@@ -573,7 +575,7 @@ public final class RoadPathCalculator {
             // 0.9.087：**必须同时打 maxCutDepth**。旧日志只打 maxFillDepth ——
             // 真机 5 条拒绝的 fill 全是 2~3（远低于上限），真正越界的是 cut（19 / 25），
             // 而那个字段根本没打出来，排查时完全看不见。
-            LOGGER.warn("RoadWeaver rejected route after incomplete construction continuity repair "
+            LOGGER.warn("【连续性修复不完整且仍超挖填限制，拒绝路线】 " + "RoadWeaver rejected route after incomplete construction continuity repair "
                             + "owners={} -> {} maxCutDepth={} (limit={}) maxFillDepth={} (limit={}) "
                             + "conflictSegment={} conflictPos={}",
                     road.ownerA2dKey(), road.ownerB2dKey(),
@@ -584,7 +586,7 @@ public final class RoadPathCalculator {
         }
         CONSTRUCTION_CONFLICT_HINTS.remove(
                 net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(connection));
-        LOGGER.info("RoadWeaver accepted local continuity/height repair owners={} -> {} nodes={} -> {}",
+        LOGGER.info("【局部连续性和高度修复已接受】 " + "RoadWeaver accepted local continuity/height repair owners={} -> {} nodes={} -> {}",
                 road.ownerA2dKey(), road.ownerB2dKey(), road.roadSegmentList().size(), rebuilt.size());
         return candidate;
     }

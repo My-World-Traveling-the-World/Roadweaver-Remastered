@@ -1,6 +1,8 @@
 /* 文件职责：路径度量与小工具 —— 指纹、快照等待超时、坡度记录、最近站、直连 A*。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps;
 import net.shiroha233.roadweaver.planning.terrain.StructureRepair.ExactStructureRepairOutcome;
@@ -140,7 +142,7 @@ public final class PathMetricsOps {
             if (hinted != null && path != null && path.size() >= 3) {
                 int segment = nearestSegmentIndex(path, hinted);
                 if (segment >= 0) {
-                    LOGGER.info("RoadWeaver local-repair conflict-hint consumed connection={}->{} hint={},{} segment={} nodes={}",
+                    LOGGER.info("【已读取局部修复的持久冲突提示】 " + "RoadWeaver local-repair conflict-hint consumed connection={}->{} hint={},{} segment={} nodes={}",
                             connection == null ? "?" : connection.from(),
                             connection == null ? "?" : connection.to(),
                             hinted.getX(), hinted.getZ(), segment, path.size());
@@ -148,11 +150,11 @@ public final class PathMetricsOps {
                             AccurateGradeRepairPlanner.rerouteConstructionHeightConflict(
                                     path, segment, level, accurate, pathCfg, connection));
                     if (!rerouted.equals(path)) {
-                        LOGGER.info("RoadWeaver local-repair conflict reroute MERGED segment={} nodes={} -> {}",
+                        LOGGER.info("【冲突局部绕行已拼回原路线】 " + "RoadWeaver local-repair conflict reroute MERGED segment={} nodes={} -> {}",
                                 segment, path.size(), rerouted.size());
                         return List.copyOf(rerouted);
                     }
-                    LOGGER.warn("RoadWeaver local-repair conflict reroute could not bypass, keeping original gap "
+                    LOGGER.warn("【局部绕行未避开冲突，保留原保护缺口】 " + "RoadWeaver local-repair conflict reroute could not bypass, keeping original gap "
                                     + "connection={}->{} hint={},{} segment={}",
                             connection == null ? "?" : connection.from(),
                             connection == null ? "?" : connection.to(),
@@ -160,13 +162,13 @@ public final class PathMetricsOps {
                 }
             }
             if (hinted != null) {
-                LOGGER.info("RoadWeaver local-repair hint found but no usable segment, falling back to whole-path repair "
+                LOGGER.info("【冲突提示没有可用局部段，转入整路修复】 " + "RoadWeaver local-repair hint found but no usable segment, falling back to whole-path repair "
                                 + "connection={}->{} hint={},{}",
                         connection == null ? "?" : connection.from(),
                         connection == null ? "?" : connection.to(),
                         hinted.getX(), hinted.getZ());
             }
-            LOGGER.info("RoadWeaver whole-path grade repair connection={}->{} nodes={}",
+            LOGGER.info("【开始整路纵坡修复】 " + "RoadWeaver whole-path grade repair connection={}->{} nodes={}",
                     connection == null ? "?" : connection.from(),
                     connection == null ? "?" : connection.to(),
                     path == null ? 0 : path.size());
@@ -273,7 +275,7 @@ public final class PathMetricsOps {
         long added = after.stream().filter(p -> !before.contains(p)).count();
         long removed = before.stream().filter(p -> !after.contains(p)).count();
         // 比较真正铺装的唯一列与站距；站数相同也可能挤进保护区或漏一列。
-        LOGGER.info("[LAND-RELAX-SHADOW] tag={} changed={} base={} withRelaxProtection={} "
+        LOGGER.info("【第二次陆地松弛的影子产物对照】 " + "[LAND-RELAX-SHADOW] tag={} changed={} base={} withRelaxProtection={} "
                         + "shadow={} withoutRelaxProtection={} maxStep={}->{} columns={}->{} added={} removed={}",
                 tag, !base.equals(shadow), GeometryDriftObserver.measure(baseCenters),
                 describePreparedProtection(level, connection, base), GeometryDriftObserver.measure(shadowCenters),
@@ -333,13 +335,13 @@ public final class PathMetricsOps {
                         // 从 1217 涨到 2067（+70%），8 次局部 splice 的成果全被丢弃，
                         // 路面上留下 61 处来回折角。只有长度增幅不超过阈值才换用它。
                         if (unsmoothed.size() <= Math.round(curved.size() * UNSMOOTHED_MAX_LENGTH_RATIO)) {
-                            LOGGER.info("RoadWeaver preferred unsmoothed route: protection gaps {} -> {} "
+                            LOGGER.info("【未平滑路线保护缺口更少，采用未平滑产物】 " + "RoadWeaver preferred unsmoothed route: protection gaps {} -> {} "
                                             + "curvedSegments={} unsmoothedSegments={} connection={}->{}",
                                     curvedGaps, unsmoothedGaps, curved.size(), unsmoothed.size(),
                                     connection.from(), connection.to());
                             return unsmoothed;
                         }
-                        LOGGER.info("RoadWeaver kept smoothed route: unsmoothed variant too long "
+                        LOGGER.info("【未平滑路线过长，保留平滑产物】 " + "RoadWeaver kept smoothed route: unsmoothed variant too long "
                                         + "protection gaps {} -> {} curvedSegments={} unsmoothedSegments={} "
                                         + "connection={}->{}",
                                 curvedGaps, unsmoothedGaps, curved.size(), unsmoothed.size(),
@@ -347,7 +349,7 @@ public final class PathMetricsOps {
                     }
                 }
             }
-            LOGGER.warn("RoadWeaver retained route with internal building protection gap gaps={} connection={}->{}",
+            LOGGER.warn("【保留含内部建筑保护缺口的路线】 " + "RoadWeaver retained route with internal building protection gap gaps={} connection={}->{}",
                     curvedGaps, connection.from(), connection.to());
             return curved;
         }
@@ -358,18 +360,18 @@ public final class PathMetricsOps {
         }
         if (linear != null && linear.size() >= 2
                 && !protection.intersects().test(linear)) {
-            LOGGER.info("RoadWeaver retained unsmoothed route to preserve a structure connection={}->{}",
+            LOGGER.info("【为保护建筑保留未平滑路线】 " + "RoadWeaver retained unsmoothed route to preserve a structure connection={}->{}",
                     connection.from(), connection.to());
             return linear;
         }
         if (linear != null && linear.size() >= 3 && connection != null
                 && protection.gapCount().applyAsInt(linear) > 0) {
-            LOGGER.warn("RoadWeaver retained linear route with internal building protection gap connection={}->{}",
+            LOGGER.warn("【保留含内部建筑保护缺口的线性路线】 " + "RoadWeaver retained linear route with internal building protection gap connection={}->{}",
                     connection.from(), connection.to());
             return linear;
         }
         LAST_SEGMENT_FAILURE.set("still_intersects_protected_structure");
-        LOGGER.warn("RoadWeaver rejected post-processed route that still intersects a protected structure connection={}->{}",
+        LOGGER.warn("【后处理后仍侵入保护建筑，拒绝路线】 " + "RoadWeaver rejected post-processed route that still intersects a protected structure connection={}->{}",
                 connection.from(), connection.to());
         return null;
     }
@@ -553,7 +555,7 @@ public final class PathMetricsOps {
             awaitPlanningSnapshot(
                     ensurePlanningSnapshotForPathAsync(level, ownerConnection, rawPath));
         } catch (RuntimeException snapshotFailure) {
-            LOGGER.warn("RoadWeaver could not prepare a structure corridor for direct route connection={}->{}",
+            LOGGER.warn("【无法为直连路线准备结构走廊】 " + "RoadWeaver could not prepare a structure corridor for direct route connection={}->{}",
                     ownerConnection.from(), ownerConnection.to(), snapshotFailure);
             return PathCalculationResult.failure();
         }

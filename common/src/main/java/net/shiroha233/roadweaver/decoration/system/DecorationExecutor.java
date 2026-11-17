@@ -1,6 +1,8 @@
 /* 文件职责：装饰执行器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.decoration.base.Decoration;
 import net.shiroha233.roadweaver.decoration.material.BiomeWoodAware;
 import net.shiroha233.roadweaver.decoration.material.WoodSelector;
@@ -35,7 +37,7 @@ public final class DecorationExecutor {
                 }
                 dec.place();
             } catch (Throwable t) {
-                LOGGER.warn("Decoration placement failed: {}", dec.getClass().getSimpleName(), t);
+                LOGGER.warn("【道路装饰放置失败】 " + "Decoration placement failed: {}", dec.getClass().getSimpleName(), t);
             } finally {
                 it.remove();
             }

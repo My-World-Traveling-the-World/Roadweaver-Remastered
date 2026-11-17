@@ -1,6 +1,8 @@
 /* 文件职责：保留角色优先级及 FIFO，并将闸门拒绝、换世界和停服传递到真实任务终态。 */
 package net.shiroha233.roadweaver.runtime;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Objects;
@@ -65,14 +67,14 @@ final class PrioritizedTask implements Runnable, Comparable<PrioritizedTask> {
                 allowed = false;
             } catch (Throwable gateFailure) {
                 // 保留旧契约：非取消的闸门故障记录后放行，不能把 Future 静默丢掉。
-                LOGGER.warn("RoadWeaver admission gate failed on role={}; running task anyway", role, gateFailure);
+                LOGGER.warn("【任务准入门异常，按既有规则继续执行任务】 " + "RoadWeaver admission gate failed on role={}; running task anyway", role, gateFailure);
             }
             // 闸门退出和执行之间再核对；换代、停服、取消都不能被失败开放分支绕过。
             if (allowed && !expired() && !Thread.currentThread().isInterrupted()) delegate.run();
             else cancelTask();
         } catch (Throwable failure) {
             cancelTask();
-            LOGGER.warn("RoadWeaver task failed on role={} (not re-queued)", role, failure);
+            LOGGER.warn("【工作线程任务失败，本任务不重新入队】 " + "RoadWeaver task failed on role={} (not re-queued)", role, failure);
         } finally {
             ThreadPoolManager.restoreTaskRole(previous);
             synchronized (this) { runner = null; }

@@ -1,6 +1,8 @@
 /* 文件职责：已加载区块的道路被动回填 —— 每次限量，刻意不主动加载区块。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
@@ -164,7 +166,7 @@ public final class LoadedChunkRoadBackfill {
         }
         if (pass.placed() > 0 || !pass.noConstruction().isEmpty()) {
             RoadConstructionLedger.flush(level);
-            LOGGER.info("RoadWeaver loaded-chunk construction backfill: candidates={} loaded={} processed={} "
+            LOGGER.info("【已加载区块回填的查询、施工和结案统计】 " + "RoadWeaver loaded-chunk construction backfill: candidates={} loaded={} processed={} "
                             + "placed={} noConstruction={} fullLookups={} elapsedMs={}",
                     expanded.size(), pass.loaded(), pass.processed(), pass.placed(), pass.noConstruction().size(),
                     pass.fullLookups(), (System.nanoTime() - backfillStartedAt) / 1_000_000L);

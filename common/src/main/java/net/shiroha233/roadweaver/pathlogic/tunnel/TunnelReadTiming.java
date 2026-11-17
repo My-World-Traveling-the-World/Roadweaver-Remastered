@@ -1,6 +1,8 @@
 /* 文件职责：可选的隧道阶段计时，只统计本包直接发出的世界读请求。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.WorldGenLevel;
@@ -70,7 +72,7 @@ final class TunnelReadTiming {
             if (previous == null) ACTIVE.remove();
             else ACTIVE.set(previous);
             RoadTunnelBuilder.LOGGER.info(
-                    "[TUNNEL-READ-TIMING] phase={} pos={} completed={} terrainCalls={} terrainColumns={} rockCalls={} rockColumns={} directBlockReads={} totalUs={}",
+                    "【隧道地形列、岩层列和直接读块耗时】 " + "[TUNNEL-READ-TIMING] phase={} pos={} completed={} terrainCalls={} terrainColumns={} rockCalls={} rockColumns={} directBlockReads={} totalUs={}",
                     phase, anchor, completed, terrainCalls, terrainColumns.size(), rockCalls,
                     rockColumns.size(), blockReads, totalUs);
         }

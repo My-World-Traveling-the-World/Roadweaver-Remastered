@@ -1,6 +1,8 @@
 /* 文件职责：将 Minecraft density function DAG 编译为 OpenCL 可执行的紧凑多根图。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +72,7 @@ public final class DensityGraphCompiler {
         } catch (UnsupportedDensityGraphException e) {
             return DensityGraphCompileResult.unsupported(e.getMessage());
         } catch (Throwable t) {
-            LOGGER.info("OpenCL density graph compile failed: root={} error={} message={}",
+            LOGGER.info("【OpenCL粗密度图编译失败】 " + "OpenCL density graph compile failed: root={} error={} message={}",
                     root.getClass().getName(),
                     t.getClass().getName(),
                     t.getMessage(),
@@ -112,7 +114,7 @@ public final class DensityGraphCompiler {
         } catch (UnsupportedDensityGraphException e) {
             return DensityGraphCompileResult.unsupported(e.getMessage());
         } catch (Throwable failure) {
-            LOGGER.info("OpenCL accurate density graph compile failed: error={} message={}",
+            LOGGER.info("【OpenCL精确密度图编译失败】 " + "OpenCL accurate density graph compile failed: error={} message={}",
                     failure.getClass().getName(), failure.getMessage(), failure);
             return DensityGraphCompileResult.unsupported("accurate density graph compile failed: "
                     + failure.getClass().getSimpleName());
@@ -589,7 +591,7 @@ public final class DensityGraphCompiler {
                 main = readPerlinNoise(runtimeNoise, "mainNoise", 2);
                 if (minLimit != null && maxLimit != null && main != null
                         && BLENDED_NOISE_RECOVERY_LOGGED.compareAndSet(false, true)) {
-                    LOGGER.info("RoadWeaver restored vanilla terrain RandomState for an unseeded blended-noise fallback");
+                    LOGGER.info("【未播种混合噪声兼容路径已恢复原版地形随机状态】 " + "RoadWeaver restored vanilla terrain RandomState for an unseeded blended-noise fallback");
                 }
             }
         }

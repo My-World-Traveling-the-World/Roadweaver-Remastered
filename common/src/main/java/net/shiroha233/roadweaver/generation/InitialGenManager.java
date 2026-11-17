@@ -1,6 +1,8 @@
 /* 文件职责：协调首次世界加载时的道路规划、生成、进度与持久化。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
 import net.shiroha233.roadweaver.planning.RouteRefinementOps;
 import net.shiroha233.roadweaver.planning.ConflictWindowOps;
@@ -198,7 +200,7 @@ public final class InitialGenManager {
         try {
             ModConfig config = ConfigService.get();
             var appearance = config.roadAppearance();
-            LOGGER.info("RoadWeaver config appearance: width={} clearHeight={} tunnelClearHeight={} "
+            LOGGER.info("【启动时实际读取的道路外观与规划配置】 " + "RoadWeaver config appearance: width={} clearHeight={} tunnelClearHeight={} "
                             + "tunnelDrySeal={} culvert={} culvertMaxStations={} culvertMaxWaterDepth={} "
                             + "slopeByArcLength={} slopeLimitEnabled={} maxSlopeStepPer2={} bridge={} "
                             + "planningAlgorithm={}",
@@ -208,18 +210,18 @@ public final class InitialGenManager {
                     appearance.slopeLimitEnabled(), appearance.maxSlopeStepPerTwoSegments(),
                     config.bridgeEnabled(), config.planning().planningAlgorithm());
         } catch (Throwable couldNotRead) {
-            LOGGER.warn("RoadWeaver config appearance could not be read for the startup line", couldNotRead);
+            LOGGER.warn("【无法读取启动配置摘要】 " + "RoadWeaver config appearance could not be read for the startup line", couldNotRead);
         }
 
         if (resumeStage != null) {
             InitialGenerationCheckpointStore.ResumePoint point = resume.orElseThrow();
-            LOGGER.info("RoadWeaver initial generation RESUMING after an unclean shutdown: "
+            LOGGER.info("【检测到上次异常退出，复用持久缓存并继续未完成道路】 " + "RoadWeaver initial generation RESUMING after an unclean shutdown: "
                             + "phase={} done={}/{} atLastSave. "
                             + "Persisted work (structure scan tiles, coarse terrain tiles, completed connections) "
                             + "is reused; the remaining connections continue from where the previous session stopped.",
                     resumeStage.name(), point.done(), point.total());
         } else if (resume.isPresent()) {
-            LOGGER.info("RoadWeaver initial generation starting from the beginning: "
+            LOGGER.info("【没有可用阶段检查点，从头调度并复用匹配缓存】 " + "RoadWeaver initial generation starting from the beginning: "
                     + "checkpoint has no usable phase (legacy schema or malformed file). "
                     + "Persisted caches are still reused where their keys match.");
         }
@@ -227,7 +229,7 @@ public final class InitialGenManager {
         // （statusPriority: GENERATING=3 > PLANNED=2，既不做也不重置）。
         int downgraded = downgradeStaleGenerating(WorldDataProvider.getInstance(), level);
         if (downgraded > 0) {
-            LOGGER.info("RoadWeaver initial resume: {} connection(s) left in GENERATING by the previous "
+            LOGGER.info("【上次未结束的生成任务已重置为待规划】 " + "RoadWeaver initial resume: {} connection(s) left in GENERATING by the previous "
                     + "session were reset to PLANNED and will be regenerated.", downgraded);
         }
 
@@ -310,7 +312,7 @@ public final class InitialGenManager {
         try {
             return InitialGenerationStage.valueOf(phaseName.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException unknown) {
-            LOGGER.warn("RoadWeaver checkpoint contains unknown phase '{}'; restarting initial generation from the beginning",
+            LOGGER.warn("【检查点阶段未知，从初始阶段重新调度】 " + "RoadWeaver checkpoint contains unknown phase '{}'; restarting initial generation from the beginning",
                     phaseName);
             return null;
         }
@@ -341,7 +343,7 @@ public final class InitialGenManager {
         if (downgraded.isEmpty()) return 0;
         provider.setStructureConnections(level, updated);
         for (StructureConnection connection : downgraded) {
-            LOGGER.info("RoadWeaver initial resume: downgraded stale GENERATING connection to PLANNED {} -> {}",
+            LOGGER.info("【遗留生成状态已回退为待规划以便重试】 " + "RoadWeaver initial resume: downgraded stale GENERATING connection to PLANNED {} -> {}",
                     connection.from(), connection.to());
         }
         return downgraded.size();
@@ -400,12 +402,12 @@ public final class InitialGenManager {
                     }
                 }
             }
-            LOGGER.info("RoadWeaver initial persisted-state reuse: connections total={} "
+            LOGGER.info("【已恢复存档连接状态，以下计数不代表本次重新生成】 " + "RoadWeaver initial persisted-state reuse: connections total={} "
                             + "(completed={} protectedGap={} failed={} filtered={} stillPending={}). "
                             + "These are loaded from state.json and are NOT regenerated.",
                     completed + protectedGap + failed + filtered + pending,
                     completed, protectedGap, failed, filtered, pending);
-            LOGGER.info("RoadWeaver initial work to do: {} route(s) need planning/generation this session "
+            LOGGER.info("【本次仍需规划或生成的道路数量】 " + "RoadWeaver initial work to do: {} route(s) need planning/generation this session "
                             + "(structure-scan tiles and coarse terrain tiles already on disk will be reused "
                             + "automatically; watch 'memoryHits='/'diskHits=' in the coarse terrain load timing line).",
                     plannedRoutes);
@@ -504,7 +506,7 @@ public final class InitialGenManager {
         try {
             GreatWallPrewarmCompat.awaitPrewarmForInitialGeneration(level).join();
         } catch (Throwable failure) {
-            LOGGER.warn("RoadWeaver Great Wall gate failed; continuing with initial generation.", failure);
+            LOGGER.warn("【长城旧预热门执行失败，后续启动仍须遵守前置条件】 " + "RoadWeaver Great Wall gate failed; continuing with initial generation.", failure);
         } finally {
             InitialGenerationProgressTracker.enterStage(
                     InitialGenerationStage.ROAD_GENERATION, "generating_roads");
@@ -528,7 +530,7 @@ public final class InitialGenManager {
             plannedPaths++;
         }
         if (allPlannedPositions.isEmpty()) return null;
-        LOGGER.info("RoadWeaver initial global Streams prewarm: plannedPaths={} positions={}",
+        LOGGER.info("【初始道路全局河流预热规模】 " + "RoadWeaver initial global Streams prewarm: plannedPaths={} positions={}",
                 plannedPaths, allPlannedPositions.size());
         StreamsReflowingCompat.prewarmInitialRoutes(level, allPlannedPositions);
         return allPlannedPositions;

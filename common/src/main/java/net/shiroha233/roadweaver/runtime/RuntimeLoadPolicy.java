@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.runtime;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -309,7 +311,7 @@ public final class RuntimeLoadPolicy {
         exclusiveWarnedAtMs = 0L;
         STREAMS_CHUNKY_EXCLUSIVE.invoke(active);
         cachedCoordinator = active ? PauseReason.CHUNKY : PauseReason.NONE;
-        LOGGER.info("RoadWeaver runtime phase={}",
+        LOGGER.info("【运行期负载阶段已切换】 " + "RoadWeaver runtime phase={}",
                 active ? "CHUNKY_EXCLUSIVE" : "POST_CHUNKY_RECOVERY");
     }
 
@@ -720,7 +722,7 @@ public final class RuntimeLoadPolicy {
         if (target != gameplayStreamsTarget) {
             STREAMS_SUPPLY_THREADS.invoke(target);
             if (target > 0 || gameplayStreamsLimited) {
-                LOGGER.info("RoadWeaver gameplay auxiliary concurrency: streams={} reason={}",
+                LOGGER.info("【游玩期河流辅助任务并发配置】 " + "RoadWeaver gameplay auxiliary concurrency: streams={} reason={}",
                         target > 0 ? Integer.toString(target) : "player-configured", reason);
             }
             gameplayStreamsTarget = target;
@@ -925,7 +927,7 @@ public final class RuntimeLoadPolicy {
         long now = System.nanoTime();
         long next = NEXT_PAUSE_LOG.get();
         if (now < next || !NEXT_PAUSE_LOG.compareAndSet(next, now + LOG_INTERVAL_NANOS)) return;
-        LOGGER.info("RoadWeaver runtime work paused for {}.", switch (reason) {
+        LOGGER.info("【后台工作因前台活动或负载压力暂停】 " + "RoadWeaver runtime work paused for {}.", switch (reason) {
             case PLAYER_TRAVEL -> "player travel protection";
             case CHUNKY -> "active Chunky task";
             case PLAYER_INTERACTION -> "player interaction priority";

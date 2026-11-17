@@ -1,6 +1,8 @@
 /* 文件职责：结构索引服务。 */
 package net.shiroha233.roadweaver.search;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -133,7 +135,7 @@ public final class StructureIndexService {
                 }
             } catch (Throwable t) {
                 StructureFileStorage.releaseScanWindow(level, cminx, cminz, cmaxx, cmaxz);
-                LOGGER.warn("StructureIndexService: scan window failed rect=[{},{}..{},{}]", cminx, cminz, cmaxx, cmaxz, t);
+                LOGGER.warn("【结构索引窗口扫描失败】 " + "StructureIndexService: scan window failed rect=[{},{}..{},{}]", cminx, cminz, cmaxx, cmaxz, t);
             }
         }
 
@@ -145,7 +147,8 @@ public final class StructureIndexService {
                 LOGGER.warn("RoadWeaver structure verification let every predicted structure through"
                                 + " (first of possibly many; predicted={} verified={})"
                                 + " — this also happens when verification is unavailable,"
-                                + " so treat it as a hint, not a verdict (counter={})",
+                                + " so treat it as a hint, not a verdict (counter={})"
+                                + "【本批预测结构全部通过，验证不可用也会如此；该现象不能作为有效性证明】",
                         predictedTotal, verifiedTotal, n);
             }
         }
@@ -154,7 +157,7 @@ public final class StructureIndexService {
         if (CACHE_DEBUG) {
             int afterCount = out.size();
             long ms = (System.nanoTime() - tAll0) / 1_000_000L;
-            LOGGER.info("StructureIndexService.predictAndVerifyInRect rect=[{},{}..{},{}] windowsClaimed={} predicted={} verified={} cachedBefore={} cachedAfter={} timeMs={}",
+            LOGGER.info("【结构索引窗口预测与验证耗时】 " + "StructureIndexService.predictAndVerifyInRect rect=[{},{}..{},{}] windowsClaimed={} predicted={} verified={} cachedBefore={} cachedAfter={} timeMs={}",
                     minBlockX, minBlockZ, maxBlockX, maxBlockZ,
                     windowsClaimed,
                     predictedTotal, verifiedTotal,

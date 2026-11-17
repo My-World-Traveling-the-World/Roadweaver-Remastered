@@ -1,6 +1,8 @@
 /* 文件职责：截断与既有路重叠的规划段，避免沿同一条走廊重复开路。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -116,7 +118,7 @@ public final class RoadOverlapTruncator {
             }
         }
         if (pathByConnection.size() < 2) {
-            LOGGER.info("RoadWeaver village merge skipped: only {} connection(s) had a planned path "
+            LOGGER.info("【可用规划路径不足，跳过村庄路网合并】 " + "RoadWeaver village merge skipped: only {} connection(s) had a planned path "
                     + "(out of {}); stepCandidates={}", pathByConnection.size(), connections.size(),
                     java.util.Arrays.toString(stepCandidates));
             return empty;
@@ -129,10 +131,10 @@ public final class RoadOverlapTruncator {
             try {
                 PlannedPathCache.discard(level, old);
             } catch (Throwable couldNotDiscard) {
-                LOGGER.warn("RoadWeaver could not discard merged path for {} -> {}", old.from(), old.to());
+                LOGGER.warn("【合并后的旧规划路径清理失败】 " + "RoadWeaver could not discard merged path for {} -> {}", old.from(), old.to());
             }
         }
-        LOGGER.info("RoadWeaver village merge: connections={} merged={}", connections.size(), replaced.size());
+        LOGGER.info("【村庄路网合并数量】 " + "RoadWeaver village merge: connections={} merged={}", connections.size(), replaced.size());
         return replaced;
     }
 
@@ -241,7 +243,7 @@ public final class RoadOverlapTruncator {
                 if (sameColumn(mergePoint, connection.from())) continue;
                 StructureConnection merged = new StructureConnection(mergePoint, connection.to());
                 replaced.put(connection, merged);
-                LOGGER.info("RoadWeaver village merge: {} -> {} becomes {} -> {} "
+                LOGGER.info("【村庄路网已接入共用主干】 " + "RoadWeaver village merge: {} -> {} becomes {} -> {} "
                                 + "(mergedAt={} village={} trunk={} -> {} trunkStations={})",
                         connection.from(), connection.to(), merged.from(), merged.to(),
                         mergePoint, connection.from(), trunk.from(), trunk.to(), trunkPath.size());
@@ -250,7 +252,7 @@ public final class RoadOverlapTruncator {
                 if (sameColumn(mergePoint, connection.to())) continue;
                 StructureConnection merged = new StructureConnection(connection.from(), mergePoint);
                 replaced.put(connection, merged);
-                LOGGER.info("RoadWeaver village merge: {} -> {} becomes {} -> {} "
+                LOGGER.info("【村庄路网已接入共用主干】 " + "RoadWeaver village merge: {} -> {} becomes {} -> {} "
                                 + "(mergedAt={} village={} trunk={} -> {} trunkStations={})",
                         connection.from(), connection.to(), merged.from(), merged.to(),
                         mergePoint, connection.to(), trunk.from(), trunk.to(), trunkPath.size());

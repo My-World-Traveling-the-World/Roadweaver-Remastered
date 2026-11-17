@@ -1,6 +1,8 @@
 /* 文件职责：在网格上解 Eikonal 方程 |∇T| = 1/c，得到从源点出发的到达时间场。 */
 package net.shiroha233.roadweaver.metric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.Arrays;
 
 import org.slf4j.Logger;
@@ -270,7 +272,7 @@ public final class FastMarchingSolver {
         if (TRACE) {
             // 求解耗时在写日志之前截取；多目标和单目标要分组看，不能把工作量变化当提速。
             long totalMicros = (System.nanoTime() - began) / 1000;
-            LOGGER.info("[FMM-TIMING] source={}:{} grid={}x{} step={} stops={} remaining={} "
+            LOGGER.info("【FMM传播网格、队列峰值与阶段耗时】 " + "[FMM-TIMING] source={}:{} grid={}x{} step={} stops={} remaining={} "
                             + "frozen={} offers={} queuePeak={} prepareUs={} totalUs={}",
                     sourceX, sourceZ, w, d, step, targets == null ? "all" : stopCount, remainingStops,
                     frozenCount, offers, peak, (prepared - began) / 1000, totalMicros);

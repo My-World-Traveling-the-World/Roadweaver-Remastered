@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -322,7 +324,7 @@ public final class RoadDataValidator {
                     && ((gapStart.equals(span.start()) && gapEnd.equals(span.end()))
                     || (gapStart.equals(span.end()) && gapEnd.equals(span.start()))));
             if (!alreadyMarked) {
-                LOGGER.warn("RoadWeaver protected-gap height step idx={}..{} from=({},y={}) to=({},y={}) delta={} owners={} -> {}",
+                LOGGER.warn("【保护缺口内部存在高度突变】 " + "RoadWeaver protected-gap height step idx={}..{} from=({},y={}) to=({},y={}) delta={} owners={} -> {}",
                         gapIndex - 1, gapIndex,
                         gapStart.getX(), previous, gapStart.getZ(),
                         gapEnd.getX(), current, gapEnd.getZ(),

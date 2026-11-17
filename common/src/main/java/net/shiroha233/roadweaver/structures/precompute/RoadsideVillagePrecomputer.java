@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.structures.precompute;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.core.BlockPos;
@@ -139,7 +141,7 @@ public final class RoadsideVillagePrecomputer {
             if (PendingRoadsideVillageStorage.addPendingVillage(level, village)) {
                 acceptedBounds.add(bounds);
                 placedCount++;
-                LOGGER.debug("Precomputed roadside village {} style={} slots={} window=[{}, {}] score={} chunk=[{}, {}]",
+                LOGGER.debug("【沿路村庄布局预计算完成】 " + "Precomputed roadside village {} style={} slots={} window=[{}, {}] score={} chunk=[{}, {}]",
                     placementId, style, slots.size(), candidate.startIndex(), candidate.endIndex(), candidate.score(), originChunk.x, originChunk.z);
             }
         }
@@ -147,7 +149,7 @@ public final class RoadsideVillagePrecomputer {
         // Which half of the village stage costs the 159 seconds: picking where a village could go, or
         // laying out the slots for the candidates that survive? A measured run spent 158,718 ms here and
         // nothing said which. No behaviour depends on this line.
-        LOGGER.info("RoadWeaver ROADSIDE_VILLAGE_BREAKDOWN candidatesMs={} candidates={} layoutMs={} tried={} placed={}",
+        LOGGER.info("【沿路村庄候选筛选和布局耗时】 " + "RoadWeaver ROADSIDE_VILLAGE_BREAKDOWN candidatesMs={} candidates={} layoutMs={} tried={} placed={}",
                 candidatesMs, candidates.size(), (System.nanoTime() - placementStartNanos) / 1_000_000L,
                 placementsTried, placedCount);
         return placedCount;

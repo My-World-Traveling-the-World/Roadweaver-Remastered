@@ -1,6 +1,8 @@
 /* 文件职责：计划小节装配 —— 把隧道切成 chunk 能独立处理的小节并算横向偏移。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -186,13 +188,13 @@ public final class PlannedSectionBuilder {
         }
         if (best >= 0 && bestDist <= STATION_XZ_FALLBACK_TOLERANCE) {
             if (STATION_FALLBACK_HITS.incrementAndGet() <= 8) {
-                LOGGER.info("RoadWeaver tunnel span endpoint matched by nearest station: target={} nearest={} dxz={}",
+                LOGGER.info("【隧道跨度端点已匹配最近站点】 " + "RoadWeaver tunnel span endpoint matched by nearest station: target={} nearest={} dxz={}",
                         target, centers.get(best), bestDist);
             }
             return best;
         }
         if (STATION_FALLBACK_MISSES.incrementAndGet() <= 8) {
-            LOGGER.warn("RoadWeaver tunnel span endpoint unmatchable: target={} nearestDxz={} centers={} "
+            LOGGER.warn("【隧道跨度端点无法匹配，本跨度将整体跳过】 " + "RoadWeaver tunnel span endpoint unmatchable: target={} nearestDxz={} centers={} "
                     + "-> this tunnel span will be skipped entirely",
                     target, best < 0 ? -1 : bestDist, centers.size());
         }

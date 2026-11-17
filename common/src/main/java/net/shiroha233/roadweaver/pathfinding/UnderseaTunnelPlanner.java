@@ -1,6 +1,8 @@
 /* 文件职责：长海桥改海底隧道 —— 桥太长就沉到海底走隧道。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
@@ -88,7 +90,7 @@ public final class UnderseaTunnelPlanner {
             }
             if (!chooseUnderseaTunnel(span, centers)) {
                 result.add(span);
-                LOGGER.info("RoadWeaver retained long ocean bridge by 50%% selection range={}..{}",
+                LOGGER.info("【按既有半数选择规则保留长海桥】 " + "RoadWeaver retained long ocean bridge by 50%% selection range={}..{}",
                         from, to);
                 continue;
             }
@@ -124,7 +126,7 @@ public final class UnderseaTunnelPlanner {
             int tunnelTo = extendIndexByDistance(centers, to, 1, UNDERSEA_APPROACH_TUNNEL_BLOCKS);
             result.add(new RoadSpan(centers.get(tunnelFrom), centers.get(tunnelTo), SpanType.TUNNEL));
             converted++;
-            LOGGER.info("RoadWeaver converted long ocean bridge to undersea tunnel range={}..{} approach={} lengthBlocks={} minBedY={} maxDepth={}",
+            LOGGER.info("【长海桥已转换为海底隧道】 " + "RoadWeaver converted long ocean bridge to undersea tunnel range={}..{} approach={} lengthBlocks={} minBedY={} maxDepth={}",
                     tunnelFrom, tunnelTo, UNDERSEA_APPROACH_TUNNEL_BLOCKS,
                     crossingWidthBlocks(centers, from, to), minimumBed, maximumDepth);
         }

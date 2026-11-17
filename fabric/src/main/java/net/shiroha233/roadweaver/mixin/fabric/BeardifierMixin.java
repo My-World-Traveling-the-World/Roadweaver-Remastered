@@ -1,6 +1,8 @@
 /* 文件职责：将预编译的区块道路密度 stamp 接入 Fabric 原版 Beardifier。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.Level;
@@ -58,7 +60,7 @@ public class BeardifierMixin implements RoadBeardifierAccess {
             RoadChunkPlan plan = RoadWorldgenPlanCache.get(serverLevel, pos, cfg);
             ((RoadBeardifierAccess) cir.getReturnValue()).roadweaver$setRoadChunkPlan(plan);
         } catch (Exception e) {
-            roadweaver$LOGGER.debug("Failed to inject road data into Beardifier", e);
+            roadweaver$LOGGER.debug("【道路数据注入地形平滑器失败】 " + "Failed to inject road data into Beardifier", e);
         }
     }
 

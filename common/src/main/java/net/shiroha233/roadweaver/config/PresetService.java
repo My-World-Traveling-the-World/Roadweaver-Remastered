@@ -1,6 +1,8 @@
 /* 文件职责：预设的读写与内置预设注册。 */
 package net.shiroha233.roadweaver.config;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.architectury.platform.Platform;
@@ -55,7 +57,7 @@ public final class PresetService {
             try {
                 Files.createDirectories(presetDir);
             } catch (Exception e) {
-                LOGGER.warn("Failed to create preset directory: {}", presetDir, e);
+                LOGGER.warn("【无法创建材料预设目录】 " + "Failed to create preset directory: {}", presetDir, e);
             }
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(presetDir, "*.json")) {
                 for (Path p : ds) {
@@ -74,7 +76,7 @@ public final class PresetService {
                     List<String> validSlabs = validateBlockIds(dto.slabMaterials);
 
                     if (valid.isEmpty()) {
-                        LOGGER.warn("Skip preset {} due to empty/invalid materials", p.getFileName());
+                        LOGGER.warn("【材料为空或无效，跳过该预设】 " + "Skip preset {} due to empty/invalid materials", p.getFileName());
                         continue;
                     }
 
@@ -83,26 +85,26 @@ public final class PresetService {
                     PresetDef def = new PresetDef(id, name, type,
                             Collections.unmodifiableList(valid), Collections.unmodifiableList(validSlabs));
                     if (map.containsKey(id)) {
-                        LOGGER.warn("Duplicate preset id '{}', file {} is ignored", id, p.getFileName());
+                        LOGGER.warn("【材料预设标识重复，忽略后读文件】 " + "Duplicate preset id '{}', file {} is ignored", id, p.getFileName());
                         continue;
                     }
                     map.put(id, def);
                 }
             }
         } catch (Exception e) {
-            LOGGER.warn("Failed scanning presets: {}", presetDir, e);
+            LOGGER.warn("【扫描材料预设失败】 " + "Failed scanning presets: {}", presetDir, e);
         }
 
         if (map.isEmpty()) {
             try {
                 writeSamplePresets(presetDir);
             } catch (Exception e) {
-                LOGGER.warn("Failed to write sample presets: {}", e.toString());
+                LOGGER.warn("【示例材料预设写入失败】 " + "Failed to write sample presets: {}", e.toString());
             }
             map = defaultPresets();
         }
         PRESETS.set(map);
-        LOGGER.info("Presets loaded: {} entries", map.size());
+        LOGGER.info("【材料预设加载完成】 " + "Presets loaded: {} entries", map.size());
     }
 
     private static List<String> validateBlockIds(List<String> ids) {
@@ -125,7 +127,7 @@ public final class PresetService {
         try {
             return RoadType.valueOf(typeStr.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            LOGGER.warn("Invalid road type '{}' in preset {}, defaulting to ARTIFICIAL", typeStr, presetId);
+            LOGGER.warn("【预设道路类型无效，采用人工道路类型】 " + "Invalid road type '{}' in preset {}, defaulting to ARTIFICIAL", typeStr, presetId);
             return RoadType.ARTIFICIAL;
         }
     }
@@ -139,7 +141,7 @@ public final class PresetService {
         try (BufferedReader br = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
             return GSON.fromJson(br, PresetFile.class);
         } catch (Exception e) {
-            LOGGER.warn("Failed to read preset file {}: {}", p.getFileName(), e.toString());
+            LOGGER.warn("【材料预设文件读取失败】 " + "Failed to read preset file {}: {}", p.getFileName(), e.toString());
             return null;
         }
     }
@@ -289,7 +291,7 @@ public final class PresetService {
         try {
             Files.createDirectories(presetDir);
         } catch (Exception e) {
-            LOGGER.warn("Failed to create preset directory: {}", presetDir, e);
+            LOGGER.warn("【无法创建材料预设目录】 " + "Failed to create preset directory: {}", presetDir, e);
         }
         PresetFile dto = new PresetFile();
         dto.id = id;
@@ -315,7 +317,7 @@ public final class PresetService {
         try {
             Files.deleteIfExists(presetDir.resolve(id + ".json"));
         } catch (Exception e) {
-            LOGGER.warn("Failed to delete preset file for id {}: {}", id, e.toString());
+            LOGGER.warn("【材料预设文件删除失败】 " + "Failed to delete preset file for id {}: {}", id, e.toString());
         }
     }
 

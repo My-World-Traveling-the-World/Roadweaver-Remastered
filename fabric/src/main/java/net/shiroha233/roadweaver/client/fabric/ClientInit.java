@@ -1,6 +1,8 @@
 /* 文件职责：客户端初始化：在 CLIENT_STARTED 时自证各契约的运行时占用（谁提供、谁消费），供主菜单即可验证接线。 */
 package net.shiroha233.roadweaver.client.fabric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -47,7 +49,7 @@ public class ClientInit implements ClientModInitializer {
         // 那样读到的是「还没人注册」。CLIENT_STARTED 在客户端完全起来（标题界面）
         // 之后才触发，此时**所有 mod 的 entrypoint 都已跑完**，结果才可信。
         ClientLifecycleEvents.CLIENT_STARTED.register(client ->
-                LOGGER.info("RoadWeaver {}", LoadSignalBridge.describeResolution()));
+                LOGGER.info("【客户端跨模组负载信号接入状态】 " + "RoadWeaver {}", LoadSignalBridge.describeResolution()));
         MapNetworkFabric.registerClientReceivers();
 
         // 世界内手绘路线渲染（线条 + 控制点句柄）。

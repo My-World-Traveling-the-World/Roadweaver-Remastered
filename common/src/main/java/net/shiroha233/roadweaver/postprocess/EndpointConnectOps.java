@@ -1,6 +1,8 @@
 /* 文件职责：端点走廊吸收与端点连接 —— 覆盖「副线整条落在主线走廊里」这类情形。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -425,7 +427,7 @@ public final class EndpointConnectOps {
                 connectedSegments, connectedSpans, connectedY,
                 secondary.ownerA2dKey(), secondary.ownerB2dKey());
 
-        LOGGER.info("RoadWeaver direct junction primary={} secondary={} mode={} owner={} side={} segments={}->{} cutIndex={} anchorSegments={}",
+        LOGGER.info("【主次道路直接路口连接结果】 " + "RoadWeaver direct junction primary={} secondary={} mode={} owner={} side={} segments={}->{} cutIndex={} anchorSegments={}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(secondary),
                 sharedOwner == RoadData.NO_OWNER_2D ? "spatial" : "shared-owner",

@@ -1,6 +1,8 @@
 /* 文件职责：并行走廊重叠的消解与改道 —— 只判「并排了没」并给出改道方案。 */
 package net.shiroha233.roadweaver.pathlogic.junction;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.postprocess.JunctionConnector;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
@@ -125,7 +127,7 @@ public final class ParallelOverlapResolver {
                 }
                 if (braidedWith == null) break;
                 pairs++;
-                LOGGER.info("RoadWeaver braid detected attempt={} primary={} secondary={} "
+                LOGGER.info("【检测到并行缠绕道路】 " + "RoadWeaver braid detected attempt={} primary={} secondary={} "
                                 + "secondaryRange={}..{} primaryRange={}..{} stations={} "
                                 + "votes={}/{} worstDot={} medianDistance={}",
                         attempt, RoadShardStorage.computeFingerprint(braidedWith),
@@ -143,13 +145,13 @@ public final class ParallelOverlapResolver {
                 rerouteMs += elapsedMs(rerouteStartedAt);
                 if (candidate == null) {
                     rejected++;
-                    LOGGER.info("RoadWeaver braid reroute rejected primary={} secondary={} "
+                    LOGGER.info("【并行道路改线被拒，保留原路线】 " + "RoadWeaver braid reroute rejected primary={} secondary={} "
                                     + "stations={} -> kept original",
                             RoadShardStorage.computeFingerprint(braidedWith),
                             RoadShardStorage.computeFingerprint(secondary), report.stations());
                     break;
                 }
-                LOGGER.info("RoadWeaver braid rerouted primary={} secondary={} stations={} -> {} "
+                LOGGER.info("【并行道路改线已接受】 " + "RoadWeaver braid rerouted primary={} secondary={} stations={} -> {} "
                                 + "banCells={} secondaryRange={}..{}",
                         RoadShardStorage.computeFingerprint(braidedWith),
                         RoadShardStorage.computeFingerprint(secondary),
@@ -233,7 +235,7 @@ public final class ParallelOverlapResolver {
             candidate = CorridorBan.withScoped(ban,
                     () -> RoadGenerationService.regenerateRoadWithoutPersist(level, connection));
         } catch (RuntimeException failure) {
-            LOGGER.warn("RoadWeaver braid reroute failed primary={} secondary={}",
+            LOGGER.warn("【并行道路改线执行失败】 " + "RoadWeaver braid reroute failed primary={} secondary={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary), failure);
             return null;
@@ -241,7 +243,7 @@ public final class ParallelOverlapResolver {
         if (candidate == null || candidate.roadSegmentList() == null) {
             // 0.9.028：这一支原来是**静默**返回 null，调用方只会打一句
             // `braid reroute rejected … kept original`，看不出是「A* 无解」还是别的门拦的。
-            LOGGER.info("RoadWeaver braid reroute null-candidate primary={} secondary={} "
+            LOGGER.info("【并行道路改线未产生候选】 " + "RoadWeaver braid reroute null-candidate primary={} secondary={} "
                             + "banCells={} radius={} primaryRange={}..{}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary),
@@ -254,7 +256,7 @@ public final class ParallelOverlapResolver {
         int minimumStations = Math.max(12,
                 (int) Math.floor(originalStations.size() * BRAID_REROUTE_MIN_LENGTH_RATIO));
         if (candidate.roadSegmentList().size() < minimumStations) {
-            LOGGER.info("RoadWeaver braid reroute too short primary={} secondary={} stations={} minimum={}",
+            LOGGER.info("【并行道路改线候选过短】 " + "RoadWeaver braid reroute too short primary={} secondary={} stations={} minimum={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary),
                     candidate.roadSegmentList().size(), minimumStations);
@@ -262,7 +264,7 @@ public final class ParallelOverlapResolver {
         }
         int limit = (int) Math.floor(originalStations.size() * maxLengthRatio);
         if (candidate.roadSegmentList().size() > limit) {
-            LOGGER.info("RoadWeaver braid reroute too long primary={} secondary={} stations={} limit={}",
+            LOGGER.info("【并行道路改线候选过长】 " + "RoadWeaver braid reroute too long primary={} secondary={} stations={} limit={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary),
                     candidate.roadSegmentList().size(), limit);
@@ -270,7 +272,7 @@ public final class ParallelOverlapResolver {
         }
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(candidate);
         if (validation == null || !validation.valid()) {
-            LOGGER.info("RoadWeaver braid reroute invalid primary={} secondary={} reason={}",
+            LOGGER.info("【并行道路改线候选数据无效】 " + "RoadWeaver braid reroute invalid primary={} secondary={} reason={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary),
                     validation == null ? null : validation.reason());
@@ -279,14 +281,14 @@ public final class ParallelOverlapResolver {
         // 后处理也能挪横向路心；只发布仍然避开禁区的最终改道。
         if (ban.intersectsPath(candidate.roadSegmentList().stream()
                 .map(RoadSegmentPlacement::middlePos).toList())) {
-            LOGGER.info("RoadWeaver braid reroute rejected: final corridor intersects ban {}->{}",
+            LOGGER.info("【改线后走廊仍与禁行区相交，拒绝候选】 " + "RoadWeaver braid reroute rejected: final corridor intersects ban {}->{}",
                     connection.from(), connection.to());
             return null;
         }
         RoadBraidDetector.Report afterReroute = RoadBraidDetector.compare(primary, candidate, minDot, maxDistance);
         if (afterReroute.braided()) {
             // 0.9.028：这一支原本静默 —— 是「改道了但还是并排」这一档。
-            LOGGER.info("RoadWeaver braid reroute still-parallel primary={} secondary={} stations={}..{} "
+            LOGGER.info("【改线后仍存在并行缠绕，拒绝候选】 " + "RoadWeaver braid reroute still-parallel primary={} secondary={} stations={}..{} "
                             + "medianDistance={} worstDot={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary),
@@ -338,14 +340,14 @@ public final class ParallelOverlapResolver {
                             PlanningUtils.posFrom2dKey(best.ownerB2dKey()),
                             net.shiroha233.roadweaver.core.model.ConnectionStatus.GENERATING));
             long repairMs = elapsedMs(repairStartedAt);
-            LOGGER.info("RoadWeaver merge refine timing: index={} owners={} -> {} tunnelMs={} dedupMs={} "
+            LOGGER.info("【合并路线精修各阶段耗时】 " + "RoadWeaver merge refine timing: index={} owners={} -> {} tunnelMs={} dedupMs={} "
                             + "repairMs={} nodes={} -> {}",
                     item.index(), secondary.ownerA2dKey(), secondary.ownerB2dKey(),
                     tunnelMs, dedupMs, repairMs, nodesBeforeRepair,
                     refinedHeight == null || refinedHeight.roadSegmentList() == null
                             ? -1 : refinedHeight.roadSegmentList().size());
             if (refinedHeight == null) {
-                LOGGER.warn("RoadWeaver discarded parallel junction rewrite because local interface repair failed owners={} -> {}",
+                LOGGER.warn("【局部接口修复失败，撤销并行路口改写】 " + "RoadWeaver discarded parallel junction rewrite because local interface repair failed owners={} -> {}",
                         best.ownerA2dKey(), best.ownerB2dKey());
                 // 0.8.328：合并结果整体丢弃时，至少保留"共用走廊"的复用标记——否则
                 // secondary 会连同复用段一起退回合并前版本，两条路把同一段走廊各铺一遍
@@ -376,7 +378,7 @@ public final class ParallelOverlapResolver {
             }
             return new MergeResult(item.index(), secondary, best, item.selection().donor());
         } catch (PlanningSnapshotUnavailableException unavailable) {
-            LOGGER.warn("RoadWeaver retained original road because parallel junction structure snapshot is unavailable owners={} -> {} reason={}",
+            LOGGER.warn("【精确结构快照不可用，保留并行路口原路线】 " + "RoadWeaver retained original road because parallel junction structure snapshot is unavailable owners={} -> {} reason={}",
                     secondary.ownerA2dKey(), secondary.ownerB2dKey(), unavailable.getMessage());
             return new MergeResult(item.index(), secondary, secondary, item.selection().donor());
         } finally {

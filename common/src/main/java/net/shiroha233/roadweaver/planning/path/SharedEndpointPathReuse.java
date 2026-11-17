@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.planning.path;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.minecraft.core.BlockPos;
@@ -107,7 +109,7 @@ public final class SharedEndpointPathReuse {
                     if (lowered != null) rewritten.put(connection, lowered);
                 }
                 endpoint = new BlockPos(endpoint.getX(), unifiedY, endpoint.getZ());
-                LOGGER.info("RoadWeaver shared-endpoint unknown height unified endpoint=({},{}) "
+                LOGGER.info("【共用未知端点的预规划高度已统一】 " + "RoadWeaver shared-endpoint unknown height unified endpoint=({},{}) "
                                 + "height={} routes={}",
                         endpoint.getX(), endpoint.getZ(), unifiedY, connections.size());
             }
@@ -137,7 +139,7 @@ public final class SharedEndpointPathReuse {
                             PlannedPathKey.of(primaryConnection), primary);
                 }
                 reused++;
-                LOGGER.info("RoadWeaver pre-detail shared-endpoint reuse endpoint={} primary={} secondary={} stations={}->{}",
+                LOGGER.info("【精细规划前共用端点走廊复用】 " + "RoadWeaver pre-detail shared-endpoint reuse endpoint={} primary={} secondary={} stations={}->{}",
                         endpoint, PlannedPathKey.of(primaryConnection), PlannedPathKey.of(secondaryConnection),
                         secondary.size(), merged.size());
             }
@@ -166,7 +168,7 @@ public final class SharedEndpointPathReuse {
                             PlannedPathKey.of(primaryConnection), primary);
                 }
                 spatialReused++;
-                LOGGER.info("RoadWeaver pre-detail spatial road reuse primary={} secondary={} "
+                LOGGER.info("【精细规划前空间邻近道路复用】 " + "RoadWeaver pre-detail spatial road reuse primary={} secondary={} "
                                 + "primaryStations={}..{} secondaryStations={}..{}",
                         PlannedPathKey.of(primaryConnection), PlannedPathKey.of(secondaryConnection),
                         join.primaryStart(), join.primaryEnd(), join.secondaryStart(), join.secondaryEnd());
@@ -174,7 +176,7 @@ public final class SharedEndpointPathReuse {
             }
         }
         if (spatialReused > 0) {
-            LOGGER.info("RoadWeaver pre-detail spatial road reuse completed reused={} joinDistance={}",
+            LOGGER.info("【空间邻近道路复用完成】 " + "RoadWeaver pre-detail spatial road reuse completed reused={} joinDistance={}",
                     spatialReused, reuseDistance);
         }
         // T-23.2: 合并完成后重新执行一次过路村庄裁剪检查。合并是巨路尾段被
@@ -194,14 +196,14 @@ public final class SharedEndpointPathReuse {
                         level, entry.getKey(), mergedPath);
                 if (crossingsAfter > crossingsBefore) {
                     rewritten.put(entry.getKey(), originalPath);
-                    LOGGER.info("RoadWeaver reverted shared-endpoint merge that introduced a pass-through village "
+                    LOGGER.info("【合并引入额外途经村庄冲突，撤销共用端点合并】 " + "RoadWeaver reverted shared-endpoint merge that introduced a pass-through village "
                                     + "crossing connection={} -> {} crossings={} -> {}",
                             entry.getKey().from(), entry.getKey().to(), crossingsBefore, crossingsAfter);
                 }
             }
         }
         if (reused > 0 || spatialReused > 0) {
-            LOGGER.info("RoadWeaver pre-detail shared-endpoint reuse completed paths={} endpointReused={} spatialReused={} joinDistance={}",
+            LOGGER.info("【精细规划前共用端点复用汇总】 " + "RoadWeaver pre-detail shared-endpoint reuse completed paths={} endpointReused={} spatialReused={} joinDistance={}",
                     result.paths().size(), reused, spatialReused, reuseDistance);
             return new RoadTerrainPlanningPort.Result(result.mode(), rewritten);
         }
@@ -341,7 +343,7 @@ public final class SharedEndpointPathReuse {
             tailStart++;
         }
         if (tailStart < secondary.size() && tailStart > join.secondaryEnd() + 1) {
-            LOGGER.info("RoadWeaver shared-endpoint trunk trim removed secondary stub overlapping "
+            LOGGER.info("【次路桩段与主干重叠，已裁除重叠部分】 " + "RoadWeaver shared-endpoint trunk trim removed secondary stub overlapping "
                             + "trunk secondary={}..{} joinPrimaryEnd={}",
                     join.secondaryEnd() + 1, tailStart - 1, join.primaryEnd());
         }
@@ -352,7 +354,7 @@ public final class SharedEndpointPathReuse {
             // Merging would swallow the secondary's own far endpoint, breaking
             // connectivity. Keep the historical behavior (preserve the tail);
             // the later post-process trim may still shorten it.
-            LOGGER.warn("RoadWeaver shared-endpoint merge kept overlapping tail: secondary never "
+            LOGGER.warn("【次路始终未离开主干走廊，保留端点尾段】 " + "RoadWeaver shared-endpoint merge kept overlapping tail: secondary never "
                             + "leaves the trunk corridor; preserving its endpoint tail");
             appendConnector(merged, primary.get(join.primaryEnd()),
                     secondary.get(join.secondaryEnd()), pathStep);
@@ -409,7 +411,7 @@ public final class SharedEndpointPathReuse {
             if (best == null || current.betterThan(best)) best = current;
         }
         if (best != null && !best.connection().equals(connections.get(0))) {
-            LOGGER.info("RoadWeaver selected shared-endpoint trunk endpoint={} primary={} routes={} "
+            LOGGER.info("【共用端点主干选择结果】 " + "RoadWeaver selected shared-endpoint trunk endpoint={} primary={} routes={} "
                             + "joinable={} reusableStations={}",
                     endpoint, PlannedPathKey.of(best.connection()), connections.size(),
                     best.joinable(), best.reusableStations());

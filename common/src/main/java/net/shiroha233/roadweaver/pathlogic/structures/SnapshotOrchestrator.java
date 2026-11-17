@@ -1,6 +1,8 @@
 /* 文件职责：规划快照的编排 —— 决定「为哪条路线、在什么时机、取哪批结构」。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
@@ -195,7 +197,7 @@ public final class SnapshotOrchestrator {
         int safeRadius = Math.max(1, radius);
         int effectiveRadius = clampCircleProbeRadius(safeRadius);
         if (effectiveRadius < safeRadius) {
-            LOGGER.info("RoadWeaver circle snapshot radius clamped by probe budget: requested={} effective={} maxProbeChunks={}",
+            LOGGER.info("【结构探测预算不足，圆形快照半径已夹取】 " + "RoadWeaver circle snapshot radius clamped by probe budget: requested={} effective={} maxProbeChunks={}",
                     safeRadius, effectiveRadius, MAX_CIRCLE_PROBE_CHUNKS);
         }
         int minChunkX = Math.floorDiv(center.getX() - effectiveRadius, 16);
@@ -216,7 +218,7 @@ public final class SnapshotOrchestrator {
                 }
             }
         }
-        LOGGER.info("RoadWeaver local structure circle snapshot: center=({}, {}) radius={} probeChunks={}",
+        LOGGER.info("【局部圆形结构快照探测范围】 " + "RoadWeaver local structure circle snapshot: center=({}, {}) radius={} probeChunks={}",
                 center.getX(), center.getZ(), effectiveRadius, probes.size());
         return preparePlanningSnapshotsForPathsAsync(
                 level, Map.of(connection, List.copyOf(probes)), false,
@@ -372,7 +374,7 @@ public final class SnapshotOrchestrator {
                 uniqueStarts.addAll(starts);
             }
             if (reusedStarts > 0) {
-                LOGGER.info("RoadWeaver path corridor reused exact structure starts: routes={} reused={} newlyRequired={}",
+                LOGGER.info("【路径走廊复用了精确结构起点】 " + "RoadWeaver path corridor reused exact structure starts: routes={} reused={} newlyRequired={}",
                         routePlans.size(), reusedStarts, uniqueStarts.size());
             }
             return new SnapshotPreparation(routePlans, List.copyOf(uniqueStarts));
@@ -432,7 +434,7 @@ public final class SnapshotOrchestrator {
                             InitialGenerationProgressTracker.completePlanningSnapshots(
                                     "road_corridor_structures_ready");
                         }
-                        LOGGER.info("RoadWeaver path corridor snapshots: dimension={} routes={} uniqueStarts={} newlyMergedBoxes={} totalMs={}",
+                        LOGGER.info("【路径走廊快照合并耗时】 " + "RoadWeaver path corridor snapshots: dimension={} routes={} uniqueStarts={} newlyMergedBoxes={} totalMs={}",
                                 level.dimension().location(), preparation.routePlans().size(),
                                 preparation.uniqueStarts().size(), mergedBoxes, elapsedMillis(startedAt));
                     });

@@ -1,6 +1,8 @@
 /* 文件职责：道路生成队列的刷新与轮询 —— 谁先做、做哪些、什么时候暂停。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.world.level.Level;
@@ -87,7 +89,7 @@ public final class RoadQueueOps {
                 removedKeys.add(key);
                 PROCESSED.remove(key);
                 MapPatchService.publishConnectionRemoval(level, removed);
-                LOGGER.info("RoadWeaver removed redundant pending connection already covered by completed network: {} -> {} status={}",
+                LOGGER.info("【已完工网络已覆盖该连接，移除冗余待处理项】 " + "RoadWeaver removed redundant pending connection already covered by completed network: {} -> {} status={}",
                         removed.from(), removed.to(), removed.status());
             }
             QUEUE.removeIf(connection -> removedKeys.contains(PlannedPathKey.of(connection)));

@@ -1,6 +1,8 @@
 /* 文件职责：与 Streams Reflowing 的可选集成层：采样会话、水域计划与「是否可用」判定，全部走 api 契约、不含反射。 */
 package net.shiroha233.roadweaver.compat;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,9 +141,9 @@ public final class StreamsReflowingCompat {
         if (paused) {
             clearPrewarmState();
             prewarmPausedForDimension = true;
-            LOGGER.info("RoadWeaver Streams bridge paused outside minecraft:overworld.");
+            LOGGER.info("【离开主世界，暂停河流接入工作】 " + "RoadWeaver Streams bridge paused outside minecraft:overworld.");
         } else {
-            LOGGER.info("RoadWeaver Streams bridge resumed in minecraft:overworld.");
+            LOGGER.info("【返回主世界，恢复河流接入工作】 " + "RoadWeaver Streams bridge resumed in minecraft:overworld.");
         }
     }
 
@@ -180,7 +182,7 @@ public final class StreamsReflowingCompat {
                         lakeClass.getMethod("digDepth"));
                 access = resolved;
                 if (ENABLED_LOGGED.compareAndSet(false, true)) {
-                    LOGGER.info("RoadWeaver Streams Reflowing river-plan compatibility enabled");
+                    LOGGER.info("【河流规划兼容接口已启用】 " + "RoadWeaver Streams Reflowing river-plan compatibility enabled");
                 }
             } catch (ClassNotFoundException absent) {
                 access = null;
@@ -188,7 +190,7 @@ public final class StreamsReflowingCompat {
                 accessFailure = true;
                 access = null;
                 if (FAILURE_LOGGED.compareAndSet(false, true)) {
-                    LOGGER.warn("RoadWeaver Streams Reflowing compatibility initialization failed: {}",
+                    LOGGER.warn("【河流兼容接口初始化失败】 " + "RoadWeaver Streams Reflowing compatibility initialization failed: {}",
                             failure.toString());
                 }
             }
@@ -224,7 +226,7 @@ public final class StreamsReflowingCompat {
 
     private static void logFailure(Throwable failure) {
         if (FAILURE_LOGGED.compareAndSet(false, true)) {
-            LOGGER.warn("RoadWeaver could not query Streams Reflowing river plans; using terrain fallback: {}",
+            LOGGER.warn("【河流规划查询失败，本次改用地形判据】 " + "RoadWeaver could not query Streams Reflowing river plans; using terrain fallback: {}",
                     failure.toString());
         }
     }
@@ -351,7 +353,7 @@ public final class StreamsReflowingCompat {
                     if (strict) throw failure;
                 }
             }
-            LOGGER.info("RoadWeaver Streams plate prewarm: scope={} positions={} requiredPlates={} workers={} await={} elapsedMs={}",
+            LOGGER.info("【河流板块预热范围与耗时】 " + "RoadWeaver Streams plate prewarm: scope={} positions={} requiredPlates={} workers={} await={} elapsedMs={}",
                     scope, positions.size(), plates.size(), PREWARM_WORKERS, await,
                     Math.round((System.nanoTime() - started) / 1_000_000.0D));
         }
@@ -372,7 +374,7 @@ public final class StreamsReflowingCompat {
                 return future.get(STREAMS_QUERY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (TimeoutException slow) {
                 future.cancel(true);
-                LOGGER.warn("RoadWeaver Streams Reflowing {} answered slower than {} ms; "
+                LOGGER.warn("【河流接口响应超时，本条道路后续仅按地形分类】 " + "RoadWeaver Streams Reflowing {} answered slower than {} ms; "
                         + "falling back to terrain-only classification for the rest of this route",
                         what, STREAMS_QUERY_TIMEOUT_MS);
                 return BOUNDED_TIMED_OUT;

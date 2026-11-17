@@ -1,6 +1,8 @@
 /* 文件职责：道路质量度量：坡度分布、空洞、断点、接缝台阶 —— 诊断与 AB 对比共用同一套口径。 */
 package net.shiroha233.roadweaver.pathlogic.metrics;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -86,7 +88,7 @@ public final class RoadQualityMetrics {
             int fromStation = stationIndexOf(stations, span.start());
             int toStation = stationIndexOf(stations, span.end());
             int deckY = span.start() == null ? 0 : span.start().getY();
-            LOGGER.info("RoadWeaver {} connection={}->{} span={} type={} stations={}..{} "
+            LOGGER.info("【道路跨度质量明细】 " + "RoadWeaver {} connection={}->{} span={} type={} stations={}..{} "
                             + "start={} end={} width={} deckY={}",
                     tag, from, to, index, type, fromStation, toStation,
                     pos(span.start()), pos(span.end()), road.width(), deckY);
@@ -103,7 +105,7 @@ public final class RoadQualityMetrics {
      */
     private static void logSwitchback(RoadData road, Object from, Object to) {
         try {
-            LOGGER.info("RoadWeaver route SWITCHBACK connection={}->{} {}",
+            LOGGER.info("【道路盘山折返质量指标】 " + "RoadWeaver route SWITCHBACK connection={}->{} {}",
                     from, to, SwitchbackMetrics.fromRoad(road).format());
         } catch (RuntimeException ignored) {
             // 只读度量，失败就少一行日志。
@@ -132,7 +134,7 @@ public final class RoadQualityMetrics {
      */
     public static Report record(RoadData road, Object from, Object to) {
         Report report = evaluate(road);
-        LOGGER.info("RoadWeaver route QUALITY connection={}->{} {}", from, to, report.format());
+        LOGGER.info("【单条道路质量指标】 " + "RoadWeaver route QUALITY connection={}->{} {}", from, to, report.format());
         logSwitchback(road, from, to);
         logSpanLocations(road, from, to);
         int roads = ROADS.incrementAndGet();
@@ -144,7 +146,7 @@ public final class RoadQualityMetrics {
         DIRECTION_BIAS.add(report.directionGradeBias());
         REUSE_SHARE.add(report.reuseShare());
         if (roads % 10 == 0) {
-            LOGGER.info("RoadWeaver quality ROLLUP roads={} avgWidthVar={} totalBreaks={} totalHoles={} "
+            LOGGER.info("【路网质量指标汇总】 " + "RoadWeaver quality ROLLUP roads={} avgWidthVar={} totalBreaks={} totalHoles={} "
                             + "avgGradeP95={} avgDirBias={} avgReuse={} culverts={}",
                     roads,
                     String.format(java.util.Locale.ROOT, "%.2f", WIDTH_VARIATION.sum() / roads),

@@ -1,6 +1,8 @@
 /* 文件职责：路灯装饰。 */
 package net.shiroha233.roadweaver.decoration.types;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.core.BlockPos;
@@ -50,7 +52,7 @@ public class LamppostDecoration extends OrientedDecoration implements BiomeWoodA
             BlockPos basePos = this.getPos();
             placeLampStructure(basePos, world);
         } catch (Throwable t) {
-            LOGGER.warn("Lamppost placement failed at {}", this.getPos(), t);
+            LOGGER.warn("【灯柱放置失败】 " + "Lamppost placement failed at {}", this.getPos(), t);
         }
     }
 

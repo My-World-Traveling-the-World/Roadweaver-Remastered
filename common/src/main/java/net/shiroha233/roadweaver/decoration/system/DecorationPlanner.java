@@ -1,6 +1,8 @@
 /* 文件职责：装饰规划器。 */
 package net.shiroha233.roadweaver.decoration.system;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -109,7 +111,7 @@ public final class DecorationPlanner {
             // 密集/重复放置问题。chunk 坐标 + 路段站号 + 距离间隔可回溯到
             // 具体是哪次铺装放的路灯。
             if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("RoadWeaver lamp placed mode={} pos={},{} y={} chunk=[{},{}] segment={} interval={}",
+                LOGGER.debug("【路灯放置位置与间距】 " + "RoadWeaver lamp placed mode={} pos={},{} y={} chunk=[{},{}] segment={} interval={}",
                         mode,
                         shifted.getX(), shifted.getZ(), shifted.getY(),
                         Math.floorDiv(shifted.getX(), 16), Math.floorDiv(shifted.getZ(), 16),
@@ -141,7 +143,7 @@ public final class DecorationPlanner {
         });
         if (timing != null) {
             long searchUs = (System.nanoTime() - timing.started) / 1000;
-            LOGGER.info("[LAMP-BASE-TIMING] pos={} left={} candidates={} directReads={} found={} searchUs={}",
+            LOGGER.info("【灯座候选检查次数与耗时】 " + "[LAMP-BASE-TIMING] pos={} left={} candidates={} directReads={} found={} searchUs={}",
                     roadPos, left, timing.candidates, timing.directReads, best != null, searchUs);
         }
         return best;

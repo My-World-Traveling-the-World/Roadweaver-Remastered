@@ -1,6 +1,8 @@
 /* 文件职责：在玩家空闲预算内调度并追踪延迟道路生成任务。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -125,7 +127,7 @@ public final class IdleRoadGenerationService {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;
         if (!paused) {
-            LOGGER.info("RoadWeaver idle Overworld road work resumed.");
+            LOGGER.info("【恢复主世界空闲道路任务】 " + "RoadWeaver idle Overworld road work resumed.");
             return;
         }
         ALL_RUNNING.forEach(f -> { try { if (f != null) f.cancel(true); } catch (Throwable ignored) {} });
@@ -136,7 +138,7 @@ public final class IdleRoadGenerationService {
         IDLE_OWNED.clear();
         IN_FLIGHT.clear();
         RUNNING.set(0);
-        LOGGER.info("RoadWeaver idle roads paused outside minecraft:overworld.");
+        LOGGER.info("【离开主世界，暂停空闲道路任务】 " + "RoadWeaver idle roads paused outside minecraft:overworld.");
     }
 
     public static void tickPlayer(ServerPlayer player) {
@@ -201,7 +203,7 @@ public final class IdleRoadGenerationService {
             resetPlanningRegions(win, -1, targetRadius);
             // 重定中心属于「玩家跑远了」的响应性动作，不节流：立刻排一次覆盖推进。
             win.coverageDirty = true;
-            LOGGER.info("RoadWeaver radial runtime planning recentered: oldCenter=({},{}), center=({},{}), radius={} chunks.",
+            LOGGER.info("【游玩期径向规划中心已迁移】 " + "RoadWeaver radial runtime planning recentered: oldCenter=({},{}), center=({},{}), radius={} chunks.",
                     oldCenterX, oldCenterZ, pcx, pcz, targetRadius);
             advancePlanningCoverageThrottled(level, win);
             return;
@@ -220,7 +222,7 @@ public final class IdleRoadGenerationService {
         win.radiusChunks = nextRadius;
         appendPlanningRegions(win, oldRadius, nextRadius);
         win.coverageDirty = true;
-        LOGGER.info("RoadWeaver radial runtime planning expanded: center=({},{}), radius={} -> {} chunks, regions={}",
+        LOGGER.info("【游玩期径向规划半径已扩大】 " + "RoadWeaver radial runtime planning expanded: center=({},{}), radius={} -> {} chunks, regions={}",
                 win.centerChunkX, win.centerChunkZ, oldRadius, nextRadius, win.planningRegions.size());
         advancePlanningCoverageThrottled(level, win);
     }
@@ -426,7 +428,7 @@ public final class IdleRoadGenerationService {
                 executeOnMain(level, epoch, () -> removeOwnership(level, key));
                 return;
             }
-            LOGGER.warn("IdleRoad: generate failed {} -> {}", task.from(), task.to(), t);
+            LOGGER.warn("【空闲道路生成失败】 " + "IdleRoad: generate failed {} -> {}", task.from(), task.to(), t);
             executeOnMain(level, epoch, () -> {
                 if (ConnectionDeletionService.shouldAbort(level, task)) {
                     removeOwnership(level, key);
@@ -677,7 +679,7 @@ public final class IdleRoadGenerationService {
             String requested = RoadPlanningReadinessIndex.requestRegion(level, region.x(), region.z());
             if ("READY".equals(requested)) continue;
             window.activePlanningRegion = region;
-            LOGGER.info("RoadWeaver radial runtime planning queued nearest region [{},{}]; center=({},{}), radius={} chunks, remaining={}",
+            LOGGER.info("【最近规划区域已入队】 " + "RoadWeaver radial runtime planning queued nearest region [{},{}]; center=({},{}), radius={} chunks, remaining={}",
                     region.x(), region.z(), window.centerChunkX, window.centerChunkZ,
                     window.radiusChunks, window.planningRegions.size());
             return false;

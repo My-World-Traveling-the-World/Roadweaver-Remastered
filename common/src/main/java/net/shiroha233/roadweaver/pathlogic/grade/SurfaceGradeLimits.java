@@ -6,6 +6,8 @@
 
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import org.slf4j.Logger;
@@ -150,7 +152,7 @@ public record SurfaceGradeLimits(int plainCut,
         long now = System.currentTimeMillis();
         if (now - LIMIT_LOG_AT < 10_000L) return;
         LIMIT_LOG_AT = now;
-        LIMIT_LOGGER.info("RoadWeaver grade limits reduced by profile tendency: mode={} "
+        LIMIT_LOGGER.info("【按纵断面地形倾向收紧挖填限制】 " + "RoadWeaver grade limits reduced by profile tendency: mode={} "
                         + "plainCut={}->{} plainFill={}->{} mountainCut={}->{} mountainFill={}->{}",
                 mode, configuredPlainCut, effectivePlainCut, configuredPlainFill, effectivePlainFill,
                 configuredMountainCut, effectiveMountainCut, configuredMountainFill, effectiveMountainFill);

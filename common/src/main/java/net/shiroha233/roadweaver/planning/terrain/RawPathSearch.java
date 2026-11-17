@@ -1,6 +1,8 @@
 /* 文件职责：统一使用量化地形场执行道路原始路径搜索。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -101,7 +103,7 @@ final class RawPathSearch {
             int routeBridgeMinDepth = bridgeFirst
                     ? 1
                     : Math.max(1, ConfigService.get().bridge().minWaterDepth());
-            LOGGER.info("RoadWeaver coarse terrain profile: mountain={}({}) plain={} coast={} river={} lake={} ocean={} "
+            LOGGER.info("【粗地形分类和自动倾向统计】 " + "RoadWeaver coarse terrain profile: mountain={}({}) plain={} coast={} river={} lake={} ocean={} "
                             + "water=({}) mode={} autoTendency={} step={}",
                     terrainCounts.getOrDefault(RoadTerrainType.MOUNTAIN, 0),
                     String.format("%.2f", mountainFraction),
@@ -150,7 +152,7 @@ final class RawPathSearch {
                     boolean preferSafer = (!currentBuildable && candidateBuildable)
                             || (!currentClear && candidateClear);
                     if (preferSafer || betterCoarseCandidate(heightAware, modeRoute, terrain, step)) {
-                        LOGGER.info("RoadWeaver accepted height-aware coarse reroute: originalNodes={} reroutedNodes={} forced={} step={}",
+                        LOGGER.info("【高度感知的粗规划绕行已接受】 " + "RoadWeaver accepted height-aware coarse reroute: originalNodes={} reroutedNodes={} forced={} step={}",
                                 modeRoute.size(), heightAware.size(), preferSafer, step);
                         modeRoute = heightAware;
                     }
@@ -173,7 +175,7 @@ final class RawPathSearch {
                             MountainSwitchbackPlanner.replaceIfSafer(
                                     hintedResult.rawPath(), start, end, hintedTerrain, config));
                     if (rerouted != null && rerouted.size() >= 2) {
-                        LOGGER.info("RoadWeaver coarse tunnel-aware reroute accepted: originalNodes={} reroutedNodes={} step={}",
+                        LOGGER.info("【考虑隧道的粗规划绕行已接受】 " + "RoadWeaver coarse tunnel-aware reroute accepted: originalNodes={} reroutedNodes={} step={}",
                                 route.size(), rerouted.size(), step);
                         return applyCoarseTerrainModes(rerouted, terrain, config, routeBridgeMinDepth);
                     }
@@ -329,7 +331,7 @@ final class RawPathSearch {
             hard = pathfinder.findRawPath(start, end, level, config.aStarMaxSteps(), cache, terrain, config);
         }
         if (hard != null && hard.success() && hard.hasRawPath()) return hard;
-        LOGGER.info("RoadWeaver relaxed building hard obstacles after no-route step={} start={} end={}",
+        LOGGER.info("【无可用路径，按既有规则放松建筑硬障碍并继续求解】 " + "RoadWeaver relaxed building hard obstacles after no-route step={} start={} end={}",
                 config.effectiveAStarStep(), start, end);
         return pathfinder.findRawPath(start, end, level, config.aStarMaxSteps(), cache, terrain, config);
     }
@@ -444,12 +446,12 @@ final class RawPathSearch {
                 result.add(new BlockPos(point.getX(), y, point.getZ()));
             }
             if (changed > 0) {
-                LOGGER.info("RoadWeaver coarse terrain mode precheck: tunnelCandidateStations={} totalStations={} step={}",
+                LOGGER.info("【粗规划桥隧模式预检统计】 " + "RoadWeaver coarse terrain mode precheck: tunnelCandidateStations={} totalStations={} step={}",
                         changed, size, config.effectiveAStarStep());
             }
             return List.copyOf(result);
         } catch (RuntimeException failure) {
-            LOGGER.debug("RoadWeaver coarse terrain mode precheck skipped", failure);
+            LOGGER.debug("【粗规划桥隧模式预检已跳过】 " + "RoadWeaver coarse terrain mode precheck skipped", failure);
             return path;
         }
     }

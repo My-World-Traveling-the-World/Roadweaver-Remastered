@@ -1,6 +1,8 @@
 /* 文件职责：把度量、拓扑、几何三层串成一条端到端流水线。 */
 package net.shiroha233.roadweaver.pipeline;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -178,7 +180,7 @@ public final class RoadPipeline {
                         evidenceSink.accept(new ConnectionEvidence(a.x(), a.z(), b.x(), b.z(),
                                 edge.choice().selected(), edge.choice().geodesic(), edge.toString()));
                     }
-                    LOGGER.info("RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
+                    LOGGER.info("【可建性影子评分采用高度图水域代理，保护快照尚未准备】 " + "RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
                                 + "water=heightmap-gap protection=unprepared shadowMs={} {} coordinates={}",
                         nodes.size(), nodes.getFirst().x(), nodes.getFirst().z(), metric.terrain().step(),
                         nanos / 1_000_000, report, report.edges().stream().map(e -> {
@@ -211,7 +213,7 @@ public final class RoadPipeline {
                 observer.accept(report, System.nanoTime() - started);
             } catch (RuntimeException failure) {
                 // 实验失败不能触发生产规划器回退到直线 MST。
-                LOGGER.warn("RoadWeaver buildability shadow failed (nodes={})", nodes.size(), failure);
+                LOGGER.warn("【可建性影子评分失败，原拓扑选择保持】 " + "RoadWeaver buildability shadow failed (nodes={})", nodes.size(), failure);
             }
         }
         return selected;

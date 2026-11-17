@@ -1,6 +1,8 @@
 /* 文件职责：编译并执行单个世界生成设置对应的 OpenCL 精确高度程序。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
@@ -262,7 +264,7 @@ final class OpenCLAccurateProgram implements AutoCloseable {
             for (ColumnRequest column : columns) {
                 (leftChunks.contains(column.chunkKey()) ? leftColumns : rightColumns).add(column);
             }
-            LOGGER.warn("RoadWeaver precise OpenCL allocation rejected; splitting chunk batch {} -> {}+{} "
+            LOGGER.warn("【GPU拒绝精确采样内存申请，拆分整块批次】 " + "RoadWeaver precise OpenCL allocation rejected; splitting chunk batch {} -> {}+{} "
                             + "device={} maxAllocationMiB={}",
                     batchChunks.size(), leftChunks.size(), rightChunks.size(),
                     runtime.deviceName(), runtime.deviceInfo().maxAllocationBytes() / (1024L * 1024L));
@@ -390,7 +392,7 @@ final class OpenCLAccurateProgram implements AutoCloseable {
             }
             workspace(runtime).resetForAdaptiveRetry();
             int midpoint = Math.max(1, batchChunks.size() / 2);
-            LOGGER.warn("RoadWeaver precise OpenCL grid allocation rejected; splitting chunk batch {} -> {}+{} device={} maxAllocationMiB={}",
+            LOGGER.warn("【GPU拒绝精确网格内存申请，拆分整块批次】 " + "RoadWeaver precise OpenCL grid allocation rejected; splitting chunk batch {} -> {}+{} device={} maxAllocationMiB={}",
                     batchChunks.size(), midpoint, batchChunks.size() - midpoint,
                     runtime.deviceName(), runtime.deviceInfo().maxAllocationBytes() / (1024L * 1024L));
             sampleGridBatchAdaptive(runtime, request, indicesByChunk,

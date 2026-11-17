@@ -1,6 +1,8 @@
 /* 文件职责：隧道洞口与覆盖层采样 —— 判断这一段挖得出来、覆土够不够。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadData;
@@ -90,7 +92,7 @@ public final class TunnelFootprintSampler {
             if (fallbackEnd + 1 < centers.size() && !bridge[fallbackEnd + 1]) fallbackEnd++;
             if (fallbackEnd - fallbackStart + 1 >= TUNNEL_RUN_MIN_LENGTH) {
                 result.add(new RoadSpan(centers.get(fallbackStart), centers.get(fallbackEnd), SpanType.TUNNEL));
-                LOGGER.warn("RoadWeaver retained deep-cut tunnel without stable surface mouths "
+                LOGGER.warn("【深挖段未找到稳定地表洞口，仍保留隧道】 " + "RoadWeaver retained deep-cut tunnel without stable surface mouths "
                                 + "range={}..{} buried={}..{}",
                         fallbackStart, fallbackEnd, buriedStart, buriedEnd);
             }

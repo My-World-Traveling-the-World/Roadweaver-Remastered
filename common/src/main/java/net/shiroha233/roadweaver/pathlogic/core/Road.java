@@ -1,6 +1,8 @@
 /* 文件职责：生成单条道路并协调精确地形路径、跨度与附属结构。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.PathMetricsOps;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.PathFinalizeOps;
@@ -185,7 +187,7 @@ public final class Road {
             DetailedRoadGenerationStats.recordSpanExtraction(spanExtractionNanos);
             DetailedRoadGenerationStats.RouteTiming spanTiming = DetailedRoadGenerationStats.routeTiming();
             if (spanTiming != null) spanTiming.addSpanExtraction(spanExtractionNanos);
-            LOGGER.info("RoadWeaver route stage=span_extraction connection={}->{} spans={} {}",
+            LOGGER.info("【路线跨度提取阶段结果】 " + "RoadWeaver route stage=span_extraction connection={}->{} spans={} {}",
                     rawStart, rawEnd, spans.size(), summarizeSpans(spans));
             long targetHeightStartedAt = System.nanoTime();
             if (containsPhysicalCrossing(spans)) {
@@ -226,7 +228,7 @@ public final class Road {
                 ArrayList<RoadSpan> withGaps = new ArrayList<>(spans);
                 withGaps.addAll(protectedGaps);
                 spans = List.copyOf(withGaps);
-                LOGGER.warn("RoadWeaver persisted protected building gaps connection={}->{} count={}",
+                LOGGER.warn("【建筑保护缺口已持久化】 " + "RoadWeaver persisted protected building gaps connection={}->{} count={}",
                         connection.from(), connection.to(), protectedGaps.size());
             }
             List<RoadSpan> plannedReuse = PlannedPathCache.plannedReuseSpans(level, connection, segments);
@@ -234,7 +236,7 @@ public final class Road {
                 ArrayList<RoadSpan> withReuse = new ArrayList<>(spans);
                 withReuse.addAll(plannedReuse);
                 spans = List.copyOf(withReuse);
-                LOGGER.info("RoadWeaver persisted planned NETWORK_REUSE spans connection={}->{} count={}",
+                LOGGER.info("【既有路网复用跨度已持久化】 " + "RoadWeaver persisted planned NETWORK_REUSE spans connection={}->{} count={}",
                         connection.from(), connection.to(), plannedReuse.size());
             }
             DetailedRoadGenerationStats.recordTargetHeight(System.nanoTime() - targetHeightStartedAt);
@@ -258,9 +260,9 @@ public final class Road {
             RoadData constructionRepaired = RoadPathCalculator.repairFinalHeightConflict(
                     rd, level, cache, connection);
             if (constructionRepaired == null) {
-                LOGGER.warn("RoadWeaver rejected route before persistence because local construction continuity repair failed connection={}->{}",
+                LOGGER.warn("【持久化前施工连续性修复失败，拒绝路线】 " + "RoadWeaver rejected route before persistence because local construction continuity repair failed connection={}->{}",
                         rawStart, rawEnd);
-                LOGGER.warn("RoadWeaver route filtered: reason=construction_continuity_repair_failed connection={}->{}",
+                LOGGER.warn("【路线被过滤：施工连续性修复失败】 " + "RoadWeaver route filtered: reason=construction_continuity_repair_failed connection={}->{}",
                         rawStart, rawEnd);
                 return null;
             }
@@ -297,7 +299,7 @@ public final class Road {
                 //   用的是修复后的地形，比上面那次更贴合最终走廊。
                 //   若没有新解（DP 无解 / 回写关闭），本调用原样返回，不影响旧判定。
                 spans = applySpanWriteback(spans, ownerA2d, ownerB2d, "post-repair");
-                LOGGER.info("RoadWeaver accepted bounded construction-feasibility height repair connection={}->{}",
+                LOGGER.info("【已接受有界施工高度修复】 " + "RoadWeaver accepted bounded construction-feasibility height repair connection={}->{}",
                         rawStart, rawEnd);
             }
             if (persistImmediately) {
@@ -314,9 +316,9 @@ public final class Road {
                 RoadData mergedConstructionRepaired = RoadPathCalculator.repairFinalHeightConflict(
                         rd, level, cache, connection);
                 if (mergedConstructionRepaired == null) {
-                    LOGGER.warn("RoadWeaver rejected merged route because post-junction construction continuity repair failed connection={}->{}",
+                    LOGGER.warn("【路口合并后施工连续性修复失败，拒绝路线】 " + "RoadWeaver rejected merged route because post-junction construction continuity repair failed connection={}->{}",
                             rawStart, rawEnd);
-                    LOGGER.warn("RoadWeaver route filtered: reason=post_junction_construction_repair_failed connection={}->{}",
+                    LOGGER.warn("【路线被过滤：路口合并后施工连续性修复失败】 " + "RoadWeaver route filtered: reason=post_junction_construction_repair_failed connection={}->{}",
                             rawStart, rawEnd);
                     return null;
                 }
@@ -325,7 +327,7 @@ public final class Road {
                     segments = rd.roadSegmentList();
                     spans = rd.spans();
                     targetY = rd.targetY();
-                    LOGGER.info("RoadWeaver accepted post-junction construction-feasibility height repair connection={}->{}",
+                    LOGGER.info("【已接受路口合并后的施工高度修复】 " + "RoadWeaver accepted post-junction construction-feasibility height repair connection={}->{}",
                             rawStart, rawEnd);
                 }
             }
@@ -333,9 +335,9 @@ public final class Road {
             rd = RoadPlanConsistencyService.reconcile(
                     level, rd, cache, terrain, streams, routeBridgeMinWaterDepth());
             if (rd == null) {
-                LOGGER.warn("RoadWeaver rejected route because final plan consistency reconciliation failed connection={}->{}",
+                LOGGER.warn("【最终计划一致性协调失败，拒绝路线】 " + "RoadWeaver rejected route because final plan consistency reconciliation failed connection={}->{}",
                         rawStart, rawEnd);
-                LOGGER.warn("RoadWeaver route filtered: reason=plan_consistency_reconcile_failed connection={}->{}",
+                LOGGER.warn("【路线被过滤：计划一致性协调失败】 " + "RoadWeaver route filtered: reason=plan_consistency_reconcile_failed connection={}->{}",
                         rawStart, rawEnd);
                 RoadPlanningService.rebindGeneratedRouteForRetry(
                         level, connection, consistencyInput, localRetryStep());
@@ -349,10 +351,10 @@ public final class Road {
             rd = RoadDataValidator.repairFinalHeightSteps(rd);
             RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(rd);
             if (!validation.valid()) {
-                LOGGER.error("RoadWeaver rejected invalid finalized road {} -> {} reason={} index={} pos={} detail={}",
+                LOGGER.error("【最终道路数据无效，拒绝路线】 " + "RoadWeaver rejected invalid finalized road {} -> {} reason={} index={} pos={} detail={}",
                         rawStart, rawEnd, validation.reason(), validation.index(),
                         validation.position(), validation.detail());
-                LOGGER.warn("RoadWeaver route filtered: reason=invalid_finalized_road:{} connection={}->{}",
+                LOGGER.warn("【路线被过滤：最终道路数据无效】 " + "RoadWeaver route filtered: reason=invalid_finalized_road:{} connection={}->{}",
                         validation.reason(), rawStart, rawEnd);
                 RoadPlanningService.rebindGeneratedRouteForRetry(
                         level, connection, rd, localRetryStep());
@@ -382,7 +384,7 @@ public final class Road {
                             targetY = rd.targetY();
                             waterValidation = crossedValidation;
                             waterCollision = null;
-                            LOGGER.warn("RoadWeaver promoted Streams river collision to {} connection={}->{}",
+                            LOGGER.warn("【河流碰撞已晋级为对应过水类型】 " + "RoadWeaver promoted Streams river collision to {} connection={}->{}",
                                     promotedType, rawStart, rawEnd);
                         }
                     }
@@ -417,7 +419,7 @@ public final class Road {
                                 targetY = rd.targetY();
                                 waterValidation = FinalRoadWaterValidator.validate(level, rd, cache, streams);
                                 waterCollision = waterValidation.collision();
-                                LOGGER.warn("RoadWeaver culverted narrow water connection={}->{} runs={} "
+                                LOGGER.warn("【窄水域已按涵洞方案处理，后续仍须终态校验】 " + "RoadWeaver culverted narrow water connection={}->{} runs={} "
                                                 + "stations={} safe={} reason={}",
                                         rawStart, rawEnd, culvert.runs(), culvert.stations(),
                                         waterValidation.safe(), waterValidation.reason());
@@ -439,7 +441,7 @@ public final class Road {
                         targetY = rd.targetY();
                         waterValidation = FinalRoadWaterValidator.validate(level, rd, cache, streams);
                         waterCollision = waterValidation.collision();
-                        LOGGER.warn("RoadWeaver retained river protection gaps and preserved remaining route "
+                        LOGGER.warn("【保留河流保护缺口和剩余可用路线】 " + "RoadWeaver retained river protection gaps and preserved remaining route "
                                         + "connection={}->{} firstSegment={} pos={} source={}",
                                 rawStart, rawEnd, waterCollision == null ? -1 : waterCollision.segmentIndex(),
                                 waterCollision == null ? null : waterCollision.position(),
@@ -447,11 +449,11 @@ public final class Road {
                     }
                 }
             }
-            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+            if (RoadBuildEvidence.enabled()) LOGGER.info("【路线最终水域校验证据】 " + "{}", RoadBuildEvidence.validation(
                     level.dimension().location().toString(), level.getSeed(), rd,
                     "final-water", waterValidation.safe(), waterValidation.reason()));
             if (!waterValidation.safe()) {
-                LOGGER.error("RoadWeaver rejected finalized road in water {} -> {} reason={} "
+                LOGGER.error("【最终道路入水，拒绝路线】 " + "RoadWeaver rejected finalized road in water {} -> {} reason={} "
                                 + "segment={} pos={} targetY={} waterSurfaceY={} bedY={} span={} source={}",
                         rawStart, rawEnd, waterValidation.reason(),
                         waterCollision == null ? -1 : waterCollision.segmentIndex(),
@@ -461,7 +463,7 @@ public final class Road {
                         waterCollision == null ? null : waterCollision.bedY(),
                         waterCollision == null ? null : waterCollision.activeSpan(),
                         waterCollision == null ? null : waterCollision.source());
-                LOGGER.warn("RoadWeaver route filtered: reason=finalized_road_in_water:{} connection={}->{}",
+                LOGGER.warn("【路线被过滤：最终道路入水】 " + "RoadWeaver route filtered: reason=finalized_road_in_water:{} connection={}->{}",
                         waterValidation.reason(), rawStart, rawEnd);
                 RoadPlanningService.rebindGeneratedRouteForRetry(
                         level, connection, rd, localRetryStep());
@@ -490,13 +492,13 @@ public final class Road {
                         spans = rd.spans();
                         targetY = rd.targetY();
                         structureValidation = gapStructureValidation;
-                        LOGGER.warn("RoadWeaver retained all internal verified-building protection gaps after final volume collision "
+                        LOGGER.warn("【最终体积碰撞后保留内部已确认建筑的保护缺口】 " + "RoadWeaver retained all internal verified-building protection gaps after final volume collision "
                                         + "connection={}->{}", rawStart, rawEnd);
                         break;
                     }
                 }
                 FinalRoadStructureValidator.Collision collision = structureValidation.collision();
-                LOGGER.error("RoadWeaver rejected finalized construction volume {} -> {} reason={} "
+                LOGGER.error("【最终施工体积与保护区域相交，拒绝当前产物】 " + "RoadWeaver rejected finalized construction volume {} -> {} reason={} "
                                 + "attempt={} segment={} kind={} pos={} y={}..{} owner={} box={}",
                         rawStart, rawEnd, structureValidation.reason(), structureAttempt + 1,
                         collision == null ? -1 : collision.segmentIndex(),
@@ -507,7 +509,7 @@ public final class Road {
                         collision == null ? null : collision.owner(),
                         collision == null ? null : collision.componentBox());
                 if (collision == null || collision.owner() == null || structureAttempt >= 3) {
-                    LOGGER.warn("RoadWeaver structure repair loop exiting: no further local attempt possible "
+                    LOGGER.warn("【不再具备局部修复条件，结束结构修复循环】 " + "RoadWeaver structure repair loop exiting: no further local attempt possible "
                                     + "reason={} attempt={} hasCollision={} hasOwner={} connection={}->{}",
                             structureValidation.reason(), structureAttempt + 1,
                             collision != null, collision != null && collision.owner() != null,
@@ -522,7 +524,7 @@ public final class Road {
                         level, connection, rd, localRetryStep());
                 if (collision.position() != null) {
                     RoadPathCalculator.recordConstructionConflictHint(connection, collision.position());
-                    LOGGER.info("RoadWeaver structure conflict hint written attempt={} owner={} pos={} connection={}->{}",
+                    LOGGER.info("【已写入局部结构冲突提示】 " + "RoadWeaver structure conflict hint written attempt={} owner={} pos={} connection={}->{}",
                             structureAttempt + 1, collision.owner(), collision.position(), rawStart, rawEnd);
                 }
                 // Local detour around the collided building only.
@@ -537,7 +539,7 @@ public final class Road {
                     centreProfile.add(new BlockPos(centre.getX(), stationY, centre.getZ()));
                 }
                 if (centreProfile == null) {
-                    LOGGER.warn("RoadWeaver structure repair loop exiting: centre profile unavailable "
+                    LOGGER.warn("【缺少道路中心或目标高度，结束结构修复】 " + "RoadWeaver structure repair loop exiting: centre profile unavailable "
                                     + "reason=missing_station_center_or_target attempt={} stations={} connection={}->{}",
                             structureAttempt + 1, segments.size(), rawStart, rawEnd);
                     break;
@@ -547,7 +549,7 @@ public final class Road {
                 List<BlockPos> repaired = StructureRepair.repairStructureIntersectionsAtExactClearance(
                         centreProfile, level, cache.getAccurateSampler(level), detourCfg, connection, 50);
                 if (repaired == null || repaired.size() < 2 || repaired.equals(centreProfile)) {
-                    LOGGER.warn("RoadWeaver structure repair loop exiting: local detour unavailable "
+                    LOGGER.warn("【局部绕行不可用，结束结构修复】 " + "RoadWeaver structure repair loop exiting: local detour unavailable "
                                     + "reason={} attempt={} nodes={}->{} connection={}->{}",
                             repaired == null ? "null_repair" : repaired.size() < 2 ? "path_too_short" : "unchanged_path",
                             structureAttempt + 1, centreProfile.size(),
@@ -556,14 +558,14 @@ public final class Road {
                 }
                 RoadData rebuilt = RoadPathCalculator.rebuildRoadDataFromProfile(rd, repaired, level, cache, connection);
                 if (rebuilt == null) {
-                    LOGGER.warn("RoadWeaver structure repair loop exiting: rebuild from detour profile failed "
+                    LOGGER.warn("【绕行纵断面重建失败，结束结构修复】 " + "RoadWeaver structure repair loop exiting: rebuild from detour profile failed "
                                     + "attempt={} nodes={}->{} connection={}->{}",
                             structureAttempt + 1, centreProfile.size(), repaired.size(), rawStart, rawEnd);
                     break;
                 }
                 rebuilt = RoadPathCalculator.repairFinalHeightConflict(rebuilt, level, cache, connection);
                 if (rebuilt == null) {
-                    LOGGER.warn("RoadWeaver structure repair loop exiting: post-detour height repair failed "
+                    LOGGER.warn("【绕行后的高度修复失败，结束结构修复】 " + "RoadWeaver structure repair loop exiting: post-detour height repair failed "
                                     + "attempt={} connection={}->{}", structureAttempt + 1, rawStart, rawEnd);
                     break;
                 }
@@ -572,7 +574,7 @@ public final class Road {
                 if (!rebuiltWater.safe()) {
                     FinalRoadWaterValidator.Collision rebuiltWaterCollision = rebuiltWater.collision();
                     if (rebuiltWaterCollision == null || rebuiltWaterCollision.segmentIndex() < 0) {
-                        LOGGER.warn("RoadWeaver structure repair loop exiting: post-detour water check failed without collision "
+                        LOGGER.warn("【绕行后水域校验失败且无碰撞详情，结束结构修复】 " + "RoadWeaver structure repair loop exiting: post-detour water check failed without collision "
                                         + "reason={} attempt={} connection={}->{}",
                                 rebuiltWater.reason(), structureAttempt + 1, rawStart, rawEnd);
                         break;
@@ -581,7 +583,7 @@ public final class Road {
                             rebuilt, rebuiltWaterCollision.segmentIndex());
                     if (gappedWater == null
                             || !FinalRoadWaterValidator.validate(level, gappedWater, cache, streams).safe()) {
-                        LOGGER.warn("RoadWeaver structure repair loop exiting: post-detour water gap retention failed "
+                        LOGGER.warn("【绕行后无法保留水域保护缺口，结束结构修复】 " + "RoadWeaver structure repair loop exiting: post-detour water gap retention failed "
                                         + "reason={} attempt={} segment={} pos={} connection={}->{}",
                                 rebuiltWater.reason(), structureAttempt + 1,
                                 rebuiltWaterCollision.segmentIndex(), rebuiltWaterCollision.position(),
@@ -594,7 +596,7 @@ public final class Road {
                 segments = rd.roadSegmentList();
                 spans = rd.spans();
                 targetY = rd.targetY();
-                LOGGER.info("RoadWeaver accepted local structure detour after final volume collision "
+                LOGGER.info("【最终体积碰撞后的局部结构绕行已接受】 " + "RoadWeaver accepted local structure detour after final volume collision "
                                 + "attempt={} connection={}->{}",
                         structureAttempt + 1, rawStart, rawEnd);
             }
@@ -602,14 +604,14 @@ public final class Road {
             DetailedRoadGenerationStats.recordFinalValidation(finalValidationNanos);
             DetailedRoadGenerationStats.RouteTiming validationTiming = DetailedRoadGenerationStats.routeTiming();
             if (validationTiming != null) validationTiming.addValidation(finalValidationNanos);
-            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+            if (RoadBuildEvidence.enabled()) LOGGER.info("【路线最终结构校验证据】 " + "{}", RoadBuildEvidence.validation(
                     level.dimension().location().toString(), level.getSeed(), rd, "final-structure",
                     structureValidation != null && structureValidation.safe(),
                     structureValidation == null ? "validation_not_run" : structureValidation.reason()));
             if (structureValidation == null || !structureValidation.safe()) {
                 FinalRoadStructureValidator.Collision finalCollision = structureValidation == null
                         ? null : structureValidation.collision();
-                LOGGER.error("RoadWeaver route finally rejected after structure repair loop "
+                LOGGER.error("【结构修复结束仍未通过，最终拒绝路线】 " + "RoadWeaver route finally rejected after structure repair loop "
                                 + "reason={} attemptExhausted=true segment={} pos={} owner={} box={} connection={}->{}",
                         structureValidation == null ? "validation_not_run" : structureValidation.reason(),
                         finalCollision == null ? -1 : finalCollision.segmentIndex(),
@@ -617,7 +619,7 @@ public final class Road {
                         finalCollision == null ? null : finalCollision.owner(),
                         finalCollision == null ? null : finalCollision.componentBox(),
                         rawStart, rawEnd);
-                LOGGER.warn("RoadWeaver route filtered: reason=construction_volume_intersection:{} connection={}->{}",
+                LOGGER.warn("【路线被过滤：施工体积与保护区域相交】 " + "RoadWeaver route filtered: reason=construction_volume_intersection:{} connection={}->{}",
                         structureValidation == null ? "validation_not_run" : structureValidation.reason(),
                         rawStart, rawEnd);
                 RoadPlanningService.rebindGeneratedRouteForRetry(
@@ -660,15 +662,15 @@ public final class Road {
                     DetailedRoadGenerationStats.recordRoadsideVillage(
                             System.nanoTime() - roadsideVillagesStartedAt);
                 } catch (RuntimeException roadsideFailure) {
-                    LOGGER.error("RoadWeaver persisted road but skipped failed roadside content {} -> {}",
+                    LOGGER.error("【道路已持久化，失败的沿路内容已跳过】 " + "RoadWeaver persisted road but skipped failed roadside content {} -> {}",
                             rawStart, rawEnd, roadsideFailure);
                 }
             }
             completed = true;
             // 规划通过仍未证明区块施工完成，后者由PathFeature单独发布结案。
-            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+            if (RoadBuildEvidence.enabled()) LOGGER.info("【路线终态校验通过；尚不代表方块竣工】 " + "{}", RoadBuildEvidence.validation(
                     level.dimension().location().toString(), level.getSeed(), rd, "validated", true, "accepted"));
-            LOGGER.info("RoadWeaver route PLANNED_OK connection={}->{} stations={} spans={} {}",
+            LOGGER.info("【道路计划已通过校验】 " + "RoadWeaver route PLANNED_OK connection={}->{} stations={} spans={} {}",
                     rawStart, rawEnd, rd.roadSegmentList().size(), rd.spans().size(), summarizeSpans(rd.spans()));
             // D1: the quality numbers, once per finished road, plus a session rollup every ten roads,
             // so a real session yields the eleven measurements instead of only "it built".
@@ -748,7 +750,7 @@ public final class Road {
         if (!ModeDpBridge.writebackEnabled()) return current;
         ModeDpBridge.Stash stash = ModeDpBridge.consumeStash();
         if (stash == null) {
-            LOGGER.info("RoadWeaver [SPAN-WB] phase={} no stashed solution, keeping legacy spans"
+            LOGGER.info("【没有暂存跨度解，保留当前跨度】 " + "RoadWeaver [SPAN-WB] phase={} no stashed solution, keeping legacy spans"
                             + " connection={}->{} {}",
                     phase, ownerA2d, ownerB2d, ModeDpBridge.writebackStats());
             return current;
@@ -756,7 +758,7 @@ public final class Road {
         List<RoadSpan> merged = ModeDpBridge.mergeByModes(
                 current, stash.solution().modes(), stash.centers(), stash.stations());
         ModeDpBridge.noteWritebackApplied();
-        LOGGER.info("RoadWeaver [SPAN-WB] phase={} spans written back connection={}->{}"
+        LOGGER.info("【跨度解已写回道路数据】 " + "RoadWeaver [SPAN-WB] phase={} spans written back connection={}->{}"
                         + " before={} after={} {}",
                 phase, ownerA2d, ownerB2d, current.size(), merged.size(), ModeDpBridge.writebackStats());
         return merged;
@@ -876,7 +878,7 @@ public final class Road {
     private static void logSpecIntegrity(RoadData rd, BlockPos from, BlockPos to) {
         try {
             RoadSpec spec = RoadSpec.from(rd);
-            LOGGER.info("RoadWeaver road spec OK connection={}->{} stations={} sections={} uncovered={}",
+            LOGGER.info("【道路规格自检通过】 " + "RoadWeaver road spec OK connection={}->{} stations={} sections={} uncovered={}",
                     from, to, spec.stationCount(), spec.sections().size(), spec.uncoveredStations());
         } catch (RoadSpec.SpecViolationException e) {
             int seen = SPEC_VIOLATIONS.incrementAndGet();
@@ -886,7 +888,7 @@ public final class Road {
             }
         } catch (Throwable t) {
             // 自检本身出问题也必须吞掉 —— 它只是诊断
-            LOGGER.warn("RoadWeaver road spec self-check failed connection={}->{}: {}",
+            LOGGER.warn("【道路规格自检失败】 " + "RoadWeaver road spec self-check failed connection={}->{}: {}",
                     from, to, t.toString());
         }
     }

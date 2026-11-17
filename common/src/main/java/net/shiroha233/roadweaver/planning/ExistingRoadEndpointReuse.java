@@ -1,6 +1,8 @@
 /* 文件职责：找一条已完工的自动路作为后续自动连接的端点（刻意做成生成器：每次只产出一个候选）。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -82,7 +84,7 @@ public final class ExistingRoadEndpointReuse {
             if (best == null || candidate.betterThan(best)) best = candidate;
         }
         if (best == null) return null;
-        LOGGER.info("RoadWeaver existing-road endpoint candidate original={} -> {} replacement={} -> {} "
+        LOGGER.info("【既有道路端点复用候选】 " + "RoadWeaver existing-road endpoint candidate original={} -> {} replacement={} -> {} "
                         + "approachDistance={} routeIndex={} existingEdge={}",
                 original.from(), original.to(), best.connection().from(), best.connection().to(),
                 best.distance(), best.routeIndex(), best.existingEdge());

@@ -1,6 +1,8 @@
 /* 文件职责：路边内容的延迟落盘：一直保存到它所属的区块收到结构起始点为止。 */
 package net.shiroha233.roadweaver.persistence.files;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.world.level.ChunkPos;
@@ -102,7 +104,7 @@ public final class PendingRoadsideContentFileStorage {
                 FileStorageIO.writeStringAtomic(path, GSON.toJson(rows));
             }
         } catch (IOException failure) {
-            LOGGER.warn("Could not persist pending roadside content kind={} chunk={}", kind, chunkKey, failure);
+            LOGGER.warn("【沿路内容待办持久化失败】 " + "Could not persist pending roadside content kind={} chunk={}", kind, chunkKey, failure);
         }
     }
 

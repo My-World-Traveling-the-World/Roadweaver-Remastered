@@ -1,6 +1,8 @@
 /* 文件职责：结构注入器。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.Registry;
@@ -97,7 +99,7 @@ public final class StructureInjector {
                         Mirror.NONE
                     );
                 } else {
-                    LOGGER.warn("Structure {} is not a supported type, skipping", pendingStructure.structureId());
+                    LOGGER.warn("【结构类型不支持，跳过注入】 " + "Structure {} is not a supported type, skipping", pendingStructure.structureId());
                     return false;
                 }
                 
@@ -111,8 +113,8 @@ public final class StructureInjector {
                 SectionPos sectionPos = SectionPos.of(chunkPos, 0);
                 structureManager.setStartForStructure(sectionPos, structure, start, chunk);
                 return true;
-            }, item -> LOGGER.warn("Structure {} not found in registry, skipping", item.structureId()),
-            (item, error) -> LOGGER.error("Failed to inject structure {} at {}", item.structureId(), item.anchor(), error),
+            }, item -> LOGGER.warn("【注册表中找不到结构，跳过注入】 " + "Structure {} not found in registry, skipping", item.structureId()),
+            (item, error) -> LOGGER.error("【结构注入失败】 " + "Failed to inject structure {} at {}", item.structureId(), item.anchor(), error),
             () -> PendingStructureStorage.markAsInjected(level, chunkPos), "structure", chunkPos);
     }
 
@@ -130,13 +132,13 @@ public final class StructureInjector {
         injectBatch(villages, item -> structureRegistry.get(item.structureId()),
             (village, structure) -> {
                 if (!(structure instanceof RoadsideVillageStructure)) {
-                    LOGGER.warn("Roadside village structure {} is not available", village.structureId());
+                    LOGGER.warn("【沿路村庄结构不可用】 " + "Roadside village structure {} is not available", village.structureId());
                     return false;
                 }
 
                 List<PoolElementStructurePiece> pieces = RoadsideVillageJigsawPlanner.createPieces(level, village, templateManager);
                 if (pieces.isEmpty()) {
-                    LOGGER.debug("Roadside village {} produced no pieces", village.placementId());
+                    LOGGER.debug("【沿路村庄没有生成片段】 " + "Roadside village {} produced no pieces", village.placementId());
                     return false;
                 }
 
@@ -148,8 +150,8 @@ public final class StructureInjector {
                 );
                 structureManager.setStartForStructure(sectionPos, structure, start, chunk);
                 return true;
-            }, item -> LOGGER.warn("Roadside village structure {} is not available", item.structureId()),
-            (item, error) -> LOGGER.error("Failed to inject roadside village {}", item.placementId(), error),
+            }, item -> LOGGER.warn("【沿路村庄结构不可用】 " + "Roadside village structure {} is not available", item.structureId()),
+            (item, error) -> LOGGER.error("【沿路村庄注入失败】 " + "Failed to inject roadside village {}", item.placementId(), error),
             () -> PendingRoadsideVillageStorage.markAsInjected(level, chunkPos), "roadside village", chunkPos);
     }
 
@@ -172,7 +174,7 @@ public final class StructureInjector {
         }
 
         if (injectedCount > 0) {
-            LOGGER.debug("Injected {} {}(s) into chunk [{}, {}]", injectedCount, kind, chunkPos.x, chunkPos.z);
+            LOGGER.debug("【当前区块结构注入结果】 " + "Injected {} {}(s) into chunk [{}, {}]", injectedCount, kind, chunkPos.x, chunkPos.z);
         }
         // 标记会清掉整批；用应处理减成功覆盖所有拒绝，包括找不到注册 ID 的分支。
         finishInjection(mark, kind, chunkPos, injectedCount, pending.size() - injectedCount);
@@ -183,7 +185,7 @@ public final class StructureInjector {
         mark.run();
         if (droppedCount > 0) {
             DROPPED_PENDING.addAndGet(droppedCount);
-            LOGGER.warn("RoadWeaver dropped {} pending {}(s) in chunk [{}, {}]"
+            LOGGER.warn("【待注入结构已丢弃并标记处理，本项不会再重试】 " + "RoadWeaver dropped {} pending {}(s) in chunk [{}, {}]"
                             + " — marked as injected, will NOT be retried (injected={})",
                     droppedCount, kind, chunkPos.x, chunkPos.z, injectedCount);
         }

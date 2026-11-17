@@ -1,6 +1,8 @@
 /* 文件职责：单个结构碎片的方块占位判定 —— 逐块分类成实心 / 杂物 / 会掉的块。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Mirror;
@@ -200,7 +202,7 @@ final class PieceOccupancy {
         // 只留外层。
         if (StructureAvoidanceCache.UNSUPPORTED_PIECE_CLASSES.size() < MAX_LOGGED_UNSUPPORTED_CLASSES
                 && StructureAvoidanceCache.UNSUPPORTED_PIECE_CLASSES.add(className)) {
-            LOGGER.info("RoadWeaver structure occupancy fallback for unsupported piece type: {} "
+            LOGGER.info("【结构片段类型不支持，使用既有占地替代判据】 " + "RoadWeaver structure occupancy fallback for unsupported piece type: {} "
                     + "(logged once per piece type)", className);
         }
         return null;
@@ -364,7 +366,7 @@ final class PieceOccupancy {
             totalBlocks = resolveBlocks;
         }
         if ((count & 255L) == 0L) {
-            LOGGER.info("STRUCTURE_RESOLVE count={} templates={} reuse={} avgMs={} totalMs={} blocks={} "
+            LOGGER.info("【结构占地解析及模板复用统计】 " + "STRUCTURE_RESOLVE count={} templates={} reuse={} avgMs={} totalMs={} blocks={} "
                             + "overflow={} notPalette={} nullTemplate={} failed={}",
                     count, templates,
                     String.format(java.util.Locale.ROOT, "%.2f", templates == 0 ? 0.0 : (double) count / templates),

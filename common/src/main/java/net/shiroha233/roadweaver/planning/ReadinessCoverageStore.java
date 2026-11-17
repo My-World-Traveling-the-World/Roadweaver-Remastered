@@ -1,6 +1,8 @@
 /* 文件职责：隔离 READY 覆盖文件的同步读写，保证文件格式可在没有世界对象时直接验证。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.persistence.files.FileStorageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,14 +105,14 @@ final class ReadinessCoverageStore {
             if (schema == SCHEMA && fingerprint.equals(storedFingerprint)) {
                 ready.addAll(storedRegions);
             } else {
-                LOGGER.info("RoadWeaver ignored stale Chunky readiness coverage: schema={} fingerprintMatch={}.",
+                LOGGER.info("【READY覆盖版本或世界指纹不匹配，忽略旧覆盖】 " + "RoadWeaver ignored stale Chunky readiness coverage: schema={} fingerprintMatch={}.",
                         schema, fingerprint.equals(storedFingerprint));
             }
         } catch (NoSuchFileException missing) {
             // 只有确认文件不存在时才能按空覆盖开始，权限/共享锁失败不能走这里。
         } catch (RuntimeException | IOException failure) {
             readFailure = failure instanceof IOException io ? io : new IOException("Invalid readiness coverage: " + path, failure);
-            LOGGER.warn("RoadWeaver could not read Chunky readiness state {}.", path, failure);
+            LOGGER.warn("【READY覆盖状态读取失败】 " + "RoadWeaver could not read Chunky readiness state {}.", path, failure);
         }
     }
 
@@ -135,7 +137,7 @@ final class ReadinessCoverageStore {
             written = true;
         } finally {
             if (TIMINGS) {
-                LOGGER.info("[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
+                LOGGER.info("【READY覆盖构建与写盘耗时】 " + "[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
                         ordered.size(), written, (writing - buildStart) / 1000, (System.nanoTime() - writing) / 1000);
             }
         }

@@ -1,6 +1,8 @@
 /* 文件职责：协调地形采样、端点高度和跨度处理，产出逐站目标高程。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
@@ -277,7 +279,7 @@ public final class TargetYComputation {
                 if (stepCount < 8) {
                     BlockPos a = centers.get(i - 1);
                     BlockPos b = centers.get(i);
-                    LOGGER.info("RoadWeaver profile height step idx={} delta={} pos=({},{})y{}->({},{})y{} inWaterSpan={}",
+                    LOGGER.info("【纵断面相邻站点高度突变】 " + "RoadWeaver profile height step idx={} delta={} pos=({},{})y{}->({},{})y{} inWaterSpan={}",
                             i, delta,
                             a.getX(), a.getZ(), smoothed[i - 1],
                             b.getX(), b.getZ(), smoothed[i],
@@ -287,7 +289,7 @@ public final class TargetYComputation {
             }
         }
         if (stepCount > 0) {
-            LOGGER.info("RoadWeaver profile height steps total={} stations={} connection={}->{}",
+            LOGGER.info("【纵断面高度突变数量汇总】 " + "RoadWeaver profile height steps total={} stations={} connection={}->{}",
                     stepCount, n,
                     connection == null ? "?" : connection.from(),
                     connection == null ? "?" : connection.to());
@@ -300,7 +302,7 @@ public final class TargetYComputation {
             int yEnd = smoothed[range.end()];
             int yAfter = smoothed[after];
             if (Math.abs(yStart - yBefore) > 1 || Math.abs(yAfter - yEnd) > 1) {
-                LOGGER.info("RoadWeaver water-span boundary height jump range={}..{} "
+                LOGGER.info("【水域跨度与岸边存在高度跳变】 " + "RoadWeaver water-span boundary height jump range={}..{} "
                                 + "bankY=({}|{}) spanY=({}|{}) terrainY=({}|{}) connection={}->{}",
                         range.start(), range.end(), yBefore, yAfter, yStart, yEnd,
                         terrainY[before] + "|" + terrainY[after],

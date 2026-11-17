@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
@@ -275,14 +277,14 @@ public final class RoadSnapService {
                                                             level, candidate, validationCache, streams))
                             : null;
                     if (gapped == null) {
-                        LOGGER.warn("RoadWeaver discarded underwater post-load road snap owners={} -> {} "
+                        LOGGER.warn("【加载后道路吸附导致入水，撤销改写】 " + "RoadWeaver discarded underwater post-load road snap owners={} -> {} "
                                 + "reason={} collision={}",
                                 current[i].ownerA2dKey(), current[i].ownerB2dKey(),
                                 waterValidation.reason(), waterValidation.collision());
                         continue;
                     }
                     current[i] = gapped;
-                    LOGGER.warn("RoadWeaver retained post-load river protection gaps owners={} -> {} "
+                    LOGGER.warn("【加载后道路吸附保留河流保护缺口】 " + "RoadWeaver retained post-load river protection gaps owners={} -> {} "
                                     + "firstSegment={} pos={}", current[i].ownerA2dKey(), current[i].ownerB2dKey(),
                             collision.segmentIndex(), collision.position());
                 }
@@ -293,13 +295,13 @@ public final class RoadSnapService {
                             net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator.validate(
                                     level, current[i], refinementCache, streams);
                 } catch (net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException unavailable) {
-                    LOGGER.warn("RoadWeaver skipped post-load road snap because its exact structure snapshot is unavailable "
+                    LOGGER.warn("【精确结构快照不可用，跳过加载后道路吸附】 " + "RoadWeaver skipped post-load road snap because its exact structure snapshot is unavailable "
                                     + "owners={} -> {} reason={}",
                             current[i].ownerA2dKey(), current[i].ownerB2dKey(), unavailable.getMessage());
                     continue;
                 }
                 if (!structureValidation.safe()) {
-                    LOGGER.warn("RoadWeaver discarded unsafe post-load road snap owners={} -> {} collision={}",
+                    LOGGER.warn("【加载后道路吸附不安全，撤销改写】 " + "RoadWeaver discarded unsafe post-load road snap owners={} -> {} collision={}",
                             current[i].ownerA2dKey(), current[i].ownerB2dKey(),
                             structureValidation.collision());
                     continue;
@@ -322,7 +324,7 @@ public final class RoadSnapService {
                         .toList());
             }
         } catch (Exception e) {
-            LOGGER.error("RoadWeaver failed to persist direct road junctions", e);
+            LOGGER.error("【直接道路路口持久化失败】 " + "RoadWeaver failed to persist direct road junctions", e);
         }
         logSnapTiming(roads.size(), replacements.size(), (System.nanoTime() - snapStartedAt) / 1_000_000L);
     }
@@ -331,11 +333,11 @@ public final class RoadSnapService {
      *  is worth an INFO line; the rest stays at debug level. */
     static void logSnapTiming(int roads, int replaced, long elapsedMs) {
         if (elapsedMs < SNAP_TIMING_LOG_MS) {
-            LOGGER.debug("RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
+            LOGGER.debug("【已存道路协调数量与耗时】 " + "RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
                     roads, replaced, elapsedMs);
             return;
         }
-        LOGGER.info("RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
+        LOGGER.info("【已存道路协调数量与耗时】 " + "RoadWeaver saved-road reconciliation roads={} replaced={} elapsedMs={}",
                 roads, replaced, elapsedMs);
     }
 
@@ -420,7 +422,7 @@ public final class RoadSnapService {
             }
         }
         if (!changed) return road;
-        LOGGER.info("RoadWeaver removed duplicate junction span records owners={} -> {} removed={}",
+        LOGGER.info("【已删除重复的路口跨度记录】 " + "RoadWeaver removed duplicate junction span records owners={} -> {} removed={}",
                 road.ownerA2dKey(), road.ownerB2dKey(), road.spans().size() - unique.size());
         return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
                 road.roadSegmentList(), unique, road.targetY(), road.ownerA2dKey(), road.ownerB2dKey());
@@ -479,7 +481,7 @@ public final class RoadSnapService {
             }
         }
         if (retained.size() == road.spans().size()) return road;
-        LOGGER.info("RoadWeaver network reuse construction suppressed owners={} -> {} bridges={} tunnels={} crossings={}",
+        LOGGER.info("【既有路网复用段已抑制重复桥隧施工】 " + "RoadWeaver network reuse construction suppressed owners={} -> {} bridges={} tunnels={} crossings={}",
                 road.ownerA2dKey(), road.ownerB2dKey(), bridges, tunnels, crossings);
         return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
                 road.roadSegmentList(), List.copyOf(retained), road.targetY(),

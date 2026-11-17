@@ -1,6 +1,8 @@
 /* 文件职责：保留显式旧模式的剖面编排，顺序与端点锁契约不随拆分改变。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
@@ -63,7 +65,7 @@ final class LegacyTargetProfile {
             for (int i = 0; i < smoothed.length; i++) {
                 if (smoothed[i] != tunnelProfile[i]) changed++;
             }
-            LOGGER.info("RoadWeaver proactive tunnel planning selected mountain profile: changedStations={} totalStations={}",
+            LOGGER.info("【主动隧道规划已选取山体剖面】 " + "RoadWeaver proactive tunnel planning selected mountain profile: changedStations={} totalStations={}",
                     changed, smoothed.length);
             smoothed = tunnelProfile;
         }
@@ -88,7 +90,7 @@ final class LegacyTargetProfile {
             }
             BlockPos startCross = connection.from();
             BlockPos endCross = connection.to();
-            LOGGER.info("RoadWeaver structure boundary grades locked connection={}->{} startY={} endY={} "
+            LOGGER.info("【建筑边界纵坡与端点高度已锁定】 " + "RoadWeaver structure boundary grades locked connection={}->{} startY={} endY={} "
                             + "terrainStartY={} terrainEndY={} startCross=({},{}) endCross=({},{}) stations={} "
                             + "startLocked={} endLocked={} startUnknown={} endUnknown={}",
                     connection.from(), connection.to(), startBoundary, endBoundary,

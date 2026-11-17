@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
@@ -154,7 +156,7 @@ public final class BridgeSegmentPlannerNew {
         String logKey = access.dimensionId() + "|" + Math.round(bridgeLength)
                 + "|" + bridge.getId();
         if (LOGGED_BRIDGES.add(logKey)) {
-            LOGGER.info("RoadWeaver original bridge template={} lengthBlocks={} deckY={}",
+            LOGGER.info("【本段选用的原始桥模板及桥面高度】 " + "RoadWeaver original bridge template={} lengthBlocks={} deckY={}",
                     bridge.getId(), Math.round(bridgeLength), deckY);
         }
 
@@ -200,7 +202,7 @@ public final class BridgeSegmentPlannerNew {
                 visit = forced;
                 long filled = LANDING_MOUTHS_FILLED.incrementAndGet();
                 if (filled <= 8 || filled % 32 == 0) {
-                    LOGGER.info("RoadWeaver bridge landing mouth had no deck in the template abutment; "
+                    LOGGER.info("【模板桥台无桥面，使用桥身列映射补齐接岸】 " + "RoadWeaver bridge landing mouth had no deck in the template abutment; "
                                     + "used the body column mapping instead deckY={} placedBlocks={} "
                                     + "coveredRoadColumns={} count={}",
                             deckY, forced.placedBlocks(), forced.coveredRoadColumns(), filled);

@@ -1,6 +1,8 @@
 /* 文件职责：道路生成的细分统计（各阶段耗时），供日志与诊断读取。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateSamplingStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,7 +131,7 @@ public final class DetailedRoadGenerationStats {
     }
 
     public static void logSummary(long wallNanos) {
-        LOGGER.info("RoadWeaver detailed generation timing: roads={} completed={} failed={} wallMs={} "
+        LOGGER.info("【道路生成各阶段耗时汇总】 " + "RoadWeaver detailed generation timing: roads={} completed={} failed={} wallMs={} "
                         + "roadWorkerMs={} plannedLookupMs={} exactHeightMs={} gradeRepairMs={} "
                         + "structureCorridorMs={} globalRerouteMs={} segmentBuildMs={} constructionSetupMs={} "
                         + "streamsPrewarmMs={} spanExtractionMs={} targetHeightMs={} planningRepairMs={} "
@@ -164,7 +166,7 @@ public final class DetailedRoadGenerationStats {
         lastChunkBatchRequests = requests;
         long requested = AccurateSamplingStats.getChunkBatchRequestedColumns();
         long computed = AccurateSamplingStats.getChunkBatchComputedColumns();
-        LOGGER.info("RoadWeaver accurate chunk batch: requests={} requestedColumns={} wholeChunks={} "
+        LOGGER.info("【精确采样整块批次与额外列数】 " + "RoadWeaver accurate chunk batch: requests={} requestedColumns={} wholeChunks={} "
                         + "computedColumns={} amplification={}x",
                 requests, requested, AccurateSamplingStats.getChunkBatchWholeChunks(), computed,
                 requested <= 0L ? "n/a" : String.format(java.util.Locale.ROOT, "%.2f", computed / (double) requested));
@@ -255,12 +257,12 @@ public final class DetailedRoadGenerationStats {
         private void log() {
             if (spanNanos == 0L && validationNanos == 0L && totalColumns == 0L
                     && columnSourceCached == 0L) return;
-            LOGGER.info("RoadWeaver route timing: connection={} spanMs={} finalValidationMs={} "
+            LOGGER.info("【单条道路跨度与终态校验耗时】 " + "RoadWeaver route timing: connection={} spanMs={} finalValidationMs={} "
                             + "missingColumns={} totalColumns={}",
                     connection, nanosToMillis(spanNanos), nanosToMillis(validationNanos),
                     missingColumns, totalColumns);
             if (columnSourceCached > 0L || columnSourcePrefetched > 0L || columnSourceSampled > 0L) {
-                LOGGER.info("RoadWeaver final validation column source: cached={} prefetched={} sampled={} connection={}",
+                LOGGER.info("【终态校验地形列的缓存和补样来源】 " + "RoadWeaver final validation column source: cached={} prefetched={} sampled={} connection={}",
                         columnSourceCached, columnSourcePrefetched, columnSourceSampled, connection);
             }
         }

@@ -1,6 +1,8 @@
 /* 文件职责：路边村庄拼图规划器。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +53,7 @@ public final class RoadsideVillageJigsawPlanner {
             });
         }
 
-        LOGGER.debug("Created {} roadside village pieces for {}", pieces.size(), village.placementId());
+        LOGGER.debug("【沿路村庄拼接片段已创建】 " + "Created {} roadside village pieces for {}", pieces.size(), village.placementId());
         return pieces;
     }
 
@@ -65,7 +67,7 @@ public final class RoadsideVillageJigsawPlanner {
         ResourceKey<StructureTemplatePool> poolKey = ResourceKey.create(Registries.TEMPLATE_POOL, poolId);
         Optional<Holder.Reference<StructureTemplatePool>> holder = pools.getHolder(poolKey);
         if (holder.isEmpty() || holder.get().value().size() == 0) {
-            LOGGER.debug("Roadside village pool {} is not available", poolId);
+            LOGGER.debug("【沿路村庄模板池不可用】 " + "Roadside village pool {} is not available", poolId);
             return Optional.empty();
         }
 
@@ -100,7 +102,7 @@ public final class RoadsideVillageJigsawPlanner {
         try {
             return Optional.of(element.getBoundingBox(templateManager, position, rotation));
         } catch (IllegalStateException ex) {
-            LOGGER.debug("Skipping non-placeable roadside village pool element: {}", ex.getMessage());
+            LOGGER.debug("【模板池元素不可放置，跳过该元素】 " + "Skipping non-placeable roadside village pool element: {}", ex.getMessage());
             return Optional.empty();
         }
     }
@@ -112,7 +114,7 @@ public final class RoadsideVillageJigsawPlanner {
         try {
             return element.getShuffledJigsawBlocks(templateManager, BlockPos.ZERO, rotation, random);
         } catch (IllegalStateException ex) {
-            LOGGER.debug("Skipping roadside village pool element without jigsaw data: {}", ex.getMessage());
+            LOGGER.debug("【模板池元素没有拼接数据，跳过该元素】 " + "Skipping roadside village pool element without jigsaw data: {}", ex.getMessage());
             return List.of();
         }
     }

@@ -15,6 +15,8 @@
 
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
@@ -247,7 +249,7 @@ public final class RoadGradePlanner {
                 if (result[i] < before[i]) cappedStations++;
             }
         }
-        LOGGER.info(GradeCap.summary(mode, cappedStations, total));
+        LOGGER.info("【道路纵坡规划诊断】 {}", GradeCap.summary(mode, cappedStations, total));
         return result;
     }
 
@@ -607,7 +609,7 @@ public final class RoadGradePlanner {
             }
         }
         if (changed > 0) {
-            LOGGER.info("RoadWeaver accurate grade profile: stations={} changed={} cutStations={} fillStations={} step2={}",
+            LOGGER.info("【精确纵断面挖填与修改站数】 " + "RoadWeaver accurate grade profile: stations={} changed={} cutStations={} fillStations={} step2={}",
                     result.length, changed, cutStations, fillStations, maxStepPerTwoSegments);
         }
         return result;

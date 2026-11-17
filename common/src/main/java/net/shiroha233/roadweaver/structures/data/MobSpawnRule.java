@@ -1,6 +1,8 @@
 /* 文件职责：结构生物生成规则。 */
 package net.shiroha233.roadweaver.structures.data;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import org.slf4j.Logger;
@@ -58,7 +60,7 @@ public record MobSpawnRule(
         Optional<EntityType<?>> opt = BuiltInRegistries.ENTITY_TYPE.getOptional(entityId);
         if (opt.isEmpty()) {
             if (MISSING_ENTITY_LOGGED.add(entityId)) {
-                LOGGER.warn("Missing entity type {}, skipping spawn rule", entityId);
+                LOGGER.warn("【实体类型未注册，跳过对应生成规则】 " + "Missing entity type {}, skipping spawn rule", entityId);
             }
         }
         return opt;

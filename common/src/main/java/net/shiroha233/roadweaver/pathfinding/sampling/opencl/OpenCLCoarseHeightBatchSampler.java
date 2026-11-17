@@ -1,6 +1,8 @@
 /* 文件职责：使用 OpenCL 执行粗高度批量采样并提供逐程序校验与 CPU 回退。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
 import net.minecraft.world.level.Level;
@@ -218,13 +220,13 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
                         String mismatch = validation.detail();
                         String reason = "OpenCL coarse sampling validation failed: " + mismatch;
                         if (OpenCLWorldSupport.markUnsupported(reason)) {
-                            LOGGER.info("OpenCL coarse sampling validation failed; falling back to CPU: {}", mismatch);
+                            LOGGER.info("【GPU粗采样校验失败，转用CPU】 " + "OpenCL coarse sampling validation failed; falling back to CPU: {}", mismatch);
                         }
                         InitialGenerationProgressTracker.setBackend("CPU", "CPU", mismatch);
                         return fallback().sampleHeights(request);
                     }
                     if (validationMode == ValidationMode.SESSION) {
-                        LOGGER.info("OpenCL coarse sampling session spot check passed: samples={} checked={}",
+                        LOGGER.info("【GPU粗采样会话抽查通过】 " + "OpenCL coarse sampling session spot check passed: samples={} checked={}",
                                 request.sampleCount(), validation.checkedSamples());
                     }
                 }
@@ -235,7 +237,7 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
                 long scratchBytes = Math.multiplyExact(
                         Math.multiplyExact((long) request.sampleCount(), (long) Math.max(1, program.nodes().size())),
                         (long) Double.BYTES);
-                LOGGER.info("OpenCL coarse sampling kernel executed: samples={} nodes={} scratchMiB={} reusableBuffers=true",
+                LOGGER.info("【GPU粗采样内核执行完成】 " + "OpenCL coarse sampling kernel executed: samples={} nodes={} scratchMiB={} reusableBuffers=true",
                         request.sampleCount(),
                         program.nodes().size(),
                         scratchBytes / (1024L * 1024L));
@@ -282,7 +284,7 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
                     if (lane == null) break;
                     COARSE_LANE_RUNTIMES.add(lane);
                 }
-                LOGGER.info("RoadWeaver OpenCL coarse lanes prepared: lanes={} device={} memoryMiB={}",
+                LOGGER.info("【GPU粗采样并发通道已准备】 " + "RoadWeaver OpenCL coarse lanes prepared: lanes={} device={} memoryMiB={}",
                         COARSE_LANE_RUNTIMES.size(), first.deviceName(),
                         first.deviceInfo().globalMemoryBytes() / (1024L * 1024L));
             }
@@ -397,12 +399,12 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
             // ②若要在本包生效，应改为比较「单批实际申请量（scratch+heights+params）」
             // 与「当前剩余空闲」，而不是拿总预算去比单批需求（两者量纲不一致，天然不触发）。
             if (BUDGET_DIVERT_LOGGED.compareAndSet(false, true)) {
-                LOGGER.info("OpenCL coarse sampling diverted to CPU: batch scratch {} MiB exceeds GPU budget {} MiB "
+                LOGGER.info("【粗采样所需显存超过预算，转用CPU；后续同类细节仅记调试日志】 " + "OpenCL coarse sampling diverted to CPU: batch scratch {} MiB exceeds GPU budget {} MiB "
                                 + "(samples={} nodes={}); further diversions are logged at debug level",
                         requiredScratchBytes / (1024L * 1024L), budget / (1024L * 1024L),
                         request.sampleCount(), program.nodes().size());
             } else {
-                LOGGER.debug("OpenCL coarse sampling diverted to CPU: scratch={} MiB budget={} MiB samples={}",
+                LOGGER.debug("【粗采样所需显存超过预算，本批转用CPU】 " + "OpenCL coarse sampling diverted to CPU: scratch={} MiB budget={} MiB samples={}",
                         requiredScratchBytes / (1024L * 1024L), budget / (1024L * 1024L),
                         request.sampleCount());
             }

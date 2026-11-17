@@ -1,6 +1,8 @@
 /* 文件职责：开局道路的延迟施工：等条件满足再铺，避免和预热抢线程。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -52,7 +54,7 @@ public final class DeferredInitialRoadConstructionService {
         // 逐键入队，不让大批规划持锁到整张路网入队完。
         for (long key : chunkKeys) state.pending.add(key);
         state.total = Math.max(state.total, state.completed + state.pending.size());
-        LOGGER.info("RoadWeaver deferred initial construction queued: chunks={}", state.pending.size());
+        LOGGER.info("【初始道路区块已加入延迟施工队列】 " + "RoadWeaver deferred initial construction queued: chunks={}", state.pending.size());
     }
 
     /** 内存队列不会写入存档，重开时由已存道路和施工台账补回未完工键。 */
@@ -74,7 +76,7 @@ public final class DeferredInitialRoadConstructionService {
         }
         state.total = Math.max(state.total, state.completed + state.pending.size());
         if (recovered > 0) {
-            LOGGER.info("RoadWeaver recovered deferred construction queue after restart: chunks={}", recovered);
+            LOGGER.info("【已从存档恢复延迟施工队列】 " + "RoadWeaver recovered deferred construction queue after restart: chunks={}", recovered);
         }
     }
 
@@ -115,7 +117,7 @@ public final class DeferredInitialRoadConstructionService {
         var sample = selection.build();
         int settled = selection.settled();
         if (TIMINGS) {
-            LOGGER.info("[DEFERRED-CHUNK-TIMING] pending={} hintSteps={} sweepSteps={} buildable={} settled={} selectUs={}",
+            LOGGER.info("【延迟施工候选选择次数与耗时】 " + "[DEFERRED-CHUNK-TIMING] pending={} hintSteps={} sweepSteps={} buildable={} settled={} selectUs={}",
                     state.pending.size(), selection.hintSteps(), selection.sweepSteps(), sample.size(), settled,
                     (System.nanoTime() - startedAt) / 1_000L);
         }
@@ -149,10 +151,10 @@ public final class DeferredInitialRoadConstructionService {
         }
         state.completed += settledNow;
         state.cooldownTicks = DRAIN_INTERVAL_TICKS;
-        LOGGER.info("RoadWeaver deferred initial construction drain: pending={} sample={} placed={} settled={} abandoned={}",
+        LOGGER.info("【本轮延迟施工处理结果】 " + "RoadWeaver deferred initial construction drain: pending={} sample={} placed={} settled={} abandoned={}",
                 state.pending.size(), sample.size(), placed, settled + settledNow, abandoned);
         if (abandoned > 0) {
-            LOGGER.warn("RoadWeaver gave up on {} deferred chunk(s) after {} attempts each; "
+            LOGGER.warn("【延迟施工重试耗尽，区块未结案且没有完工台账】 " + "RoadWeaver gave up on {} deferred chunk(s) after {} attempts each; "
                             + "their plan never settled (nothing placed, no ledger entry, no terminal mark).",
                     abandoned, MAX_DRAIN_ATTEMPTS);
         }
@@ -162,7 +164,7 @@ public final class DeferredInitialRoadConstructionService {
 
     private static void logDrainedIfIdle(ServerLevel level, State state, int placed, int settled) {
         if (!state.pending.isEmpty() || state.total <= 0) return;
-        LOGGER.info("RoadWeaver deferred initial construction queue is empty: settled={} lastPlaced={} lastSettled={}",
+        LOGGER.info("【延迟施工队列已排空】 " + "RoadWeaver deferred initial construction queue is empty: settled={} lastPlaced={} lastSettled={}",
                 state.completed, placed, settled);
         state.total = 0;
         state.attempts.clear();
@@ -199,7 +201,7 @@ public final class DeferredInitialRoadConstructionService {
             }
         }
         if (newlyMarked > 0) {
-            LOGGER.info("RoadWeaver marked {} chunk(s) no-construction-required (empty compiled plan; terminal).",
+            LOGGER.info("【编译计划为空，区块标记为无需施工】 " + "RoadWeaver marked {} chunk(s) no-construction-required (empty compiled plan; terminal).",
                     newlyMarked);
         }
     }
@@ -242,7 +244,7 @@ public final class DeferredInitialRoadConstructionService {
             if (key != null && marked.remove(key)) removed++;
         }
         if (removed > 0) {
-            LOGGER.info("RoadWeaver cleared {} chunk(s) from no-construction-required "
+            LOGGER.info("【新道路使旧空计划失效，撤销无需施工标记】 " + "RoadWeaver cleared {} chunk(s) from no-construction-required "
                     + "(new road data landed; the earlier empty-plan conclusion is stale).",
                     removed);
         }

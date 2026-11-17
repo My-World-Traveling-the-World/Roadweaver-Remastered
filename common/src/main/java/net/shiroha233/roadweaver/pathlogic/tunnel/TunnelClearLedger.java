@@ -1,6 +1,8 @@
 /* 文件职责：0.9.065：[TUNNEL-CLEAR] 每段（span）一行的清空台账。 */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -112,7 +114,7 @@ public final class TunnelClearLedger {
     public static String report(Scope scope) {
         String line = line(scope);
         if (scope == null) {
-            LOGGER.info(line);
+            LOGGER.info("【隧道净空账本处理结果】 {}", line);
             return line;
         }
         Counts counts = counts(scope);
@@ -120,7 +122,7 @@ public final class TunnelClearLedger {
             if (counts.reported) return line;
             counts.reported = true;
         }
-        LOGGER.info(line);
+        LOGGER.info("【隧道净空账本处理结果】 {}", line);
         return line;
     }
 

@@ -1,6 +1,8 @@
 /* 文件职责：结构端点的归属推断 —— 判断哪个结构「属于」这条路的两端。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -233,7 +235,7 @@ public final class EndpointOwnerResolver {
             InferredEndpointOwner inferred = inferNearbyEndpointOwner(endpoint, boxes);
             if (inferred != null) {
                 result.add(inferred.owner());
-                LOGGER.info("RoadWeaver inferred endpoint owner from nearby verified building endpoint={} owner={} distance={}",
+                LOGGER.info("【从附近已确认建筑推断端点归属】 " + "RoadWeaver inferred endpoint owner from nearby verified building endpoint={} owner={} distance={}",
                         endpoint, inferred.owner(), Math.sqrt(inferred.distanceSquared()));
                 return;
             }
@@ -309,7 +311,7 @@ public final class EndpointOwnerResolver {
         if (replacement != null && !ambiguous) {
             result.add(replacement);
             if (ENDPOINT_OWNER_LOGGED.add(endpoint.toString())) {
-                LOGGER.info("RoadWeaver remapped selected endpoint owner endpoint={} registered={} actual={} distance={}",
+                LOGGER.info("【端点登记归属与实际建筑不一致，已重新映射】 " + "RoadWeaver remapped selected endpoint owner endpoint={} registered={} actual={} distance={}",
                         endpoint, identity.structureId(), replacement.structureId(), Math.sqrt(replacementDistance));
             }
             return;
@@ -324,7 +326,7 @@ public final class EndpointOwnerResolver {
         if (inferred != null) {
             result.add(inferred.owner());
             if (ENDPOINT_OWNER_LOGGED.add(endpoint.toString())) {
-                LOGGER.info("RoadWeaver inferred endpoint exit owner endpoint={} registered={} actual={} distance={}",
+                LOGGER.info("【已推断端点出口所属建筑】 " + "RoadWeaver inferred endpoint exit owner endpoint={} registered={} actual={} distance={}",
                         endpoint, identity.structureId(), inferred.owner().structureId(),
                         Math.sqrt(inferred.distanceSquared()));
             }
@@ -341,7 +343,7 @@ public final class EndpointOwnerResolver {
     private static void noteUnresolvedEndpointOwner(BlockPos endpoint, String registeredId) {
         long n = UNRESOLVED_ENDPOINT_OWNERS.incrementAndGet();
         if (UNRESOLVED_WARNED.compareAndSet(false, true)) {
-            LOGGER.warn("RoadWeaver could not resolve any owner for endpoint {} (registered={})"
+            LOGGER.warn("【端点归属无法解析，目的建筑不再豁免避让；优先检查归属登记】 " + "RoadWeaver could not resolve any owner for endpoint {} (registered={})"
                             + " — this endpoint's structure loses its exemption, so the road may be"
                             + " blocked by its own destination building. First of possibly many (count={})",
                     endpoint, registeredId, n);

@@ -1,6 +1,8 @@
 /* 文件职责：协调结构发现、连接拓扑规划与道路地形规划用例。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
@@ -149,7 +151,7 @@ public final class RoadPlanningService {
                             Math.min(shared[j - 1] + 1, envelope[j]));
                 }
                 UnknownEndpointHeightRegistry.preplan(entry.getKey(), agreed, shared);
-                LOGGER.info("RoadWeaver unknown endpoint preplanned agreed height={} endpoint=({},{}) "
+                LOGGER.info("【未知端点预规划共享高度已确定】 " + "RoadWeaver unknown endpoint preplanned agreed height={} endpoint=({},{}) "
                                 + "incoming={} class={} windowLowest={} sharedStations={}",
                         agreed, ep.getX(), ep.getZ(), entry.getValue().size(),
                         classification, windowLowest, shared.length);
@@ -208,7 +210,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         }
         if (!unique.isEmpty()) {
             PROTECTED_GAP_HINTS.put(PlannedPathKey.of(connection), List.copyOf(unique.values()));
-            LOGGER.info("RoadWeaver persisted protected-gap local hints centers={} radius={} connection={}->{}",
+            LOGGER.info("【保护缺口局部提示已持久化】 " + "RoadWeaver persisted protected-gap local hints centers={} radius={} connection={}->{}",
                     unique.size(), ConfigService.get().planning().localConflictRadiusBlocks(),
                     connection.from(), connection.to());
         }
@@ -266,7 +268,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
                 TerrainSamplingSessions.forLevel(level).effectiveMode(),
                 retryConfig,
                 Map.of(connection, List.copyOf(centers)));
-        LOGGER.info("RoadWeaver rebound generated route for local retry: step={} nodes={} connection={}->{}",
+        LOGGER.info("【已将生成路线重新绑定供局部重试】 " + "RoadWeaver rebound generated route for local retry: step={} nodes={} connection={}->{}",
                 retryConfig.effectiveAStarStep(), centers.size(), connection.from(), connection.to());
     }
     static final RoadTerrainPlanningPipeline TERRAIN_PLANNING = new RoadTerrainPlanningPipeline();
@@ -276,7 +278,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         // Never drop arbitrary entries after a large-radius scan: doing so
         // schedules already planned regions again and can create duplicate work.
         if (level != null) {
-            LOGGER.debug("RoadWeaver retained all persistent planning markers dimension={}",
+            LOGGER.debug("【保留该维度全部持久规划标记】 " + "RoadWeaver retained all persistent planning markers dimension={}",
                     level.dimension().location());
         }
     }
@@ -434,7 +436,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         collectStructurePointsInto(level, minBlockX, minBlockZ, maxBlockX, maxBlockZ, points, seenPos);
         long structureIndexMillis = elapsedMillis(startedAt);
         if (points.size() < 2) {
-            LOGGER.info("RoadWeaver planning timing: dimension={} structures={} structureIndexMs={} terrainPlanningMs=0 totalMs={}",
+            LOGGER.info("【结构索引阶段耗时，本次没有地形规划】 " + "RoadWeaver planning timing: dimension={} structures={} structureIndexMs={} terrainPlanningMs=0 totalMs={}",
                     level.dimension().location(), points.size(), structureIndexMillis, elapsedMillis(startedAt));
             return;
         }
@@ -509,10 +511,10 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
             }
             rebuilt.addAll(truncatedEdges.values());
             provider.setStructureConnections(level, rebuilt);
-            LOGGER.info("RoadWeaver overlap truncation committed: replaced={} topologySize={}",
+            LOGGER.info("【道路重叠裁切已提交】 " + "RoadWeaver overlap truncation committed: replaced={} topologySize={}",
                     truncatedEdges.size(), rebuilt.size());
         }
-        LOGGER.info("RoadWeaver planning timing: dimension={} structures={} connections={} structureIndexMs={} terrainPlanningMs={} totalMs={}",
+        LOGGER.info("【道路规划各阶段耗时】 " + "RoadWeaver planning timing: dimension={} structures={} connections={} structureIndexMs={} terrainPlanningMs={} totalMs={}",
                 level.dimension().location(), points.size(), incoming.size(), structureIndexMillis,
                 elapsedMillis(terrainStartedAt), elapsedMillis(startedAt));
     }

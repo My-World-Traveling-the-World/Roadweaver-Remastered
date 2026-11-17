@@ -1,6 +1,8 @@
 /* 文件职责：api 模块的后端实现：把各能力接口接到 common 的真实实现上。 */
 package net.shiroha233.roadweaver.apiimpl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import net.shiroha233.roadweaver.planning.AsyncPlanningOps;
 import java.util.LinkedHashSet;
@@ -118,7 +120,7 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
     public void addLifecycleListener(PlanningLifecycleListener listener) {
         if (listener != null) {
             listeners.add(listener);
-            LOGGER.info("RoadWeaver api: lifecycle listener registered (total={})",
+            LOGGER.info("【生命周期监听器注册完成】 " + "RoadWeaver api: lifecycle listener registered (total={})",
                     listeners.size());
         }
     }
@@ -140,7 +142,7 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
             try {
                 l.onRiversPrewarmed();
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("RoadWeaver api: onRiversPrewarmed listener failed: {}", e.toString());
+                LOGGER.warn("【河流预热完成回调失败】 " + "RoadWeaver api: onRiversPrewarmed listener failed: {}", e.toString());
             }
         }
     }
@@ -151,7 +153,7 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
             try {
                 l.onInitialGenerationStart();
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("RoadWeaver api: onInitialGenerationStart listener failed: {}", e.toString());
+                LOGGER.warn("【道路初始生成开始回调失败】 " + "RoadWeaver api: onInitialGenerationStart listener failed: {}", e.toString());
             }
         }
     }
@@ -164,7 +166,7 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
             try {
                 l.onInitialGenerationEnd(summary);
             } catch (RuntimeException | LinkageError e) {
-                LOGGER.warn("RoadWeaver api: onInitialGenerationEnd listener failed: {}", e.toString());
+                LOGGER.warn("【道路初始生成结束回调失败】 " + "RoadWeaver api: onInitialGenerationEnd listener failed: {}", e.toString());
             }
         }
     }

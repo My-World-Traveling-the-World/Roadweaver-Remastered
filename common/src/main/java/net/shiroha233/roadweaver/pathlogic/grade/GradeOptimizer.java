@@ -10,6 +10,8 @@
 
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import static net.shiroha233.roadweaver.pathlogic.grade.GradeOptimizer.*;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -242,7 +244,7 @@ public final class GradeOptimizer {
             deepest = Math.max(deepest, terrain[i] - upper);
             if (terrain[i] - upper > TUNNEL_SURFACE_CUT_BUDGET) {
                 if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("RoadWeaver tunnel chord justified: surface cut would reach {} blocks at station {} (anchor span {}..{}) overburden threshold {}",
+                    LOGGER.debug("【明挖深度超过门槛，允许采用隧道弦线】 " + "RoadWeaver tunnel chord justified: surface cut would reach {} blocks at station {} (anchor span {}..{}) overburden threshold {}",
                             terrain[i] - upper, i, from, to, tunnelCoreOverburden);
                 }
                 return false;

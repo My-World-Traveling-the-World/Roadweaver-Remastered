@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.pathlogic.tunnel;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
@@ -161,7 +163,7 @@ public final class RoadTunnelBuilder {
             construction.accept(TunnelPlan.none());
             return;
         }
-        LOGGER.info("RoadWeaver tunnel span segment={} span={}..{} len={} center={},{} junction={}",
+        LOGGER.info("【当前隧道跨度和路口位置】 " + "RoadWeaver tunnel span segment={} span={}..{} len={} center={},{} junction={}",
                 segmentIndex, span.start(), span.end(), span.length(centers),
                 segment == null || segment.middlePos() == null ? -1 : segment.middlePos().getX(),
                 segment == null || segment.middlePos() == null ? -1 : segment.middlePos().getZ(),
@@ -257,7 +259,7 @@ public final class RoadTunnelBuilder {
         }
         if (!check.safe()) {
             if (isContinuityOnlyFailure(check.reason())) {
-                LOGGER.info("RoadWeaver tunnel forced continuous bore segment={} role={} reason={} center={},{}",
+                LOGGER.info("【按连续洞身规则施工当前隧道站点】 " + "RoadWeaver tunnel forced continuous bore segment={} role={} reason={} center={},{}",
                         segmentIndex,
                         junction ? "JUNCTION" : (portal ? "PORTAL" : "SEALED"),
                         check.reason(),
@@ -279,7 +281,7 @@ public final class RoadTunnelBuilder {
                 // 那一列的顶板也随之被跳过 —— 结果从「墙上一个洞」变成「头顶一块石头没清」。
                 // 注意：不要把它改回 protectedGapPlan，也不要退回 T-22 之前的整段降级
                 // （那会产生「洞→未挖墙→洞」的残墙，是这条线最差的一档）。
-                LOGGER.info("RoadWeaver tunnel headroom veto kept as bore segment={} reason={} pos={} "
+                LOGGER.info("【洞顶净空否决已保留为洞身，跳过屋顶】 " + "RoadWeaver tunnel headroom veto kept as bore segment={} reason={} pos={} "
                                 + "action=keep_bore_skip_roof",
                         segmentIndex, check.reason(), check.position());
             } else {
@@ -292,7 +294,7 @@ public final class RoadTunnelBuilder {
                     ? -1 : profile[segmentIndex];
             int terrainY = center == null ? -1 :
                     TunnelReadTiming.terrain(world, center.getX(), center.getZ());
-            LOGGER.info("RoadWeaver tunnel section segment={} role={} roadY={} terrainY={} "
+            LOGGER.info("【隧道断面角色和覆土高度】 " + "RoadWeaver tunnel section segment={} role={} roadY={} terrainY={} "
                             + "overburden={} center={},{}",
                     segmentIndex,
                     junction ? "JUNCTION" : (portal ? "PORTAL" : "SEALED"),
@@ -525,7 +527,7 @@ public final class RoadTunnelBuilder {
             }
         }
         BlockPos sample = plan.interior().get(0);
-        LOGGER.info("RoadWeaver tunnel built role={} columns={} roofed={}/{} overburden={}..{} "
+        LOGGER.info("【隧道断面落块、净空和保留灯笼统计】 " + "RoadWeaver tunnel built role={} columns={} roofed={}/{} overburden={}..{} "
                         + "cleared={} missed={} lanternsKept={} at {},{} y={}",
                 plan.portal() ? "PORTAL" : (plan.junction() ? "JUNCTION" : "SEALED"),
                 builtColumns, roofedColumns, plan.interior().size(),
@@ -536,7 +538,7 @@ public final class RoadTunnelBuilder {
             long count = PORTAL_SECTIONS.incrementAndGet();
             if (count <= 8 || count % 128 == 0) {
                 BlockPos center = plan.interior().get(plan.interior().size() / 2);
-                LOGGER.info("RoadWeaver opened tunnel portal section at {},{} y={} count={}",
+                LOGGER.info("【隧道洞口断面已敞开】 " + "RoadWeaver opened tunnel portal section at {},{} y={} count={}",
                         center.getX(), center.getZ(), center.getY(), count);
             }
         }
@@ -786,9 +788,9 @@ public final class RoadTunnelBuilder {
      */
     static PortalSplit announcePortalSplit(PortalSplit split) {
         if (split == null) return null;
-        LOGGER.info(split.logLine());
+        LOGGER.info("【隧道洞口与洞身分段结果】 {}", split.logLine());
         if (split.openCutOnly()) {
-            LOGGER.warn(split.openCutOnlyLine());
+            LOGGER.warn("【整段隧道仅作明挖，没有封闭洞身】 {}", split.openCutOnlyLine());
         }
         return split;
     }
@@ -871,7 +873,7 @@ public final class RoadTunnelBuilder {
         if (count <= 32 || count % 128 == 0) {
             BlockPos center = centers != null && segmentIndex >= 0 && segmentIndex < centers.size()
                     ? centers.get(segmentIndex) : null;
-            LOGGER.warn("RoadWeaver tunnel PROTECTED_GAP road={}->{} segment={} span={}..{} reason={} center={} pos={} "
+            LOGGER.warn("【隧道站点受保护，跳过该站并保留隧道跨度类型】 " + "RoadWeaver tunnel PROTECTED_GAP road={}->{} segment={} span={}..{} reason={} center={} pos={} "
                             + "count={} action=skip_station span_stays_tunnel",
                     road == null ? RoadData.NO_OWNER_2D : road.ownerA2dKey(),
                     road == null ? RoadData.NO_OWNER_2D : road.ownerB2dKey(),
@@ -893,7 +895,7 @@ public final class RoadTunnelBuilder {
         if (count <= 32 || count % 128 == 0) {
             BlockPos center = centers != null && segmentIndex >= 0 && segmentIndex < centers.size()
                     ? centers.get(segmentIndex) : null;
-            LOGGER.warn("RoadWeaver blocked tunnel section road={}->{} segment={} span={}..{} reason={} center={} pos={} count={}",
+            LOGGER.warn("【隧道断面施工被阻挡】 " + "RoadWeaver blocked tunnel section road={}->{} segment={} span={}..{} reason={} center={} pos={} count={}",
                     road == null ? RoadData.NO_OWNER_2D : road.ownerA2dKey(),
                     road == null ? RoadData.NO_OWNER_2D : road.ownerB2dKey(),
                     segmentIndex, span == null ? -1 : span.start(), span == null ? -1 : span.end(),

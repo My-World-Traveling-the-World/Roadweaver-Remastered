@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.decoration.system;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BushBlock;
@@ -137,7 +139,7 @@ public final class AboveColumnClearer {
             if (isProtected(world, bump, null)) {
                 if (!allowProtected) continue;
                 if (FORCED_CLEAR_LOGGED.getAndIncrement() < MAX_FORCED_CLEAR_LOGS) {
-                    LOGGER.warn("[ROAD-FORCED-CLEAR] flattening protected block {} at {} for surface bump tag={}",
+                    LOGGER.warn("【为修平路面凸起，按既有规则清理受保护方块】 " + "[ROAD-FORCED-CLEAR] flattening protected block {} at {} for surface bump tag={}",
                             net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()),
                             bump, tag);
                 }
@@ -313,7 +315,7 @@ public final class AboveColumnClearer {
             if (isProtected(world, up, road)) {
                 if (!allowProtected) continue;              // 回退档：不动，交回调用方的旧「拒建」逻辑
                 if (FORCED_CLEAR_LOGGED.getAndIncrement() < MAX_FORCED_CLEAR_LOGS) {
-                    LOGGER.warn("[ROAD-FORCED-CLEAR] clearing protected block {} at {} for road headroom tag={}",
+                    LOGGER.warn("【为保留道路净空，按既有规则清理受保护方块】 " + "[ROAD-FORCED-CLEAR] clearing protected block {} at {} for road headroom tag={}",
                             net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()),
                             up, tag);
                 }
@@ -348,7 +350,7 @@ public final class AboveColumnClearer {
             if (isProtected(world, bump, road) && !allowProtected) continue;
             if (isProtected(world, bump, road)
                     && FORCED_CLEAR_LOGGED.getAndIncrement() < MAX_FORCED_CLEAR_LOGS) {
-                LOGGER.warn("[ROAD-FORCED-CLEAR] flattening protected block {} at {} for bridge bump tag={}",
+                LOGGER.warn("【为修平桥面凸起，按既有规则清理受保护方块】 " + "[ROAD-FORCED-CLEAR] flattening protected block {} at {} for bridge bump tag={}",
                         net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(
                                 world.getBlockState(bump).getBlock()), bump, tag);
             }

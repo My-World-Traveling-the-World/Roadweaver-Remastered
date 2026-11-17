@@ -1,6 +1,8 @@
 /* 文件职责：几何漂移观测 —— 量化「弹性带平滑」与「后处理平滑」各改动了多少路形。 */
 package net.shiroha233.roadweaver.pathlogic.pathcalc;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -188,7 +190,7 @@ public final class GeometryDriftObserver {
         try {
             Metrics m = measure(path);
             long call = CALLS.incrementAndGet();
-            LOGGER.info("[GEOM-AB] tag={} stage={} n={} len={} flips/100={} ampP50={} ampP95={} maxTurn={} (call={})",
+            LOGGER.info("【几何变化影子观测指标】 " + "[GEOM-AB] tag={} stage={} n={} len={} flips/100={} ampP50={} ampP95={} maxTurn={} (call={})",
                     tag, stage, m.stations(),
                     String.format("%.1f", m.length()),
                     String.format("%.2f", m.flipsPer100()),
@@ -198,7 +200,7 @@ public final class GeometryDriftObserver {
                     call);
         } catch (Throwable t) {
             // 观测器不允许影响生产：任何异常都只记一句警告。
-            LOGGER.warn("[GEOM-AB] tag={} stage={} measure failed: {}", tag, stage, t.toString());
+            LOGGER.warn("【几何变化影子测量失败】 " + "[GEOM-AB] tag={} stage={} measure failed: {}", tag, stage, t.toString());
         }
     }
 
@@ -211,7 +213,7 @@ public final class GeometryDriftObserver {
     public static void report(String tag, Metrics band, Metrics post) {
         if (!enabled() || band == null || post == null) return;
         try {
-            LOGGER.info("[GEOM-AB-SUMMARY] tag={} "
+            LOGGER.info("【几何变化影子对照汇总】 " + "[GEOM-AB-SUMMARY] tag={} "
                             + "len {}->{} ({}) "
                             + "flips/100 {}->{} ({}) "
                             + "ampP95 {}->{} ({})",

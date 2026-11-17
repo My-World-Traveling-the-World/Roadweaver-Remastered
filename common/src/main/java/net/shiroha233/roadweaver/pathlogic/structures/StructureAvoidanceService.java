@@ -1,6 +1,8 @@
 /* 文件职责：缓存已加载区块的结构边界，让路面铺设 worker 线程无需同步触发主线程 chunk 加载。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -206,7 +208,7 @@ public final class StructureAvoidanceService {
                 }
             }
             if (skipped.isEmpty()) {
-                LOGGER.info("RoadWeaver structure prefilter guard: skipped=0 checked=0 boxes=0 verdict=match");
+                LOGGER.info("【结构预筛对照检查为空】 " + "RoadWeaver structure prefilter guard: skipped=0 checked=0 boxes=0 verdict=match");
                 return;
             }
             // 只核对"被预筛跳过"的候选：预筛的风险正是"跳掉了本来有盒子的候选"。
@@ -220,16 +222,16 @@ public final class StructureAvoidanceService {
                         level, new ChunkPos(start.chunkKey()), start.structureSet()).size();
             }
             boolean match = boxes == 0L;
-            LOGGER.info("RoadWeaver structure prefilter guard: skipped={} checked={} boxes={} verdict={}",
+            LOGGER.info("【结构预筛对照检查结果】 " + "RoadWeaver structure prefilter guard: skipped={} checked={} boxes={} verdict={}",
                     skipped.size(), checked, boxes, match ? "match" : "mismatch");
             if (!match) {
                 STRUCTURE_PREFILTER_ENABLED.set(false);
-                LOGGER.warn("structure prefilter disabled: box count mismatch skipped={} checked={} boxes={}",
+                LOGGER.warn("【包围盒数量不一致，禁用结构预筛】 " + "structure prefilter disabled: box count mismatch skipped={} checked={} boxes={}",
                         skipped.size(), checked, boxes);
             }
         } catch (Throwable failure) {
             STRUCTURE_PREFILTER_ENABLED.set(false);
-            LOGGER.warn("structure prefilter disabled: box count mismatch (guard failed: {})", failure.toString());
+            LOGGER.warn("【结构预筛守卫执行失败，禁用预筛】 " + "structure prefilter disabled: box count mismatch (guard failed: {})", failure.toString());
         }
     }
 

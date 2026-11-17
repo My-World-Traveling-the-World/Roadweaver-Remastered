@@ -1,6 +1,8 @@
 /* 文件职责：每条路的启动诊断，用来在进入世界之前发现「静默等待」。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,7 +109,7 @@ public final class InitialRouteTaskDiagnostics {
         String suffix = pending.size() > limit
                 ? " ... (+" + (pending.size() - limit) + " more; queued=" + queued + " tracked=" + tracked + ")"
                 : " (queued=" + queued + " tracked=" + tracked + ")";
-        LOGGER.info("RoadWeaver initial route watchdog: step={} pending={} {}{}",
+        LOGGER.info("【初始道路等待任务诊断】 " + "RoadWeaver initial route watchdog: step={} pending={} {}{}",
                 step, pending.size(), String.join(" | ", states), suffix);
     }
 

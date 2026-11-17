@@ -1,6 +1,8 @@
 /* 文件职责：异步规划编排 —— 分批、逐轮推进、收尾与日志。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
@@ -137,7 +139,7 @@ public final class AsyncPlanningOps {
         // 红线：coreBounds 永远完整枚举 —— 收窄只作用在外扩的 margin 上，候选矩形恒包含 core。
         final AdaptiveCandidateBounds.CandidateGuard guard = AdaptiveCandidateBounds.guard(coreBounds);
         if (guard.tripped()) {
-            LOGGER.warn("{} ({})", guard.describe(), guard.coreAloneExceedsCap()
+            LOGGER.warn("【异步规划前置条件未满足】 {} ({})", guard.describe(), guard.coreAloneExceedsCap()
                     ? "core 自身面积已超 cap，几何上无法压进；余量落到 MARGIN_FLOOR，core 仍完整枚举（红线）"
                     : "余量已收窄到能落进 cap；core 仍完整枚举（红线）");
         }
@@ -392,7 +394,7 @@ public final class AsyncPlanningOps {
         state.roadsExpanded += Math.max(1, roadsOutside);
         int fromMargin = round.margin();
         state.expand();
-        LOGGER.info("[PLAN-ADAPTIVE] expand round={} margin={} fromMargin={} toMargin={} roadsOutside={} "
+        LOGGER.info("【规划边界按路线越界情况扩大】 " + "[PLAN-ADAPTIVE] expand round={} margin={} fromMargin={} toMargin={} roadsOutside={} "
                         + "maxOvershoot={} fromBounds=[{},{} -> {},{}] toBounds=[{},{} -> {},{}]",
                 state.rounds(), state.margin(), fromMargin, state.margin(), roadsOutside,
                 AdaptiveCandidateBounds.maxOvershoot(bounds, roadBounds),
@@ -432,7 +434,7 @@ public final class AsyncPlanningOps {
         AdaptiveCandidateBounds.Rect expanded =
                 AdaptiveCandidateBounds.boundsWithMargin(coreBounds, state.margin());
         LOGGER.info(
-                "RoadWeaver async planning timing: dimension={} coreBounds=[{},{} -> {},{}] candidateBounds=[{},{} -> {},{}] structures={} connections={} topologyMs={} structureSnapshotsMs={} terrainPlanningMs={} terrainQueueMs={} terrainSnapshotPrepMs={} terrainCoreMs={} terrainTailMs={} publishMs={} totalMs={} success={}",
+                "【异步规划各阶段与发布耗时】 " + "RoadWeaver async planning timing: dimension={} coreBounds=[{},{} -> {},{}] candidateBounds=[{},{} -> {},{}] structures={} connections={} topologyMs={} structureSnapshotsMs={} terrainPlanningMs={} terrainQueueMs={} terrainSnapshotPrepMs={} terrainCoreMs={} terrainTailMs={} publishMs={} totalMs={} success={}",
                 level.dimension().location(), coreBounds[0], coreBounds[1], coreBounds[2], coreBounds[3],
                 expanded.minX(), expanded.minZ(), expanded.maxX(), expanded.maxZ(),
                 state.structures(), timing.connectionCount,
@@ -444,12 +446,12 @@ public final class AsyncPlanningOps {
                 nanosToMillis(timing.publishNanos),
                 elapsedMillis(timing.startedAt), failure == null);
         if (prepTiming != null && prepTiming.ran()) {
-            LOGGER.info("[PLAN-SNAPSHOT-BREAKDOWN] {}", prepTiming.describe());
+            LOGGER.info("【规划快照阶段耗时明细】 " + "[PLAN-SNAPSHOT-BREAKDOWN] {}", prepTiming.describe());
         }
         // 0.9.060（②/④）：coreDiag= 核心区对角线、marginRatio= 相对余量比例、
         // margin= 未守卫的请求余量、guardTripped= 面积守卫是否触发、finalMargin= 守卫后余量；
         // appliedMargin= 多轮扩张后真正生效的余量（旧 margin= 字段的口径，改名以免和上面撞名）。
-        LOGGER.info("[PLAN-ADAPTIVE] initialBounds=[{},{} -> {},{}] expanded=[{},{} -> {},{}] "
+        LOGGER.info("【自适应规划边界和扩展轮次汇总】 " + "[PLAN-ADAPTIVE] initialBounds=[{},{} -> {},{}] expanded=[{},{} -> {},{}] "
                         + "roadsExpanded={} expandedRounds={} structures={} connections={} "
                         + "{} appliedMargin={} capMargin={}",
                 initial.minX(), initial.minZ(), initial.maxX(), initial.maxZ(),

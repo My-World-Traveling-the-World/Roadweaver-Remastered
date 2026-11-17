@@ -1,6 +1,8 @@
 /* 文件职责：路口修剪 —— 副线接到主线后，把多余的头尾裁掉、把跨度标记搬对。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -80,7 +82,7 @@ public final class JunctionTrimOps {
         // 两条路保持独立（宁可两条路不连，也不织麻花）。丁字/十字（正交）不受影响。
         if (!ConfigService.get().pathfindingCost().braidAllowParallelOverlap()
                 && detectsBraid(primary, secondary, snapTarget, runs)) {
-            LOGGER.info("RoadWeaver braid suppressed primary={} secondary={}",
+            LOGGER.info("【已抑制主次道路并行缠绕】 " + "RoadWeaver braid suppressed primary={} secondary={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(secondary));
             return null;
@@ -125,7 +127,7 @@ public final class JunctionTrimOps {
             if (best == null || option.betterThan(best)) best = option;
         }
         if (best == null) return null;
-        LOGGER.info("RoadWeaver selected snap candidate mode={} primary={} secondary={} "
+        LOGGER.info("【已选取路口吸附候选】 " + "RoadWeaver selected snap candidate mode={} primary={} secondary={} "
                         + "constructionLength={} -> {} reuseStations={} segments={}->{}",
                 best.mode(), RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(secondary),
@@ -212,7 +214,7 @@ public final class JunctionTrimOps {
                 candidate.ownerA2dKey(), candidate.ownerB2dKey());
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(trimmed);
         if (!validation.valid()) {
-            LOGGER.warn("RoadWeaver kept secondary head: trimmed route failed validation reason={} index={} pos={} detail={} "
+            LOGGER.warn("【裁切结果无效，保留次路头段】 " + "RoadWeaver kept secondary head: trimmed route failed validation reason={} index={} pos={} detail={} "
                             + "primary={} secondary={} head={}",
                     validation.reason(), validation.index(), validation.position(), validation.detail(),
                     RoadShardStorage.computeFingerprint(primary),
@@ -220,7 +222,7 @@ public final class JunctionTrimOps {
             return null;
         }
         BlockPos startPos = retainedSegments.get(0).middlePos();
-        LOGGER.info("RoadWeaver trimmed secondary head at junction primary={} secondary={} "
+        LOGGER.info("【次路头段已裁至路口】 " + "RoadWeaver trimmed secondary head at junction primary={} secondary={} "
                         + "start=({},{}) segments={} -> {}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(candidate),
@@ -279,7 +281,7 @@ public final class JunctionTrimOps {
         // nothing pressing on the primary, nothing to trim.
         if (junction >= n - 1 || n - junction < 2) return null;
         if (junction + 1 < 5) {
-            LOGGER.warn("RoadWeaver kept secondary tail: trimming would leave too few segments "
+            LOGGER.warn("【裁切后站数不足，保留次路尾段】 " + "RoadWeaver kept secondary tail: trimming would leave too few segments "
                             + "primary={} secondary={} junction={} segments={}",
                     RoadShardStorage.computeFingerprint(primary),
                     RoadShardStorage.computeFingerprint(candidate), junction, n);
@@ -303,7 +305,7 @@ public final class JunctionTrimOps {
                         || span.type() == SpanType.JUNCTION_ANCHOR) {
                     // Junction metadata in the tail: trimming would cut the
                     // anchor the rest of the route depends on. Keep as-is.
-                    LOGGER.debug("RoadWeaver kept secondary tail: junction span {} extends past "
+                    LOGGER.debug("【路口跨度越过裁切点，保留次路尾段】 " + "RoadWeaver kept secondary tail: junction span {} extends past "
                             + "junction {}", span.type(), junction);
                     return null;
                 }
@@ -320,7 +322,7 @@ public final class JunctionTrimOps {
         RoadDataValidator.ValidationResult trimmedValidation =
                 RoadDataValidator.validateFinalRoad(trimmed);
         if (!trimmedValidation.valid()) {
-            LOGGER.warn("RoadWeaver kept secondary tail: trimmed route failed validation reason={} index={} pos={} detail={} "
+            LOGGER.warn("【裁切结果无效，保留次路尾段】 " + "RoadWeaver kept secondary tail: trimmed route failed validation reason={} index={} pos={} detail={} "
                             + "primary={} secondary={} junction={}",
                     trimmedValidation.reason(), trimmedValidation.index(),
                     trimmedValidation.position(), trimmedValidation.detail(),
@@ -329,7 +331,7 @@ public final class JunctionTrimOps {
             return null;
         }
         BlockPos junctionPos = retainedSegments.get(retainedSegments.size() - 1).middlePos();
-        LOGGER.info("RoadWeaver trimmed secondary tail at junction primary={} secondary={} "
+        LOGGER.info("【次路尾段已裁至路口】 " + "RoadWeaver trimmed secondary tail at junction primary={} secondary={} "
                         + "junction=({},{}) segments={} -> {}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(candidate),
@@ -345,7 +347,7 @@ public final class JunctionTrimOps {
         RoadData normalized = deduplicateExactSpans(candidate);
         RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(normalized);
         if (!validation.valid()) {
-            LOGGER.debug("RoadWeaver rejected snap option mode={} reason={} index={} pos={} detail={}",
+            LOGGER.debug("【路口吸附候选数据无效，拒绝该候选】 " + "RoadWeaver rejected snap option mode={} reason={} index={} pos={} detail={}",
                     mode, validation.reason(), validation.index(), validation.position(), validation.detail());
             return;
         }
@@ -353,7 +355,7 @@ public final class JunctionTrimOps {
         double originalLength = ordinaryConstructionLength(secondary);
         double constructionLimit = originalLength + MAX_SNAP_CONSTRUCTION_OVERHEAD;
         if (constructionLength > constructionLimit) {
-            LOGGER.debug("RoadWeaver rejected snap option mode={} constructionLength={} limit={}",
+            LOGGER.debug("【路口吸附候选施工长度超限，拒绝该候选】 " + "RoadWeaver rejected snap option mode={} constructionLength={} limit={}",
                     mode, constructionLength, constructionLimit);
             return;
         }
@@ -386,7 +388,7 @@ public final class JunctionTrimOps {
         }
         int priY = targetAt(primary, junction.primaryIndex());
         int secY = targetAt(secondary, junction.secondaryIndex());
-        LOGGER.info("RoadWeaver junction+connect primary={} secondary={} junction=({},{}) "
+        LOGGER.info("【路口接线位置与道路高度差】 " + "RoadWeaver junction+connect primary={} secondary={} junction=({},{}) "
                         + "idx={}/{} roadY={}->{} delta={} side={}",
                 RoadShardStorage.computeFingerprint(primary),
                 RoadShardStorage.computeFingerprint(secondary),

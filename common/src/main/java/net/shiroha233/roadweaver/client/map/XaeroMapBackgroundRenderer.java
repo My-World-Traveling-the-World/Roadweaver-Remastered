@@ -1,6 +1,8 @@
 /* 文件职责：用 Xaero 小地图当底图的地图背景渲染（可选集成）。 */
 package net.shiroha233.roadweaver.client.map;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import dev.architectury.platform.Platform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -149,7 +151,7 @@ final class XaeroMapBackgroundRenderer {
         reset();
         if (!failureLogged) {
             failureLogged = true;
-            LOGGER.warn("Xaero world-map background integration was disabled; RoadWeaver overlays remain available.",
+            LOGGER.warn("【Xaero背景接入已禁用，道路叠图仍可使用】 " + "Xaero world-map background integration was disabled; RoadWeaver overlays remain available.",
                     failure);
         }
     }

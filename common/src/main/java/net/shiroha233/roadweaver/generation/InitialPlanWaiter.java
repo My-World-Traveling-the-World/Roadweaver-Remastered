@@ -1,6 +1,8 @@
 /* 文件职责：初始规划阻塞等待循环 —— 只等结果、更新状态、处理超时。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
 import net.shiroha233.roadweaver.planning.RouteRefinementOps;
 import net.shiroha233.roadweaver.planning.ConflictWindowOps;
@@ -122,7 +124,7 @@ public final class InitialPlanWaiter {
             }
             final int filteredRouteCount = endpointFilter.filteredCount();
             if (filteredRouteCount > 0) {
-                LOGGER.info("RoadWeaver initial route filter summary: filtered={} kept={}",
+                LOGGER.info("【初始路线过滤与保留数量】 " + "RoadWeaver initial route filter summary: filtered={} kept={}",
                         filteredRouteCount, roadTasks.size());
             }
             total.set(roadTasks.size());
@@ -135,7 +137,7 @@ public final class InitialPlanWaiter {
             InitialGenerationProgressTracker.updateConnections(total.get(), generating.get(), done.get(), failed.get());
             // 0.8.355：进入道路生成阶段即落一次断点，重启后能定位到该阶段。
             recordCheckpoint(level, InitialGenerationStage.ROAD_GENERATION, 0, roadTasks.size());
-            LOGGER.info("RoadWeaver initial road generation phase starting: plannedRoutes={} (alreadyCompleted={} "
+            LOGGER.info("【开始初始道路生成阶段，逐路记录检查点】 " + "RoadWeaver initial road generation phase starting: plannedRoutes={} (alreadyCompleted={} "
                             + "failed={} filtered={} protectedGap={}) - a checkpoint is written after every route "
                             + "so an unclean shutdown can resume instead of restarting.",
                     roadTasks.size(), countByStatus(list, ConnectionStatus.COMPLETED),
@@ -253,7 +255,7 @@ public final class InitialPlanWaiter {
                                         // local-repair handoff.
                                         resolved.put(result.originalKey(), result);
                                         InitialGenerationProgressTracker.routePhaseRetained();
-                                        LOGGER.info("RoadWeaver retained protected-gap route without "
+                                        LOGGER.info("【按配置保留保护缺口，不执行局部修复】 " + "RoadWeaver retained protected-gap route without "
                                                         + "local repair (localRepairOnlyOnUnavoidable=false) "
                                                         + "connection={}->{}",
                                                 task.from(), task.to());
@@ -264,7 +266,7 @@ public final class InitialPlanWaiter {
                                             // （真机数据：这种路修完断口反而从 1 变 4/7）。
                                             resolved.put(result.originalKey(), result);
                                             InitialGenerationProgressTracker.routePhaseRetained();
-                                            LOGGER.info("RoadWeaver kept small protected-gap route without local repair "
+                                            LOGGER.info("【保护缺口较小，保留路线并跳过局部修复】 " + "RoadWeaver kept small protected-gap route without local repair "
                                                             + "gapRuns={} connection={}->{}",
                                                     gapRuns, task.from(), task.to());
                                         } else {
@@ -276,19 +278,19 @@ public final class InitialPlanWaiter {
                                             next.add(task);
                                             outcome = "PROTECTED_GAP(h" + gapRuns + " runs -> fine regenerate)";
                                             InitialGenerationProgressTracker.routePhaseRetained();
-                                            LOGGER.info("RoadWeaver initial protected-gap route handed to fine regenerate connection={}->{}",
+                                            LOGGER.info("【保护缺口路线已交给精细重算】 " + "RoadWeaver initial protected-gap route handed to fine regenerate connection={}->{}",
                                                     task.from(), task.to());
                                         }
                                     }
                                 } else {
                                     resolved.put(result.originalKey(), result);
                                     outcome = "PROTECTED_GAP(retained after local repair)";
-                                    LOGGER.info("RoadWeaver local repair retained usable protected-gap route connection={}->{}",
+                                    LOGGER.info("【局部修复后仍有可用路线，保留保护缺口】 " + "RoadWeaver local repair retained usable protected-gap route connection={}->{}",
                                             task.from(), task.to());
                                 }
                             } else {
                                 if (endpointOnlyGap) {
-                                    LOGGER.info("RoadWeaver retained endpoint-only protected gap without topology replacement connection={}->{}",
+                                    LOGGER.info("【仅端点存在保护缺口，保留原拓扑连接】 " + "RoadWeaver retained endpoint-only protected gap without topology replacement connection={}->{}",
                                             task.from(), task.to());
                                 }
                                 resolved.put(result.originalKey(), result);
@@ -298,7 +300,7 @@ public final class InitialPlanWaiter {
                             outcome = result == null ? "PENDING(no result)" : "PENDING(retry)";
                         }
                         // 每条连接一行：序号 / 端点 / 结果 / 累计进度。
-                        LOGGER.info("RoadWeaver initial connection [{}/{}] step={} {} -> {} : {} (totalDone={} pending={})",
+                        LOGGER.info("【初始道路当前连接处理进度】 " + "RoadWeaver initial connection [{}/{}] step={} {} -> {} : {} (totalDone={} pending={})",
                                 processedInRound, remaining.size(), step,
                                 task.from(), task.to(), outcome,
                                 resolved.size(), next.size());
@@ -314,7 +316,7 @@ public final class InitialPlanWaiter {
                             tierIndex + 1 < tiers.size() ? remaining.size() : 0, 0);
                     InitialGenerationProgressTracker.updateConnections(
                             roadTasks.size(), 0, done.get(), 0);
-                    LOGGER.info("RoadWeaver initial generation round: step={} requested={} completed={} remaining={}",
+                    LOGGER.info("【本轮初始道路请求和完成数量】 " + "RoadWeaver initial generation round: step={} requested={} completed={} remaining={}",
                             step, batch.results().size(), resolved.size(), remaining.size());
                 }
 
@@ -329,7 +331,7 @@ public final class InitialPlanWaiter {
                     if (waveResult.road().hasProtectedGap()) waveProtectedGap++;
                     else waveClean++;
                 }
-                LOGGER.info("RoadWeaver initial route wave summary: step={} requested={} resolved={} clean={} "
+                LOGGER.info("【初始道路波次结果与耗时】 " + "RoadWeaver initial route wave summary: step={} requested={} resolved={} clean={} "
                                 + "protectedGap={} handedToLocalRepair={} filtered={} wallMs={}",
                         configuredStep, roadTasks.size(), resolved.size(), waveClean, waveProtectedGap,
                         remaining.size(), filteredRouteCount, elapsedMs(detailedGenerationStartedAt));
@@ -391,7 +393,7 @@ public final class InitialPlanWaiter {
                                 regenerable.add(task);
                             } else {
                                 skippedNoRebound++;
-                                LOGGER.info("RoadWeaver local repair regenerate skipped: no rebound path "
+                                LOGGER.info("【缺少绑定路径，跳过局部修复重算】 " + "RoadWeaver local repair regenerate skipped: no rebound path "
                                                 + "step={} connection={}->{}", step, task.from(), task.to());
                             }
                         }
@@ -399,7 +401,7 @@ public final class InitialPlanWaiter {
                                 ? new BatchGenerationResult(Map.of(), List.of())
                                 : submitAndCollectAtStep(level, regenerable, step, true);
                         long regenerateMs = elapsedMs(regenerateStartedAt);
-                        LOGGER.info("RoadWeaver local repair step split: step={} routes={} regenerated={} "
+                        LOGGER.info("【局部修复拼接和重算耗时】 " + "RoadWeaver local repair step split: step={} routes={} regenerated={} "
                                         + "skippedNoRebound={} spliceMs={} regenerateMs={}",
                                 step, remaining.size(), regenerable.size(), skippedNoRebound,
                                 splicePhaseMs, regenerateMs);
@@ -436,7 +438,7 @@ public final class InitialPlanWaiter {
                                         chosen = fallback;
                                         removeGeneratedRoad(generatedRoads, result.road());
                                         generatedRoads.add(fallback.road());
-                                        LOGGER.info("RoadWeaver kept first-wave gap route over local repair result "
+                                        LOGGER.info("【修复结果未更优，保留首轮保护缺口路线】 " + "RoadWeaver kept first-wave gap route over local repair result "
                                                         + "firstRuns={} firstBlocks={} repairedRuns={} repairedBlocks={} connection={}->{}",
                                                 protectedGapRuns(fallback.road()),
                                                 Math.round(protectedGapBlocks(fallback.road())),
@@ -447,7 +449,7 @@ public final class InitialPlanWaiter {
                                     resolved.put(taskKey, chosen);
                                     InitialGenerationProgressTracker.routePhaseRetained();
                                     localRetained[0]++;
-                                    LOGGER.info("RoadWeaver local building repair succeeded with retained gap; candidate handoff skipped connection={}->{}",
+                                    LOGGER.info("【建筑局部修复已得到可保留路线，停止候补替换】 " + "RoadWeaver local building repair succeeded with retained gap; candidate handoff skipped connection={}->{}",
                                             task.from(), task.to());
                                 } else {
                                     resolved.put(result.originalKey(), result);
@@ -463,19 +465,19 @@ public final class InitialPlanWaiter {
                                     resolved.put(taskKey, protectedFallback);
                                     InitialGenerationProgressTracker.routePhaseRetained();
                                     localRetained[0]++;
-                                    LOGGER.warn("RoadWeaver building local repair failed; retained protected gap and skipped candidates connection={}->{} reason=see_previous_local_repair_diagnostics",
+                                    LOGGER.warn("【建筑局部修复失败，保留保护缺口并跳过候补】 " + "RoadWeaver building local repair failed; retained protected gap and skipped candidates connection={}->{} reason=see_previous_local_repair_diagnostics",
                                             task.from(), task.to());
                                 } else if (!buildingConflictRoutes.contains(taskKey)) {
                                     next.add(task);
                                 } else {
-                                    LOGGER.error("RoadWeaver building local repair failed without retainable route; candidates skipped connection={}->{}",
+                                    LOGGER.error("【建筑局部修复失败且无可保留路线，跳过候补】 " + "RoadWeaver building local repair failed without retainable route; candidates skipped connection={}->{}",
                                             task.from(), task.to());
                                     resolved.put(taskKey, new GenResult(taskKey, task,
                                             RoadGenerationService.InitialTaskResult.FAILED, null));
                                 }
                             }
                             // 0.8.355：精细重算波次同样逐条打日志 + 落断点。
-                            LOGGER.info("RoadWeaver fine regenerate connection [{}/{}] step={} {} -> {} : {} "
+                            LOGGER.info("【精细重算连接处理进度】 " + "RoadWeaver fine regenerate connection [{}/{}] step={} {} -> {} : {} "
                                             + "(totalDone={} remaining={})",
                                     localProcessed, remaining.size(), step,
                                     task.from(), task.to(), localOutcome,
@@ -493,7 +495,7 @@ public final class InitialPlanWaiter {
                     InitialGenerationProgressTracker.updateRetryStates(0, 0);
                     InitialGenerationProgressTracker.updateConnections(
                             roadTasks.size(), 0, done.get(), 0);
-                    LOGGER.info("RoadWeaver local repair wave finished: completed={} remaining={} wallMs={}",
+                    LOGGER.info("【局部修复波次结束】 " + "RoadWeaver local repair wave finished: completed={} remaining={} wallMs={}",
                             resolved.size(), remaining.size(),
                             (System.nanoTime() - localRepairWaveStartedAt) / 1_000_000L);
                     InitialGenerationProgressTracker.settleRoutePhase(
@@ -535,7 +537,7 @@ public final class InitialPlanWaiter {
                             // fallback edges must not race on one structure.
                             if (candidateEndpointOwners.contains(fromKey)
                                     || candidateEndpointOwners.contains(toKey)) {
-                                LOGGER.warn("RoadWeaver skipped conflicting fallback candidate original={}->{} candidate={}->{} reason=endpoint_reserved",
+                                LOGGER.warn("【候补端点已占用，拒绝冲突替换】 " + "RoadWeaver skipped conflicting fallback candidate original={}->{} candidate={}->{} reason=endpoint_reserved",
                                         original.from(), original.to(), candidate.from(), candidate.to());
                                 continue;
                             }
@@ -604,7 +606,7 @@ public final class InitialPlanWaiter {
                                                 RoadGenerationService.InitialTaskResult.COMPLETED, originalRoad);
                                         resolved.put(retainedOriginal.originalKey(), retainedOriginal);
                                         addSupplementalConnection(supplementalConnections, candidate);
-                                        LOGGER.info("RoadWeaver retained different-direction original and candidate original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
+                                        LOGGER.info("【原路与候补方向不同，保留两条连接】 " + "RoadWeaver retained different-direction original and candidate original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
                                                 original.from(), original.to(), candidate.from(), candidate.to(),
                                                 originalSpawnConnected, spawnConnected);
                                     } else {
@@ -617,7 +619,7 @@ public final class InitialPlanWaiter {
                                         GenResult mapped = new GenResult(
                                                 PlannedPathKey.of(original), raw.effectiveConnection(), raw.result(), candidateRoad);
                                         resolved.put(mapped.originalKey(), mapped);
-                                        LOGGER.info("RoadWeaver accepted same-direction candidate replacement original={}->{} candidate={}->{} sameDirection={} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
+                                        LOGGER.info("【同方向候补替换已接受】 " + "RoadWeaver accepted same-direction candidate replacement original={}->{} candidate={}->{} sameDirection={} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
                                                 original.from(), original.to(), candidate.from(), candidate.to(),
                                                 sameDirection, originalSpawnConnected, spawnConnected);
                                     }
@@ -628,7 +630,7 @@ public final class InitialPlanWaiter {
                                     GenResult mapped = new GenResult(
                                             PlannedPathKey.of(original), raw.effectiveConnection(), raw.result(), candidateRoad);
                                     resolved.put(mapped.originalKey(), mapped);
-                                    LOGGER.info("RoadWeaver accepted candidate replacement original={}->{} candidate={}->{} connected={}",
+                                    LOGGER.info("【候补连接替换已接受】 " + "RoadWeaver accepted candidate replacement original={}->{} candidate={}->{} connected={}",
                                             original.from(), original.to(), candidate.from(), candidate.to(), connected);
                                 }
                             } else {
@@ -652,7 +654,7 @@ public final class InitialPlanWaiter {
                     InitialGenerationProgressTracker.updateRetryStates(0, remaining.size());
                     InitialGenerationProgressTracker.updateConnections(
                             roadTasks.size(), 0, done.get(), 0);
-                    LOGGER.info("RoadWeaver candidate generation wave: candidateIndex={} completed={} remaining={}",
+                    LOGGER.info("【候补道路生成波次进度】 " + "RoadWeaver candidate generation wave: candidateIndex={} completed={} remaining={}",
                             candidateIndex + 1, resolved.size(), remaining.size());
                 }
 
@@ -666,7 +668,7 @@ public final class InitialPlanWaiter {
                     if (protectedFallback != null) {
                         resolved.putIfAbsent(key, protectedFallback);
                         generatedRoads.add(protectedFallback.road());
-                        LOGGER.warn("RoadWeaver retained original protected-gap route after local repair exhausted connection={}->{}",
+                        LOGGER.warn("【局部修复耗尽，保留原保护缺口路线】 " + "RoadWeaver retained original protected-gap route after local repair exhausted connection={}->{}",
                                 unresolved.from(), unresolved.to());
                     } else {
                         resolved.putIfAbsent(key,
@@ -704,7 +706,7 @@ public final class InitialPlanWaiter {
             // are the world-entry gate. Physical chunk loading and construction
             // remain owned by Chunky or real player-loaded chunks; startup must
             // never force-load the road footprint.
-            LOGGER.info("RoadWeaver initial planning ready; physical construction deferred to Chunky/player-loaded chunks: chunks={}",
+            LOGGER.info("【初始规划就绪，方块施工等待区块实际加载】 " + "RoadWeaver initial planning ready; physical construction deferred to Chunky/player-loaded chunks: chunks={}",
                     initialConstructionChunks.size());
             flushAndFinish(level);
         } catch (Throwable failure) {

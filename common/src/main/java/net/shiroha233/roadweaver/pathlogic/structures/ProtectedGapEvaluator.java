@@ -1,6 +1,8 @@
 /* 文件职责：保护缺口与过村判定 —— 判断「这里的碰撞是不是端点豁免造成的」。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -385,7 +387,7 @@ public final class ProtectedGapEvaluator {
             int end = i;
             if (start == 0 && end >= path.size() - 1) {
                 if (connection != null) {
-                    LOGGER.warn("RoadWeaver rejected building protection gap because the building consumes the whole route connection={} -> {} span={}..{}",
+                    LOGGER.warn("【建筑吞没整条路线，拒绝保护缺口方案】 " + "RoadWeaver rejected building protection gap because the building consumes the whole route connection={} -> {} span={}..{}",
                             connection.from(), connection.to(), start, end);
                 }
                 return false;
@@ -404,7 +406,7 @@ public final class ProtectedGapEvaluator {
                     || (start == 0 && after <= 0.0D)
                     || (end >= path.size() - 1 && before <= 0.0D)) {
                 if (connection != null) {
-                    LOGGER.warn("RoadWeaver rejected building protection gap without usable road outside the building connection={} -> {} span={}..{} before={} after={}",
+                    LOGGER.warn("【建筑外没有可用道路，拒绝保护缺口方案】 " + "RoadWeaver rejected building protection gap without usable road outside the building connection={} -> {} span={}..{} before={} after={}",
                             connection.from(), connection.to(), start, end, before, after);
                 }
                 return false;

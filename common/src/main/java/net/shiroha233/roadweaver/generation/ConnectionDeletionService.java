@@ -1,6 +1,8 @@
 /* 文件职责：协调用户「删除未完成连接」的请求，并在拆除过程中处理中止信号。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
@@ -77,7 +79,7 @@ public final class ConnectionDeletionService {
         net.shiroha233.roadweaver.route.RouteBuildRegistry.clear(level, target);
         deletePersistedNonCompletedRoad(level, target);
         MapPatchService.publishConnectionRemoval(level, target);
-        LOGGER.info("RoadWeaver user deleted non-completed connection: {} -> {} status={}",
+        LOGGER.info("【用户删除了尚未完工的道路连接】 " + "RoadWeaver user deleted non-completed connection: {} -> {} status={}",
                 target.from(), target.to(), target.status());
         return Result.DELETED;
     }

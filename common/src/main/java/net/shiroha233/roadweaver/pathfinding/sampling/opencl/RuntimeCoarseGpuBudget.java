@@ -1,6 +1,8 @@
 /* 文件职责：运行期粗粒度 GPU 预算：决定一批能并行多少，避免把显卡打满。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
@@ -240,7 +242,7 @@ public final class RuntimeCoarseGpuBudget {
             BUDGET.set(initial);
             LOW_PRESSURE_SINCE.set(now);
             lastPressure = pressure;
-            LOGGER.info("RoadWeaver runtime GPU coarse budget initialized: budget={}/{} configuredCap={} phase={} pressure={} device={}",
+            LOGGER.info("【游玩期GPU粗采样预算已初始化】 " + "RoadWeaver runtime GPU coarse budget initialized: budget={}/{} configuredCap={} phase={} pressure={} device={}",
                     initial, maximum, configuredCapLabel(normalGameplay), RuntimeLoadPolicy.currentPhase(), pressure.name(), runtime.deviceName());
             return;
         }
@@ -264,7 +266,7 @@ public final class RuntimeCoarseGpuBudget {
         BUDGET.set(nextBudget);
         lastPressure = pressure;
         if (nextBudget != old || shouldLog(now)) {
-            LOGGER.info("RoadWeaver runtime GPU coarse budget changed: budget={}/{} configuredCap={} active={} phase={} pressure={} heap={}%% device={}",
+            LOGGER.info("【游玩期GPU粗采样预算发生变化】 " + "RoadWeaver runtime GPU coarse budget changed: budget={}/{} configuredCap={} active={} phase={} pressure={} heap={}%% device={}",
                     nextBudget, maximum, configuredCapLabel(normalGameplay), ACTIVE.get(),
                     RuntimeLoadPolicy.currentPhase(), pressure.name(), heapPercent(), runtime.deviceName());
         }

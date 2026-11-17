@@ -1,6 +1,8 @@
 /* 文件职责：探测显卡显存的真实空闲量，供粗采样 GPU 预算自适应使用。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,7 +118,7 @@ public final class GpuMemoryProbe {
             long free = Math.max(0L, totalDeviceBytes - used);
             long usable = (long) (free * fraction);
             if (LOGGED_SUCCESS.compareAndSet(false, true)) {
-                LOGGER.info("RoadWeaver GPU memory probe: layer={} total={} MiB used={} MiB free={} MiB "
+                LOGGER.info("【GPU显存探测结果与预算】 " + "RoadWeaver GPU memory probe: layer={} total={} MiB used={} MiB free={} MiB "
                                 + "fraction={} budget={} MiB",
                         Layer.PDH_LIVE, totalDeviceBytes / 1048576L, used / 1048576L, free / 1048576L,
                         String.format("%.2f", fraction), clamp(usable, hardCapBytes) / 1048576L);
@@ -126,7 +128,7 @@ public final class GpuMemoryProbe {
         if (totalDeviceBytes > 0L) {
             // 第 2 层：读不到实时占用，退回到"按总显存打折"的保守比例。
             if (LOGGED_FALLBACK.compareAndSet(false, true)) {
-                LOGGER.info("RoadWeaver GPU memory probe: layer={} (PDH unavailable) total={} MiB fraction={}",
+                LOGGER.info("【显存占用探测不可用，采用容量比例预算】 " + "RoadWeaver GPU memory probe: layer={} (PDH unavailable) total={} MiB fraction={}",
                         Layer.CONSERVATIVE_RATIO, totalDeviceBytes / 1048576L,
                         String.format("%.2f", fraction));
             }
@@ -208,7 +210,7 @@ public final class GpuMemoryProbe {
         } catch (ClassNotFoundException jnaMissing) {
             // JNA 确实不在 classpath（或非 Windows）—— 这是**确定性**事实，永久关闭该层。
             PDH_UNAVAILABLE.set(true);
-            LOGGER.info("RoadWeaver GPU memory probe permanently disabled ({}); falling back to conservative ratio",
+            LOGGER.info("【GPU显存探测永久停用，采用保守比例】 " + "RoadWeaver GPU memory probe permanently disabled ({}); falling back to conservative ratio",
                     jnaMissing.getClass().getSimpleName());
             return -1L;
         } catch (Throwable transientFailure) {
@@ -216,7 +218,7 @@ public final class GpuMemoryProbe {
             // 独立审计观察到 PdhEnumObjectItems 在本环境存在非确定性崩溃（3 次运行 2 次抛
             // java.lang.Error: Invalid memory access，崩点漂移）；若一次性熔断，
             // 一次偶发失败就会让整个 PDH 层永久降级。现改为按 FAILURE_RETRY_NANOS 重试。
-            LOGGER.info("RoadWeaver GPU memory probe transient failure ({}); will retry after {}s",
+            LOGGER.info("【GPU显存探测暂时失败，稍后重试】 " + "RoadWeaver GPU memory probe transient failure ({}); will retry after {}s",
                     transientFailure.getClass().getSimpleName(), FAILURE_RETRY_NANOS / 1_000_000_000L);
             return -1L;
         }

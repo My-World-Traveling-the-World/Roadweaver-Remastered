@@ -1,6 +1,8 @@
 /* 文件职责：把长城 API 就绪状态接入道路开局预热门。 */
 package net.shiroha233.roadweaver.compat;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -70,7 +72,7 @@ public final class GreatWallPrewarmCompat {
             PrewarmGateWork.Scheduler scheduler, java.util.function.LongSupplier clock,
             java.util.function.Consumer<PrewarmGateWork.Resolution> resolved) {
         if (probe.required()) {
-            LOGGER.info("RoadWeaver initial generation is waiting for the Great Wall prewarm (timeout {} ms).", timeoutMillis);
+            LOGGER.info("【初始道路正在等待长城预热】 " + "RoadWeaver initial generation is waiting for the Great Wall prewarm (timeout {} ms).", timeoutMillis);
         }
         return PrewarmGateWork.await(probe, scheduler, clock, resolved,
                 new PrewarmGateWork.Limits(POLL_MILLIS, FIRST_READY_GRACE_MILLIS,
@@ -80,9 +82,9 @@ public final class GreatWallPrewarmCompat {
     private static void logResolution(PrewarmGateWork.Resolution reason) {
         switch (reason) {
             case ABSENT -> { /* 没有长城就没有等待阶段，不打印虚假的完成日志。 */ }
-            case READY -> LOGGER.info("Great Wall prewarm gate resolved; RoadWeaver initial generation may start.");
+            case READY -> LOGGER.info("【长城预热门已释放，进入后续启动检查】 " + "Great Wall prewarm gate resolved; RoadWeaver initial generation may start.");
             case TIMEOUT, STALLED, ABSOLUTE_CAP, POLLER_UNAVAILABLE -> LOGGER.warn(
-                    "Great Wall prewarm gate released without confirmed readiness: reason={}; RoadWeaver initial generation may start.", reason);
+                    "【长城预热门未确认就绪便结束，后续仍须检查前置条件】 " + "Great Wall prewarm gate released without confirmed readiness: reason={}; RoadWeaver initial generation may start.", reason);
         }
     }
 

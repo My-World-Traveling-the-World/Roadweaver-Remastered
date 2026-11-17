@@ -1,6 +1,8 @@
 /* 文件职责：端点剖面 —— 端点日志、共用接近剖面、单侧/优先挖边界坡度。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.SpanConflictResolver;
 import net.shiroha233.roadweaver.pathfinding.FillBridgeExtender;
@@ -93,7 +95,7 @@ public final class EndpointProfileOps {
         int last = profile.length - 1;
         int startTerrain = terrain != null && terrain.length > 0 ? terrain[0] : -1;
         int endTerrain = terrain != null && terrain.length > 0 ? terrain[terrain.length - 1] : -1;
-        LOGGER.info("RoadWeaver endpoint profile stage={} connection={}->{} stations={} "
+        LOGGER.info("【端点纵断面高度与锁高差异】 " + "RoadWeaver endpoint profile stage={} connection={}->{} stations={} "
                         + "profileStart={} terrainStart={} lockedStart={} startDelta={} "
                         + "profileEnd={} terrainEnd={} lockedEnd={} endDelta={}",
                 stage,

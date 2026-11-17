@@ -1,6 +1,8 @@
 /* 文件职责：搜索预算与长度闸门 —— 只回答「还能不能继续搜」「这条路绕得太远没有」。 */
 package net.shiroha233.roadweaver.planning.terrain;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import net.minecraft.core.BlockPos;
@@ -81,13 +83,13 @@ final class SearchBudgetPolicy {
         String verdict = found ? "found" : "no_path";
         String factorText = String.format(java.util.Locale.ROOT, "%.2f", factor);
         if (prunedNodes > 0 && (seq <= 40L || seq % 200L == 0L)) {
-            LOGGER.info("[PLAN-LENGTH-CAP] #{} steep={} factor={} cap={} prunedNodes={} pathLen={} chord={} "
+            LOGGER.info("【局部搜索长度上限和剪枝结果】 " + "[PLAN-LENGTH-CAP] #{} steep={} factor={} cap={} prunedNodes={} pathLen={} chord={} "
                             + "originalLength={} expanded={} prunedTotal={} result={}",
                     seq, steep, factorText, fmt1(cap), prunedNodes,
                     pathLength < 0.0D ? "n/a" : fmt1(pathLength),
                     fmt1(chord), fmt1(originalLength), expanded, prunedTotal, verdict);
         } else if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("[PLAN-LENGTH-CAP] #{} steep={} factor={} cap={} prunedNodes={} pathLen={} chord={} "
+            LOGGER.debug("【局部搜索长度上限和剪枝结果】 " + "[PLAN-LENGTH-CAP] #{} steep={} factor={} cap={} prunedNodes={} pathLen={} chord={} "
                             + "originalLength={} expanded={} prunedTotal={} result={}",
                     seq, steep, factorText, fmt1(cap), prunedNodes,
                     pathLength < 0.0D ? "n/a" : fmt1(pathLength),
@@ -378,7 +380,7 @@ final class SearchBudgetPolicy {
      * 现在每条分支在自己的出口各消费一次，诊断归属于产生它的那次搜索。</p>
      */
     static void logLocalSearchDiag(String stage) {
-        LOGGER.info("RoadWeaver local search diag stage={} {}", stage, consumeLocalSearchDiag());
+        LOGGER.info("【局部路径搜索阶段诊断】 " + "RoadWeaver local search diag stage={} {}", stage, consumeLocalSearchDiag());
     }
 
     static String consumeLocalSearchDiag() {

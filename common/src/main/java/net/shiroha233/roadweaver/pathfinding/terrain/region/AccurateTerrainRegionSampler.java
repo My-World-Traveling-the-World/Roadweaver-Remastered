@@ -1,6 +1,8 @@
 /* 文件职责：批量构建规划区域的精确量化地形场，不依赖粗地形瓦片。 */
 package net.shiroha233.roadweaver.pathfinding.terrain.region;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.Holder;
@@ -119,7 +121,7 @@ public final class AccurateTerrainRegionSampler {
             flags[index] = AccurateTerrainRegion.flags(columnWater, waterBiome);
             biomes[index] = biome;
         }
-        LOGGER.info("RoadWeaver circular local exact sampling: center=({}, {}) radius={} step={} sampledColumns={} gridColumns={}",
+        LOGGER.info("【圆形局部精确采样完成】 " + "RoadWeaver circular local exact sampling: center=({}, {}) radius={} step={} sampledColumns={} gridColumns={}",
                 center.getX(), center.getZ(), safeRadius, bounds.step(), positions.size(), size);
         return new AccurateTerrainRegion(bounds, seaLevel, heights, oceanFloors, flags, biomes,
                 center, safeRadius, routeStart, routeGoal);

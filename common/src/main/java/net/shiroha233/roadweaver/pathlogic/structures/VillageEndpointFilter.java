@@ -1,6 +1,8 @@
 /* 文件职责：过滤村庄包围盒内的未知端点连接，并保留整轮撤销安全阀。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
@@ -86,14 +88,14 @@ final class VillageEndpointFilter {
         }
         // 安全阀一：一轮过滤太多就整体放弃。
         if (filtered.size() > UNKNOWN_ENDPOINT_FILTER_MAX_PER_ROUND) {
-            LOGGER.warn("RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=too_many_per_round",
+            LOGGER.warn("【本轮过滤比例超限，暂不执行路线过滤】 " + "RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=too_many_per_round",
                     filtered.size(), kept.size());
             return new EndpointFilterOutcome(connections, List.of(), true, "too_many_per_round");
         }
         // 安全阀二：过滤后某端点变成 0 连接就整体放弃。村内连接（两端同一村庄盒）
         // 不参与该判定 —— 它本来就不是"这个村庄通往别处的路"。
         if (leavesEndpointWithoutConnection(kept, filtered, villageInternal)) {
-            LOGGER.warn("RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=endpoint_left_without_connection",
+            LOGGER.warn("【过滤后端点将失联，暂不执行路线过滤】 " + "RoadWeaver route filter held back: threshold exceeded filtered={} kept={} reason=endpoint_left_without_connection",
                     filtered.size(), kept.size());
             return new EndpointFilterOutcome(connections, List.of(), true, "endpoint_left_without_connection");
         }
@@ -104,7 +106,7 @@ final class VillageEndpointFilter {
                                                    BlockPos unknown,
                                                    BlockPos villageEndpoint,
                                                    StructureConnection connection) {
-        LOGGER.info("RoadWeaver route filtered: village {} owns endpoint, unknown endpoint inside its box "
+        LOGGER.info("【未知端点落入所属村庄包围盒，过滤重复连接】 " + "RoadWeaver route filtered: village {} owns endpoint, unknown endpoint inside its box "
                         + "village={} unknown={} connection={}->{}",
                 village.structureId(), villageEndpoint, unknown, connection.from(), connection.to());
     }

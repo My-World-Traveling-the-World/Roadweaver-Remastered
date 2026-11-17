@@ -1,6 +1,8 @@
 /* 文件职责：构建 Fabric 配置界面。 */
 package net.shiroha233.roadweaver.client.fabric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
@@ -107,14 +109,14 @@ public class ConfigScreenFactoryImpl {
                     experimental++;
                 }
             }
-            LOGGER.info("RoadWeaver config ui: categories={} keys={} active={} unwired={} "
+            LOGGER.info("【配置界面有效、未接线、废弃和实验项统计】 " + "RoadWeaver config ui: categories={} keys={} active={} unwired={} "
                             + "deprecated={} experimental={}",
                     ConfigKeyTable.byCategory().size(), keys.size(),
                     keys.size() - unwired - deprecated - experimental,
                     unwired, deprecated, experimental);
         } catch (Throwable t) {
             // 自证日志绝不能影响界面打开
-            LOGGER.warn("RoadWeaver config ui: metadata self-report failed: {}", t.toString());
+            LOGGER.warn("【配置界面元数据自检失败】 " + "RoadWeaver config ui: metadata self-report failed: {}", t.toString());
         }
     }
 

@@ -2,6 +2,8 @@
 
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 
 
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
@@ -216,7 +218,7 @@ public final class RouteRefinementOps {
 
             if (originalPath.size() < 3) {
 
-                LOGGER.warn("RoadWeaver local route refinement skipped: missing persisted route path "
+                LOGGER.warn("【缺少持久化路径，跳过局部路线精修】 " + "RoadWeaver local route refinement skipped: missing persisted route path "
 
                                 + "connection={}->{}", connection.from(), connection.to());
 
@@ -230,7 +232,7 @@ public final class RouteRefinementOps {
 
             if (localWindows.isEmpty()) {
 
-                LOGGER.warn("RoadWeaver local route refinement skipped broad endpoint scan: "
+                LOGGER.warn("【没有识别出局部冲突，跳过大范围端点扫描】 " + "RoadWeaver local route refinement skipped broad endpoint scan: "
 
                                 + "no local conflict was identified connection={}->{}",
 
@@ -272,7 +274,7 @@ public final class RouteRefinementOps {
 
                 level, windowsByConnection, Math.max(1, step));
 
-        LOGGER.info("RoadWeaver local conflict prefetch scheduled: routes={} windows={} step={} radius={} ",
+        LOGGER.info("【局部冲突窗口预取任务已提交】 " + "RoadWeaver local conflict prefetch scheduled: routes={} windows={} step={} radius={} ",
 
                 windowsByConnection.size(),
 
@@ -302,7 +304,7 @@ public final class RouteRefinementOps {
 
                 final int currentIndex = windowIndex;
 
-                LOGGER.info("RoadWeaver local route refinement window: step={} padding={} index={}/{} "
+                LOGGER.info("【当前局部精修窗口与采样精度】 " + "RoadWeaver local route refinement window: step={} padding={} index={}/{} "
 
                                 + "bounds=[{},{} -> {},{}] connection={}->{}",
 
@@ -336,7 +338,7 @@ public final class RouteRefinementOps {
 
                 PlannedPathCache.discard(level, connection);
 
-                LOGGER.warn("RoadWeaver local exact repair failed; refusing broad fallback "
+                LOGGER.warn("【精确局部修复失败，拒绝扩大范围并交候补处理】 " + "RoadWeaver local exact repair failed; refusing broad fallback "
 
                                 + "and leaving route for candidate handling connection={}->{}",
 
@@ -372,7 +374,7 @@ public final class RouteRefinementOps {
 
         if (slices.isEmpty()) {
 
-            LOGGER.warn("RoadWeaver local route splice skipped: conflict has no interior entry/exit "
+            LOGGER.warn("【冲突在当前半径内没有内部出入口，跳过局部拼接】 " + "RoadWeaver local route splice skipped: conflict has no interior entry/exit "
 
                             + "within radius={} connection={}->{}",
 
@@ -420,7 +422,7 @@ public final class RouteRefinementOps {
 
                         window.center(), window.radius());
 
-                LOGGER.info("RoadWeaver local splice attempt: candidate={}/{} step={} radius={} center={} "
+                LOGGER.info("【正在尝试局部路径拼接】 " + "RoadWeaver local splice attempt: candidate={}/{} step={} radius={} center={} "
 
                                 + "slice={}..{} nodes={} connection={}->{}",
 
@@ -448,7 +450,7 @@ public final class RouteRefinementOps {
 
                 if (localPath == null || localPath.size() < 2) {
 
-                    LOGGER.info("RoadWeaver local splice rejected no_path candidate={}/{} step={} radius={} "
+                    LOGGER.info("【局部拼接未找到路径，拒绝该候选】 " + "RoadWeaver local splice rejected no_path candidate={}/{} step={} radius={} "
 
                                     + "bounds=[{},{} -> {},{}] slice={}..{} localEndpoints={}->{} planMs={} connection={}->{}",
 
@@ -484,7 +486,7 @@ public final class RouteRefinementOps {
 
                 currentPath.set(merged);
 
-                LOGGER.info("RoadWeaver local splice accepted: candidate={}/{} step={} radius={} "
+                LOGGER.info("【局部路径拼接已接受】 " + "RoadWeaver local splice accepted: candidate={}/{} step={} radius={} "
 
                                 + "localNodes={} routeNodes={} -> {} planMs={} connection={}->{}",
 
@@ -622,13 +624,13 @@ public final class RouteRefinementOps {
 
             sampler.samplePositions(positions, batch -> LOGGER.debug(
 
-                    "RoadWeaver unified local conflict sampling progress: completed={} total={} batch={} backend={} device={}",
+                    "【统一局部冲突采样批次进度】 " + "RoadWeaver unified local conflict sampling progress: completed={} total={} batch={} backend={} device={}",
 
                     batch.completedColumns(), batch.totalColumns(), batch.batchColumns(),
 
                     sampler.backendName(), sampler.deviceName()));
 
-            LOGGER.info("RoadWeaver unified local conflict sampling complete: routes={} windows={} uniqueColumns={} step={} elapsedMs={} backend={} device={}",
+            LOGGER.info("【统一局部冲突采样完成】 " + "RoadWeaver unified local conflict sampling complete: routes={} windows={} uniqueColumns={} step={} elapsedMs={} backend={} device={}",
 
                     windowsByConnection.size(),
 
@@ -670,7 +672,7 @@ public final class RouteRefinementOps {
         PathfindingCostConfig pathfinding = config.pathfindingCost().withAStarStep(step);
         long epoch = ThreadPoolManager.currentEpoch();
         List<StructureConnection> tasks = List.copyOf(connectionsToPlan);
-        LOGGER.info("RoadWeaver initial refinement batch scheduled: step={} bounds=[{},{} -> {},{}] "
+        LOGGER.info("【初始精修批次已调度】 " + "RoadWeaver initial refinement batch scheduled: step={} bounds=[{},{} -> {},{}] "
                         + "samplingMask={} center={} radius={} connections={}",
                 pathfinding.effectiveAStarStep(), bounds[0], bounds[1], bounds[2], bounds[3],
                 samplingCenter != null, samplingCenter, Math.max(0, samplingRadius), tasks.size());
@@ -690,7 +692,7 @@ public final class RouteRefinementOps {
             result = SharedEndpointPathReuse.reuseSharedEndpointTails(
                     level, result, pathfinding.effectiveAStarStep());
             PlannedPathCache.register(level, result.mode(), pathfinding, result.paths());
-            LOGGER.info("RoadWeaver initial refinement batch planned: step={} requested={} resolvedPaths={}",
+            LOGGER.info("【初始精修批次规划结束】 " + "RoadWeaver initial refinement batch planned: step={} requested={} resolvedPaths={}",
                     pathfinding.effectiveAStarStep(), tasks.size(), result.paths().size());
             return result;
         }).thenCompose(result -> result == null || result.paths().isEmpty()

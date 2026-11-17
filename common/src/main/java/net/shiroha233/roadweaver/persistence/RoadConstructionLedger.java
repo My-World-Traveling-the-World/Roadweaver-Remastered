@@ -1,6 +1,8 @@
 /* 文件职责：持久化「哪些路指纹已在哪些整区块施工完成」，避免重复铺装。 */
 package net.shiroha233.roadweaver.persistence;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -31,7 +33,7 @@ public final class RoadConstructionLedger {
     private static final int SCHEMA = 3;
     private static final Consumer<FlushTiming> FLUSH_TIMING =
             "on".equalsIgnoreCase(System.getProperty("roadweaver.constructionLedgerTimings", "off"))
-                    ? timing -> LOGGER.info("[CONSTRUCTION-LEDGER-TIMING] entries={} bytes={} written={} gatherUs={} sortUs={} serializeUs={} writeUs={}",
+                    ? timing -> LOGGER.info("【施工完工台账收集、排序、编码和写盘耗时】 " + "[CONSTRUCTION-LEDGER-TIMING] entries={} bytes={} written={} gatherUs={} sortUs={} serializeUs={} writeUs={}",
                             timing.entries, timing.bytes, timing.written, timing.gatherNanos / 1000,
                             timing.sortNanos / 1000, timing.serializeNanos / 1000, timing.writeNanos / 1000)
                     : null;
@@ -103,7 +105,7 @@ public final class RoadConstructionLedger {
         }
         long finished = timing == null ? 0L : System.nanoTime();
         if (writeFailure != null) {
-            LOGGER.warn("RoadWeaver could not persist constructed chunk ledger {}.", target, writeFailure);
+            LOGGER.warn("【施工完工台账写盘失败，保留待重试状态】 " + "RoadWeaver could not persist constructed chunk ledger {}.", target, writeFailure);
         }
         if (timing != null) {
             // schema 3 的标题和数值均为 ASCII，字符长度就是文件的 UTF-8 字节数。
@@ -152,7 +154,7 @@ public final class RoadConstructionLedger {
                 }
             }
             if (schema != SCHEMA) {
-                LOGGER.info("RoadWeaver ignored stale constructed chunk ledger schema={}.", schema);
+                LOGGER.info("【施工完工台账版本过旧，未加载旧格式内容】 " + "RoadWeaver ignored stale constructed chunk ledger schema={}.", schema);
                 return state;
             }
             for (Entry entry : entries) {
@@ -161,7 +163,7 @@ public final class RoadConstructionLedger {
                         .add(entry.roadFingerprint());
             }
         } catch (RuntimeException | IOException failure) {
-            LOGGER.warn("RoadWeaver could not read constructed chunk ledger {}.", path, failure);
+            LOGGER.warn("【施工完工台账读取失败】 " + "RoadWeaver could not read constructed chunk ledger {}.", path, failure);
         }
         return state;
     }

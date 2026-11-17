@@ -1,6 +1,8 @@
 /* 文件职责：路径障碍判定：三种严格度的「这一格能不能过」（已验证建筑 / 规划障碍 / 村庄群），以及诊断用的碰撞盒与描述。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -272,12 +274,12 @@ public final class ObstacleJudge {
                 && snapshot.blocksEndpointBuildingSegmentFootprint(segments.get(lastSafe))) lastSafe--;
         if (firstSafe == 0 && lastSafe == segments.size() - 1) return segments;
         if (firstSafe > lastSafe || lastSafe - firstSafe + 1 < 2) {
-            LOGGER.warn("RoadWeaver endpoint building consumed the complete route connection={}->{}",
+            LOGGER.warn("【端点建筑占据整条路线，拒绝该连接】 " + "RoadWeaver endpoint building consumed the complete route connection={}->{}",
                     connection.from(), connection.to());
             return null;
         }
         List<RoadSegmentPlacement> clipped = List.copyOf(segments.subList(firstSafe, lastSafe + 1));
-        LOGGER.info("RoadWeaver stopped structure endpoint approach at last safe station connection={}->{} "
+        LOGGER.info("【建筑端点接近段已裁到最后安全站点】 " + "RoadWeaver stopped structure endpoint approach at last safe station connection={}->{} "
                         + "segments={} -> {} firstTrim={} lastTrim={}",
                 connection.from(), connection.to(), segments.size(), clipped.size(),
                 firstSafe, segments.size() - 1 - lastSafe);

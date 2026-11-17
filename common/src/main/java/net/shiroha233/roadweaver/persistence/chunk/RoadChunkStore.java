@@ -1,6 +1,8 @@
 /* 文件职责：按世界目录持久化道路聚合根和 ChunkPos 分片，并原子发布内存快照。 */
 package net.shiroha233.roadweaver.persistence.chunk;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mojang.serialization.Dynamic;
@@ -369,7 +371,7 @@ public final class RoadChunkStore implements AutoCloseable {
         // 后果：关服瞬间处于"已过入口校验、落盘中途"的任务会把旧世界道路写进存档。
         // 与 StructureFileStorage 保持同一口径：停服即拒绝写入。
         if (!net.shiroha233.roadweaver.runtime.RoadLifecycle.allowsWrites()) {
-            LOGGER.warn("RoadWeaver road chunk publish skipped: server is stopping (generation {} dropped)", nextGeneration);
+            LOGGER.warn("【服务端正在停止，跳过当前代次道路发布】 " + "RoadWeaver road chunk publish skipped: server is stopping (generation {} dropped)", nextGeneration);
             return;
         }
         // ★ 2026-09-26 修 WorkBuddy R-5：只读降级期间**拒绝一切写入**。
@@ -394,7 +396,7 @@ public final class RoadChunkStore implements AutoCloseable {
                 reportConstructionChanges(previous, next);
             } catch (RuntimeException failure) {
                 // 道路已经写完；取证错误不能让上层以为保存失败而重试。
-                LOGGER.warn("RoadWeaver construction content shadow failed at generation {}", nextGeneration, failure);
+                LOGGER.warn("【施工内容变化影子检查失败】 " + "RoadWeaver construction content shadow failed at generation {}", nextGeneration, failure);
             }
         }
     }
@@ -408,12 +410,12 @@ public final class RoadChunkStore implements AutoCloseable {
             if (delta.isEmpty()) continue;
             // 完工仍从旧台账读取。日志只指出同键内容变化，不能据此认为已有区块应重新铺设。
             if (++changed <= 8) {
-                LOGGER.info("[CONSTRUCTION-CONTENT-SHADOW] sameFingerprint={} changes={} oldChunks={} newChunks={}",
+                LOGGER.info("【同一道路身份的施工内容变化对照】 " + "[CONSTRUCTION-CONTENT-SHADOW] sameFingerprint={} changes={} oldChunks={} newChunks={}",
                         current.fingerprint(), delta, old.footprint().chunkKeys().size(),
                         current.footprint().chunkKeys().size());
             }
         }
-        if (changed > 8) LOGGER.info("[CONSTRUCTION-CONTENT-SHADOW] {} other changes not listed", changed - 8);
+        if (changed > 8) LOGGER.info("【其余施工内容变化未逐项列出】 " + "[CONSTRUCTION-CONTENT-SHADOW] {} other changes not listed", changed - 8);
     }
 
     private long nextGeneration() {
@@ -482,7 +484,7 @@ public final class RoadChunkStore implements AutoCloseable {
                 RoadData normalized = RoadDataValidator.normalizeLegacyRoad(road);
                 if (normalized == null) {
                     skippedEntry = true;
-                    LOGGER.warn("RoadWeaver ignored structurally unusable legacy road: {}", roadPath);
+                    LOGGER.warn("【旧道路数据结构不可用，忽略该项】 " + "RoadWeaver ignored structurally unusable legacy road: {}", roadPath);
                     continue;
                 }
                 RoadData frozen = RoadSnapshot.freezeForStorage(normalized);
@@ -638,7 +640,7 @@ public final class RoadChunkStore implements AutoCloseable {
         }
 
         long verifyMillis = (System.nanoTime() - verifyStartNanos) / 1_000_000L;
-        LOGGER.info("RoadWeaver verified {} chunk shard(s) in {} ms (parallel).",
+        LOGGER.info("【道路区块分片并行校验完成】 " + "RoadWeaver verified {} chunk shard(s) in {} ms (parallel).",
                 shardFiles.size(), verifyMillis);
 
         if (!valid.get() || actual.size() != expected.chunkReferences().size()) return false;

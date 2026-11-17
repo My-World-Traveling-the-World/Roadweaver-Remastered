@@ -1,6 +1,8 @@
 /* 文件职责：将道路聚合数据一次性编译为区块局部世界生成计划。 */
 package net.shiroha233.roadweaver.worldgen.road;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -146,7 +148,7 @@ public final class RoadChunkPlanCompiler {
                 // 统计,避免为被抑制的日志支付 O(站数×7) 的格式化成本。
                 if (LOGGER.isDebugEnabled()) {
                     long fp = RoadShardStorage.computeFingerprint(road);
-                    LOGGER.debug("RoadWeaver compile chunk={},{} road={} produced 0 localIndices; "
+                    LOGGER.debug("【区块计划编译未产生局部站点，记录掩码与相交判据】 " + "RoadWeaver compile chunk={},{} road={} produced 0 localIndices; "
                                     + "placements={} spans={} maskHits(reuse={},gap={},junction={},tunnel={},bridge={},crossing={}) "
                                     + "chunkIntersects={}",
                             chunkPos.x, chunkPos.z, fp, placements.size(),

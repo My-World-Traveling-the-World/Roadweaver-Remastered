@@ -1,6 +1,8 @@
 /* 文件职责：管理可复用的 OpenCL 设备会话、kernel 资源与串行提交边界。 */
 package net.shiroha233.roadweaver.pathfinding.sampling.opencl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.sampling.opencl.bridge.OpenCLBridge;
 import org.slf4j.Logger;
@@ -257,7 +259,7 @@ public final class OpenCLRuntime implements AutoCloseable {
             return session.allocate(access, bytes);
         } catch (IllegalStateException failure) {
             if (failure.getMessage() != null && failure.getMessage().contains("clCreateBuffer failed: -61")) {
-                LOGGER.warn("RoadWeaver OpenCL -61 allocation rejected access={} requestedMiB={} deviceMaxMiB={}",
+                LOGGER.warn("【OpenCL内存申请被设备拒绝】 " + "RoadWeaver OpenCL -61 allocation rejected access={} requestedMiB={} deviceMaxMiB={}",
                         access, bytes / (1024L * 1024L),
                         session.deviceInfo().maxAllocationBytes() / (1024L * 1024L));
             }

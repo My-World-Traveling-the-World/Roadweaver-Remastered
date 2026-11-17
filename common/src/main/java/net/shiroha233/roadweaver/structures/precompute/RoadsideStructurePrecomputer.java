@@ -1,6 +1,8 @@
 /* 文件职责：基于道路与共享精确地形预计算路边结构位置。 */
 package net.shiroha233.roadweaver.structures.precompute;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.core.BlockPos;
@@ -206,7 +208,7 @@ public final class RoadsideStructurePrecomputer {
             if (placedChunks.contains(chunkKey) ||
                     !structure.skipTerrainCheck() &&
                     !checkTerrainConditions(center, sizeHint, cache, terrain, level, heightmap, useBaseHeight)) {
-                LOGGER.debug("Structure {} at {} failed the terrain check", entry.id(), anchor);
+                LOGGER.debug("【沿路结构未通过地形检查】 " + "Structure {} at {} failed the terrain check", entry.id(), anchor);
                 continue;
             }
 
@@ -224,7 +226,7 @@ public final class RoadsideStructurePrecomputer {
             placedChunks.add(chunkKey);
             placedCount++;
             
-            LOGGER.debug("Precomputed structure {} at {} for chunk [{}, {}]", entry.id(), anchor, chunkPos.x, chunkPos.z);
+            LOGGER.debug("【沿路结构预计算完成】 " + "Precomputed structure {} at {} for chunk [{}, {}]", entry.id(), anchor, chunkPos.x, chunkPos.z);
         }
         
         return placedCount;

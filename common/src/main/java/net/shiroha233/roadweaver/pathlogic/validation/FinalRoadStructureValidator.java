@@ -1,6 +1,8 @@
 /* 文件职责：落盘前对每条路做结构层面的最终校验（借用体积规划遍历全部列）。 */
 package net.shiroha233.roadweaver.pathlogic.validation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureOwnerKey;
@@ -71,7 +73,7 @@ public final class FinalRoadStructureValidator {
         var audit = new FootprintAudit((x, z) -> HugeTreeReservation.isReserved(level, x, z));
         ValidationResult result = validate(snapshot, road, context, audit);
         var hit = audit.firstHit();
-        LOGGER.info("[FINAL-FOOTPRINT-AUDIT] roadId={} complete={} reservationOverlap={} segment={} kind={} pos={}",
+        LOGGER.info("【最终施工占地与预留保护列交集审计】 " + "[FINAL-FOOTPRINT-AUDIT] roadId={} complete={} reservationOverlap={} segment={} kind={} pos={}",
                 roadId(road), result.safe(), hit != null, hit == null ? -1 : hit.segmentIndex(),
                 hit == null ? "-" : hit.kind(), hit == null ? "-" : hit.representativePos());
         return result;
@@ -115,7 +117,7 @@ public final class FinalRoadStructureValidator {
             return cached;
         }
         long roadId = roadId(road);
-        LOGGER.info("RoadWeaver final validation filling missing terrain columns: roadId={} totalColumns={} missingColumns={} backend={} device={}",
+        LOGGER.info("【最终校验正在补齐缺失地形列】 " + "RoadWeaver final validation filling missing terrain columns: roadId={} totalColumns={} missingColumns={} backend={} device={}",
                 roadId, positions.size(), missing.size(), sampler.backendName(), sampler.deviceName());
         if (DetailedRoadGenerationStats.routeTiming() != null) {
             DetailedRoadGenerationStats.routeTiming().addMissingColumns(positions.size(), missing.size());
@@ -168,7 +170,7 @@ public final class FinalRoadStructureValidator {
                     positions.size() - missing.size(), wholeChunkColumns, sparse.size());
         }
         if (!wholeChunks.isEmpty()) {
-            LOGGER.info("RoadWeaver final validation chunk prefetch: roadId={} totalColumns={} wholeChunks={} coveredColumns={} "
+            LOGGER.info("【最终校验整块预取和稀疏补样规模】 " + "RoadWeaver final validation chunk prefetch: roadId={} totalColumns={} wholeChunks={} coveredColumns={} "
                             + "sparseColumns={} cachedChunks={} cachedColumns={} backend={}",
                     roadId, positions.size(), wholeChunks.size(), wholeChunkColumns, sparse.size(),
                     sampler.cachedChunkCount(), sampler.cachedColumnCount(), sampler.backendName());
@@ -418,7 +420,7 @@ public final class FinalRoadStructureValidator {
             }
         }
         if (!allSeated || stepsAfter != 0) {
-            LOGGER.warn("RoadWeaver protected-gap smoothing could not flatten every gap "
+            LOGGER.warn("【坡道窗口不足以消除全部缺口高差，保留原纵断面】 " + "RoadWeaver protected-gap smoothing could not flatten every gap "
                             + "(descent does not fit the ramp window); keeping the original profile "
                             + "heightSteps={} -> affectedSteps={}",
                     stepsBefore, stepsAfter);
@@ -426,7 +428,7 @@ public final class FinalRoadStructureValidator {
         }
         List<Integer> newTargetY = new ArrayList<>(n);
         for (int value : profile) newTargetY.add(value);
-        LOGGER.info("RoadWeaver protected-gap approaches smoothed gaps={} heightSteps={} -> {}",
+        LOGGER.info("【保护缺口接近段平滑结果】 " + "RoadWeaver protected-gap approaches smoothed gaps={} heightSteps={} -> {}",
                 ranges.size(), stepsBefore, stepsAfter);
         return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
                 road.roadSegmentList(), road.spans(), List.copyOf(newTargetY),

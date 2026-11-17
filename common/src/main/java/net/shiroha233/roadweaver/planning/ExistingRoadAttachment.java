@@ -1,6 +1,8 @@
 /* 文件职责：把「通向村庄的失败连接」改接到「附近已有的道路上」。 */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -59,7 +61,7 @@ public final class ExistingRoadAttachment {
         try {
             roads = RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ);
         } catch (Throwable couldNotQuery) {
-            LOGGER.debug("RoadWeaver attachment query failed", couldNotQuery);
+            LOGGER.debug("【既有道路挂接查询失败】 " + "RoadWeaver attachment query failed", couldNotQuery);
             return null;
         }
         if (roads == null || roads.isEmpty()) return null;
@@ -104,7 +106,7 @@ public final class ExistingRoadAttachment {
         if (!shouldAttach(bestFromDist, bestToDist, attachLength, horizontalDistance(from, to))) return null;
 
         StructureConnection attached = new StructureConnection(newFrom, newTo, ConnectionStatus.PLANNED);
-        LOGGER.info("RoadWeaver attaching failed connection to existing road: {} -> {} becomes {} -> {} "
+        LOGGER.info("【失败连接尝试挂接既有道路】 " + "RoadWeaver attaching failed connection to existing road: {} -> {} becomes {} -> {} "
                         + "(fromDistance={} toDistance={} attachLength={})",
                 from, to, newFrom, newTo, bestFromDist, bestToDist, attachLength);
         return attached;

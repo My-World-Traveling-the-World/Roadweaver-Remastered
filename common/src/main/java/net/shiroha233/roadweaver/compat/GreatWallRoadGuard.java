@@ -1,6 +1,8 @@
 /* 文件职责：道路侧访问长城只读守卫的唯一入口。 */
 package net.shiroha233.roadweaver.compat;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -53,7 +55,7 @@ public final class GreatWallRoadGuard {
         } catch (Throwable failure) {
             if (!failureLogged) {
                 failureLogged = true;
-                LOGGER.warn("Great Wall road guard unavailable ({}); roads keep laying as before",
+                LOGGER.warn("【长城保护接口不可用，保持既有铺路行为】 " + "Great Wall road guard unavailable ({}); roads keep laying as before",
                         failure.toString());
             }
             return false;
@@ -63,7 +65,7 @@ public final class GreatWallRoadGuard {
     private static void note(Ch ch) {
         long n = SKIPS.computeIfAbsent(ch, unused -> new AtomicLong()).incrementAndGet();
         if (n % 500L == 0L) {
-            LOGGER.info("ROAD_GUARD_SKIP channel={} count={}", ch, n);
+            LOGGER.info("【长城保护拦截了施工请求】 " + "ROAD_GUARD_SKIP channel={} count={}", ch, n);
         }
     }
 
@@ -72,14 +74,14 @@ public final class GreatWallRoadGuard {
         if (!CONTACT_CELLS.add(cell)) return;
         CONTACTS.add(new int[]{x, y, z});
         if (CONTACTS.size() <= 40) {
-            LOGGER.info("ROAD_WALL_CONTACT #{} at {} {} {}", CONTACTS.size(), x, y, z);
+            LOGGER.info("【道路接触长城的位置】 " + "ROAD_WALL_CONTACT #{} at {} {} {}", CONTACTS.size(), x, y, z);
         }
     }
 
     private static void firstHit() {
         if (blockedLogged) return;
         blockedLogged = true;
-        LOGGER.info("Great Wall corridor detected; roads will stop at the wall foot");
+        LOGGER.info("【检测到长城走廊，道路止于墙脚】 " + "Great Wall corridor detected; roads will stop at the wall foot");
     }
 
     /** Clears contact/skip diagnostics when a server/world session ends. */
@@ -104,7 +106,7 @@ public final class GreatWallRoadGuard {
         } catch (Throwable failure) {
             if (!failureLogged) {
                 failureLogged = true;
-                LOGGER.warn("Great Wall road guard call failed ({}); failing closed to protect the wall",
+                LOGGER.warn("【长城保护调用失败，本次拒绝施工以保护墙体】 " + "Great Wall road guard call failed ({}); failing closed to protect the wall",
                         failure.toString());
             }
             // The wall mod is present but its guard is broken. Treat the target as protected;
@@ -164,7 +166,7 @@ public final class GreatWallRoadGuard {
     private static void noteCoarseHit() {
         long n = ++coarseHits;
         if ((n & 0xFFFFFL) == 0L) {
-            LOGGER.info("ROAD_GUARD_COARSE_SKIP hits={} (density channel: road terrain stamping suppressed here)", n);
+            LOGGER.info("【长城走廊内已抑制道路地形压印】 " + "ROAD_GUARD_COARSE_SKIP hits={} (density channel: road terrain stamping suppressed here)", n);
         }
     }
 

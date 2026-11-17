@@ -6,6 +6,8 @@
  */
 package net.shiroha233.roadweaver.planning;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import net.minecraft.world.level.Level;
@@ -138,7 +140,7 @@ public final class RoadPlanningReadinessIndex {
         if (entry == null) {
             QUEUE.add(key);
             entry = created;
-            LOGGER.info("RoadWeaver queued Chunky readiness region [{},{}].", regionX, regionZ);
+            LOGGER.info("【区域规划请求已加入Chunky就绪队列】 " + "RoadWeaver queued Chunky readiness region [{},{}].", regionX, regionZ);
         } else if (entry.state() == State.FAILED && entry.attempts < MAX_PLAN_ATTEMPTS) {
             ENTRIES.transition(key, entry, State.QUEUED);
             QUEUE.add(key);
@@ -224,7 +226,7 @@ public final class RoadPlanningReadinessIndex {
         Snapshot supply = supplySnapshot(world);
         if (sampleScan) {
             long scanUs = (System.nanoTime() - scanStart) / 1000;
-            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=scan source=incremental tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
+            LOGGER.info("【READY即时统计读取耗时】 " + "[CHUNKY-READINESS-TIMING] phase=scan source=incremental tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
                     tick, ENTRIES.size(), supply.queued(), supply.planning(), supply.readyAhead(), scanUs);
         }
         int desiredLanes = RuntimeLoadPolicy.recommendedCoordinatorLanes(
@@ -266,11 +268,11 @@ public final class RoadPlanningReadinessIndex {
                     if (markCoverageReady(level, regionX, regionZ)) marked++;
                 } catch (IOException | RuntimeException failure) {
                     // 初始批次继续处理其他区域；失败区域保持未就绪，后续请求可重新入队。
-                    LOGGER.error("RoadWeaver could not persist initial readiness region [{},{}].", regionX, regionZ, failure);
+                    LOGGER.error("【初始READY覆盖持久化失败】 " + "RoadWeaver could not persist initial readiness region [{},{}].", regionX, regionZ, failure);
                 }
             }
         }
-        LOGGER.info("RoadWeaver registered initial Chunky-ready coverage: marked={} {}.",
+        LOGGER.info("【初始Chunky规划覆盖已登记】 " + "RoadWeaver registered initial Chunky-ready coverage: marked={} {}.",
                 marked, progressSummary(level));
     }
 
@@ -317,7 +319,7 @@ public final class RoadPlanningReadinessIndex {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;
         if (!paused) {
-            LOGGER.info("RoadWeaver Chunky readiness planning resumed in minecraft:overworld.");
+            LOGGER.info("【返回主世界，恢复Chunky就绪规划】 " + "RoadWeaver Chunky readiness planning resumed in minecraft:overworld.");
             return;
         }
         for (Map.Entry<RegionKey, Entry> candidate : ENTRIES.entrySet()) {
@@ -334,7 +336,7 @@ public final class RoadPlanningReadinessIndex {
         }
         ThreadPoolManager.setChunkySupplyThreads(0);
         RuntimeLoadPolicy.setStreamsSupplyThreads(0);
-        LOGGER.info("RoadWeaver Chunky readiness planning paused outside minecraft:overworld.");
+        LOGGER.info("【离开主世界，暂停Chunky就绪规划】 " + "RoadWeaver Chunky readiness planning paused outside minecraft:overworld.");
     }
 
     private static void startPlanning(ServerLevel level, RegionKey key, Entry entry) {
@@ -345,7 +347,7 @@ public final class RoadPlanningReadinessIndex {
         int maxChunkX = (key.regionX + 1) * REGION_CHUNKS - 1 + PLAN_MARGIN_CHUNKS;
         int maxChunkZ = (key.regionZ + 1) * REGION_CHUNKS - 1 + PLAN_MARGIN_CHUNKS;
         long epoch = ThreadPoolManager.currentEpoch();
-        LOGGER.info("RoadWeaver preparing Chunky region [{},{}], attempt={}/{} with guaranteed coordinator progress.",
+        LOGGER.info("【开始准备Chunky区域，当前重试次数如下】 " + "RoadWeaver preparing Chunky region [{},{}], attempt={}/{} with guaranteed coordinator progress.",
                 key.regionX, key.regionZ, entry.attempts, MAX_PLAN_ATTEMPTS);
         CompletableFuture<Void> future = AsyncPlanningOps.planRectForChunkyAsync(
                 level, minChunkX << 4, minChunkZ << 4, (maxChunkX << 4) + 15, (maxChunkZ << 4) + 15)
@@ -363,7 +365,7 @@ public final class RoadPlanningReadinessIndex {
                         || ENTRIES.get(key) != entry) return;
                 if (finishPlanning(worldState(level), key, entry, epoch, failure,
                         failure == null && regionPlanningDataReady(level, key.regionX, key.regionZ))) {
-                    LOGGER.info("RoadWeaver Chunky region READY [{},{}]; {}.",
+                    LOGGER.info("【Chunky区域规划已持久化就绪，尚不代表方块竣工】 " + "RoadWeaver Chunky region READY [{},{}]; {}.",
                             key.regionX, key.regionZ, progressSummary(level));
                 }
             });
@@ -394,7 +396,7 @@ public final class RoadPlanningReadinessIndex {
         if (positions.isEmpty() || !StreamsReflowingCompat.isAvailable()) {
             return CompletableFuture.completedFuture(null);
         }
-        LOGGER.info("RoadWeaver Chunky prewarm phase=PREWARM region=[{},{}] positions={}",
+        LOGGER.info("【Chunky区域河流预热开始】 " + "RoadWeaver Chunky prewarm phase=PREWARM region=[{},{}] positions={}",
                 region.regionX, region.regionZ, positions.size());
         return StreamsReflowingCompat.prewarmRoutesAsync(level, positions,
                 "chunky-region-" + region.regionX + "," + region.regionZ);
@@ -427,13 +429,13 @@ public final class RoadPlanningReadinessIndex {
     private static boolean adoptCoverageReady(ReadinessCoverageStore store, RegionKey key) {
         try {
             if (markCoverageReady(store, key)) {
-                LOGGER.info("RoadWeaver adopted existing initial planning coverage for Chunky region [{},{}].",
+                LOGGER.info("【已复用初始规划覆盖作为Chunky就绪结果】 " + "RoadWeaver adopted existing initial planning coverage for Chunky region [{},{}].",
                         key.regionX, key.regionZ);
             }
             return true;
         } catch (IOException | RuntimeException failure) {
             // 写失败不能仍向 requestRegion 返回 READY；让它走原有入队与限次重试。
-            LOGGER.error("RoadWeaver could not persist adopted readiness region [{},{}].", key.regionX, key.regionZ, failure);
+            LOGGER.error("【复用READY覆盖时持久化失败】 " + "RoadWeaver could not persist adopted readiness region [{},{}].", key.regionX, key.regionZ, failure);
             return false;
         }
     }
@@ -572,10 +574,10 @@ public final class RoadPlanningReadinessIndex {
         if (entry.attempts < MAX_PLAN_ATTEMPTS) {
             ENTRIES.transition(key, entry, State.QUEUED);
             QUEUE.add(key);
-            LOGGER.warn("RoadWeaver planning retry for Chunky region [{},{}].", key.regionX, key.regionZ, problem);
+            LOGGER.warn("【Chunky区域规划失败，将重试】 " + "RoadWeaver planning retry for Chunky region [{},{}].", key.regionX, key.regionZ, problem);
         } else {
             ENTRIES.transition(key, entry, State.FAILED);
-            LOGGER.error("RoadWeaver could not prepare Chunky region [{},{}].", key.regionX, key.regionZ, problem);
+            LOGGER.error("【Chunky区域规划重试耗尽，准备失败】 " + "RoadWeaver could not prepare Chunky region [{},{}].", key.regionX, key.regionZ, problem);
         }
         ACTIVE.remove(key);
         return false;
@@ -624,7 +626,7 @@ public final class RoadPlanningReadinessIndex {
         currentSupplyLanes = desiredLanes;
         currentStreamsThreads = streamsThreads;
         LOGGER.info(
-                "RoadWeaver Chunky supply capacity: pending={}, queued={}, inFlight={}, readyAhead={}, lanes={}, streams={}.",
+                "【Chunky规划供给状态与道路、河流并发通道】 " + "RoadWeaver Chunky supply capacity: pending={}, queued={}, inFlight={}, readyAhead={}, lanes={}, streams={}.",
                 supply.pending(), supply.queued(), supply.planning(), supply.readyAhead(),
                 desiredLanes, streamsThreads);
     }

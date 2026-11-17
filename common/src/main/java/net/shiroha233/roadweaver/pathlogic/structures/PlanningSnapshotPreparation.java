@@ -1,6 +1,8 @@
 /* 文件职责：按原代次、服务器线程和进度顺序准备并发布规划快照。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
@@ -83,7 +85,7 @@ final class PlanningSnapshotPreparation {
                 timing.setStarts(uniqueStarts.size());
             }
             SnapshotPreparation preparation = new SnapshotPreparation(routePlans, List.copyOf(uniqueStarts));
-            LOGGER.debug("RoadWeaver structure prediction timing: dimension={} routes={} uniqueStarts={} elapsedMs={}",
+            LOGGER.debug("【结构预测阶段耗时】 " + "RoadWeaver structure prediction timing: dimension={} routes={} uniqueStarts={} elapsedMs={}",
                     level.dimension().location(), routePlans.size(), uniqueStarts.size(),
                     elapsedMillis(predictionStartedAt));
             return preparation;
@@ -144,20 +146,20 @@ final class PlanningSnapshotPreparation {
                     timing.setResolvedBoxes((int) Math.min(Integer.MAX_VALUE, boxes));
                 }
                 if (predicted + manual + cacheHits + tiles + tileCacheHits > 0L) {
-                    LOGGER.info("RoadWeaver structure snapshots: obstacleTiles={} predictionChunks={} obstacleTileCacheHits={} obstacleCandidates={} corridorCandidates={} predictedDirect={} nativeDirectStarts={} realChunkFallbacks={} manualReferenceFallback={} cacheHits={} emptyResults={} exactPieceBoxes={} prefilterSkipped={} prefilterKept={} prefilterEnabled={}",
+                    LOGGER.info("【结构快照来源、缓存与精确包围盒统计】 " + "RoadWeaver structure snapshots: obstacleTiles={} predictionChunks={} obstacleTileCacheHits={} obstacleCandidates={} corridorCandidates={} predictedDirect={} nativeDirectStarts={} realChunkFallbacks={} manualReferenceFallback={} cacheHits={} emptyResults={} exactPieceBoxes={} prefilterSkipped={} prefilterKept={} prefilterEnabled={}",
                             tiles, predictionChunks, tileCacheHits, candidates, corridorCandidates,
                             predicted, directStarts, directFallbacks,
                             manual, cacheHits, empty, boxes,
                             PREFILTERED_CANDIDATES.get(), PREFILTER_KEPT_CANDIDATES.get(),
                             STRUCTURE_PREFILTER_ENABLED.get());
                 }
-                LOGGER.info("RoadWeaver structure snapshot timing: dimension={} routes={} uniqueStarts={} resolutionMs={} totalMs={}",
+                LOGGER.info("【结构快照解析及总耗时】 " + "RoadWeaver structure snapshot timing: dimension={} routes={} uniqueStarts={} resolutionMs={} totalMs={}",
                         level.dimension().location(), preparation.routePlans().size(),
                         preparation.uniqueStarts().size(), elapsedMillis(resolutionStartedAt),
                         elapsedMillis(snapshotStartedAt));
                 // 0.9.034（R-07 计数模式）：累计值（进程内），不改任何结果。
                 // wouldRejectNonEmpty 就是「开群系预筛会丢掉的真实结构数」—— 必须是 0 才算可证明安全。
-                LOGGER.info("RoadWeaver structure biome-prefilter probe (count only, results unchanged): "
+                LOGGER.info("【群系预筛仅计数探测，不改变结构结果】 " + "RoadWeaver structure biome-prefilter probe (count only, results unchanged): "
                                 + "probed={} wouldReject={} wouldRejectNonEmpty={} emptyResults={}",
                         StructureAvoidanceDiagnostics.BIOME_PROBE_PROBED.get(), StructureAvoidanceDiagnostics.BIOME_PROBE_REJECTED.get(),
                         StructureAvoidanceDiagnostics.BIOME_PROBE_REJECTED_NONEMPTY.get(), empty);

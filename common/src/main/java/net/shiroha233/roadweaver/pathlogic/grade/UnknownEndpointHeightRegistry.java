@@ -6,6 +6,8 @@
 
 package net.shiroha233.roadweaver.pathlogic.grade;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,7 +90,7 @@ public final class UnknownEndpointHeightRegistry {
         state.chosen = Math.min(state.chosen == Integer.MIN_VALUE
                 ? structureSurfaceY : state.chosen, structureSurfaceY);
         state.chosen = Math.min(state.chosen, state.lowestBase);
-        LOGGER.info("RoadWeaver unknown endpoint height chosen={} structureSurfaceY={} "
+        LOGGER.info("【未知端点的共享接近高度已确定】 " + "RoadWeaver unknown endpoint height chosen={} structureSurfaceY={} "
                         + "approachBaseY={} lowestBase={} window={}",
                 state.chosen, structureSurfaceY, base, state.lowestBase, APPROACH_WINDOW);
         return state.chosen;

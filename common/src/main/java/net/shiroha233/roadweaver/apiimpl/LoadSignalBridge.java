@@ -1,6 +1,8 @@
 /* 文件职责：跨模组加载信号桥的实现（ownerId 是其对外契约，改名会断掉外部集成）。 */
 package net.shiroha233.roadweaver.apiimpl;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.api.outgoing.LoadKind;
 import net.shiroha233.roadweaver.api.outgoing.RoadLoadSignals;
 import net.shiroha233.roadweaver.api.outgoing.RoadLoadSignalsRegistry;
@@ -314,7 +316,7 @@ public final class LoadSignalBridge {
             long now = System.nanoTime();
             long next = NEXT_FAILURE_LOG.get();
             if (now >= next && NEXT_FAILURE_LOG.compareAndSet(next, now + FAILURE_LOG_INTERVAL)) {
-                LOGGER.warn("RoadWeaver load signal query failed: provider={} failure={}",
+                LOGGER.warn("【跨模组负载信号查询失败】 " + "RoadWeaver load signal query failed: provider={} failure={}",
                         source.getClass().getName(), failure.toString());
             }
         }

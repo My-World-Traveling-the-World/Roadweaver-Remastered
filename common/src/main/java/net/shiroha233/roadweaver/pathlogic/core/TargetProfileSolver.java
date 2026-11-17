@@ -1,6 +1,8 @@
 /* 文件职责：组装高程硬约束并编排 DP 与约束回落，世界采样经最小端口注入。 */
 package net.shiroha233.roadweaver.pathlogic.core;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
@@ -129,7 +131,7 @@ final class TargetProfileSolver {
             }
         } catch (Throwable deckFailure) {
             java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
-            LOGGER.warn("RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
+            LOGGER.warn("【桥面下界采样失败，本次不施加该下界】 " + "RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
                     deckFailure.toString());
         }
         try {
@@ -158,7 +160,7 @@ final class TargetProfileSolver {
                 // 回落解取的是同一套硬约束（窗口 / 一阶二阶坡度 / 站钉 / 桥面下界 /
                 // 隧道覆土），所以结果一定合规 —— 它只是不做全局最优，不像旧 pass
                 // 那样有一堆互相打架的事后修正。
-                LOGGER.warn("RoadWeaver profile solver=dp infeasible, using constraint fallback"
+                LOGGER.warn("【纵断面DP无可行解，采用约束修复器】 " + "RoadWeaver profile solver=dp infeasible, using constraint fallback"
                                 + " stations={} cut={} fill={} perTwo={} pins={} decks={}"
                                 + " connection={}->{}",
                         n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
@@ -168,7 +170,7 @@ final class TargetProfileSolver {
                         terrainY, maxCut, maxFill, maxStep, perTwo,
                         pin, tunnelMask, minCover, deckFloor));
             }
-            LOGGER.info("RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
+            LOGGER.info("【纵断面DP求解完成】 " + "RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
                     n, perTwo, maxStep, maxCut, maxFill, minCover,
                     connection == null ? "?" : connection.from(),
                     connection == null ? "?" : connection.to());
@@ -179,7 +181,7 @@ final class TargetProfileSolver {
             // pin / tunnelMask / minCover / deckFloor 都在 try 外构造好了，
             // 不再像原来那样在异常路径把 pin 与 deckFloor 传 null（那会丢掉
             // 结构端点钉高与桥面水位下界，而它们正是硬契约）。
-            LOGGER.warn("RoadWeaver profile solver=dp failed, using constraint fallback"
+            LOGGER.warn("【纵断面DP执行失败，采用约束修复器】 " + "RoadWeaver profile solver=dp failed, using constraint fallback"
                             + " stations={} pins={} decks={}: {}",
                     n, countPinned(pin), countDeckFloors(deckFloor), t.toString());
             return java.util.Optional.of(ProfileFallback.terrainFollowing(

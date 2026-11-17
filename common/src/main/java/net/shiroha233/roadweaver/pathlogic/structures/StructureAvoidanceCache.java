@@ -1,6 +1,8 @@
 /* 文件职责：结构避让的核心缓存（从 {@link StructureAvoidanceService} 拆出）。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -136,13 +138,13 @@ public final class StructureAvoidanceCache {
     private static void noteBlindQuery() {
         long n = BLIND_QUERIES.incrementAndGet();
         if (BLIND_WARNED.compareAndSet(false, true)) {
-            LOGGER.warn("RoadWeaver structure avoidance queried WITHOUT a planning snapshot"
+            LOGGER.warn("【未绑定规划快照，结构避让本次视为不阻挡；若穿建筑请检查线程快照作用域】 " + "RoadWeaver structure avoidance queried WITHOUT a planning snapshot"
                     + " (first of possibly many) — each such query returns false,"
                     + " which is indistinguishable from \"no structure here\"."
                     + " If routes cut through buildings, check the planning-snapshot thread scope.");
         }
         if (n % 100_000L == 0L) {
-            LOGGER.warn("RoadWeaver structure avoidance blind queries reached {}", n);
+            LOGGER.warn("【未绑定快照的结构避让查询累计数量】 " + "RoadWeaver structure avoidance blind queries reached {}", n);
         }
     }
 

@@ -1,6 +1,8 @@
 /* 文件职责：在 Fabric 服务端关卡准备阶段触发 RoadWeaver 初始化。 */
 package net.shiroha233.roadweaver.mixin.fabric;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.server.MinecraftServer;
@@ -39,16 +41,16 @@ public abstract class MinecraftServerMixin {
                     GreatWallPrewarmCompat::isPrewarmComplete,
                     () -> GreatWallPrewarmCompat.awaitPrewarmForInitialGeneration(level));
             if (prerequisites.isDone() && !prerequisites.isCompletedExceptionally()) {
-                LOGGER.info("ROAD_INITIAL_GEN_START path=server-thread rivers=ready wall=ready-or-absent");
+                LOGGER.info("【河流已就绪且长城就绪或缺席，开始初始道路生成】 " + "ROAD_INITIAL_GEN_START path=server-thread rivers=ready wall=ready-or-absent");
                 InitialGenManager.begin(level);
                 InitialGenManager.blockUntilDone(level);
                 return;
             }
             // 让当前注入返回，河流/长城自己的后续启动钩子才能运行，避免同线程相互等候。
-            LOGGER.info("ROAD_INITIAL_GEN_WAIT path=async prerequisites=river-then-wall");
+            LOGGER.info("【初始道路异步等待前置条件，顺序为河流再长城】 " + "ROAD_INITIAL_GEN_WAIT path=async prerequisites=river-then-wall");
             prerequisites.whenComplete((ignored, failure) -> {
                 if (failure != null) {
-                    LOGGER.warn("ROAD_INITIAL_GEN_NOT_STARTED reason=prerequisite-failed-or-cancelled", failure);
+                    LOGGER.warn("【前置条件失败或取消，初始道路尚未启动】 " + "ROAD_INITIAL_GEN_NOT_STARTED reason=prerequisite-failed-or-cancelled", failure);
                     return;
                 }
                 server.execute(() -> {

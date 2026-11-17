@@ -1,6 +1,8 @@
 /* 文件职责：对道路路径执行精确高度修正、平滑与桥梁后处理。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -116,7 +118,7 @@ public final class PathPostProcessor {
                 // 观测者拿到只读快照；即便错误修改列也不能污染生产结果。
                 observer.accept(freezeProduct(produced), freezeProduct(withoutRelax));
             } catch (RuntimeException failure) {
-                LOGGER.warn("RoadWeaver land-relax shadow failed (rawStations={})", rawPath.size(), failure);
+                LOGGER.warn("【陆地第二次松弛影子计算失败，生产产物保持】 " + "RoadWeaver land-relax shadow failed (rawStations={})", rawPath.size(), failure);
             }
         }
         return produced;
@@ -162,7 +164,7 @@ public final class PathPostProcessor {
             SawtoothMetric.Result before = SawtoothMetric.measure(rawPath, gridStep);
             BlockPos from = produced.get(0).middlePos();
             BlockPos to = produced.get(produced.size() - 1).middlePos();
-            LOGGER.info("RoadWeaver route SHAPE stage={} step={} "
+            LOGGER.info("【道路后处理前后的形状指标】 " + "RoadWeaver route SHAPE stage={} step={} "
                             + "raw=[stations={} zigzag={} flipsPer100={} ampP50={} ampP95={} legP50={}] "
                             + "final=[stations={} zigzag={} flipsPer100={} ampP50={} ampP95={} legP50={} reason={}] "
                             + "from={} to={}",

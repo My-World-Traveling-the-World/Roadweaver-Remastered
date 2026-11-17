@@ -1,6 +1,8 @@
 /* 文件职责：初始路线的落盘与失败记账 —— 持久化批次、记录失败、处理最终路段。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
 import net.shiroha233.roadweaver.planning.RouteRefinementOps;
 import net.shiroha233.roadweaver.planning.ConflictWindowOps;
@@ -107,10 +109,10 @@ public final class InitialRoutePersistOps {
                     Math.max(0, total.get()), generating.get(), done.get(), failed.get());
         }
         if (failure == null) {
-            LOGGER.warn("RoadWeaver initial route marked retryable failure: step={} route={}->{} reason={}",
+            LOGGER.warn("【初始路线标记为可重试失败】 " + "RoadWeaver initial route marked retryable failure: step={} route={}->{} reason={}",
                     step, task.from(), task.to(), reason);
         } else {
-            LOGGER.error("RoadWeaver initial route marked retryable failure: step={} route={}->{} reason={}",
+            LOGGER.error("【初始路线标记为可重试失败】 " + "RoadWeaver initial route marked retryable failure: step={} route={}->{} reason={}",
                     step, task.from(), task.to(), reason, failure);
         }
     }
@@ -156,7 +158,7 @@ public final class InitialRoutePersistOps {
         long mergeMs = elapsedMs(postProcessStartedAt);
         // msPerRoad is the number E3 needs: nine roads and 22 seconds is either a fixed geometry cost
         // per road or something quadratic, and the ratio separates them without a profiler.
-        LOGGER.info("RoadWeaver initial final network ready before persistence: inputRoads={} finalRoads={} "
+        LOGGER.info("【初始网络合并完成，准备持久化】 " + "RoadWeaver initial final network ready before persistence: inputRoads={} finalRoads={} "
                         + "refined={} mergeMs={} msPerRoad={}",
                 roads.size(), connected.size(), refinedRoadFingerprints.size(), mergeMs,
                 roads.isEmpty() ? mergeMs : mergeMs / roads.size());
@@ -241,7 +243,7 @@ public final class InitialRoutePersistOps {
         }
         long finalRoadsMs = elapsedMs(finalRoadsStartedAt);
         int roadCount = Math.max(1, connected.size());
-        LOGGER.info("RoadWeaver final road processing timing: roads={} changed={} rejected={} wallMs={} "
+        LOGGER.info("【最终道路处理数量与耗时】 " + "RoadWeaver final road processing timing: roads={} changed={} rejected={} wallMs={} "
                         + "avgMs={} slowestMs={} threads={}",
                 connected.size(), finalRoadChanged.get(), finalRoadRejected.get(), finalRoadsMs,
                 (finalRoadTotalNanos.get() / roadCount) / 1_000_000L,
@@ -251,7 +253,7 @@ public final class InitialRoutePersistOps {
         long persistStartedAt = System.nanoTime();
         RoadShardStorage.addRoads(level, roadsToPersist);
         long persistMs = elapsedMs(persistStartedAt);
-        LOGGER.info("RoadWeaver initial post-processing timing: mergeMs={} finalRoadsMs={} persistMs={} "
+        LOGGER.info("【初始道路后处理和持久化耗时】 " + "RoadWeaver initial post-processing timing: mergeMs={} finalRoadsMs={} persistMs={} "
                         + "totalMs={} persistedRoads={} constructionChunks={}",
                 mergeMs, finalRoadsMs, persistMs, elapsedMs(postProcessStartedAt),
                 roadsToPersist.size(), constructionChunks.size());
@@ -318,9 +320,9 @@ public final class InitialRoutePersistOps {
                                     PlanningUtils.posFrom2dKey(road.ownerB2dKey()),
                                     ConnectionStatus.GENERATING));
                     if (postJunctionRepair == null) {
-                        LOGGER.error("RoadWeaver rejected initial merged road because construction continuity repair failed owners={} -> {}",
+                        LOGGER.error("【合并后施工连续性无法修复，拒绝该路线】 " + "RoadWeaver rejected initial merged road because construction continuity repair failed owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
-                        LOGGER.warn("RoadWeaver route filtered: reason=merged_construction_continuity_repair_failed owners={} -> {}",
+                        LOGGER.warn("【路线被过滤：合并后施工连续性修复失败】 " + "RoadWeaver route filtered: reason=merged_construction_continuity_repair_failed owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
                         return new FinalRoadWork(ownerKey(connectedRoad), null);
                     }
@@ -334,9 +336,9 @@ public final class InitialRoutePersistOps {
                             level, road, roadsideCache, null, streams,
                             ConfigService.get().bridgeMinWaterDepth());
                     if (reconciled == null) {
-                        LOGGER.error("RoadWeaver rejected initial merged road during final span reconciliation owners={} -> {}",
+                        LOGGER.error("【最终跨度协调失败，拒绝初始路线】 " + "RoadWeaver rejected initial merged road during final span reconciliation owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
-                        LOGGER.warn("RoadWeaver route filtered: reason=final_span_reconcile_failed owners={} -> {}",
+                        LOGGER.warn("【路线被过滤：最终跨度协调失败】 " + "RoadWeaver route filtered: reason=final_span_reconcile_failed owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
                         return new FinalRoadWork(ownerKey(connectedRoad), null);
                     }
@@ -349,18 +351,18 @@ public final class InitialRoutePersistOps {
                     if (smoothed != road) {
                         road = smoothed;
                         validation = RoadDataValidator.validateFinalRoad(road);
-                        LOGGER.info("RoadWeaver repaired finalized local height profile owners={} -> {} index={}",
+                        LOGGER.info("【已修复最终道路的局部纵断面】 " + "RoadWeaver repaired finalized local height profile owners={} -> {} index={}",
                                 road.ownerA2dKey(), road.ownerB2dKey(), repairedIndex);
                     }
                 }
                 if (!validation.valid()) {
-                    LOGGER.error("RoadWeaver rejected invalid finalized initial road owners={} -> {} "
+                    LOGGER.error("【最终道路数据无效，拒绝写入】 " + "RoadWeaver rejected invalid finalized initial road owners={} -> {} "
                                     + "reason={} index={} pos={} detail={}",
                             road == null ? "null" : road.ownerA2dKey(),
                             road == null ? "null" : road.ownerB2dKey(),
                             validation.reason(), validation.index(),
                             validation.position(), validation.detail());
-                    LOGGER.warn("RoadWeaver route filtered: reason=invalid_finalized_initial_road:{} owners={} -> {}",
+                    LOGGER.warn("【路线被过滤：最终道路数据无效】 " + "RoadWeaver route filtered: reason=invalid_finalized_initial_road:{} owners={} -> {}",
                             validation.reason(), road == null ? "null" : road.ownerA2dKey(),
                             road == null ? "null" : road.ownerB2dKey());
                     return new FinalRoadWork(ownerKey(connectedRoad), null);
@@ -375,7 +377,7 @@ public final class InitialRoutePersistOps {
                             ? FinalRoadWaterValidator.validate(level, original, roadsideCache, streams)
                             : null;
                     if (originalWater != null && originalWater.safe()) {
-                        LOGGER.warn("RoadWeaver discarded underwater initial junction rewrite and retained the "
+                        LOGGER.warn("【路口改写导致入水，保留已通过校验的原路】 " + "RoadWeaver discarded underwater initial junction rewrite and retained the "
                                         + "validated original road owners={} -> {} collision={}",
                                 road.ownerA2dKey(), road.ownerB2dKey(), waterValidation.collision());
                         road = original;
@@ -391,14 +393,14 @@ public final class InitialRoutePersistOps {
                                 : null;
                         if (gapped != null) {
                             road = gapped;
-                            LOGGER.warn("RoadWeaver retained initial river protection gaps owners={} -> {} "
+                            LOGGER.warn("【初始路线保留河流保护缺口】 " + "RoadWeaver retained initial river protection gaps owners={} -> {} "
                                             + "firstSegment={} pos={} source={}",
                                     road.ownerA2dKey(), road.ownerB2dKey(),
                                     collision == null ? -1 : collision.segmentIndex(),
                                     collision == null ? null : collision.position(),
                                     collision == null ? null : collision.source());
                         } else {
-                            LOGGER.error("RoadWeaver rejected finalized initial road in water owners={} -> {} reason={} "
+                            LOGGER.error("【最终初始道路入水，拒绝该路线】 " + "RoadWeaver rejected finalized initial road in water owners={} -> {} reason={} "
                                             + "segment={} pos={} targetY={} waterSurfaceY={} bedY={} span={} source={}",
                                     road.ownerA2dKey(), road.ownerB2dKey(), waterValidation.reason(),
                                     collision == null ? -1 : collision.segmentIndex(),
@@ -408,7 +410,7 @@ public final class InitialRoutePersistOps {
                                     collision == null ? null : collision.bedY(),
                                     collision == null ? null : collision.activeSpan(),
                                     collision == null ? null : collision.source());
-                            LOGGER.warn("RoadWeaver route filtered: reason=finalized_initial_road_in_water:{} owners={} -> {}",
+                            LOGGER.warn("【路线被过滤：最终道路入水】 " + "RoadWeaver route filtered: reason=finalized_initial_road_in_water:{} owners={} -> {}",
                                     waterValidation.reason(), road.ownerA2dKey(), road.ownerB2dKey());
                             return new FinalRoadWork(ownerKey(connectedRoad), null);
                         }
@@ -428,7 +430,7 @@ public final class InitialRoutePersistOps {
                         FinalRoadStructureValidator.ValidationResult gapValidation =
                                 FinalRoadStructureValidator.validate(level, gapped, roadsideCache, streams);
                         if (gapValidation.safe()) {
-                            LOGGER.warn("RoadWeaver retained verified-building protection gaps after initial network junction validation owners={} -> {}",
+                            LOGGER.warn("【初始路网校验后保留已确认建筑的保护缺口】 " + "RoadWeaver retained verified-building protection gaps after initial network junction validation owners={} -> {}",
                                     road.ownerA2dKey(), road.ownerB2dKey());
                             road = gapped;
                             structureValidation = gapValidation;
@@ -442,23 +444,23 @@ public final class InitialRoutePersistOps {
                         FinalRoadStructureValidator.ValidationResult originalValidation =
                                 FinalRoadStructureValidator.validate(level, original, roadsideCache, streams);
                         if (originalValidation.safe()) {
-                            LOGGER.warn("RoadWeaver discarded unsafe initial junction rewrite and retained the "
+                            LOGGER.warn("【路口改写不安全，保留已通过校验的原路】 " + "RoadWeaver discarded unsafe initial junction rewrite and retained the "
                                             + "validated original road owners={} -> {} collision={}",
                                     road.ownerA2dKey(), road.ownerB2dKey(), structureValidation.collision());
                             road = original;
                         } else {
-                            LOGGER.error("RoadWeaver rejected initial road after final construction-volume validation "
+                            LOGGER.error("【初始路线最终施工体积校验失败，拒绝该路线】 " + "RoadWeaver rejected initial road after final construction-volume validation "
                                             + "owners={} -> {} collision={}",
                                     road.ownerA2dKey(), road.ownerB2dKey(), structureValidation.collision());
-                            LOGGER.warn("RoadWeaver route filtered: reason=initial_construction_volume_intersection:{} owners={} -> {}",
+                            LOGGER.warn("【路线被过滤：施工体积与保护区域相交】 " + "RoadWeaver route filtered: reason=initial_construction_volume_intersection:{} owners={} -> {}",
                                     structureValidation.reason(), road.ownerA2dKey(), road.ownerB2dKey());
                             return new FinalRoadWork(ownerKey(connectedRoad), null);
                         }
                     } else {
-                        LOGGER.error("RoadWeaver rejected initial road after final construction-volume validation "
+                        LOGGER.error("【初始路线最终施工体积校验失败，拒绝该路线】 " + "RoadWeaver rejected initial road after final construction-volume validation "
                                         + "owners={} -> {} collision={}",
                                 road.ownerA2dKey(), road.ownerB2dKey(), structureValidation.collision());
-                        LOGGER.warn("RoadWeaver route filtered: reason=initial_construction_volume_intersection:{} owners={} -> {}",
+                        LOGGER.warn("【路线被过滤：施工体积与保护区域相交】 " + "RoadWeaver route filtered: reason=initial_construction_volume_intersection:{} owners={} -> {}",
                                 structureValidation.reason(), road.ownerA2dKey(), road.ownerB2dKey());
                         return new FinalRoadWork(ownerKey(connectedRoad), null);
                     }
@@ -476,7 +478,7 @@ public final class InitialRoutePersistOps {
                             road.width(), roadsideCache, null, random, road.targetY());
                     DetailedRoadGenerationStats.recordRoadsideVillage(System.nanoTime() - roadsideVillagesStartedAt);
                 } catch (RuntimeException roadsideFailure) {
-                    LOGGER.error("RoadWeaver finalized initial road but skipped failed roadside content owners={} -> {}",
+                    LOGGER.error("【道路已处理，失败的沿路内容已跳过】 " + "RoadWeaver finalized initial road but skipped failed roadside content owners={} -> {}",
                             road.ownerA2dKey(), road.ownerB2dKey(), roadsideFailure);
                 }
             return new FinalRoadWork(ownerKey(road), road);

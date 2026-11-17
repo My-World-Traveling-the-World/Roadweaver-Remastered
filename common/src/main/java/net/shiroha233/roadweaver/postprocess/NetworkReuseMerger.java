@@ -1,6 +1,8 @@
 /* 文件职责：两条路「复用同一段走廊」时的合并判定 —— 判定 + 合并，不改既有路。 */
 package net.shiroha233.roadweaver.postprocess;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
@@ -101,7 +103,7 @@ final class NetworkReuseMerger {
                     primary, primaryFrom);
             addJunctionMarker(spans, merged, reuseEnd, Math.min(merged.size() - 1, reuseEnd + 1),
                     primary, primaryTo);
-            LOGGER.info("RoadWeaver joined nearby middle corridor primary={} secondary={} secondaryRun={}..{} "
+            LOGGER.info("【邻近中部走廊已连接】 " + "RoadWeaver joined nearby middle corridor primary={} secondary={} secondaryRun={}..{} "
                             + "primaryRun={}..{} segments={}",
                     RoadShardStorage.computeFingerprint(primary), RoadShardStorage.computeFingerprint(secondary),
                     from, to, primaryFrom, primaryTo, merged.size());
@@ -199,7 +201,7 @@ final class NetworkReuseMerger {
                 addNetworkReuse(spans, merged, sharedStart, sharedEnd);
                 addJunctionAnchor(spans, merged, Math.max(0, sharedStart - 1), sharedStart);
                 addJunctionAnchor(spans, merged, sharedEnd, Math.min(merged.size() - 1, sharedEnd + 1));
-                LOGGER.info("RoadWeaver planned network reuse primary={} secondary={} entry={} exit={} ownerSpan={} segments={}",
+                LOGGER.info("【规划路网复用段已建立】 " + "RoadWeaver planned network reuse primary={} secondary={} entry={} exit={} ownerSpan={} segments={}",
                         RoadShardStorage.computeFingerprint(primary), RoadShardStorage.computeFingerprint(secondary),
                         secFrom, secTo, pStart + ".." + pEnd, merged.size());
                 return new RoadData(secondary.width(), secondary.roadType(), secondary.materials(),
@@ -353,7 +355,7 @@ final class NetworkReuseMerger {
                     lowered |= lowerToward(mergedY, mergedSharedEnd, 1, mergedY.get(mergedSharedEnd));
                 }
                 if (!lowered || !validMergedSequence(merged, mergedY)) continue;
-                LOGGER.info("RoadWeaver aligned parallel corridor join grades primary={} secondary={} "
+                LOGGER.info("【并行走廊接入高度已对齐】 " + "RoadWeaver aligned parallel corridor join grades primary={} secondary={} "
                                 + "secondaryRun={}..{} primaryRun={}..{} segments={}",
                         RoadShardStorage.computeFingerprint(primary),
                         RoadShardStorage.computeFingerprint(secondary), from, to, pFrom, pTo, merged.size());
@@ -367,7 +369,7 @@ final class NetworkReuseMerger {
             addNetworkReuse(spans, merged, sharedStart, sharedEnd);
             addJunctionAnchor(spans, merged, from, sharedStart);
             addJunctionAnchor(spans, merged, sharedEnd, Math.min(merged.size() - 1, sharedEnd + 1));
-            LOGGER.info("RoadWeaver merged parallel corridor primary={} secondary={} secondaryRun={}..{} primaryRun={}..{} segments={}",
+            LOGGER.info("【并行走廊合并完成】 " + "RoadWeaver merged parallel corridor primary={} secondary={} secondaryRun={}..{} primaryRun={}..{} segments={}",
                     RoadShardStorage.computeFingerprint(primary), RoadShardStorage.computeFingerprint(secondary),
                     from, to, pFrom, pTo, merged.size());
             return new RoadData(secondary.width(), secondary.roadType(), secondary.materials(),
@@ -394,7 +396,7 @@ final class NetworkReuseMerger {
                                          int primaryFrom,
                                          int primaryTo) {
         if (!LOGGER.isInfoEnabled()) return;
-        LOGGER.info("RoadWeaver parallel corridor rejected reason={} primary={} secondary={} "
+        LOGGER.info("【并行走廊不满足条件，拒绝合并】 " + "RoadWeaver parallel corridor rejected reason={} primary={} secondary={} "
                         + "secondaryRange={}..{} primaryRange={}..{}",
                 reason,
                 RoadShardStorage.computeFingerprint(primary),
@@ -481,7 +483,7 @@ final class NetworkReuseMerger {
                     || !gradeCompatibleAtJunction(primaryRoad, pi, secondaryRoad, si, distance)) {
                 outliers++;
                 if (outliers > tolerance) {
-                    LOGGER.info("RoadWeaver parallel corridor rejected reason=not-parallel-distance "
+                    LOGGER.info("【并行走廊距离不满足条件，拒绝合并】 " + "RoadWeaver parallel corridor rejected reason=not-parallel-distance "
                                     + "primary={} secondary={} secondaryRange={}..{} primaryRange={}..{} "
                                     + "outliers={} tolerance={} checked={} sampleDistance={}",
                             RoadShardStorage.computeFingerprint(primaryRoad),
@@ -509,7 +511,7 @@ final class NetworkReuseMerger {
         // 若禁麻花且不允许并排重叠，则记录但暂不改判定语义（新逻辑默认关闭，待真机验证）。
         // 这里仅保留 worstDot 供日志诊断；braidAllowParallelOverlap 的强制拒绝在后续阶段接入。
         if (!accepted) {
-            LOGGER.info("RoadWeaver parallel corridor rejected reason=not-parallel-samples "
+            LOGGER.info("【并行走廊采样方向不满足条件，拒绝合并】 " + "RoadWeaver parallel corridor rejected reason=not-parallel-samples "
                             + "primary={} secondary={} secondaryRange={}..{} primaryRange={}..{} "
                             + "votes={}/{} worstDot={} checked={}",
                     RoadShardStorage.computeFingerprint(primaryRoad),

@@ -1,6 +1,8 @@
 /* 文件职责：距离路牌装饰。 */
 package net.shiroha233.roadweaver.decoration.types;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.decoration.base.OrientedDecoration;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.BlockPos;
@@ -53,7 +55,7 @@ public class DistanceSignDecoration extends OrientedDecoration implements BiomeW
         try {
             updateSigns(world, signPos, signText);
         } catch (Throwable t) {
-            LOGGER.warn("Distance sign text write failed at {}", signPos, t);
+            LOGGER.warn("【距离路牌文字写入失败】 " + "Distance sign text write failed at {}", signPos, t);
         }
     }
 

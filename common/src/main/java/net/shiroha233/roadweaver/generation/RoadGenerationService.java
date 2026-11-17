@@ -1,6 +1,8 @@
 /* 文件职责：调度道路生成任务并维护规划路径缓存生命周期。 */
 package net.shiroha233.roadweaver.generation;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.planning.PlanningBoundsOps;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
@@ -127,7 +129,7 @@ public final class RoadGenerationService {
             return new Road(level, conn, featureConfig, genConfig)
                     .generateRoad(genConfig.pathfinding().aStarMaxSteps(), false);
         } catch (RuntimeException failure) {
-            LOGGER.warn("RoadWeaver braid reroute could not regenerate {}->{}; keeping the original route",
+            LOGGER.warn("【并行道路改线无法重建，保留原路线】 " + "RoadWeaver braid reroute could not regenerate {}->{}; keeping the original route",
                     conn.from(), conn.to(), failure);
             return null;
         }
@@ -160,7 +162,7 @@ public final class RoadGenerationService {
         if (runtimePausedForDimension == paused) return;
         runtimePausedForDimension = paused;
         if (!paused) {
-            LOGGER.info("RoadWeaver Overworld runtime road work resumed.");
+            LOGGER.info("【恢复主世界游玩期道路任务】 " + "RoadWeaver Overworld runtime road work resumed.");
             return;
         }
         // Invalidate all epoch-bound continuations before cancelling futures.
@@ -176,7 +178,7 @@ public final class RoadGenerationService {
         PROCESSED.clear();
         RUNNING_COUNT.set(0);
         RUNTIME_SLOTS.set(runtimeGenerationLimit());
-        LOGGER.info("RoadWeaver runtime roads paused outside minecraft:overworld; world plans retained.");
+        LOGGER.info("【离开主世界，暂停游玩期道路任务并保留计划】 " + "RoadWeaver runtime roads paused outside minecraft:overworld; world plans retained.");
     }
 
     public static void onServerStopping() {
@@ -377,7 +379,7 @@ public final class RoadGenerationService {
                     TerrainSamplingSessions.forLevel(level).effectiveMode(),
                     cfg.pathfindingCost()).isPresent();
             if (!hasStartupPath) {
-                LOGGER.warn("Initial road has no coarse planned path: {} -> {}. Running the detailed planner before world entry.",
+                LOGGER.warn("【缺少粗规划路径，进世界前执行详细规划】 " + "Initial road has no coarse planned path: {} -> {}. Running the detailed planner before world entry.",
                         conn.from(), conn.to());
             }
             GenerationAttempt attempt = generateTaskWithFallback(level, conn, false);
@@ -395,7 +397,7 @@ public final class RoadGenerationService {
                     outcome.success() ? InitialTaskResult.COMPLETED : InitialTaskResult.FAILED,
                     outcome.road(), attempt.connection());
         } catch (Throwable failure) {
-            LOGGER.error("Initial road generation failed for connection {} -> {}", conn.from(), conn.to(), failure);
+            LOGGER.error("【初始道路连接生成失败】 " + "Initial road generation failed for connection {} -> {}", conn.from(), conn.to(), failure);
             return new InitialGenerationResult(InitialTaskResult.FAILED, null);
         }
     }
@@ -445,7 +447,7 @@ public final class RoadGenerationService {
             }
             if (localOnly) {
                 if (!hasLocalRepairReboundPath(level, conn, safeStep)) {
-                    LOGGER.warn("RoadWeaver local-only retry refused full-route sampling: missing rebound path "
+                    LOGGER.warn("【缺少绑定路径，局部重试拒绝扩大为整路采样】 " + "RoadWeaver local-only retry refused full-route sampling: missing rebound path "
                                     + "step={} connection={}->{}",
                             safeStep, conn.from(), conn.to());
                     return new InitialGenerationResult(InitialTaskResult.FAILED, null, conn);
@@ -473,7 +475,7 @@ public final class RoadGenerationService {
                     outcome.success() ? InitialTaskResult.COMPLETED : InitialTaskResult.FAILED,
                     outcome.road(), conn);
         } catch (Throwable failure) {
-            LOGGER.error("Initial road single-step generation failed for connection {} -> {} step={} localOnly={}",
+            LOGGER.error("【初始道路单步生成失败】 " + "Initial road single-step generation failed for connection {} -> {} step={} localOnly={}",
                     conn.from(), conn.to(), safeStep, localOnly, failure);
             return new InitialGenerationResult(InitialTaskResult.FAILED, null, conn);
         }
@@ -587,7 +589,7 @@ public final class RoadGenerationService {
         }
         reconciliation.whenComplete((ignored, failure) -> executeOnMainThread(level, epoch, () -> {
             if (failure != null) {
-                LOGGER.warn("RoadWeaver saved-road reconciliation failed; retaining persisted routes", failure);
+                LOGGER.warn("【已存道路协调失败，保留持久化原路线】 " + "RoadWeaver saved-road reconciliation failed; retaining persisted routes", failure);
             }
             if (attempt.outcome().road() != null) {
                 // ★ 2026-09-25 用户要求：手绘路线**强制加载其经过的区块并立即施工**。
@@ -631,7 +633,7 @@ public final class RoadGenerationService {
         provider.setStructureConnections(level, updated);
         MapPatchService.publishConnection(level, completed);
         MapPatchService.publishRoadForConnectionAsync(level, completed);
-        LOGGER.info("RoadWeaver added disconnected runtime candidate edge {} -> {} while retaining original route",
+        LOGGER.info("【原路保留，另加入未连通的游玩期候补边】 " + "RoadWeaver added disconnected runtime candidate edge {} -> {} while retaining original route",
                 completed.from(), completed.to());
     }
 
@@ -699,7 +701,7 @@ public final class RoadGenerationService {
             PlannedPathCache.find(level, connection, mode, pathConfig);
             warmed++;
         }
-        LOGGER.info("RoadWeaver prewarmed planned paths off the server thread: connections={}", warmed);
+        LOGGER.info("【已在服务端线程外预热规划路径】 " + "RoadWeaver prewarmed planned paths off the server thread: connections={}", warmed);
     }
 
     static ConnectionTopologyReconciler.Result reconcileConnections(ServerLevel level,

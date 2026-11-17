@@ -1,6 +1,8 @@
 /* 文件职责：沿一条路线铺出「避让走廊」—— 只做几何与候选枚举，不做避让判定。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSets;
@@ -272,7 +274,7 @@ public final class PathCorridorBuilder {
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .reduce((left, right) -> left + "," + right)
                 .orElse("none");
-        LOGGER.info("RoadWeaver corridor prediction scope: routes={} pathChunks={} candidateChunks={} predictionTiles={} predictedCandidates={} topSets={}",
+        LOGGER.info("【路径结构走廊预测范围】 " + "RoadWeaver corridor prediction scope: routes={} pathChunks={} candidateChunks={} predictionTiles={} predictedCandidates={} topSets={}",
                 corridors.size(), pathChunks, candidateChunks, requiredTiles.size(), predictedCandidates, topSets);
         return result;
     }

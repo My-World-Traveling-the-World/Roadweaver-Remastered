@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.runtime;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.minecraft.server.MinecraftServer;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
@@ -112,7 +114,7 @@ public final class ThreadPoolManager {
                 rebuildMapPool(resolveMapWorkerThreads());
                 rebuildMapReadPool();
                 var performance = ConfigService.get().performance();
-                LOGGER.info("RoadWeaver adaptive startup profile: processors={}, maxHeapMiB={}, roads={}, coarse={}, "
+                LOGGER.info("【按硬件资源生成的启动和游玩预算】 " + "RoadWeaver adaptive startup profile: processors={}, maxHeapMiB={}, roads={}, coarse={}, "
                                 + "structures={}, nativeStructures={}, startupCap={}, runtimeCap={}, runtimeConcurrency={}, "
                                 + "idleConcurrency={}, chunkyRoadCap={}.",
                         startupProfile.processors(), startupProfile.maxHeapMiB(), startupProfile.roadWorkers(),
@@ -183,7 +185,7 @@ public final class ThreadPoolManager {
                 }
                 setSharedRuntimeThreads(Math.max(
                         configuredSharedWorkerThreads(), profile.roadWorkers()));
-                LOGGER.info("RoadWeaver initial generation hardware lanes prepared: roads={} structures={} shared={}",
+                LOGGER.info("【初始生成的道路、结构和共享通道已准备】 " + "RoadWeaver initial generation hardware lanes prepared: roads={} structures={} shared={}",
                         profile.roadWorkers(), profile.structureWorkers(), currentSharedRuntimeThreads());
             }
         } finally { PoolRetirements.drain(); }
@@ -330,7 +332,7 @@ public final class ThreadPoolManager {
         executor.prestartAllCoreThreads();
         PENDING_SHARED_TARGET.set(Long.MIN_VALUE);
         SHARED_STABLE_SINCE.set(0L);
-        LOGGER.info("RoadWeaver shared runtime worker capacity changed: {} -> {}.", current, target);
+        LOGGER.info("【游玩期共享工作线程容量已调整】 " + "RoadWeaver shared runtime worker capacity changed: {} -> {}.", current, target);
     }
 
     private static void applyStructureRuntimeThreads(ThreadPoolExecutor executor, int target) {
@@ -357,7 +359,7 @@ public final class ThreadPoolManager {
         executor.prestartAllCoreThreads();
         PENDING_STRUCTURE_TARGET.set(Long.MIN_VALUE);
         STRUCTURE_STABLE_SINCE.set(0L);
-        LOGGER.info("RoadWeaver structure runtime worker capacity changed: {} -> {}.", current, bounded);
+        LOGGER.info("【游玩期结构工作线程容量已调整】 " + "RoadWeaver structure runtime worker capacity changed: {} -> {}.", current, bounded);
     }
 
     public static int configuredSharedWorkerThreads() {
@@ -505,7 +507,7 @@ public final class ThreadPoolManager {
         }
         // 单纯换代也要结束旧结果，不能只指望旧 worker 最终取得执行机会。
         pools.forEach(pool -> ((LifecycleWorkerPool) pool).cancelExpiredTasks());
-        LOGGER.info("RoadWeaver runtime epoch invalidated: {}", epoch);
+        LOGGER.info("【运行任务代次已失效，旧任务应停止发布】 " + "RoadWeaver runtime epoch invalidated: {}", epoch);
         return epoch;
     }
 

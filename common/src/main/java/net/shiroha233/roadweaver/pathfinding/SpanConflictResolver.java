@@ -1,6 +1,8 @@
 /* 文件职责：跨度冲突消解 —— 同段路上桥与隧道重叠、水跨重叠时如何取舍。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.core.model.RoadData;
@@ -211,7 +213,7 @@ public final class SpanConflictResolver {
                 result.add(span);
                 continue;
             }
-            LOGGER.info("RoadWeaver resolved physical span overlap: tunnel wins, {} range={}..{} "
+            LOGGER.info("【物理跨度重叠已消解，隧道优先并保留其余片段】 " + "RoadWeaver resolved physical span overlap: tunnel wins, {} range={}..{} "
                             + "kept as {} remainder run(s)",
                     span.type(), from, to, freeRuns.size());
             for (int[] run : freeRuns) {
@@ -219,7 +221,7 @@ public final class SpanConflictResolver {
                 // remainder is invalid, so it is dropped (the tunnel already
                 // implements those stations). A one-station crossing is valid.
                 if (span.type() == SpanType.BRIDGE && run[0] == run[1]) {
-                    LOGGER.info("RoadWeaver dropped one-station bridge remainder inside tunnel range={}..{}",
+                    LOGGER.info("【隧道内部的单站桥余段已移除】 " + "RoadWeaver dropped one-station bridge remainder inside tunnel range={}..{}",
                             from, to);
                     continue;
                 }
@@ -307,7 +309,7 @@ public final class SpanConflictResolver {
                 }
             }
             if (foundWater && safelyBelowEveryWaterColumn) {
-                LOGGER.info("RoadWeaver retained underground tunnel below surface water type={} range={}..{} "
+                LOGGER.info("【水面下仍有足够覆土，保留地下隧道】 " + "RoadWeaver retained underground tunnel below surface water type={} range={}..{} "
                                 + "maximumTunnelCeilingY={} minimumRiverBedY={}",
                         span.type(), from, to, maximumTunnelCeiling, minimumBed);
                 continue;

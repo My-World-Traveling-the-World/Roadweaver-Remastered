@@ -1,6 +1,8 @@
 /* 文件职责：结构避让的规划快照 —— 哪些结构盒会挡路、哪些端点归属者要豁免。 */
 package net.shiroha233.roadweaver.pathlogic.structures;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -519,13 +521,13 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
 
         if (first == 0 && last == segments.size() - 1) return segments;
         if (first < 0 || last >= segments.size() || last - first + 1 < 2) {
-            LOGGER.warn("RoadWeaver village building approach left no safe road connection={}->{} "
+            LOGGER.warn("【村庄接近段裁切后无安全道路】 " + "RoadWeaver village building approach left no safe road connection={}->{} "
                             + "firstCollision={} lastCollision={}",
                     connection.from(), connection.to(), firstCollision, lastCollision);
             return null;
         }
         List<RoadSegmentPlacement> clipped = List.copyOf(segments.subList(first, last + 1));
-        LOGGER.info("RoadWeaver landed at structure boundary connection={}->{} segments={} -> {} "
+        LOGGER.info("【道路已落在建筑边界并裁除侵入段】 " + "RoadWeaver landed at structure boundary connection={}->{} segments={} -> {} "
                         + "first={} last={} firstBuildingCollision={} lastBuildingCollision={}",
                 connection.from(), connection.to(), segments.size(), clipped.size(),
                 first, last, firstCollision, lastCollision);
@@ -591,7 +593,7 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
             }
         }
         if (clipped > 0) {
-            LOGGER.info("RoadWeaver pass-through village clip: stations={}/{} villageBoxes={}",
+            LOGGER.info("【途经村庄按包围盒裁切的站点数】 " + "RoadWeaver pass-through village clip: stations={}/{} villageBoxes={}",
                     clipped, mask.length, passThrough.size());
         }
         return mask;

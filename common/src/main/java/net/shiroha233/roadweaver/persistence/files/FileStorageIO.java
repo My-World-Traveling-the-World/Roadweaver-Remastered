@@ -1,6 +1,8 @@
 /* 文件职责：文件型存储的原子写和目录清理辅助。 */
 package net.shiroha233.roadweaver.persistence.files;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -55,13 +57,13 @@ public final class FileStorageIO {
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
                     if (logger != null) {
-                        logger.warn("{}: {}", reason, path, e);
+                        logger.warn("【文件存储操作失败】 " + "{}: {}", reason, path, e);
                     }
                 }
             });
         } catch (IOException e) {
             if (logger != null) {
-                logger.warn("{}: {}", reason, root, e);
+                logger.warn("【文件存储操作失败】 " + "{}: {}", reason, root, e);
             }
         }
     }
@@ -72,11 +74,11 @@ public final class FileStorageIO {
         try {
             Files.move(path, target, StandardCopyOption.REPLACE_EXISTING);
             if (logger != null) {
-                logger.warn("{}: {} -> {}", reason, path, target);
+                logger.warn("【文件移动或替换失败】 " + "{}: {} -> {}", reason, path, target);
             }
         } catch (IOException e) {
             if (logger != null) {
-                logger.warn("{}: {}", reason, path, e);
+                logger.warn("【文件存储操作失败】 " + "{}: {}", reason, path, e);
             }
         }
     }

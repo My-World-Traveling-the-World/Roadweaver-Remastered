@@ -1,6 +1,8 @@
 /* 文件职责：填方桥跨度的补齐与延长 —— 让桥跨覆盖真正的岸到岸。 */
 package net.shiroha233.roadweaver.pathfinding;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
@@ -275,7 +277,7 @@ public final class FillBridgeExtender {
                 type = SpanType.BRIDGE;
             }
             appendNormalizedWaterSpan(spans, centers, bridgeStart, bridgeEnd, type);
-            LOGGER.info("RoadWeaver final-grade dry depression plan type={} widthBlocks={} "
+            LOGGER.info("【最终纵断面的干谷跨越方案】 " + "RoadWeaver final-grade dry depression plan type={} widthBlocks={} "
                             + "unsafeFillRange={}..{} stableRange={}..{} depth={} bankHeightDelta={}",
                     type, widthBlocks, unsafeStart, unsafeEnd, bridgeStart, bridgeEnd,
                     maximumDepth, bankHeightDelta);

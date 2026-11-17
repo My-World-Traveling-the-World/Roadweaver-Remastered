@@ -1,6 +1,8 @@
 /* 文件职责：实现普通道路的世界生成入口。 */
 package net.shiroha233.roadweaver.pathlogic;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import com.mojang.serialization.Codec;
 import net.minecraft.world.level.ChunkPos;
@@ -141,7 +143,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     if (LOGGER.isDebugEnabled()) {
                         for (RoadData shardRoad : shards) {
                             if (shardRoad == null) continue;
-                            LOGGER.debug("RoadWeaver empty worldgen plan detail chunk={},{} shardRoadId={} "
+                            LOGGER.debug("【区块编译计划为空的道路分片明细】 " + "RoadWeaver empty worldgen plan detail chunk={},{} shardRoadId={} "
                                             + "stations={} spans={} compilerMaskHits=unavailable "
                                             + "compilerChunkIntersects=unavailable compilerLocalIndices=unavailable",
                                     currentChunk.x, currentChunk.z,
@@ -149,7 +151,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                                     shardRoad.roadSegmentList() == null ? 0 : shardRoad.roadSegmentList().size(),
                                     shardRoad.spans() == null ? 0 : shardRoad.spans().size());
                         }
-                        LOGGER.debug("RoadWeaver chunk has {} road shard(s) but empty worldgen plan chunk={},{} "
+                        LOGGER.debug("【区块有道路分片但无施工计划，可能仅擦边或路线已迁移】 " + "RoadWeaver chunk has {} road shard(s) but empty worldgen plan chunk={},{} "
                                         + "(benign when the road disc only grazes this chunk or the route moved; "
                                         + "cross-check the compiler 'produced 0 localIndices' diagnostic)",
                                 shards.size(), currentChunk.x, currentChunk.z);
@@ -160,7 +162,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                 return false;
             }
             if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("RoadWeaver chunk plan chunk={},{} slices={} revision={}",
+                LOGGER.debug("【当前区块施工计划版本与片段数】 " + "RoadWeaver chunk plan chunk={},{} slices={} revision={}",
                         currentChunk.x, currentChunk.z, plan.slices().size(),
                         plan.revision());
             }
@@ -239,7 +241,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                         currentChunk.x, currentChunk.z, incompleteRoads.size());
                 logAbandonedSummary();
             } else if (!incompleteRoads.isEmpty() && completedRoads.isEmpty() && !gapRepairApplied) {
-                LOGGER.warn("RoadWeaver chunk={},{} has road slice(s) but none completed; "
+                LOGGER.warn("【区块道路片段均未结案，需检查隧道或体积拒绝原因】 " + "RoadWeaver chunk={},{} has road slice(s) but none completed; "
                                 + "likely tunnel/volume rejected",
                         currentChunk.x, currentChunk.z);
             }
@@ -251,7 +253,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     if (!reported.add(fingerprint)) continue;
                     var outcome = RoadBuildEvidence.outcome(completedRoads.contains(fingerprint),
                             incompleteRoads.contains(fingerprint), abandoned);
-                    LOGGER.info("{}", RoadBuildEvidence.chunk(server.dimension().location().toString(),
+                    LOGGER.info("【道路区块施工结案证据】 " + "{}", RoadBuildEvidence.chunk(server.dimension().location().toString(),
                             server.getSeed(), slice.road(), fingerprint, currentChunk.x, currentChunk.z,
                             slice.segmentCount(), outcome, gapRepairApplied));
                 }
@@ -318,13 +320,13 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         } catch (RuntimeException failure) {
             // 批量提交失败时不谎报成功：让 chunk 保持未完成，走既有重试路径。
             for (RefusalAccumulator accumulator : accepted) {
-                LOGGER.warn("RoadWeaver could not persist construction refusal gaps road={}",
+                LOGGER.warn("【施工拒绝缺口持久化失败】 " + "RoadWeaver could not persist construction refusal gaps road={}",
                         accumulator.fingerprint(), failure);
             }
             return false;
         }
         for (RefusalAccumulator accumulator : accepted) {
-            LOGGER.info("RoadWeaver persisted construction refusal gaps road={} refusedStations={} "
+            LOGGER.info("【施工拒绝缺口已保存，区块按既有规则结案以停止重试】 " + "RoadWeaver persisted construction refusal gaps road={} refusedStations={} "
                             + "(chunk completes; retry loop ends)",
                     accumulator.fingerprint(), accumulator.stations().size());
         }
@@ -427,7 +429,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         boolean bridgeEnabled = cfg.bridgeEnabled();
         int roadType = data.roadType();
         if (roadType != 0 && roadType != 1) {
-            LOGGER.warn("RoadWeaver rejected malformed road slice with unsupported roadType={} chunk={} road={}",
+            LOGGER.warn("【道路类型不支持，拒绝无效施工片段】 " + "RoadWeaver rejected malformed road slice with unsupported roadType={} chunk={} road={}",
                     roadType, currentChunk, roadFingerprint);
             return false;
         }
@@ -437,7 +439,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         List<BlockState> slabMaterials = data.slabMaterials();
         List<RoadSegmentPlacement> segments = data.roadSegmentList();
         if (segments == null || segments.size() < 5) {
-            LOGGER.warn("RoadWeaver rejected malformed road slice with too few segments chunk={} road={} segments={}",
+            LOGGER.warn("【站点数不足，拒绝无效施工片段】 " + "RoadWeaver rejected malformed road slice with too few segments chunk={} road={} segments={}",
                     currentChunk, roadFingerprint, segments == null ? 0 : segments.size());
             return false;
         }
@@ -562,7 +564,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             deckY, segmentIndex, random, cfg, bridgeRanges, baseYArr, i, bridgeCtx, line);
                     if (!placedFallback) {
                         completed[0] = false;
-                        LOGGER.warn("RoadWeaver bridge segment construction failed road={} segment={} pos={}",
+                        LOGGER.warn("【桥梁站点施工失败】 " + "RoadWeaver bridge segment construction failed road={} segment={} pos={}",
                                 data.hasOwnerPair() ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
                                 i, middle);
                     }
@@ -579,7 +581,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             // gap: the span keeps building as a tunnel around
                             // it, the chunk completes, and the backfill loop
                             // never retries it.
-                            LOGGER.warn("RoadWeaver tunnel station skipped as PROTECTED_GAP road={} segment={} pos={} action=skip_station span_stays_tunnel",
+                            LOGGER.warn("【隧道站点按保护缺口跳过，跨度仍保持隧道类型】 " + "RoadWeaver tunnel station skipped as PROTECTED_GAP road={} segment={} pos={} action=skip_station span_stays_tunnel",
                                     data != null && data.hasOwnerPair()
                                             ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
                                     i, middle);
@@ -597,7 +599,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                                     world, blockedCenter.getX(), blockedCenter.getZ());
                             int[] fallbackY = baseYArr != null ? baseYArr : new int[middlePositions.size()];
                             fallbackY[i] = surfaceY;
-                            LOGGER.warn("RoadWeaver tunnel rejected; falling back to surface-cut build road={} segment={} pos={} y={} reason=see_blocked_tunnel_section",
+                            LOGGER.warn("【隧道施工被拒，本段按既有规则转为地表切坡】 " + "RoadWeaver tunnel rejected; falling back to surface-cut build road={} segment={} pos={} y={} reason=see_blocked_tunnel_section",
                                     data != null && data.hasOwnerPair()
                                             ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
                                     i, blockedCenter, surfaceY);
@@ -674,7 +676,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                         (roadType == 0 ? DecorationPlanner.Mode.ARTIFICIAL : DecorationPlanner.Mode.NATURAL));
             }
         }
-        LOGGER.info("RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
+        LOGGER.info("【道路区块片段施工结果】 " + "RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
                         + "reuse={} gap={} completed={}",
                 roadFingerprint, currentChunk, slice.segmentCount(),
                 countMask(isBridge), countMask(tunnelMask),
@@ -686,7 +688,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                 if (tunnelMask != null && index < tunnelMask.length && tunnelMask[index]) tunnelStations++;
                 if (slice.isTunnelJunction(index)) tunnelJunctionStations++;
             }
-            LOGGER.warn("RoadWeaver chunk construction incomplete road={} chunk={} tunnelStations={} "
+            LOGGER.warn("【道路区块施工尚未完成】 " + "RoadWeaver chunk construction incomplete road={} chunk={} tunnelStations={} "
                             + "tunnelJunctionStations={} segments={}",
                     roadFingerprint, currentChunk, tunnelStations, tunnelJunctionStations, segments.size());
         }
@@ -704,7 +706,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         long last = EMPTY_WORLDGEN_PLAN_SUMMARY_AT.get();
         if (now - last < EMPTY_WORLDGEN_PLAN_SUMMARY_INTERVAL_MS) return;
         if (!EMPTY_WORLDGEN_PLAN_SUMMARY_AT.compareAndSet(last, now)) return;
-        LOGGER.info("RoadWeaver empty worldgen plan chunks observed: total={} (benign grazing discs or moved routes; "
+        LOGGER.info("【空区块施工计划累计统计，逐块细节见调试日志】 " + "RoadWeaver empty worldgen plan chunks observed: total={} (benign grazing discs or moved routes; "
                 + "per-chunk detail at debug level)", EMPTY_WORLDGEN_PLAN_CHUNKS.get());
     }
 

@@ -1,6 +1,8 @@
 /* 文件职责：按固定顺序选主、发起批量精修并提交通过校验的路网结果。 */
 package net.shiroha233.roadweaver.pathlogic.junction;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -118,7 +120,7 @@ final class JunctionBatchCoordinator {
                     futures.get(i).cancel(true);
                     results.add(new MergeResult(item.index(), item.secondary(), item.secondary(), item.selection().donor()));
                 } catch (Throwable failure) {
-                    LOGGER.warn("RoadWeaver parallel merged interface check failed index={} owners={} -> {}; retaining original",
+                    LOGGER.warn("【并行道路合并接口校验失败，保留原路】 " + "RoadWeaver parallel merged interface check failed index={} owners={} -> {}; retaining original",
                             item.index(), item.secondary().ownerA2dKey(), item.secondary().ownerB2dKey(), failure);
                     results.add(new MergeResult(item.index(), item.secondary(), item.secondary(), item.selection().donor()));
                 }
@@ -141,7 +143,7 @@ final class JunctionBatchCoordinator {
                     RoadData preReroute = braid.originalAt(result.index());
                     RoadData fallback = preReroute != null ? preReroute : secondary;
                     // 有些结构拒绝只有原因、没有碰撞坐标；记录两者才能分辨是哪一道守卫拒绝。
-                    LOGGER.warn("RoadWeaver discarded unsafe in-memory junction owners={} -> {} dataReason={} "
+                    LOGGER.warn("【内存路口不安全，撤销本次改写】 " + "RoadWeaver discarded unsafe in-memory junction owners={} -> {} dataReason={} "
                                     + "structureReason={} collision={} fallback={}",
                             fallback.ownerA2dKey(), fallback.ownerB2dKey(), dataValidation.reason(),
                             structureValidation == null ? null : structureValidation.reason(),
@@ -167,7 +169,7 @@ final class JunctionBatchCoordinator {
             for (int secondaryIndex = 0; secondaryIndex < current.size(); secondaryIndex++) {
                 InitialGenerationProgressTracker.recordConstructionChunksDone(secondaryIndex + 1);
             }
-            LOGGER.info("RoadWeaver network merge timing: routes={} persisted={} merged={} donorSelectMs={} "
+            LOGGER.info("【路网合并各阶段耗时与共用桥统计】 " + "RoadWeaver network merge timing: routes={} persisted={} merged={} donorSelectMs={} "
                             + "refineMs={} commitMs={} totalMs={} braidPairs={} braidRerouted={} "
                             + "braidRejected={} braidScanMs={} braidRerouteMs={} "
                             + "braidSkipAbsorbed={} braidSkipTotal={} "

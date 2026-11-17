@@ -5,6 +5,8 @@
  */
 package net.shiroha233.roadweaver.route;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -103,7 +105,7 @@ public final class RouteRoadDataPatcher {
         List<RouteSegmentMapper.MappedSegment> mapped =
                 RouteSegmentMapper.map(actualCenters, smoothed, route);
         if (mapped.size() != actualCenters.size()) {
-            LOGGER.warn("RoadWeaver player-route patch skipped: center/mapped size mismatch "
+            LOGGER.warn("【手绘路径与映射站数不一致，保留当前规划结果；玩家意图未应用】 " + "RoadWeaver player-route patch skipped: center/mapped size mismatch "
                             + "centers={} mapped={} route={} points={} "
                             + "(keeping pipeline result; player intent NOT applied)",
                     actualCenters.size(), mapped.size(), route.id(), route.pointCount());

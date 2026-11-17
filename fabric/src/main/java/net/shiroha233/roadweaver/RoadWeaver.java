@@ -1,6 +1,8 @@
 /* 文件职责：RoadWeaver 模组主类（Fabric）：注册入口，把平台实现挂到 common 的契约上。 */
 package net.shiroha233.roadweaver;
 
+// 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
+
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -27,27 +29,27 @@ public class RoadWeaver implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("Initializing RoadWeaver (Fabric)...");
+        LOGGER.info("【初始化云游四海道路模组】 " + "Initializing RoadWeaver (Fabric)...");
 
         // 把实现注入 roadweaver-api 契约模块。必须**尽可能早**：
         // 外部 mod 在各自 onInitialize 里调 PlanningLifecycleApi.addListener 注册回调，
         // 若本行晚于它们的注册时机，backend 仍是 null，注册会返回 false。
         // fabric.mod.json 的 depends 保证 roadweaver_api 先于本 mod 加载。
         RoadWeaverApi.installBackend(ApiBackendImpl.INSTANCE);
-        LOGGER.info("RoadWeaver api: {}", RoadWeaverApi.describe());
+        LOGGER.info("【道路公共接口状态】 " + "RoadWeaver api: {}", RoadWeaverApi.describe());
 
         // 跨 mod 信号注册表的解析结果：进入世界（集成/专用服务端启动完成）后再打一行。
         // 这里能看到的是**运行时真实读取路径** —— 走 API 还是退回反射。
         ServerLifecycleEvents.SERVER_STARTED.register(server ->
-                LOGGER.info("RoadWeaver {}", LoadSignalBridge.describeResolution()));
+                LOGGER.info("【服务端跨模组负载信号接入状态】 " + "RoadWeaver {}", LoadSignalBridge.describeResolution()));
         
         WorldDataAttachment.registerWorldDataAttachment();
         
         ConfigService.load();
-        LOGGER.info("Configuration loaded");
+        LOGGER.info("【道路配置加载完成】 " + "Configuration loaded");
         
         StructureRegistryFabric.register();
-        LOGGER.info("Structure types registered");
+        LOGGER.info("【道路结构类型注册完成】 " + "Structure types registered");
         
         RoadFeatureRegistry.register();
 
