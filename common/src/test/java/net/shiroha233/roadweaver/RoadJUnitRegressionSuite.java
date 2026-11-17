@@ -44,6 +44,7 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.TiledTerrainFieldTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.TiledTerrainFmmTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.impl.PipelinePlannerSamplingTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.sampling.TiledSamplerIntegrationTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.topology.MinimumSpanningTreeTest"),
                         DiscoverySelectors.selectClass(
