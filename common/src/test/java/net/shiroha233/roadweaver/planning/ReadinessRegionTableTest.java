@@ -193,6 +193,28 @@ class ReadinessRegionTableTest {
     }
 
     @Test
+    void repeatedSnapshotsDoNotRevisitAnyHistoricalEntry() {
+        java.util.concurrent.atomic.AtomicInteger worldReads = new java.util.concurrent.atomic.AtomicInteger();
+        ReadinessRegionTable<Key, Integer> table = new ReadinessRegionTable<>(key -> {
+            worldReads.incrementAndGet();
+            return key.world;
+        });
+        for (int i = 0; i < 20_000; i++) {
+            assertNull(table.putIfAbsent(new Key(i % 3, i), new Entry(State.READY)));
+        }
+        assertNull(table.putIfAbsent(new Key(0, -1), new Entry(State.QUEUED)));
+        assertTrue(worldReads.get() >= 20_001);
+        worldReads.set(0);
+        for (int i = 0; i < 10_000; i++) {
+            assertEquals(new Snapshot(1, 0, 6_667, 0), table.snapshot(0));
+            assertEquals(new Snapshot(0, 0, 6_667, 0), table.snapshot(1));
+            assertEquals(new Snapshot(0, 0, 6_666, 0), table.snapshot(2));
+        }
+        // 行为对拍已独立验证数值；这里精确约束重复读取的工作量不随历史区域增长。
+        assertEquals(0, worldReads.get());
+    }
+
+    @Test
     void cancellationCallbacksCanUseTheTableOutsideItsLifecycleSnapshot() throws Exception {
         ReadinessRegionTable<Key, Integer> table = new ReadinessRegionTable<>(Key::world);
         Key key = new Key(1, 3);

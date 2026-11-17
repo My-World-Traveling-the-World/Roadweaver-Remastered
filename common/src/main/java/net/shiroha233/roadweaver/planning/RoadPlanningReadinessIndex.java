@@ -75,16 +75,7 @@ public final class RoadPlanningReadinessIndex {
     private static volatile int currentSupplyLanes = 1;
     private static volatile int currentStreamsThreads = 1;
 
-    /**
-     * 单调递增的 tick 计数（★ 0.8.401）。
-     *
-     * <p>用途：给 {@link #backlogSaturated} 的「按 tick 记忆化」提供代价为零的
-     * 失效键 —— 无需挂任何显式失效逻辑，tick 一变缓存自然失效。</p>
-     *
-     * <p>由 {@link #tick(ServerLevel)} 每次调用递增。注意 requestRegion 是 Chunky
-     * 通过反射投进服务端线程的，同一 tick 内的多次调用共享同一个值，
-     * 这正是我们要的语义（一个 tick 内饱和状态不会变）。</p>
-     */
+    // 仅用于周期诊断；准入必须立即观察同一 tick 内的转换，不能按 tick 缓存旧计数。
     private static final java.util.concurrent.atomic.AtomicLong CURRENT_TICK =
             new java.util.concurrent.atomic.AtomicLong();
 
@@ -119,7 +110,7 @@ public final class RoadPlanningReadinessIndex {
         // 现在的顺序（最便宜的先判）：
         //   ① ready 集合（内存）
         //   ② ENTRIES 已有项（内存）—— 已 QUEUED/PLANNING 直接返回状态
-        //   ③ 饱和短路（内存，按 tick 记忆化）—— 饱和且未入项直接 QUEUED，
+        //   ③ 饱和短路（内存，即时计数）—— 饱和且未入项直接 QUEUED，
         //      **跳过 adoption**（被拒的 region 永远进不了 ENTRIES，
         //      让它们跑 adoption 是最大的那笔浪费）
         //   ④ adoption（可能读盘 / 遍历连接表）
@@ -177,70 +168,9 @@ public final class RoadPlanningReadinessIndex {
      */
     private static final int MAX_BACKLOG_REGIONS = 512;
 
-    /**
-     * 队列入队是否已到上限（只统计本世界的 QUEUED/PLANNING）。
-     *
-     * <p>★ 0.8.401：**按 tick 记忆化**。原实现每次调用都遍历
-     * {@code ACTIVE} + {@code QUEUE}（约 512 项），而 requestRegion 在
-     * Chunky 预热期每 tick 被调用约 2754×2 遍 ⇒ 每次约 512 次 map 查找
-     * ⇒ 每 tick 约 280 万次。饱和状态在一个 tick 内不会变（入队/出队
-     * 都发生在服务端线程的 tick 边界内），因此按 tick 缓存是安全且等价的。</p>
-     *
-     * <p>用 {@code CURRENT_TICK} 作 key：它是单调递增的 tick 计数（见 tick()）。
-     * 这样无需额外失效逻辑 —— 新 tick 自动重新计算一次。</p>
-     */
+    /** 唯一区域的 QUEUED + PLANNING 为实际积压；历史 READY 和重复队列键不占名额。 */
     private static boolean backlogSaturated(WorldKey world) {
-        long tick = CURRENT_TICK.get();
-        CacheKey cacheKey = new CacheKey(world, tick);
-        Boolean cached = SATURATED_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        boolean result = computeBacklogSaturated(world);
-        synchronized (SATURATED_CACHE) {
-            // 双检：并发进入时可能已被别的线程填好（结果等价，直接返回即可）。
-            Boolean racer = SATURATED_CACHE.get(cacheKey);
-            if (racer != null) {
-                return racer;
-            }
-            // 只保留当前 tick 的结果 —— 旧的 tick key 永不复用，直接清掉。
-            SATURATED_CACHE.clear();
-            SATURATED_CACHE.put(cacheKey, result);
-        }
-        return result;
-    }
-
-    /** 饱和缓存键：(世界, tick)。 */
-    private record CacheKey(WorldKey world, long tick) {
-    }
-
-    /**
-     * 饱和缓存。**逻辑上容量恒为 1**（当前 tick 的当前世界）—— 每次填充前
-     * {@code clear()} 完成轮换。用 synchronized 保护 clear+put 的原子性
-     * （单条 ConcurrentHashMap 操作原子，但两者组合不是）。
-     */
-    private static final java.util.concurrent.ConcurrentHashMap<CacheKey, Boolean> SATURATED_CACHE =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** 供测试：清空饱和缓存。 */
-    static void resetSaturatedCacheForTest() {
-        SATURATED_CACHE.clear();
-    }
-
-    private static boolean computeBacklogSaturated(WorldKey world) {
-        int n = 0;
-        for (RegionKey k : ACTIVE) {
-            if (!k.world.equals(world)) continue;
-            Entry e = ENTRIES.get(k);
-            if (e != null && (e.state() == State.PLANNING || e.state() == State.QUEUED)) n++;
-        }
-        for (RegionKey k : QUEUE) {
-            if (!k.world.equals(world)) continue;
-            Entry e = ENTRIES.get(k);
-            if (e != null && e.state() == State.QUEUED) n++;
-            if (n >= MAX_BACKLOG_REGIONS) return true;
-        }
-        return n >= MAX_BACKLOG_REGIONS;
+        return supplySnapshot(world).pending() >= MAX_BACKLOG_REGIONS;
     }
 
     /** Reflection-friendly read-only API used by PlainCraft Chunky AutoGen. */
@@ -285,9 +215,7 @@ public final class RoadPlanningReadinessIndex {
 
     public static void tick(ServerLevel level) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())) return;
-        // ★ 0.8.401：推进 tick 计数（让 backlogSaturated 的按-tick 缓存失效）。
-        //   注意放在 runtimePausedForDimension 检查**之前** —— 暂停期同样要推进，
-        //   否则恢复后会用过期的 (world, tick) 命中旧缓存。
+        // 暂停期间也推进诊断时钟；状态计数随每次转换立即更新。
         long tick = CURRENT_TICK.incrementAndGet();
         if (runtimePausedForDimension) return;
         worldState(level);
@@ -298,7 +226,7 @@ public final class RoadPlanningReadinessIndex {
         Snapshot supply = supplySnapshot(world);
         if (sampleScan) {
             long scanUs = (System.nanoTime() - scanStart) / 1000;
-            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=scan tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
+            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=scan source=incremental tick={} entriesApprox={} queued={} planning={} readyAhead={} scanUs={}",
                     tick, ENTRIES.size(), supply.queued(), supply.planning(), supply.readyAhead(), scanUs);
         }
         int desiredLanes = RuntimeLoadPolicy.recommendedCoordinatorLanes(
