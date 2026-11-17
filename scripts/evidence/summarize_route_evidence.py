@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 MARKER = "[ROUTE-EVIDENCE]"
-KEY = re.compile(r"(?:^| )(?P<key>id|stage|selected|geodesic|protection|detail|safe|reason|product|construction|fingerprint|chunk|localStations|outcome|gapRepair)=")
+KEY = re.compile(r"(?:^| )(?P<key>id|stage|selected|geodesic|protection|detail|safe|reason|product|construction|fingerprint|chunk|localStations|outcome|gapRepair|content)=")
 VALIDATIONS = ("final-water", "final-structure", "validated")
 OUTCOMES = {"COMPLETED", "ABANDONED", "INCOMPLETE", "NOT_ATTEMPTED", "CONFLICT"}
 
@@ -38,6 +38,8 @@ def parse(line):
         fields[key] = body[match.end():end].strip()
     if not fields.get("id"):
         raise ValueError("missing route id")
+    if "content" in fields and not re.fullmatch(r"c1-[0-9a-f]{64}", fields["content"]):
+        raise ValueError("invalid content version")
     stage = fields["stage"]
     if stage == "coarse":
         fields["selected"] = boolean(fields["selected"])
@@ -68,6 +70,28 @@ def parse(line):
     return fields
 
 
+def add_chunk(target, event):
+    version = target["chunksByFingerprint"].setdefault(event["fingerprint"], {})
+    chunk = version.setdefault(event["chunk"], {"latestOutcome": None,
+        "observedOutcomes": [], "observations": 0, "gapRepairSeen": False})
+    chunk["observations"] += 1
+    chunk["latestOutcome"] = event["outcome"]
+    if event["outcome"] not in chunk["observedOutcomes"]:
+        chunk["observedOutcomes"].append(event["outcome"])
+    chunk["gapRepairSeen"] |= event["gapRepair"]
+
+
+def finish_product(target, stages):
+    target["missingStages"] = [stage for stage in stages
+        if not (target["chunksByFingerprint"] if stage == "chunk" else
+                target.get("coarse") if stage == "coarse" else target["validation"].get(stage))]
+    target["latestValidationPassed"] = {stage: history[-1]["safe"]
+        for stage, history in target["validation"].items()}
+    target["chunkOutcomeCountsByFingerprint"] = {fingerprint: dict(Counter(
+        chunk["latestOutcome"] for chunk in chunks.values()))
+        for fingerprint, chunks in target["chunksByFingerprint"].items()}
+
+
 def summarize(sources):
     """sources 为(session, 文件名, 行迭代器)，调用顺序就是同会话的观测顺序。"""
     routes, errors, unlinked = {}, [], []
@@ -88,7 +112,9 @@ def summarize(sources):
             key = (session, event["id"])
             route = routes.setdefault(key, {"session": session, "id": event["id"],
                 "coarse": [], "validation": {}, "chunksByFingerprint": {},
-                "observations": 0, "roadCompletion": "not-proven"})
+                "observations": 0, "roadCompletion": "not-proven", "versionsByContent": {},
+                "legacyVersionObservations": 0,
+                "fingerprintSummaryScope": "identity-only; use versionsByContent for validation/construction correlation"})
             route["observations"] += 1
             stage = event["stage"]
             if stage == "coarse":
@@ -96,26 +122,25 @@ def summarize(sources):
             elif stage in VALIDATIONS:
                 route["validation"].setdefault(stage, []).append(event)
             else:
-                version = route["chunksByFingerprint"].setdefault(event["fingerprint"], {})
-                chunk = version.setdefault(event["chunk"], {"latestOutcome": None,
-                    "observedOutcomes": [], "observations": 0, "gapRepairSeen": False})
-                chunk["observations"] += 1
-                chunk["latestOutcome"] = event["outcome"]
-                if event["outcome"] not in chunk["observedOutcomes"]:
-                    chunk["observedOutcomes"].append(event["outcome"])
-                chunk["gapRepairSeen"] |= event["gapRepair"]
+                add_chunk(route, event)
+            if stage != "coarse":
+                if "content" not in event:
+                    # 旧日志没有施工内容版本，只能保留观测，不能靠同一指纹继承校验成功。
+                    route["legacyVersionObservations"] += 1
+                else:
+                    version = route["versionsByContent"].setdefault(event["content"], {
+                        "validation": {}, "chunksByFingerprint": {}, "roadCompletion": "not-proven"})
+                    if stage == "chunk":
+                        add_chunk(version, event)
+                    else:
+                        version["validation"].setdefault(stage, []).append(event)
     for route in routes.values():
-        route["missingStages"] = [stage for stage in ("coarse", *VALIDATIONS, "chunk")
-            if not (route["chunksByFingerprint"] if stage == "chunk" else
-                    route["coarse"] if stage == "coarse" else route["validation"].get(stage))]
-        route["latestValidationPassed"] = {stage: history[-1]["safe"]
-            for stage, history in route["validation"].items()}
-        route["chunkOutcomeCountsByFingerprint"] = {fingerprint: dict(Counter(
-            chunk["latestOutcome"] for chunk in chunks.values()))
-            for fingerprint, chunks in route["chunksByFingerprint"].items()}
+        finish_product(route, ("coarse", *VALIDATIONS, "chunk"))
+        for version in route["versionsByContent"].values():
+            finish_product(version, (*VALIDATIONS, "chunk"))
     # 同一坐标的重复日志只增加观测数，不增加完工区块数；无尝试ID时不虚构尝试次数。
     return {"routes": list(routes.values()), "unlinked": unlinked, "errors": errors,
-            "semantics": "input-order observations; fingerprints isolated; road completion not proven"}
+            "semantics": "input-order observations; explicit content versions isolated; legacy identity summaries are not version correlation; road completion not proven"}
 
 
 def main(argv=None):

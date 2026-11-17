@@ -48,6 +48,71 @@ class RoadBuildEvidenceTest {
         assertTrue(line.contains("fingerprint=123 chunk=-2,3 localStations=1 outcome=ABANDONED gapRepair=true"));
     }
 
+    @Test
+    void contentVersionIncludesEveryConstructionInputAndStationOrder() {
+        var r = road();
+        var stations = r.roadSegmentList();
+        var reversed = new ArrayList<>(stations); Collections.reverse(reversed);
+        var changedColumns = List.of(new RoadSegmentPlacement(stations.getFirst().middlePos(),
+                List.of(new BlockPos(0, 64, 1))), stations.getLast());
+        var variants = List.of(
+            new RoadData(6, 0, r.materials(), r.slabMaterials(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 1, r.materials(), r.slabMaterials(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, List.of(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState()), r.slabMaterials(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), List.of(net.minecraft.world.level.block.Blocks.STONE_SLAB.defaultBlockState()), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), reversed, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), changedColumns, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), stations, List.of(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), stations, r.spans(), List.of(64, 65), r.ownerA2dKey(), r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), stations, r.spans(), r.targetY(), r.ownerA2dKey() + 1, r.ownerB2dKey()),
+            new RoadData(5, 0, r.materials(), r.slabMaterials(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey() + 1));
+        assertEquals(10, variants.size());
+        String original = RoadBuildEvidence.content(r);
+        assertTrue(original.matches("c1-[0-9a-f]{64}"));
+        Set<String> versions = new HashSet<>(); versions.add(original);
+        for (int i = 0; i < variants.size(); i++)
+            assertTrue(versions.add(RoadBuildEvidence.content(variants.get(i))), "施工字段变化必须区分，第" + i + "组");
+        // 身份指纹刻意保持旧语义；内容版本必须独立抓到剖面变化，不能拿前者冒充后者。
+        assertEquals(net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(r),
+                net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(variants.get(7)));
+    }
+
+    @Test
+    void materialPropertyNamesAndCodecRoundTripHaveStableVersions() {
+        var r = road();
+        var log = net.minecraft.world.level.block.Blocks.OAK_LOG.defaultBlockState();
+        var otherAxis = log.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
+                net.minecraft.core.Direction.Axis.X);
+        var first = new RoadData(5, 0, List.of(log, otherAxis), List.of(), r.roadSegmentList(), r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey());
+        var second = new RoadData(5, 0, List.of(otherAxis, log), List.of(), r.roadSegmentList(), r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey());
+        assertNotEquals(RoadBuildEvidence.content(first), RoadBuildEvidence.content(second));
+        var encoded = RoadData.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, first).getOrThrow();
+        var restored = RoadData.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, encoded).getOrThrow();
+        assertEquals(first, restored);
+        assertEquals(RoadBuildEvidence.content(first), RoadBuildEvidence.content(restored));
+    }
+
+    @Test
+    void nestedColumnMutationCannotReuseAnOldDiagnosticVersion() {
+        var r = road();
+        var columns = new ArrayList<>(r.roadSegmentList().getFirst().positions());
+        var data = new RoadData(5, 0, List.of(), List.of(),
+                List.of(new RoadSegmentPlacement(new BlockPos(0, 64, 0), columns)), List.of(), List.of(64), 1, 2);
+        String first = RoadBuildEvidence.content(data);
+        columns.add(new BlockPos(0, 64, 2));
+        assertNotEquals(first, RoadBuildEvidence.content(data), "不能按RoadData对象身份缓存可变嵌套列");
+    }
+
+    @Test
+    void validationAndChunkCarryTheSameExactContentVersion() {
+        var data = road();
+        String content = RoadBuildEvidence.content(data);
+        assertTrue(RoadBuildEvidence.validation("minecraft:overworld", 42, data, "validated", true, "ok")
+                .endsWith(" content=" + content));
+        assertTrue(RoadBuildEvidence.chunk("minecraft:overworld", 42, data, 123, -2, 3, 1,
+                RoadBuildEvidence.ChunkOutcome.COMPLETED, false).endsWith(" content=" + content));
+    }
+
     private static RoadData road() {
         BlockPos a = new BlockPos(0, 64, 0), b = new BlockPos(1, 64, 0);
         return new RoadData(5, 0, List.of(), List.of(), List.of(

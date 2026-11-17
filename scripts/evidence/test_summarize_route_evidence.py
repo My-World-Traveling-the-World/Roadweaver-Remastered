@@ -103,6 +103,40 @@ class EvidenceSummaryTest(unittest.TestCase):
         self.assertEqual(2, len(route["validation"]["validated"]))
         self.assertEqual("not-proven", route["roadCompletion"])
 
+    def test_same_fingerprint_changed_content_never_inherits_validation(self):
+        old, new = "c1-" + "a" * 64, "c1-" + "b" * 64
+        route = self.report(validation() + " content=" + old,
+            chunk() + " content=" + old, chunk("INCOMPLETE") + " content=" + new)["routes"][0]
+        self.assertEqual(2, len(route["versionsByContent"]))
+        first, second = route["versionsByContent"][old], route["versionsByContent"][new]
+        self.assertTrue(first["latestValidationPassed"]["validated"])
+        self.assertEqual({}, second["latestValidationPassed"])
+        self.assertIn("validated", second["missingStages"])
+        self.assertEqual({"INCOMPLETE": 1}, second["chunkOutcomeCountsByFingerprint"]["-99"])
+        self.assertEqual("not-proven", second["roadCompletion"])
+
+    def test_legacy_events_stay_explicitly_unversioned(self):
+        content = "c1-" + "a" * 64
+        route = self.report(validation(), chunk() + " content=" + content)["routes"][0]
+        self.assertEqual(1, route["legacyVersionObservations"])
+        self.assertEqual({}, route["versionsByContent"][content]["validation"])
+        self.assertIn("identity-only", route["fingerprintSummaryScope"])
+
+    def test_chinese_description_before_marker_and_content_failure_keep_their_meaning(self):
+        content = "c1-" + "a" * 64
+        route = self.report("【最终校验】 " + validation() + " content=" + content,
+            "【最终校验】 " + validation(safe="false") + " content=" + content)["routes"][0]
+        version = route["versionsByContent"][content]
+        self.assertFalse(version["latestValidationPassed"]["validated"])
+        self.assertEqual(2, len(version["validation"]["validated"]))
+
+    def test_malformed_content_is_reported_instead_of_joined_to_legacy(self):
+        for bad in ("c1-short", "c2-" + "a" * 64, "c1-" + "A" * 64):
+            with self.subTest(bad=bad):
+                report = self.report(chunk() + " content=" + bad)
+                self.assertEqual([], report["routes"])
+                self.assertEqual(1, len(report["errors"]))
+
     def test_cli_handles_gbk_files_and_returns_nonzero_for_malformed_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             source, output = Path(directory) / "game.log", Path(directory) / "summary.json"
