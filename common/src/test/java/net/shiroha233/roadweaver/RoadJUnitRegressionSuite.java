@@ -465,6 +465,10 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.postprocess.SharpTurnSplineTest"),
                 // 求解异常必须保留与正常路径相同的端点、桥面及覆土约束。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetProfileSolverTest"),
+                // 观测必须连到真实候选和终态结果，不能只验证格式器。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.metrics.RoadBuildEvidenceTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.RouteEvidenceWiringTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pipeline.ConnectionEvidenceTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetTerrainInputsTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotActivationTest"),
                 // 村庄端点过滤必须保留外来道路、阈值边界及整轮撤销原因。

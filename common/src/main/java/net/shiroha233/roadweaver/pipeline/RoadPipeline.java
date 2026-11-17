@@ -157,19 +157,36 @@ public final class RoadPipeline {
         return planTopology(nodes, radius, allowed, null, null);
     }
 
+    public record ConnectionEvidence(int fromX, int fromZ, int toX, int toZ,
+                                     boolean selected, double geodesic, String detail) {}
+
     public TopologyPlan planTopologyWithShadow(List<RoadNode> nodes, int radius, MinimumSpanningTree.EdgeFilter allowed,
                                                IntBinaryOperator waterProxy) {
+        return planTopologyWithShadow(nodes, radius, allowed, waterProxy, evidence -> {});
+    }
+
+    /** 回调只读有限候选证据；世界标识由上层补充，内核不引入世界依赖。 */
+    public TopologyPlan planTopologyWithShadow(List<RoadNode> nodes, int radius, MinimumSpanningTree.EdgeFilter allowed,
+                                               IntBinaryOperator waterProxy,
+                                               java.util.function.Consumer<ConnectionEvidence> evidenceSink) {
         return planTopology(nodes, radius, allowed,
                 (x, z) -> new BuildabilityShadow.Column(metric.terrain().height(x, z),
                         waterProxy.applyAsInt(x, z), BuildabilityShadow.Protection.UNKNOWN),
-                (report, nanos) -> LOGGER.info("RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
+                (report, nanos) -> {
+                    for (var edge : report.edges()) {
+                        var a = nodes.get(edge.choice().from()); var b = nodes.get(edge.choice().to());
+                        evidenceSink.accept(new ConnectionEvidence(a.x(), a.z(), b.x(), b.z(),
+                                edge.choice().selected(), edge.choice().geodesic(), edge.toString()));
+                    }
+                    LOGGER.info("RoadWeaver buildability shadow nodes={} origin={}:{} step={} "
                                 + "water=heightmap-gap protection=unprepared shadowMs={} {} coordinates={}",
                         nodes.size(), nodes.getFirst().x(), nodes.getFirst().z(), metric.terrain().step(),
                         nanos / 1_000_000, report, report.edges().stream().map(e -> {
                             var a = nodes.get(e.choice().from());
                             var b = nodes.get(e.choice().to());
                             return a.x() + ":" + a.z() + "->" + b.x() + ":" + b.z();
-                        }).toList()));
+                        }).toList());
+                });
     }
 
     TopologyPlan planTopology(List<RoadNode> nodes, MinimumSpanningTree.EdgeFilter allowed,

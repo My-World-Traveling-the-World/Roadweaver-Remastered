@@ -16,6 +16,7 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.pathlogic.metrics.RoadBuildEvidence;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
@@ -184,12 +185,14 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             // 随后用新鲜计划重跑一轮 —— 缺口站被既有掩码跳过(不再铺装、不再
             // 打密度 stamp、不再放路灯),剩余站正常铺装并记账,chunk 由此按
             // 完成处理,不再进入 1-5 秒重试循环。只允许一轮替换。
+            RoadChunkPlan evidencePlan = plan;
             boolean gapRepairApplied = false;
             if (!refusals.isEmpty() && persistConstructionRefusalGaps(server, refusals)) {
                 gapRepairApplied = true;
                 // 原位写回保护缺口会改版本；此处必须重新读，不能沿用回填预检得到的计划。
                 RoadChunkPlan refreshedPlan = RoadWorldgenPlanCache.get(server, currentChunk, cfg);
                 if (!refreshedPlan.slices().isEmpty()) {
+                    evidencePlan = refreshedPlan;
                     refusals = new LinkedHashMap<>();
                     processRoadSlices(world, server, currentChunk, refreshedPlan.slices(), cfg, random,
                             averagingRadius, processedSegments, decorations, completedRoads, incompleteRoads, refusals);
@@ -239,6 +242,19 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                 LOGGER.warn("RoadWeaver chunk={},{} has road slice(s) but none completed; "
                                 + "likely tunnel/volume rejected",
                         currentChunk.x, currentChunk.z);
+            }
+            if (RoadBuildEvidence.enabled()) {
+                // 仅用本次实际处理集合判状态；台账可能记录放弃，不能借此冒报成功落块。
+                Set<Long> reported = new HashSet<>();
+                for (var slice : evidencePlan.slices()) {
+                    long fingerprint = RoadShardStorage.computeFingerprint(slice.road());
+                    if (!reported.add(fingerprint)) continue;
+                    var outcome = RoadBuildEvidence.outcome(completedRoads.contains(fingerprint),
+                            incompleteRoads.contains(fingerprint), abandoned);
+                    LOGGER.info("{}", RoadBuildEvidence.chunk(server.dimension().location().toString(),
+                            server.getSeed(), slice.road(), fingerprint, currentChunk.x, currentChunk.z,
+                            slice.segmentCount(), outcome, gapRepairApplied));
+                }
             }
             // 终态放弃的 chunk 按"已处理"返回 true,调用方不再把它当待施工候选。
             return !completedRoads.isEmpty() || abandoned;

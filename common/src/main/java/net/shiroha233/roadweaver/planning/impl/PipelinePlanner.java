@@ -24,6 +24,7 @@ import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pipeline.QualityGate;
 import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 import net.shiroha233.roadweaver.planning.NetworkPlanner;
+import net.shiroha233.roadweaver.planning.RouteEvidenceId;
 import net.shiroha233.roadweaver.topology.RoadNode;
 import net.shiroha233.roadweaver.topology.TopologyPlan;
 
@@ -81,6 +82,8 @@ public final class PipelinePlanner implements NetworkPlanner {
 
     private final java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory;
     private final int step;
+    private final String evidenceDimension;
+    private final long evidenceSeed;
 
     public PipelinePlanner(ServerLevel level) {
         this(level, DEFAULT_STEP);
@@ -91,12 +94,19 @@ public final class PipelinePlanner implements NetworkPlanner {
         this(step, level == null ? null : () -> {
             var sampler = AccurateHeightSampler.create(level);
             return sampler::sampleGrid;
-        });
+        }, level == null ? "offline" : level.dimension().location().toString(), level == null ? 0 : level.getSeed());
     }
 
     PipelinePlanner(int step, java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory) {
+        this(step, samplerFactory, "offline", 0);
+    }
+
+    private PipelinePlanner(int step, java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory,
+                            String evidenceDimension, long evidenceSeed) {
         this.samplerFactory = samplerFactory;
         this.step = Math.max(1, step);
+        this.evidenceDimension = evidenceDimension;
+        this.evidenceSeed = evidenceSeed;
     }
 
     @Override
@@ -195,7 +205,12 @@ public final class PipelinePlanner implements NetworkPlanner {
                 topology = pipeline.planTopologyWithShadow(nodes, maxEdgeLenBlocks,
                         maxEdgeLenBlocks <= 0 ? null : (from, to) ->
                                 withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks),
-                        shadowSurface::waterProxy);
+                        shadowSurface::waterProxy, evidence -> LOGGER.info(
+                                "[ROUTE-EVIDENCE] id={} stage=coarse selected={} geodesic={} protection=unprepared detail={}",
+                                RouteEvidenceId.of(evidenceDimension, evidenceSeed,
+                                        RouteEvidenceId.endpoint(evidence.fromX(), evidence.fromZ()),
+                                        RouteEvidenceId.endpoint(evidence.toX(), evidence.toZ())),
+                                evidence.selected(), evidence.geodesic(), evidence.detail()));
             } else if (maxEdgeLenBlocks <= 0) {
                 topology = pipeline.planTopology(nodes);
             } else {

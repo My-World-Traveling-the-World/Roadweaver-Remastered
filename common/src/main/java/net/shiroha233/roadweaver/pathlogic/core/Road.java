@@ -21,7 +21,6 @@ import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
-import net.shiroha233.roadweaver.core.model.StructureInfo;
 import net.shiroha233.roadweaver.config.PathFeatureConfig;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator.PathCalculationResult;
@@ -41,7 +40,6 @@ import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.planning.RouteProfileTendency;
-import net.shiroha233.roadweaver.planning.terrain.AccurateGradeRepairPlanner;
 import net.shiroha233.roadweaver.planning.RoadPlanningService;
 import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
@@ -65,6 +63,7 @@ import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightRegistry;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.metrics.RoadQualityMetrics;
+import net.shiroha233.roadweaver.pathlogic.metrics.RoadBuildEvidence;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureRoadOffsetService;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
@@ -448,6 +447,9 @@ public final class Road {
                     }
                 }
             }
+            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+                    level.dimension().location().toString(), level.getSeed(), rd,
+                    "final-water", waterValidation.safe(), waterValidation.reason()));
             if (!waterValidation.safe()) {
                 LOGGER.error("RoadWeaver rejected finalized road in water {} -> {} reason={} "
                                 + "segment={} pos={} targetY={} waterSurfaceY={} bedY={} span={} source={}",
@@ -600,6 +602,10 @@ public final class Road {
             DetailedRoadGenerationStats.recordFinalValidation(finalValidationNanos);
             DetailedRoadGenerationStats.RouteTiming validationTiming = DetailedRoadGenerationStats.routeTiming();
             if (validationTiming != null) validationTiming.addValidation(finalValidationNanos);
+            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+                    level.dimension().location().toString(), level.getSeed(), rd, "final-structure",
+                    structureValidation != null && structureValidation.safe(),
+                    structureValidation == null ? "validation_not_run" : structureValidation.reason()));
             if (structureValidation == null || !structureValidation.safe()) {
                 FinalRoadStructureValidator.Collision finalCollision = structureValidation == null
                         ? null : structureValidation.collision();
@@ -659,6 +665,9 @@ public final class Road {
                 }
             }
             completed = true;
+            // 规划通过仍未证明区块施工完成，后者由PathFeature单独发布结案。
+            if (RoadBuildEvidence.enabled()) LOGGER.info("{}", RoadBuildEvidence.validation(
+                    level.dimension().location().toString(), level.getSeed(), rd, "validated", true, "accepted"));
             LOGGER.info("RoadWeaver route PLANNED_OK connection={}->{} stations={} spans={} {}",
                     rawStart, rawEnd, rd.roadSegmentList().size(), rd.spans().size(), summarizeSpans(rd.spans()));
             // D1: the quality numbers, once per finished road, plus a session rollup every ten roads,
