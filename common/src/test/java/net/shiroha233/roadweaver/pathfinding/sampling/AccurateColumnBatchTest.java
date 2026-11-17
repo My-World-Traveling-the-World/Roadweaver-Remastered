@@ -293,6 +293,65 @@ final class AccurateColumnBatchTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2})
+    void diskOnlyFillDuringStaleMissDoesNotRecompute(int fillMode) {
+        Harness h = new Harness();
+        List<BlockPos> points = positions(GRID);
+        h.store.onLoad = () -> {
+            h.store.onLoad = () -> {};
+            // 外层已经拿到空磁盘快照；另一个请求只查盘并填入缓存，没有运行后端。
+            h.store.samples.putAll(samples(points));
+            if (fillMode == 0) assertSamples(points, h.columns(points));
+            else if (fillMode == 1) assertGrid(h.grid(GRID));
+            else assertGrid(h.batch.loadStoredGrid(GRID).orElseThrow());
+        };
+        assertGrid(h.grid(GRID));
+        assertEquals(0, h.backend.gridCalls.get(), "读盘填充也必须使旧网格未命中快照过期");
+        assertEquals(0, h.backend.columnCalls.get());
+        assertEquals(0, h.store.saves.get(), "纯读盘命中不应变成重复计算后再写盘");
+    }
+
+    @Test
+    void repeatedMemoryEvictionRestoresEveryHeightChannelFromStorage() {
+        Harness h = new Harness();
+        List<BlockPos> points = positions(GRID);
+        assertGrid(h.grid(GRID));
+        assertEquals(1, h.backend.gridCalls.get());
+        // 强制驱逐全部一级缓存，连续重载验证版本记录不是假命中，也不代替真正样本。
+        for (int round = 0; round < 64; round++) {
+            h.values.clear();
+            if ((round & 1) == 0) assertSamples(points, h.columns(points));
+            else assertGrid(h.grid(GRID));
+        }
+        assertEquals(1, h.backend.gridCalls.get());
+        assertEquals(0, h.backend.columnCalls.get());
+        assertEquals(1, h.store.saves.get());
+    }
+
+    @Test
+    void closeDuringActiveGridWakesColumnWaiterBeforeOwnerReturns() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        CountDownLatch joining = new CountDownLatch(1);
+        Harness h = new Harness(() -> { joining.countDown(); return 30_000; });
+        h.backend.onGrid = () -> { entered.countDown(); await(release); };
+        try (ExecutorService pool = Executors.newCachedThreadPool()) {
+            Future<?> owner = pool.submit(() -> h.grid(GRID));
+            try {
+                await(entered);
+                Future<?> waiter = pool.submit(() -> h.columns(List.of(P)));
+                await(joining);
+                h.close();
+                assertInstanceOf(IllegalStateException.class, failure(waiter));
+                assertFalse(owner.isDone(), "等待者必须由关闭唤醒，不能等后端自己结束才算通过");
+                release.countDown();
+                assertInstanceOf(IllegalStateException.class, failure(owner));
+                assertEquals(0, h.store.saves.get());
+                assertTrue(h.values.isEmpty());
+            } finally { release.countDown(); h.close(); }
+        }
+    }
+
     private static void assertGrid(AccurateHeightGrid grid) {
         assertTrue(grid.request().sampleCount() > 0);
         for (int i = 0; i < grid.request().sampleCount(); i++) {

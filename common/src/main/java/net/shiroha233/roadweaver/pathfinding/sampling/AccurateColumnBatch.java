@@ -76,12 +76,20 @@ final class AccurateColumnBatch {
         if (!missingIndexes.isEmpty()) {
             Map<Long, AccurateHeightSample> stored = store.loadSamples(missingIndexes.keySet());
             cache.ensureOpen();
+            LinkedHashSet<Long> loadedTiles = new LinkedHashSet<>();
             for (Map.Entry<Long, Integer> entry : missingIndexes.entrySet()) {
                 AccurateHeightSample sample = stored.get(entry.getKey());
-                if (sample == null) return Optional.empty();
+                if (sample == null) {
+                    publications.publishedTiles(loadedTiles);
+                    return Optional.empty();
+                }
                 cache.put(entry.getKey(), sample);
-                fillGridColumn(worldSurface, oceanFloor, motionBlocking, entry.getValue(), sample);
+                int index = entry.getValue();
+                loadedTiles.add(tileKey(request.blockX(index), request.blockZ(index)));
+                fillGridColumn(worldSurface, oceanFloor, motionBlocking, index, sample);
             }
+            // 只查盘也可能让并发请求的旧未命中失效；版本只能在样本进入缓存之后发布。
+            publications.publishedTiles(loadedTiles);
         }
         return Optional.of(new AccurateHeightGrid(request, worldSurface, oceanFloor, motionBlocking));
     }
@@ -150,6 +158,7 @@ final class AccurateColumnBatch {
             motionBlocking = new int[sampleCount];
         }
 
+        LinkedHashSet<Long> loadedTiles = new LinkedHashSet<>();
         IntArrayList unresolvedIndexes = new IntArrayList(missingIndexes.size());
         for (int offset = 0; offset < missingIndexes.size(); offset++) {
             int index = missingIndexes.getInt(offset);
@@ -157,6 +166,7 @@ final class AccurateColumnBatch {
             AccurateHeightSample sample = stored.get(key);
             if (sample != null) {
                 cache.put(key, sample);
+                loadedTiles.add(tileKey(request.blockX(index), request.blockZ(index)));
                 fillGridColumn(worldSurface, oceanFloor, motionBlocking, index, sample);
                 resolvedCount++;
                 continue;
@@ -164,6 +174,8 @@ final class AccurateColumnBatch {
             unresolvedIndexes.add(index);
         }
 
+        // 部分命中的已读列也要通知其他批次，不能等本批补采完成才记录。
+        publications.publishedTiles(loadedTiles);
         if (!unresolvedIndexes.isEmpty()) {
             ArrayList<BlockPos> unresolvedPositions = new ArrayList<>(unresolvedIndexes.size());
             for (int offset = 0; offset < unresolvedIndexes.size(); offset++) {
@@ -368,6 +380,7 @@ final class AccurateColumnBatch {
         if (stored.isEmpty()) {
             return;
         }
+        LinkedHashSet<Long> loadedTiles = new LinkedHashSet<>();
         Iterator<Map.Entry<Long, BlockPos>> iterator = unresolved.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, BlockPos> entry = iterator.next();
@@ -377,8 +390,11 @@ final class AccurateColumnBatch {
             }
             cache.put(entry.getKey(), sample);
             result.put(entry.getKey(), sample);
+            loadedTiles.add(tileKey(entry.getValue().getX(), entry.getValue().getZ()));
             iterator.remove();
         }
+        // 与后端计算发布共用版本口径，避免只读盘命中后外层仍重复计算整网格。
+        publications.publishedTiles(loadedTiles);
     }
 
     void fillGridColumn(int[] worldSurface,
