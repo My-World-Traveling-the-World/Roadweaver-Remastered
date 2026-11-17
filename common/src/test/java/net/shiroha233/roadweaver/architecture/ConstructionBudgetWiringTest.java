@@ -48,7 +48,7 @@ class ConstructionBudgetWiringTest {
         assertFalse(slice.contains("markComplete("));assertFalse(slice.contains("releaseChunk("));
         var all=methods("pathlogic/PathFeature.java").get("placeChunk");
         assertTrue(all.stream().anyMatch(body->body.contains("DecorationExecutor.tryPlaceDecorations(decorations)")
-                && body.contains("RoadConstructionLedger.markComplete(") && body.contains("finally") && body.contains("HugeTreeReservation.releaseChunk(")));
+                && body.contains("RoadConstructionLedger.markComplete(") && body.contains("ConstructionChunkTransaction") && body.contains("HugeTreeReservation.releaseChunk(")));
     }
     @Test void worldStationAdapterOnlyForwardsOriginalOperationsInOriginalArgumentOrder() throws Exception {
         var adapter=methods("pathlogic/construction/WorldConstructionStationAccess.java");

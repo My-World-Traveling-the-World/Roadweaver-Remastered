@@ -111,10 +111,21 @@ public class PathFeature extends Feature<PathFeatureConfig> {
 
     private static boolean placeChunk(WorldGenLevel world, ServerLevel server, ChunkPos currentChunk,
                                       RandomSource random, ModConfig cfg, RoadChunkPlan checkedPlan) {
-        try {
-            RoadChunkPlan plan = checkedPlan == null
-                    ? RoadWorldgenPlanCache.get(server, currentChunk, cfg) : checkedPlan;
-            if (plan.slices().isEmpty()) {
+        // 事务所有者统一保证：新鲜计划最多重跑一次，装饰先于台账，所有出口释放保护预留。
+        return new net.shiroha233.roadweaver.pathlogic.construction.ConstructionChunkTransaction<>(
+                new net.shiroha233.roadweaver.pathlogic.construction.ConstructionChunkTransaction.Access<RoadChunkPlan>() {
+            int averagingRadius;
+            Set<ProcessedSegment> processedSegments;
+            Set<Decoration> decorations;
+            Set<Long> completedRoads;
+            Set<Long> incompleteRoads;
+            Map<Long, RefusalAccumulator> refusals;
+
+            @Override public RoadChunkPlan loadInitial() {
+                return checkedPlan == null ? RoadWorldgenPlanCache.get(server, currentChunk, cfg) : checkedPlan;
+            }
+            @Override public boolean isEmpty(RoadChunkPlan plan) { return plan.slices().isEmpty(); }
+            @Override public void emptyPlan() {
                 // A chunk that still lists road shards but compiles to an empty
                 // plan means the worldgen plan cache is stale or the compiler
                 // pruned the road here. This is the missing-construction case.
@@ -150,8 +161,9 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     EMPTY_WORLDGEN_PLAN_CHUNKS.incrementAndGet();
                     logEmptyWorldgenPlanSummary();
                 }
-                return false;
+
             }
+            @Override public void prepare(RoadChunkPlan plan) {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("【当前区块施工计划版本与片段数】 " + "RoadWeaver chunk plan chunk={},{} slices={} revision={}",
                         currentChunk.x, currentChunk.z, plan.slices().size(),
@@ -163,40 +175,32 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             world, new ChunkPos(currentChunk.x + dx, currentChunk.z + dz));
                 }
             }
-            int averagingRadius = Math.max(0, cfg.averagingRadius());
-            Set<ProcessedSegment> processedSegments = new HashSet<>();
-            Set<Decoration> decorations = new HashSet<>();
-            Set<Long> completedRoads = new HashSet<>();
-            Set<Long> incompleteRoads = new HashSet<>();
-            Map<Long, RefusalAccumulator> refusals = new LinkedHashMap<>();
-
+            averagingRadius = Math.max(0, cfg.averagingRadius());
+            processedSegments = new HashSet<>();
+            decorations = new HashSet<>();
+            completedRoads = new HashSet<>();
+            incompleteRoads = new HashSet<>();
+            refusals = new LinkedHashMap<>();
+            }
+            @Override public void process(RoadChunkPlan plan) {
             processRoadSlices(world, server, currentChunk, plan.slices(), cfg, random,
                     averagingRadius, processedSegments, decorations, completedRoads, incompleteRoads, refusals);
-
-            // T-24: 施工拒绝(fill-too-deep / protected-*)的连片站落为
-            // PROTECTED_GAP 并把 RoadData 原位替换一次;替换会使计划缓存失效,
-            // 随后用新鲜计划重跑一轮 —— 缺口站被既有掩码跳过(不再铺装、不再
-            // 打密度 stamp、不再放路灯),剩余站正常铺装并记账,chunk 由此按
-            // 完成处理,不再进入 1-5 秒重试循环。只允许一轮替换。
-            RoadChunkPlan evidencePlan = plan;
-            boolean gapRepairApplied = false;
-            if (!refusals.isEmpty() && persistConstructionRefusalGaps(server, refusals)) {
-                gapRepairApplied = true;
-                // 原位写回保护缺口会改版本；此处必须重新读，不能沿用回填预检得到的计划。
-                RoadChunkPlan refreshedPlan = RoadWorldgenPlanCache.get(server, currentChunk, cfg);
-                if (!refreshedPlan.slices().isEmpty()) {
-                    evidencePlan = refreshedPlan;
-                    refusals = new LinkedHashMap<>();
-                    processRoadSlices(world, server, currentChunk, refreshedPlan.slices(), cfg, random,
-                            averagingRadius, processedSegments, decorations, completedRoads, incompleteRoads, refusals);
+            }
+            @Override public boolean repairRefusals() {
+                return !refusals.isEmpty() && persistConstructionRefusalGaps(server, refusals);
+            }
+            @Override public RoadChunkPlan loadRefreshed() {
+                // 缺口提交改变版本，不能继续消费回填预检或第一轮计划。
+                return RoadWorldgenPlanCache.get(server, currentChunk, cfg);
+            }
+            @Override public void resetRefusals() { refusals = new LinkedHashMap<>(); }
+            @Override public void decorate() { DecorationExecutor.tryPlaceDecorations(decorations); }
+            @Override public void commitCompleted() {
+                for (long roadFingerprint : completedRoads) {
+                    RoadConstructionLedger.markComplete(server, currentChunk, roadFingerprint);
                 }
             }
-
-            DecorationExecutor.tryPlaceDecorations(decorations);
-            for (long roadFingerprint : completedRoads) {
-                RoadConstructionLedger.markComplete(server, currentChunk, roadFingerprint);
-            }
-
+            @Override public boolean finish(RoadChunkPlan evidencePlan, boolean gapRepairApplied) {
             // T-25 终态:局部修复(PROTECTED_GAP 原位替换)没能救回来时不再重试。
             //
             // 2026-09-16 真机事故:某条路的隧道 span 因 fluid-in-wall-volume 被拒,
@@ -251,9 +255,9 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             }
             // 终态放弃的 chunk 按"已处理"返回 true,调用方不再把它当待施工候选。
             return !completedRoads.isEmpty() || abandoned;
-        } finally {
-            HugeTreeReservation.releaseChunk(server, currentChunk);
-        }
+            }
+            @Override public void release() { HugeTreeReservation.releaseChunk(server, currentChunk); }
+        }).run();
     }
 
     /** T-24: 单次 placeChunk 的切片处理循环(替换后用新鲜计划重跑一次)。 */
