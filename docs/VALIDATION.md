@@ -1,5 +1,13 @@
 # 验证与构建手册
 
+## 第52轮同步区块施工事务
+
+代码4abfd3e、守卫53721f7；恢复全部变异后安装版Gradle8.8执行:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off，PASS tests=1657 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL（35s）。日志.analysis_tmp/round52-restored-final.log。基线1651，新增5项事务行为及1项真实世界适配器冻结AST比较；Python19+2、旧版契约25API/82资源errors=[]，713生产Java无有效千行超限，最大物理998。
+
+六组行为破坏实际各1断言红：不释放、台账早于装饰、跳过新计划、旧证据、旧拒绝不清、异常仍写台账。世界适配器平均半径加1为第七组静态AST红。详表HANDOFF第52轮，记录round52-mutations.json和round52-mut-world-adapter.log。全部精确checkout并逐字恢复，最终再全量跑绿；不计编译失败。冻结原5b399d5入口逐段比较调用、参数、循环和终态证据，未忽略业务分支。独立VariableTree拼接补分号只是Javac打印差异。
+
+这是行为等价的同步生命周期拆分，不是跨tick生产交付、ServerLevel落块证明或游戏提速证据。没有本轮MSPT/FPS/加载时长测量，协议、几何和配置默认保持。
+
 ## 离线回归
 
 Windows 开发环境使用 JDK 21、已安装的 Gradle 8.8 和常驻 daemon。当前机器的 Gradle Wrapper 握手失败，直接调用下面的 `gradle.bat`；其他机器替换为自己的安装路径。
