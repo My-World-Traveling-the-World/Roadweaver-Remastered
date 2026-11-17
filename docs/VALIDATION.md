@@ -463,3 +463,12 @@ python scripts/benchmarks/evidence_history_probe.py：同一路线重复1000/100
 桥查询含全部非桥站，不能当生产只查桥站的成本；完整compile旧冻结编译器仍调用当前归一化，两边共用当前归一化以隔离索引差异，normalize另对冻结旧版，不叠加两项收益。完整compile耗时基本持平，只支持少量分配减少。稀疏候选基本持平，无“所有场景更快”结论；候选探针不含建树，Integer[]建树未改。高度Fake只在当前16站返回确定高度，不代表真实区块IO；没有帧时/进档倍数。首次探针因独立JVM漏Bootstrap失败，补引导后重跑，失败不算结果。
 
 14组实际变异均各1断言失败，精确checkout逐字恢复：13组round50-mutations.json及站邻点改坏round50-extra-mutations.json。完整表见HANDOFF。静态接线及正文比较共2组，不冒充真机行为。正常全部恢复后再完整回归1646。未改schema/CODEC/字段/枚举名、长桥弯、包围盒、crossing、双平滑或跨度/QualityGate/CPU-only默认。施工仍同步，未取消4ms区块间预算，单站/单块无毫秒上限。
+
+
+### 第50轮追加：生产站动作端口化验收
+
+最终代码97c4228：PASS tests=1651 skipped=0 aborted=0 failed=0，Fabric BUILD SUCCESSFUL（round50-final.log，39s）。相比本轮基线1631新增20项，全部显式selectClass登记。Python证据19+契约拒绝2通过；旧版契约errors=[]、25API/82资源。712生产Java有效>1000为0，物理最大998；PathFeature门面已迁出约190行站动作。依赖只增加既有pathlogic边的重复类型引用（config78→81/core196→202/decoration21→26/util9→10/worldgen3→4），基线注明拆分原因，无新方向。
+
+ConstructionStationWorkTest用真实生产编排+Fake世界端口，与独立冻结3e2af6a原for循环比较4模式×24批量：模板桥/程序桥、外区块中心、跳过/浮标、复用/保护站、硬保护隧道、地表退让、退让再拒绝、普通铺路拒绝及装饰。比较完整事件、随机余量、拒绝映射/站标记、可变高度和最终状态；另测成功末站结案、取消与半写异常不可重放。FrozenConstructionStationWork仅边界替换，分支不跟新代码共用；正文AST仍对原资源，适配器13个方法/12种操作有AST一一转发守卫。它证明操作委托次序，不等于每个桥隧内部真实方块序列或ServerLevel集成。
+
+补6组变异见HANDOFF：跳过全部站/模板甲板+1/地表退让拒绝不标记/退让高度+1/关闭装饰均为生产分支断言红；真实高度转发+1为静态AST红。全部精确checkout逐字恢复。初次“地表退让拒绝不标记”仍绿，因为夹具只让普通站10拒绝、退让站7总成功；补站7真拒绝并明确断言后重跑红，不将首次绿计作交付。新增5项验收（实际分支/成功/取消/失败4+适配器1），完整1651。生产仍runAll，外层事务未暂停，未启用新默认，没有游戏内帧时/加载时间结论。
