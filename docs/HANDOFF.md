@@ -1887,3 +1887,4 @@ READY冻结2b4d06e对拍当前，预置/空表各96随机步含负坐标、故�
 ### 六、我踩到但已解决的坑
 
 Javac的DocTree.toString会把中文转义，必须扫描TextTree.getBody原文；中文参数标签不能替代契约正文。首次扩展中文说明造成一处物理1021行，被已有守卫拦下，移除中英重复后928行，未放宽约束。原拆分有52段注释挂到下一成员，不能只翻译继续保留。UTF-8探针误按GB18030解码直接失败，按实际UTF-8重跑后errors=0。临时PowerShell/Python脚本须断言锚点，壳层转义错误不算测试红。
+`n远端同步记录：收尾 git pull --rebase 成功（Current branch main is up to date）；随后 push 因 github.com:443 在21080ms后连接失败。本地12个提交待推送，工作区空；补记本条后再试一次，若失败由最终交付明确说明，不声称origin/main已对齐。
