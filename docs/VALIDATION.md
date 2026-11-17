@@ -436,3 +436,30 @@ python scripts/benchmarks/evidence_history_probe.py：同一路线重复1000/100
 100组80站随机曲线×正反序×4坡道（800对拍），含全部跨度类型、端点漂移和缺失；另显式断言同XZ最后站/近站并列最早站、4格闭区间、桥头精确端点及闭坡道扩张、空路/空端点/极端int保留旧口径。缓存测试覆盖改跨度新对象、结构相同不同对象、反站序、配置往返、诊断副本隔离、128容量、真实弱引用clear/enqueue重建及64任务4配置并发。缺失跨度计数在热命中仍按区块累计，不因缓存改变口径。物理归一化会生成新RoadData（RoadPhysicalReuseNormalizer.withPhysicalReuseSpans/rebuildReuseSpans），这些路径可能持续冷构建；未测真实命中率/争用，不声称每区块都热命中。
 
 11组变异各1实际断言红，精确checkout并逐字恢复，round49-mutations.json及逐项round49-mut-*.log；表见HANDOFF。生产接线一组是AST静态守卫，不能冒充实际ServerLevel产物。未量FPS/MSPT/真实进档、4096完整工作集或跨模组最终事件；未改变schema、几何、crossing或施工预算/并发默认。
+
+
+## 第50轮：六项后续的冻结对拍、性能与游标边界（2026-11-17）
+
+开工main@3e2af6a干净；pull --rebase连接重置，本地已验证基线1631/0/0/0及Fabric通过。源码分项提交2eb8aa6、8ed6c1f、8124a93、d084c61、60d1102；探针5f29f98、站正文冻结8dc77e5。最终完整PASS tests=1646 skipped=0 aborted=0 failed=0，Fabric BUILD SUCCESSFUL，round50-delivery.log；Python证据19、契约拒绝2及旧版errors=0。709生产Java物理最大998，有效/物理均无千行超标。没有部署游戏。
+
+新增15项显式登记：桥2、编译/归属4、高度2、游标/状态4、异构候选1、生产接线1、冻结站正文1。桥80组随机300站及95/96/97/240弦长，短targetY/无目标、空站、负/越界、曲线pointAt/映射/桥头和同段引用一致。编译对12组×7负/正区块×2桥开关完整比较slice道路/站序/路口和256列的目标/密度/占用；每列40高度采密度。归属30组混合类型/反道路序与冻结旧归一化完整RoadData一致；Preparation两模式、同实例及结构相同不同实例隔离。单精确索引80次get，不是原每类80次。
+
+高度5窗口半径×6坡限×2开关=60组，Fake每次读随事件数改变；逐次getHeight事件、Math.round和双向坡限输出一致。没有把世界读结果缓存，短路持久targetY零世界读取。候选600盒三异构/长瘦分布逐源逐项有序对拍冻结树，原生产吸收对拍继续通过。游标1..32批量全部恢复对拍站操作/随机/拒绝/装饰序列；零预算不推进、取消/异常不可重放、暂停不能结案。假操作不是实际ServerLevel写块；额外Javac AST将冻结原站循环与生产闭包正文仅替换循环控制/状态载体后比较，站正文逐句相同。外层finally资源释放/装饰/台账有AST接线，非跨tick真机证明。
+
+探针命令：JDK21安装版Gradle8.8，加-I scripts/benchmarks/persistence-stages.gradle，运行:common:bridgeStageProbe :common:compileStageProbe :common:heightStageProbe --daemon --console=plain --dependency-verification=off。512MiB，同JVM3预热7交替批次，ThreadMXBean线程分配，冻结3e2af6a旧实现。桥构建64次/批、全路查询128次/批；候选4次/批、compile8次/批、normalize16次/批、高度64次/批。日志round50-probes-fixed.log：
+
+| 场景 | 原p50 μs | 新p50 μs | 原B/次 | 新B/次 |
+|---|---:|---:|---:|---:|
+| 桥4096站64段构建 | 126.039 | 29.820 | 261936 | 27704 |
+| 桥4096站全路查询 | 1575.296 | 10.423 | 3092992 | 0 |
+| 候选600盒稀疏 | 108.975 | 108.850 | 14400 | 14410.3 |
+| 候选600盒混合簇 | 752.250 | 389.500 | 277936 | 184896 |
+| 候选600盒混合长盒 | 1594.250 | 911.075 | 625576 | 337040 |
+| 完整compile八路80站 | 10510.600 | 10478.938 | 38976757.7 | 38718926.9 |
+| normalize八路80站 | 12135.250 | 9546.869 | 45556392.6 | 38300336 |
+| 高度32站 | 11.628 | 3.100 | 15024 | 336 |
+| 高度8192站 | 179.708 | 163.683 | 268944 | 65616 |
+
+桥查询含全部非桥站，不能当生产只查桥站的成本；完整compile旧冻结编译器仍调用当前归一化，两边共用当前归一化以隔离索引差异，normalize另对冻结旧版，不叠加两项收益。完整compile耗时基本持平，只支持少量分配减少。稀疏候选基本持平，无“所有场景更快”结论；候选探针不含建树，Integer[]建树未改。高度Fake只在当前16站返回确定高度，不代表真实区块IO；没有帧时/进档倍数。首次探针因独立JVM漏Bootstrap失败，补引导后重跑，失败不算结果。
+
+14组实际变异均各1断言失败，精确checkout逐字恢复：13组round50-mutations.json及站邻点改坏round50-extra-mutations.json。完整表见HANDOFF。静态接线及正文比较共2组，不冒充真机行为。正常全部恢复后再完整回归1646。未改schema/CODEC/字段/枚举名、长桥弯、包围盒、crossing、双平滑或跨度/QualityGate/CPU-only默认。施工仍同步，未取消4ms区块间预算，单站/单块无毫秒上限。
