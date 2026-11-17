@@ -58,6 +58,7 @@ public final class AccurateHeightSampler {
     final List<Shard<AccurateHeightSample>> columnShards;
     private final AccurateChunkBatch chunkBatch;
     private final AccurateColumnBatch columnBatch;
+    private final AccurateSamplePublications publications = new AccurateSamplePublications();
     final AtomicBoolean closed = new AtomicBoolean();
 
     AccurateHeightSampler(ServerLevel level, AccurateHeightBackend backend) {
@@ -77,7 +78,6 @@ public final class AccurateHeightSampler {
         this.chunkShards = chunks;
         this.columnShards = columns;
         // 每世界一份有界发布记录，避免整块已经发布后逐列或网格仍使用旧未命中快照。
-        AccurateSamplePublications publications = new AccurateSamplePublications();
         this.chunkBatch = new AccurateChunkBatch(this.backend, this.store, new AccurateChunkBatch.Cache() {
             @Override
             public AccurateHeightChunk get(long key) {
@@ -297,10 +297,14 @@ public final class AccurateHeightSampler {
             Map<Long, AccurateHeightSample> stored = store.loadSamples(missing);
             // 即使存储返回空集合也要拒绝迟到结果，不能靠后面的 put 偶然检查关闭。
             ensureOpen();
+            LinkedHashSet<Long> loadedTiles = new LinkedHashSet<>();
             for (Map.Entry<Long, AccurateHeightSample> entry : stored.entrySet()) {
                 putColumnCached(entry.getKey(), entry.getValue());
                 result.put(entry.getKey(), entry.getValue());
+                loadedTiles.add(tileKey((int) (entry.getKey() >> 32), (int) (long) entry.getKey()));
             }
+            // 门面只读也填缓存；必须先放样本再通知旧未命中请求重查，不能重复整网格计算。
+            publications.publishedTiles(loadedTiles);
         }
         return orderedSamples(unique.keySet(), result);
     }
@@ -314,7 +318,11 @@ public final class AccurateHeightSampler {
         // 未命中同样属于本次读取结果，必须与批量入口保持关闭契约一致。
         ensureOpen();
         sample = stored.get(key);
-        if (sample != null) putColumnCached(key, sample);
+        if (sample != null) {
+            putColumnCached(key, sample);
+            // 单列入口与批量入口共用发布记录，不让调用入口决定并发复用是否生效。
+            publications.publishedTiles(java.util.Set.of(tileKey(x, z)));
+        }
         return sample;
     }
 

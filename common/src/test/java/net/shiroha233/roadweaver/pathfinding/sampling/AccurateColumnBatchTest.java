@@ -352,6 +352,98 @@ final class AccurateColumnBatchTest {
         }
     }
 
+    @Test
+    void partialReadOnlyPrefixInvalidatesAnOlderWholeGridMiss() {
+        Harness h = new Harness();
+        List<BlockPos> points = positions(GRID);
+        h.store.onLoad = () -> {
+            h.store.onLoad = () -> {};
+            // 内层只填首列便因缺失返回；外层必须保留该列，仅补剩余三列。
+            h.store.samples.put(key(points.getFirst()), sample(points.getFirst()));
+            assertTrue(h.batch.loadStoredGrid(GRID).isEmpty());
+            assertEquals(1, h.values.size());
+        };
+        assertGrid(h.grid(GRID));
+        assertEquals(0, h.backend.gridCalls.get());
+        assertEquals(1, h.backend.columnCalls.get());
+        assertEquals(points.subList(1, points.size()), h.backend.lastColumns);
+        assertEquals(1, h.store.saves.get());
+        assertEquals(points.subList(1, points.size()).stream().map(AccurateColumnBatchTest::key).toList(), h.store.lastSaved);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void facadeReadOnlyFillInvalidatesAnOlderWholeGridMiss(boolean single) {
+        Backend backend = new Backend();
+        Store store = new Store();
+        AccurateHeightSampler sampler = new AccurateHeightSampler(null, backend, store);
+        List<BlockPos> points = positions(GRID);
+        try {
+            store.onLoad = () -> {
+                store.onLoad = () -> {};
+                store.samples.putAll(samples(points));
+                // 门面单列和批量只读也是实际缓存写入，不能漏掉共享发布通知。
+                if (single) for (BlockPos p : points) assertEquals(sample(p), sampler.cachedSample(p.getX(), p.getZ()));
+                else assertSamples(points, sampler.cachedSamples(points));
+            };
+            assertGrid(sampler.sampleGrid(GRID));
+            assertEquals(0, backend.gridCalls.get());
+            assertEquals(0, backend.columnCalls.get());
+            assertEquals(0, store.saves.get());
+        } finally { sampler.clear(); }
+    }
+
+    @Test
+    void realShardCapacityEvictsLeastRecentAndReloadsWithoutBackendOrSave() {
+        Backend backend = new Backend();
+        Store store = new Store();
+        AccurateHeightSampler sampler = new AccurateHeightSampler(null, backend, store);
+        List<BlockPos> points = new ArrayList<>();
+        // 使用生产分片容量和索引，真实触发单桶驱逐；不以手工clear冒充容量压力。
+        for (int i = 0; i < AccurateHeightSampler.COLUMN_SHARD_CAPACITY; i++) points.add(new BlockPos(i * 16, 0, 0));
+        try {
+            assertSamples(points, sampler.samplePositions(points));
+            long first = key(points.get(0)), second = key(points.get(1));
+            var shard = sampler.columnShard(first);
+            assertEquals(AccurateHeightSampler.COLUMN_SHARD_CAPACITY, shard.size());
+            assertEquals(sample(points.getFirst()), sampler.cachedSample(points.getFirst().getX(), 0));
+            BlockPos extra = new BlockPos(points.size() * 16, 0, 0);
+            assertSamples(List.of(extra), sampler.samplePositions(List.of(extra)));
+            assertNotNull(shard.get(first), "访问过的首列不能被当成最旧项");
+            assertNull(shard.get(second), "必须证明真实驱逐发生，再验证重载");
+            assertEquals(AccurateHeightSampler.COLUMN_SHARD_CAPACITY, shard.size());
+            assertEquals(2, backend.columnCalls.get());
+            assertSamples(List.of(points.get(1)), sampler.samplePositions(List.of(points.get(1))));
+            assertEquals(2, backend.columnCalls.get());
+            assertEquals(0, backend.gridCalls.get());
+            assertEquals(2, store.saves.get(), "重载仅查盘，不能重复保存");
+            assertEquals(AccurateHeightSampler.COLUMN_SHARD_CAPACITY, sampler.cachedColumnCount());
+        } finally { sampler.clear(); }
+    }
+
+    @Test
+    void closeDuringActiveColumnsWakesGridWaiterBeforeOwnerReturns() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        CountDownLatch joining = new CountDownLatch(1);
+        Harness h = new Harness(() -> { joining.countDown(); return 30_000; });
+        h.backend.onColumns = () -> { entered.countDown(); await(release); };
+        try (ExecutorService pool = Executors.newCachedThreadPool()) {
+            Future<?> owner = pool.submit(() -> h.columns(List.of(P)));
+            try {
+                await(entered);
+                Future<?> waiter = pool.submit(() -> h.grid(GRID));
+                await(joining);
+                h.close();
+                assertInstanceOf(IllegalStateException.class, failure(waiter));
+                assertFalse(owner.isDone(), "关闭必须独立唤醒网格等待者");
+                release.countDown();
+                assertInstanceOf(IllegalStateException.class, failure(owner));
+                assertEquals(0, h.store.saves.get());
+                assertTrue(h.values.isEmpty());
+            } finally { release.countDown(); h.close(); }
+        }
+    }
+
     private static void assertGrid(AccurateHeightGrid grid) {
         assertTrue(grid.request().sampleCount() > 0);
         for (int i = 0; i < grid.request().sampleCount(); i++) {
