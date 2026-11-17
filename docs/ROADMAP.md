@@ -1,5 +1,7 @@
 # RoadWeaver 重制版的下一阶段
 
+第53轮新增待修：NoiseChunkHeightSampler.java:207的(lo+hi)>>>1在负高度产生区间外中点，需负数/边界守卫及完整下降对照后修复。当前尚未改生产代码。长城同类反例和预热/补建7项分步路线见相邻plaincraft-great-wall/docs/STARTUP-OPTIMIZATION-20261118.md；不将独立探针当作真实NoiseChunk或当前游戏性能验收。
+
 第52轮更新：同步外层事务已由ConstructionChunkTransaction拥有，真实世界适配器逐段冻结对照，1657全绿；下文“外层事务未迁出”属于历史状态。剩余是实际单站/单块测量、计划修订/卸载/换代取消与跨tick租约，生产仍同步。长城保持启动规划发布、进游戏分批建造，最新用户决定不采用进世界前强拉全区块；范围和模板接线另行推进。
 
 当前代码状态见[开发现状](STATUS.md)，旧版证据见[功能对照](FEATURE-PARITY-CHECK.md)。本路线讨论还没完成的事。
