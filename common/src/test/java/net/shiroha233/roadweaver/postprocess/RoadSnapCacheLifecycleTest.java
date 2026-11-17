@@ -9,6 +9,20 @@ import java.lang.ref.Reference;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 class RoadSnapCacheLifecycleTest {
+    @Test void anchorsAndObservationReuseFrozenStationsButIsolateOuterLists() throws Exception {
+        var stations = new ArrayList<RoadSegmentPlacement>();
+        for(int x=0;x<12;x++) stations.add(new RoadSegmentPlacement(new BlockPos(x,64,0),List.of(new BlockPos(x,64,0))));
+        var anchor = EndpointApproachConnector.buildAnchorPlan(stations,Collections.nCopies(12,64),null,0,1,false,10);
+        assertNotNull(anchor);assertEquals(10,anchor.segments().size());
+        for(int i=0;i<10;i++) assertSame(stations.get(i),anchor.segments().get(i));
+        var method = PathPostProcessor.class.getDeclaredMethod("freezeProduct",List.class);method.setAccessible(true);
+        @SuppressWarnings("unchecked") var observed = (List<RoadSegmentPlacement>)method.invoke(null,stations);
+        assertEquals(12,observed.size());assertSame(stations.getFirst(),observed.getFirst());
+        stations.clear();assertEquals(12,observed.size());assertEquals(10,anchor.segments().size());
+        assertThrows(UnsupportedOperationException.class,observed::clear);
+        assertThrows(UnsupportedOperationException.class,anchor.segments()::clear);
+        assertThrows(UnsupportedOperationException.class,observed.getFirst().positions()::clear);
+    }
     @Test void collectedRoadKeysReleaseAllThreeDerivedCachesAndProductsRebuildEqually() throws Exception {
         var stations = new ArrayList<RoadSegmentPlacement>();
         for(int x=0;x<5;x++) stations.add(new RoadSegmentPlacement(new BlockPos(x,64,0),List.of(new BlockPos(x,64,0))));

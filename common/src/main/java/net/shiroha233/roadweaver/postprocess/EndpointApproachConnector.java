@@ -575,7 +575,8 @@ final class EndpointApproachConnector {
                     || (primarySpecial != null && index < primarySpecial.length && primarySpecial[index])) return null;
             RoadSegmentPlacement segment = primarySegments.get(index);
             if (segment == null || segment.middlePos() == null) return null;
-            segments.add(new RoadSegmentPlacement(segment.middlePos(), segment.positions()));
+            // 锚点不改分站内容；复用已冻结对象，避免每次候选再次复制全部铺装列。
+            segments.add(segment);
             targetY.add(primaryTargetY != null && index < primaryTargetY.size()
                     ? primaryTargetY.get(index) : segment.middlePos().getY());
         }

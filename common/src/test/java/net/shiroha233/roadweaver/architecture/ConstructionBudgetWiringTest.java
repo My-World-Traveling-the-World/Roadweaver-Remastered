@@ -22,6 +22,14 @@ class ConstructionBudgetWiringTest {
             "placeSelectedLoadedChunks(level, loadedForThisDrain, attempted)") && body.contains("!attempted.contains(key)")),
             "后台调度不能让未尝试区块消费失败次数");
     }
+    @Test void sharedBridgeProductionUsesSparseIndexWithoutSuppressingDebugPairs() throws Exception {
+        var bodies = methods("pathlogic/bridge/BridgeShareService.java").get("applyInPlace");
+        assertNotNull(bodies);assertEquals(1,bodies.size());
+        String body = bodies.getFirst();
+        assertTrue(body.contains("BridgePairIndex.sparseBatch("),"离线索引不能脱离生产入口");
+        assertTrue(body.contains("!logPairs") && body.contains("index.after(i, radius)"),"必须保留完整DEBUG并实际消费有序候选");
+        assertTrue(body.contains("nearby.get(pair)"),"不能计算候选后仍忽略索引输出");
+    }
     private static Map<String,List<String>> methods(String relative) throws Exception {
         Path root=Path.of("src/main/java/net/shiroha233/roadweaver");
         assertTrue(Files.isRegularFile(root.resolve(relative)),"生产接线源文件必须存在");

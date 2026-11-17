@@ -23,7 +23,7 @@ import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
  *
  * <p>三条安全约束（用户 2026-11-08 反复确认的）：
  * <ol>
- *   <li>预先缓存每座桥的包围盒；全部桥对只做常数次比较，只有地理邻近的桥才扫描站点精判</li>
+ *   <li>预先缓存每座桥的包围盒；大批通过层次树筛邻近桥，只有宽阶段通过才扫描站点精判</li>
  *   <li><b>改不动就放弃</b>：{@link BridgeShareAbsorber#blendToDeckY} 返回 null 时原样保留两座桥</li>
  *   <li><b>校验不过就回滚</b>：改完必须过 {@code RoadDataValidator.validateFinalRoad}，
  *       不过就把这条路整体还原 ⇒ 不会让任何一条路变成失败状态</li>
@@ -100,8 +100,14 @@ public final class BridgeShareService {
         }
         Set<Integer> alreadyAbsorbed = new HashSet<>();
 
+        // 小批和完整逐对DEBUG沿原循环；大批仅索引宽阶段，精判/吸收顺序不变。
+        BridgePairIndex index = !logPairs && bridges.size() >= 512
+                ? BridgePairIndex.sparseBatch(bridges.stream().map(BridgeRef::bounds).toList(), radius) : null;
         for (int i = 0; i < bridges.size(); i++) {
-            for (int j = i + 1; j < bridges.size(); j++) {
+            List<Integer> nearby = index == null ? null : index.after(i, radius);
+            int pairs = nearby == null ? bridges.size() - i - 1 : nearby.size();
+            for (int pair = 0; pair < pairs; pair++) {
+                int j = nearby == null ? i + pair + 1 : nearby.get(pair);
                 BridgeRef a = bridges.get(i);
                 BridgeRef b = bridges.get(j);
                 if (a.roadIndex() == b.roadIndex()) continue;

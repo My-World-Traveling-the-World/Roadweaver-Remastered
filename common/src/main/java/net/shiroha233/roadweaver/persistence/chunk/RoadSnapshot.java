@@ -240,7 +240,9 @@ public final class RoadSnapshot {
                 if (segment == null) {
                     segments.add(null);
                 } else {
-                    segments.add(new RoadSegmentPlacement(segment.middlePos(), copyList(segment.positions())));
+                    // 分站已经冻结坐标和列表；正常项直接复用，只有原有null列表归一仍需新建。
+                    segments.add(segment.positions() == null
+                            ? new RoadSegmentPlacement(segment.middlePos(), List.of()) : segment);
                 }
             }
         }

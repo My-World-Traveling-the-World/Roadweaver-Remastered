@@ -27,8 +27,8 @@ import net.shiroha233.roadweaver.pathlogic.bridge.BridgeRangeCalculator;
  * 不能认为同一持久道路永远不再修改。中心提取与范围运算按路复用，减少逐区块重复扫描。</p>
  *
  * <h2>缓存输入边界</h2>
- * <p>桥范围运算只读取站中心、跨度和桥参数，不读取嵌套铺装列。RoadData仅冻结外层列表，
- * RoadSegmentPlacement.positions未深拷贝，因此不能用record推导整个对象图深度不可变。
+ * <p>桥范围运算只读取站中心、跨度和桥参数，不读取铺装列。RoadData及分站/跨度构造器
+ * 已冻结列表和坐标；本缓存也允许独立站列表输入，因此仍核对有序中心，不只相信指纹。
  * 指纹负责分桶，桥参数与跨度进入键，正向中心站序仍须匹配；修改缓存依赖输入应创建新道路。</p>
  *
  * <h2>★ 为什么必须深拷贝出去</h2>
@@ -65,7 +65,7 @@ public final class BuildFrame {
         }
 
         boolean matches(List<RoadSegmentPlacement> stations) {
-            // 同一外层站列表直接命中；只缓存中心与掩码，不依赖可变的嵌套铺装列。
+            // 同一外层站列表直接命中；只缓存中心与掩码，不依赖铺装列。
             if (source.get() == stations) return true;
             if (frame.middlePositions().size() != stations.size()) return false;
             for (int i = 0; i < stations.size(); i++) {
