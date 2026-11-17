@@ -14,3 +14,6 @@
 
 # 证据工具也固定LF，保证Windows负控checkout后可以逐字确认恢复。
 scripts/evidence/*.py text eol=lf
+
+# 契约工具同样需要负控后逐字恢复，避免Windows检出转换换行。
+scripts/parity/*.py text eol=lf
