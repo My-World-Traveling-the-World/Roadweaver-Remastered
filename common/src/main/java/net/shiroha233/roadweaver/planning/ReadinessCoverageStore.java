@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +29,8 @@ final class ReadinessCoverageStore {
     private final String fingerprint;
     private final Writer writer;
     private final Set<Long> ready = ConcurrentHashMap.newKeySet();
+    private volatile boolean closed;
+    private IOException readFailure;
 
     static ReadinessCoverageStore open(Path path, String fingerprint) {
         return open(path, fingerprint, FileStorageIO::writeStringAtomic);
@@ -44,18 +48,40 @@ final class ReadinessCoverageStore {
         this.writer = writer;
     }
 
-    boolean contains(long region) { return ready.contains(region); }
-    int size() { return ready.size(); }
+    boolean contains(long region) { return !closed && ready.contains(region); }
+    int size() { return closed ? 0 : ready.size(); }
 
-    boolean markReady(long region) {
-        boolean added = ready.add(region);
-        if (added) persist();
-        return added;
+    synchronized boolean markReady(long region) throws IOException {
+        ensureOpen();
+        // 读不到旧索引不是空索引；先重读，避免用不完整覆盖表替换旧文件。
+        if (readFailure != null) {
+            load();
+            if (readFailure != null) throw new IOException("Cannot safely update unreadable readiness coverage: " + path, readFailure);
+        }
+        if (ready.contains(region)) return false;
+        persist(region);
+        // 提交成功才对查询发布；关闭期间完成的旧写入也不能复活旧会话的 READY。
+        ensureOpen();
+        ready.add(region);
+        return true;
+    }
+
+    void close() {
+        closed = true;
+        // 拒绝新提交并排空当前同步写入；返回后旧实例不能再覆盖重开世界的文件。
+        synchronized (this) { }
+    }
+
+    private void ensureOpen() throws IOException {
+        if (closed) throw new IOException("Readiness coverage is closed: " + path);
     }
 
     private void load() {
-        if (!Files.isRegularFile(path)) return;
+        readFailure = null;
         try {
+            if (!Files.readAttributes(path, BasicFileAttributes.class).isRegularFile()) {
+                throw new IOException("Readiness coverage is not a regular file: " + path);
+            }
             int schema = 0;
             String storedFingerprint = "";
             List<Long> storedRegions = new ArrayList<>();
@@ -80,15 +106,19 @@ final class ReadinessCoverageStore {
                 LOGGER.info("RoadWeaver ignored stale Chunky readiness coverage: schema={} fingerprintMatch={}.",
                         schema, fingerprint.equals(storedFingerprint));
             }
+        } catch (NoSuchFileException missing) {
+            // 只有确认文件不存在时才能按空覆盖开始，权限/共享锁失败不能走这里。
         } catch (RuntimeException | IOException failure) {
+            readFailure = failure instanceof IOException io ? io : new IOException("Invalid readiness coverage: " + path, failure);
             LOGGER.warn("RoadWeaver could not read Chunky readiness state {}.", path, failure);
         }
     }
 
-    private void persist() {
-        // 先保持原来的构造/写入计时口径，避免端口搬迁混入落盘节奏改变。
+    private void persist(long region) throws IOException {
+        // 保持原排序、编码与同步写入节奏；失败交回规划重试，不能只记录日志。
         long buildStart = TIMINGS ? System.nanoTime() : 0L;
         List<Long> ordered = new ArrayList<>(ready);
+        ordered.add(region);
         ordered.sort(Long::compare);
         StringBuilder output = new StringBuilder("# RoadWeaver Chunky planning coverage\n");
         output.append("schema=").append(SCHEMA).append('\n');
@@ -98,17 +128,16 @@ final class ReadinessCoverageStore {
         }
         String contents = output.toString();
         long writing = TIMINGS ? System.nanoTime() : 0L;
-        IOException writeFailure = null;
+        boolean written = false;
         try {
+            ensureOpen();
             writer.write(path, contents);
-        } catch (IOException failure) {
-            writeFailure = failure;
-        }
-        long finished = TIMINGS ? System.nanoTime() : 0L;
-        if (writeFailure != null) LOGGER.error("RoadWeaver could not persist Chunky readiness state.", writeFailure);
-        if (TIMINGS) {
-            LOGGER.info("[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
-                    ordered.size(), writeFailure == null, (writing - buildStart) / 1000, (finished - writing) / 1000);
+            written = true;
+        } finally {
+            if (TIMINGS) {
+                LOGGER.info("[CHUNKY-READINESS-TIMING] phase=write regions={} written={} buildUs={} writeUs={}",
+                        ordered.size(), written, (writing - buildStart) / 1000, (System.nanoTime() - writing) / 1000);
+            }
         }
     }
 }

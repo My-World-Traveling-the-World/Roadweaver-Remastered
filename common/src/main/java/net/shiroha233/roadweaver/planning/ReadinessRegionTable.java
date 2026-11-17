@@ -17,6 +17,8 @@ final class ReadinessRegionTable<K, W> {
         private volatile boolean dispatched;
         volatile int attempts;
         volatile CompletableFuture<Void> planningFuture;
+        // 重试排队期间保留真实失败，避免写盘故障与正常等待在诊断上不可区分。
+        volatile Throwable lastFailure;
 
         Entry(State state) { this.state = Objects.requireNonNull(state); }
         State state() { return state; }

@@ -8,14 +8,50 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import com.sun.nio.file.ExtendedOpenOption;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReadinessCoverageStoreTest {
     private static final String FINGERPRINT = "a".repeat(64);
+
+    @Test
+    void failedReplacementKeepsMemoryAndFileUnchangedAndRetriesAfterUnlock(@TempDir Path root) throws Exception {
+        Path file = root.resolve("ready.txt");
+        var store = ReadinessCoverageStore.open(file, FINGERPRINT);
+        assertTrue(store.markReady(pack(-4, 7)));
+        byte[] before = Files.readAllBytes(file);
+        try (var held = FileChannel.open(file, StandardOpenOption.READ, ExtendedOpenOption.NOSHARE_DELETE)) {
+            Path probe = Files.createTempFile(root, "probe", ".tmp");
+            try {
+                assertThrows(IOException.class, () -> FileStorageIO.moveIntoPlace(probe, file),
+                        "先确认真实目标替换被阻止，而不是只由 Fake 抛错");
+            } finally { Files.deleteIfExists(probe); }
+            assertThrows(IOException.class, () -> store.markReady(pack(5, -8)));
+            assertFalse(store.contains(pack(5, -8)), "没有落盘的区域不得发布 READY");
+            assertEquals(1, store.size());
+            assertArrayEquals(before, Files.readAllBytes(file));
+            var duringFailure = ReadinessCoverageStore.open(file, FINGERPRINT);
+            assertEquals(1, duringFailure.size());
+            assertTrue(duringFailure.contains(pack(-4, 7)));
+            assertFalse(duringFailure.contains(pack(5, -8)));
+        }
+        assertTrue(store.markReady(pack(5, -8)), "同一个对象必须真正重写，不能被污染的内存集合短路");
+        var reopened = ReadinessCoverageStore.open(file, FINGERPRINT);
+        assertEquals(2, reopened.size());
+        assertTrue(reopened.contains(pack(-4, 7)));
+        assertTrue(reopened.contains(pack(5, -8)));
+        try (var files = Files.list(root)) {
+            assertEquals(java.util.Set.of(file), files.collect(java.util.stream.Collectors.toSet()),
+                    "失败原子替换不能遗留临时文件");
+        }
+    }
 
     @Test
     void missingFileIsEmptyAndDoesNotWriteAnything(@TempDir Path root) throws Exception {

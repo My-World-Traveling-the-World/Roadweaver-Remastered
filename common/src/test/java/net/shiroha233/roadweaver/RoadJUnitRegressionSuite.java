@@ -44,6 +44,9 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessRegionTableTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessIndexStateTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessCoverageStoreTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessCoverageFaultTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessPersistenceCompletionTest"),
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.ReadinessPersistenceWiringTest"),
                         // 真正跨瓦片对拍场值与落选边；新类必须显式登记，避免守卫从未运行。
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.TiledTerrainFieldTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.TiledTerrainFmmTest"),

@@ -33,6 +33,7 @@ import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Entry;
 import net.shiroha233.roadweaver.planning.ReadinessRegionTable.State;
 import net.shiroha233.roadweaver.planning.ReadinessRegionTable.Snapshot;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -261,7 +262,12 @@ public final class RoadPlanningReadinessIndex {
                 if (!coverageContainsRegion(
                         minChunkX, minChunkZ, maxChunkX, maxChunkZ, regionX, regionZ)) continue;
                 if (!regionPlanningDataReady(level, regionX, regionZ)) continue;
-                if (markCoverageReady(level, regionX, regionZ)) marked++;
+                try {
+                    if (markCoverageReady(level, regionX, regionZ)) marked++;
+                } catch (IOException | RuntimeException failure) {
+                    // 初始批次继续处理其他区域；失败区域保持未就绪，后续请求可重新入队。
+                    LOGGER.error("RoadWeaver could not persist initial readiness region [{},{}].", regionX, regionZ, failure);
+                }
             }
         }
         LOGGER.info("RoadWeaver registered initial Chunky-ready coverage: marked={} {}.",
@@ -293,6 +299,8 @@ public final class RoadPlanningReadinessIndex {
         ENTRIES.clear();
         QUEUE.clear();
         ACTIVE.clear();
+        // 同步写入也必须先排空，再允许同一路径的新会话加载或提交。
+        for (ReadinessCoverageStore store : WORLDS.values()) store.close();
         WORLDS.clear();
         PLANNED_PATHS.clear();
         RuntimeLoadPolicy.setChunkyPreflightActive(false);
@@ -353,23 +361,10 @@ public final class RoadPlanningReadinessIndex {
                 if (RoadLifecycle.isStopping()
                         || !ThreadPoolManager.isEpoch(epoch)
                         || ENTRIES.get(key) != entry) return;
-                entry.planningFuture = null;
-                if (failure == null && regionPlanningDataReady(level, key.regionX, key.regionZ)) {
-                    markReady(level, key, entry);
-                } else if (entry.attempts < MAX_PLAN_ATTEMPTS) {
-                    ENTRIES.transition(key, entry, State.QUEUED);
-                    QUEUE.add(key);
-                    ACTIVE.remove(key);
-                    LOGGER.warn("RoadWeaver planning retry for Chunky region [{},{}].",
-                            key.regionX, key.regionZ,
-                            failure == null
-                                    ? new IllegalStateException("final persisted path verification failed")
-                                    : failure);
-                } else {
-                    ENTRIES.transition(key, entry, State.FAILED);
-                    ACTIVE.remove(key);
-                    LOGGER.error("RoadWeaver could not prepare Chunky region [{},{}].",
-                            key.regionX, key.regionZ, failure);
+                if (finishPlanning(worldState(level), key, entry, epoch, failure,
+                        failure == null && regionPlanningDataReady(level, key.regionX, key.regionZ))) {
+                    LOGGER.info("RoadWeaver Chunky region READY [{},{}]; {}.",
+                            key.regionX, key.regionZ, progressSummary(level));
                 }
             });
         });
@@ -426,11 +421,21 @@ public final class RoadPlanningReadinessIndex {
                 regionX,
                 regionZ)) return false;
         if (!regionPlanningDataReady(level, regionX, regionZ)) return false;
-        if (markCoverageReady(level, regionX, regionZ)) {
-            LOGGER.info("RoadWeaver adopted existing initial planning coverage for Chunky region [{},{}].",
-                    regionX, regionZ);
+        return adoptCoverageReady(worldState(level), key(level, regionX, regionZ));
+    }
+
+    private static boolean adoptCoverageReady(ReadinessCoverageStore store, RegionKey key) {
+        try {
+            if (markCoverageReady(store, key)) {
+                LOGGER.info("RoadWeaver adopted existing initial planning coverage for Chunky region [{},{}].",
+                        key.regionX, key.regionZ);
+            }
+            return true;
+        } catch (IOException | RuntimeException failure) {
+            // 写失败不能仍向 requestRegion 返回 READY；让它走原有入队与限次重试。
+            LOGGER.error("RoadWeaver could not persist adopted readiness region [{},{}].", key.regionX, key.regionZ, failure);
+            return false;
         }
-        return true;
     }
 
     private static boolean coverageContainsRegion(
@@ -528,20 +533,52 @@ public final class RoadPlanningReadinessIndex {
                 && edgeMaxZ >= minChunkZ && edgeMinZ <= maxChunkZ;
     }
 
-    private static boolean markCoverageReady(ServerLevel level, int regionX, int regionZ) {
-        ReadinessCoverageStore world = worldState(level);
-        boolean added = world.markReady(packRegion(regionX, regionZ));
-        Entry entry = ENTRIES.get(key(level, regionX, regionZ));
-        if (entry != null) ENTRIES.transition(key(level, regionX, regionZ), entry, State.READY);
+    private static boolean markCoverageReady(ServerLevel level, int regionX, int regionZ) throws IOException {
+        return markCoverageReady(worldState(level), key(level, regionX, regionZ));
+    }
+
+    private static boolean markCoverageReady(ReadinessCoverageStore store, RegionKey key) throws IOException {
+        Entry entry = ENTRIES.get(key);
+        boolean added = store.markReady(packRegion(key.regionX, key.regionZ));
+        if (entry != null) ENTRIES.transition(key, entry, State.READY);
         return added;
     }
 
-    private static void markReady(ServerLevel level, RegionKey key, Entry entry) {
-        ENTRIES.transition(key, entry, State.READY);
-        markCoverageReady(level, key.regionX, key.regionZ);
+    private static boolean finishPlanning(ReadinessCoverageStore store, RegionKey key, Entry entry,
+                                          long epoch, Throwable failure, boolean pathsReady) {
+        if (RoadLifecycle.isStopping() || !ThreadPoolManager.isEpoch(epoch) || ENTRIES.get(key) != entry) return false;
+        entry.planningFuture = null;
+        Throwable problem = failure;
+        if (problem == null) {
+            if (!pathsReady) problem = new IllegalStateException("final persisted path verification failed");
+            else {
+                try {
+                    // READY 的集合和运行态都在同步文件提交成功后发布，失败仍走同一重试预算。
+                    store.markReady(packRegion(key.regionX, key.regionZ));
+                    // 文件端口可能阻塞；提交期间换代或清理后，不得修改新条目的运行态。
+                    if (RoadLifecycle.isStopping() || !ThreadPoolManager.isEpoch(epoch) || ENTRIES.get(key) != entry) return false;
+                    ENTRIES.transition(key, entry, State.READY);
+                    entry.lastFailure = null;
+                    ACTIVE.remove(key);
+                    return true;
+                } catch (IOException | RuntimeException writeFailure) {
+                    problem = writeFailure;
+                }
+            }
+        }
+        // 写失败也可能伴随清理/换代；不能把已经失效的 key 重新塞回新会话队列。
+        if (RoadLifecycle.isStopping() || !ThreadPoolManager.isEpoch(epoch) || ENTRIES.get(key) != entry) return false;
+        entry.lastFailure = problem;
+        if (entry.attempts < MAX_PLAN_ATTEMPTS) {
+            ENTRIES.transition(key, entry, State.QUEUED);
+            QUEUE.add(key);
+            LOGGER.warn("RoadWeaver planning retry for Chunky region [{},{}].", key.regionX, key.regionZ, problem);
+        } else {
+            ENTRIES.transition(key, entry, State.FAILED);
+            LOGGER.error("RoadWeaver could not prepare Chunky region [{},{}].", key.regionX, key.regionZ, problem);
+        }
         ACTIVE.remove(key);
-        LOGGER.info("RoadWeaver Chunky region READY [{},{}]; {}.",
-                key.regionX, key.regionZ, progressSummary(level));
+        return false;
     }
 
     private static Snapshot supplySnapshot(WorldKey world) {
