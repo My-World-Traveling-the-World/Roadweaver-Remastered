@@ -30,6 +30,16 @@ class ConstructionBudgetWiringTest {
         assertTrue(body.contains("!logPairs") && body.contains("index.after(i, radius)"),"必须保留完整DEBUG并实际消费有序候选");
         assertTrue(body.contains("nearby.get(pair)"),"不能计算候选后仍忽略索引输出");
     }
+    @Test void roadConstructionUsesReadOnlySpanMasksAndKeepsMutableHeightAndBridgeCopies() throws Exception {
+        var bodies=methods("pathlogic/PathFeature.java").get("processRoadSlice");assertNotNull(bodies);assertEquals(1,bodies.size());
+        String body=bodies.getFirst();
+        assertTrue(body.contains("ConstructionSpanMasks.of(data, cfg.bridgeRampSegments())"),"生产必须按同一冻结道路和坡道配置复用");
+        for(String call:List.of("networkReuseAt(i)","protectedGapAt(i)","preserveGradeAt(i)","directCrossingAt(i)","tunnelAt(i)"))
+            assertTrue(body.contains("spanMasks."+call),"生产必须实际消费掩码: "+call);
+        assertTrue(body.contains("buildFrame.copyForUser()"),"运行期桥晋级必须持有独立可变副本");
+        assertTrue(body.contains("targetY.stream().mapToInt(Integer::intValue).toArray()"),"隧道拒绝会改高度，不能跨区块共享数组");
+    }
+
     private static Map<String,List<String>> methods(String relative) throws Exception {
         Path root=Path.of("src/main/java/net/shiroha233/roadweaver");
         assertTrue(Files.isRegularFile(root.resolve(relative)),"生产接线源文件必须存在");

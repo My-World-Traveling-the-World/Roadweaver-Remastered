@@ -456,14 +456,9 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         boolean[] isBridge = res.isBridge();
         List<int[]> bridgeRanges = res.mergedRanges();
         boolean[] skipSegments = res.skipSegments();
-        // 先只迁出纯跨度计算；桥梁运行期晋级仍使用本区块专属副本。
-        var spanMasks = net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks.build(
-                middlePositions, data, cfg.bridgeRampSegments());
-        boolean[] preserveCrossingGrade = spanMasks.preserveGrade();
-        boolean[] directCrossing = spanMasks.directCrossing();
-        boolean[] networkReuse = spanMasks.networkReuse();
-        boolean[] protectedGap = spanMasks.protectedGap();
-        boolean[] tunnelMask = spanMasks.tunnel();
+        // 只读跨度按冻结道路复用；世界高度、隧道退让和桥晋级仍由当前区块独立持有。
+        var spanMasks = net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks.of(
+                data, cfg.bridgeRampSegments());
 
         boolean useBuoysInstead = bridgeEnabled && cfg.bridgeUseBuoysInstead();
         boolean useBuoysWhenSkipped = bridgeEnabled && cfg.bridgeUseBuoysWhenSkipped();
@@ -503,8 +498,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             // Shared stations are navigation data for this later road only.
             // The owner road is solely responsible for pavement, clearing,
             // bridge decks/piers, tunnels, and decorations at these stations.
-            if ((networkReuse != null && i >= 0 && i < networkReuse.length && networkReuse[i])
-                    || (protectedGap != null && i >= 0 && i < protectedGap.length && protectedGap[i])) continue;
+            if (spanMasks.networkReuseAt(i) || spanMasks.protectedGapAt(i)) continue;
             BlockPos middle = middlePositions.get(i);
             int segmentIndex = Math.max(0, Math.min(segments.size() - 2, i));
             boolean centerOwned = contains(currentChunk, middle);
@@ -607,7 +601,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                                     i, blockedCenter, surfaceY);
                             SegmentPaver.SegmentGrade fallbackGrade = SegmentPaver.planGrade(
                                     world, seg, i, middlePositions, fallbackY, false,
-                                    preserveCrossingGrade[i]);
+                                    spanMasks.preserveGradeAt(i));
                             boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions,
                                     fallbackY, fallbackGrade, roadType, materials, slabMaterials, random, cfg,
                                     refusalSink.stations());
@@ -624,7 +618,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     }
                     SegmentPaver.SegmentGrade grade = SegmentPaver.planGrade(
                             world, seg, i, middlePositions, baseYArr, tunnel.active(),
-                            preserveCrossingGrade[i]);
+                            spanMasks.preserveGradeAt(i));
                     boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions, baseYArr, grade,
                             roadType, materials, slabMaterials, random, cfg, refusalSink.stations(),
                             tunnel.portal());
@@ -658,8 +652,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             // and duplicates the bridge lighting.
             // T-24: 施工拒绝站不放路灯 —— 失败站没有任何路面,路灯会插进
             // 村庄/地形里(用户观察点 -523,144,-263 的密集路灯即来源于此)。
-            if (centerOwned && !directCrossing[i] && !isBridge[i]
-                    && !(tunnelMask != null && i >= 0 && i < tunnelMask.length && tunnelMask[i])
+            if (centerOwned && !spanMasks.directCrossingAt(i) && !isBridge[i]
+                    && !spanMasks.tunnelAt(i)
                     && !(constructionRefused != null && i < constructionRefused.length && constructionRefused[i])) {
                 // 里程按全路站序共享；仍只给本站读取当前配置，以保持装饰和拒绝分支的顺序。
                 int lampInterval = Math.max(1, cfg.lampInterval());
@@ -681,13 +675,13 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         LOGGER.info("【道路区块片段施工结果】 " + "RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
                         + "reuse={} gap={} completed={}",
                 roadFingerprint, currentChunk, slice.segmentCount(),
-                countMask(isBridge), countMask(tunnelMask),
-                countMask(networkReuse), countMask(protectedGap), completed[0]);
+                countMask(isBridge), spanMasks.tunnelCount(),
+                spanMasks.networkReuseCount(), spanMasks.protectedGapCount(), completed[0]);
         if (!completed[0]) {
             int tunnelStations = 0;
             int tunnelJunctionStations = 0;
             for (int index = 0; index < isBridge.length; index++) {
-                if (tunnelMask != null && index < tunnelMask.length && tunnelMask[index]) tunnelStations++;
+                if (index < spanMasks.size() && spanMasks.tunnelAt(index)) tunnelStations++;
                 if (slice.isTunnelJunction(index)) tunnelJunctionStations++;
             }
             LOGGER.warn("【道路区块施工尚未完成】 " + "RoadWeaver chunk construction incomplete road={} chunk={} tunnelStations={} "

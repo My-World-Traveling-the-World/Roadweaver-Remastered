@@ -62,6 +62,75 @@ class ConstructionSpanMasksTest {
         same(FrozenConstructionSpanMasks.build(List.of(),road(List.of(),List.of()),0),
                 ConstructionSpanMasks.build(List.of(),road(List.of(),List.of()),0));
     }
+
+    @Test void cachedMasksAreReadOnlyAndDoNotReuseAnotherRoadInstanceOrRampSetting() {
+        ConstructionSpanMasks.clear();var c=centers(16);
+        var road=road(c,List.of(new RoadSpan(c.get(5),c.get(8),SpanType.ROAD_CROSSING),
+                new RoadSpan(c.get(10),c.get(12),SpanType.TUNNEL)));
+        var a=ConstructionSpanMasks.of(road,0);assertSame(a,ConstructionSpanMasks.of(road,-1));
+        assertFalse(a.preserveGradeAt(3));var wide=ConstructionSpanMasks.of(road,2);
+        assertNotSame(a,wide);assertTrue(wide.preserveGradeAt(3));assertSame(wide,ConstructionSpanMasks.of(road,2));
+        assertEquals(1,ConstructionSpanMasks.size());
+        var exported=wide.tunnel();exported[10]=false;assertTrue(wide.tunnelAt(10));
+        assertEquals(3,wide.tunnelCount());assertEquals(0,wide.networkReuseCount());assertEquals(0,wide.protectedGapCount());
+        var changed=road(c,List.of(new RoadSpan(c.get(1),c.get(2),SpanType.PROTECTED_GAP)));
+        var other=ConstructionSpanMasks.of(changed,2);assertNotSame(wide,other);
+        assertFalse(other.tunnelAt(10));assertTrue(other.protectedGapAt(1));assertEquals(2,other.protectedGapCount());
+        var reversed=c.reversed();var reversedRoad=road(reversed,road.spans());
+        var reversedMasks=ConstructionSpanMasks.of(reversedRoad,2);
+        same(FrozenConstructionSpanMasks.build(reversed,reversedRoad,2),reversedMasks);
+        ConstructionSpanMasks.clear();assertNotSame(wide,ConstructionSpanMasks.of(road,2));
+        same(FrozenConstructionSpanMasks.build(c,road,2),ConstructionSpanMasks.of(road,2));
+    }
+    @Test void coldComputationBuildsOneIndexRatherThanFive() {
+        var c=centers(1024);var spans=new ArrayList<RoadSpan>();
+        for(var type:SpanType.values())spans.add(new RoadSpan(c.get(5),c.get(10),type));
+        var road=road(c,spans);int[] gets={0};
+        List<BlockPos> counted=new AbstractList<>() {
+            public int size(){return c.size();}
+            public BlockPos get(int i){gets[0]++;return c.get(i);}
+        };
+        var old=FrozenConstructionSpanMasks.build(counted,road,2);assertEquals(5*c.size(),gets[0]);
+        gets[0]=0;var actual=ConstructionSpanMasks.build(counted,road,2);
+        assertEquals(c.size(),gets[0],"精确匹配跨度只需要建立一次站号索引");same(old,actual);
+    }
+    @Test void boundedWeakCacheCanRebuildAfterActualReferenceQueueEviction() throws Exception {
+        ConstructionSpanMasks.clear();var c=centers(16);var road=road(c,List.of(new RoadSpan(c.get(2),c.get(5),SpanType.TUNNEL)));
+        var first=ConstructionSpanMasks.of(road,2);
+        var cacheField=ConstructionSpanMasks.class.getDeclaredField("CACHE");cacheField.setAccessible(true);Object cache=cacheField.get(null);
+        var valuesField=cache.getClass().getDeclaredField("values");valuesField.setAccessible(true);
+        var values=(Map<?,?>)valuesField.get(cache);assertEquals(1,values.size());
+        var reference=(java.lang.ref.Reference<?>)values.keySet().iterator().next();reference.clear();assertTrue(reference.enqueue());
+        assertEquals(0,ConstructionSpanMasks.size(),"真实弱引用队列必须驱逐缓存，不依赖GC定时");
+        var rebuilt=ConstructionSpanMasks.of(road,2);assertNotSame(first,rebuilt);
+        same(FrozenConstructionSpanMasks.build(c,road,2),rebuilt);
+        // 强持有夹具，避免GC把容量测试意外变成空表测试。
+        var held=new ArrayList<RoadData>();for(int i=0;i<140;i++){var next=road(c,road.spans());held.add(next);ConstructionSpanMasks.of(next,2);}
+        assertTrue(ConstructionSpanMasks.size()<=128);assertEquals(140,held.size());
+    }
+    @Test void concurrentRoadsAndConfigurationVersionsMatchFrozenResults() throws Exception {
+        ConstructionSpanMasks.clear();var pool=java.util.concurrent.Executors.newFixedThreadPool(4);
+        var c=centers(120);var road=road(c,List.of(new RoadSpan(c.get(20),c.get(30),SpanType.ROAD_CROSSING),
+                new RoadSpan(c.get(50),c.get(70),SpanType.NETWORK_REUSE)));
+        try {
+            var tasks=new ArrayList<java.util.concurrent.Callable<Void>>();
+            for(int i=0;i<64;i++){int ramps=i%4;tasks.add(()->{var result=ConstructionSpanMasks.of(road,ramps);
+                same(FrozenConstructionSpanMasks.build(c,road,ramps),result);assertEquals(21,result.networkReuseCount());return null;});}
+            var results=pool.invokeAll(tasks);assertEquals(64,results.size());for(var result:results)result.get();
+        } finally {pool.shutdownNow();assertTrue(pool.awaitTermination(5,java.util.concurrent.TimeUnit.SECONDS));}
+    }
+
+
+    @Test void unmatchedSpanCounterCountsEveryChunkEvenOnCacheHits() throws Exception {
+        ConstructionSpanMasks.clear();var c=centers(16);var road=road(c,List.of(
+                new RoadSpan(new BlockPos(900,64,0),new BlockPos(950,64,0),SpanType.TUNNEL)));
+        var field=ConstructionSpanMasks.class.getDeclaredField("SPAN_MASK_UNMATCHED");field.setAccessible(true);
+        var count=(java.util.concurrent.atomic.AtomicLong)field.get(null);long before=count.get();
+        var first=ConstructionSpanMasks.of(road,2);assertEquals(before+1,count.get());
+        assertSame(first,ConstructionSpanMasks.of(road,2));assertEquals(before+2,count.get());
+        var equalButDistinct=road(c,road.spans());assertNotSame(first,ConstructionSpanMasks.of(equalButDistinct,2));
+        assertEquals(before+3,count.get(),"弱身份必须区分结构相等的不同道路实例");
+    }
     static void same(FrozenConstructionSpanMasks.Masks expected,ConstructionSpanMasks.Masks actual) {
         assertArrayEquals(expected.preserveGrade(),actual.preserveGrade());assertArrayEquals(expected.directCrossing(),actual.directCrossing());
         assertArrayEquals(expected.networkReuse(),actual.networkReuse());assertArrayEquals(expected.protectedGap(),actual.protectedGap());

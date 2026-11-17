@@ -20,11 +20,14 @@ public final class ConstructionInputsProbe {
                 spans.add(new RoadSpan(centers.get(i),centers.get(Math.min(n-1,i+12)),type));
             var road=new RoadData(3,0,List.of(),List.of(),centers.stream().map(p->new RoadSegmentPlacement(p,List.of(p))).toList(),
                     spans,centers.stream().map(BlockPos::getY).toList(),1,2);
+            compareMasks(road,centers,bean);
             var frame=BuildFrame.of(1,road.roadSegmentList(),road.spans(),null);
-            for(String stage:List.of("masks","targetY","copyForUser","persistedHeight","sampledHeight")) {
+            for(String stage:List.of("masksFrozen","masksCold","masksHot","targetY","copyForUser","persistedHeight","sampledHeight")) {
                 int reps=stage.equals("sampledHeight")?16:128;
                 Runnable action=switch(stage){
-                    case "masks" -> ()->sink=ConstructionSpanMasks.build(centers,road,4);
+                    case "masksFrozen" -> ()->sink=FrozenConstructionSpanMasks.build(centers,road,4);
+                    case "masksCold" -> ()->sink=ConstructionSpanMasks.build(centers,road,4);
+                    case "masksHot" -> ()->sink=ConstructionSpanMasks.of(road,4);
                     case "targetY" -> ()->sink=road.targetY().stream().mapToInt(Integer::intValue).toArray();
                     case "copyForUser" -> ()->sink=frame.copyForUser();
                     case "persistedHeight" -> ()->sink=HeightProfileService.build(world,centers,new ChunkPos(0,0),4,true,1,road.targetY());
@@ -37,6 +40,28 @@ public final class ConstructionInputsProbe {
             }
         }
     }
+    private static void compareMasks(RoadData road,List<BlockPos> centers,com.sun.management.ThreadMXBean bean) {
+        String[] names={"frozen","indexedCold","identityCold","identityHot"};
+        Runnable[] actions={()->sink=FrozenConstructionSpanMasks.build(centers,road,4),
+            ()->sink=ConstructionSpanMasks.build(centers,road,4),
+            ()->{ConstructionSpanMasks.clear();sink=ConstructionSpanMasks.of(road,4);},
+            ()->sink=ConstructionSpanMasks.of(road,4)};
+        int reps=128;for(int w=0;w<3;w++)for(var action:actions)run(action,reps);
+        long[][] times=new long[4][9];double[] bytes=new double[4];long tid=Thread.currentThread().threadId();
+        for(int r=0;r<9;r++)for(int j=0;j<4;j++) {
+            int k=r%2==0?j:3-j;long before=bean.getThreadAllocatedBytes(tid),start=System.nanoTime();
+            run(actions[k],reps);times[k][r]=System.nanoTime()-start;
+            bytes[k]+=bean.getThreadAllocatedBytes(tid)-before;
+        }
+        for(int k=0;k<4;k++){Arrays.sort(times[k]);System.out.printf(Locale.ROOT,
+            "MASK_COMPARE n=%d mode=%s p50Us=%.3f maxBatchUs=%.3f bytes=%.1f%n",centers.size(),names[k],
+            times[k][4]/(reps*1000.0),times[k][8]/(reps*1000.0),bytes[k]/(reps*9.0));}
+        var expected=FrozenConstructionSpanMasks.build(centers,road,4);var actual=ConstructionSpanMasks.of(road,4);
+        if(!Arrays.equals(expected.preserveGrade(),actual.preserveGrade()) || !Arrays.equals(expected.directCrossing(),actual.directCrossing())
+            || !Arrays.equals(expected.networkReuse(),actual.networkReuse()) || !Arrays.equals(expected.protectedGap(),actual.protectedGap())
+            || !Arrays.equals(expected.tunnel(),actual.tunnel()))throw new AssertionError("五类掩码必须逐项相同");
+    }
+
     private static void run(Runnable action,int n){for(int i=0;i<n;i++)action.run();}
 }
 
