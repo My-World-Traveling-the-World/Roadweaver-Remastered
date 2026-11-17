@@ -3,6 +3,7 @@ package net.shiroha233.roadweaver.pathlogic.metrics;
 
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.planning.RouteEvidenceId;
+import net.shiroha233.roadweaver.util.WeakIdentityCache;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,6 +21,9 @@ import java.util.HexFormat;
 import java.util.List;
 
 public final class RoadBuildEvidence {
+    // 分站、跨度与外层列表均已冻结；只缓存诊断摘要，弱键不延长道路存活，也不碰持久身份。
+    private static final WeakIdentityCache<RoadData, String> CONTENTS =
+            new WeakIdentityCache<>(4096);
     private static final boolean ENABLED = "on".equalsIgnoreCase(System.getProperty("roadweaver.buildabilityShadow"));
     private RoadBuildEvidence() {}
     public static boolean enabled() { return ENABLED; }
@@ -71,6 +75,15 @@ public final class RoadBuildEvidence {
 
     /** 只读诊断版本，不参与道路身份、缓存键、完工判定或任何存档字段。 */
     public static String content(RoadData road) {
+        String cached = CONTENTS.get(road);
+        if (cached != null) return cached;
+        // 不把整路编码放进缓存锁；并发首次允许重复纯计算，结果逐字相同。
+        String computed = contentUncached(road);
+        CONTENTS.put(road, computed);
+        return computed;
+    }
+
+    static String contentUncached(RoadData road) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             var out = new DataOutputStream(new DigestOutputStream(OutputStream.nullOutputStream(), digest));
@@ -92,7 +105,7 @@ public final class RoadBuildEvidence {
             }
             out.flush();
             // 诊断仍按发布的完整产物计算；调用方工作列表和可变坐标已在模型构造时冻结。
-            // 生产调用受buildabilityShadow开关控制；开启时为每条证据扫描输入，不改变默认游玩开销。
+            // 生产调用受buildabilityShadow开关控制；首次扫描后按实例复用，不改变默认游玩开销。
             return "c1-" + HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException | IOException failure) {
             // SHA-256是JDK必备算法且空输出不接触磁盘，失败不可冒充旧版本相同。

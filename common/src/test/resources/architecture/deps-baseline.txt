@@ -1,3 +1,4 @@
+# 2026-11-17：只读诊断摘要复用基础弱身份缓存，新增一条pathlogic到util单向引用，不增反向依赖。
 # 跨包依赖基线（ratchet：**边与次数**都只许缩小）
 # 格式：源包 -> 目标包    次数
 #
@@ -119,7 +120,7 @@ pathlogic -> runtime                            18
 pathlogic -> search                             10
 pathlogic -> spec                               1
 pathlogic -> structures                         8
-pathlogic -> util                               7
+pathlogic -> util                               8
 pathlogic -> worldgen                           3
 persistence -> config                             2
 persistence -> core                               18

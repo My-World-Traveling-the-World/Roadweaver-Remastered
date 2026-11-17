@@ -149,6 +149,28 @@ class RoadBuildEvidenceTest {
             List.of(), List.of(), stations, r.spans(), r.targetY(), r.ownerA2dKey(), r.ownerB2dKey()))));
     }
 
+    @Test
+    void cachedContentMatchesUncachedAcrossEqualInstancesChangesAndParallelCalls() throws Exception {
+        var first = road();
+        String expected = RoadBuildEvidence.contentUncached(first);
+        String cached = RoadBuildEvidence.content(first);
+        assertEquals(expected,cached);
+        assertSame(cached,RoadBuildEvidence.content(first),"热命中不得重算整路摘要");
+        var equal = road(); assertNotSame(first,equal);
+        assertEquals(expected,RoadBuildEvidence.content(equal));
+        var changed = new RoadData(first.width(),first.roadType(),first.materials(),first.slabMaterials(),
+                first.roadSegmentList(),first.spans(),List.of(64,90),first.ownerA2dKey(),first.ownerB2dKey());
+        assertNotEquals(expected,RoadBuildEvidence.content(changed));
+        assertEquals(RoadBuildEvidence.contentUncached(changed),RoadBuildEvidence.content(changed));
+        try (var workers=java.util.concurrent.Executors.newFixedThreadPool(4)) {
+            var jobs = new ArrayList<java.util.concurrent.Callable<String>>();
+            for(int i=0;i<64;i++) jobs.add(() -> RoadBuildEvidence.content(first));
+            var results=workers.invokeAll(jobs);
+            assertEquals(64,results.size());
+            for(var result:results) assertEquals(expected,result.get());
+        }
+    }
+
     private static RoadData road() {
         BlockPos a = new BlockPos(0, 64, 0), b = new BlockPos(1, 64, 0);
         return new RoadData(5, 0, List.of(), List.of(), List.of(
