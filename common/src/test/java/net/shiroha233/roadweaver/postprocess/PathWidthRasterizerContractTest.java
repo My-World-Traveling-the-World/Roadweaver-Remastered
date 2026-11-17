@@ -102,5 +102,27 @@ class PathWidthRasterizerContractTest {
         assertFalse(actual.get(511).positions().isEmpty());
     }
 
+    @Test
+    void denseRetracedColumnsKeepOrderedImmutableProductsAcrossCalls() {
+        List<BlockPos> centers = List.of(p(-4, 60), p(0, 61), p(4, 62), p(0, 63), p(-4, 64));
+        List<SplineHelper.Vec2d> points = new ArrayList<>();
+        for (int i = 0; i <= 64; i++) {
+            double x = i <= 32 ? -4 + i / 4.0 : 12 - i / 4.0;
+            points.add(new SplineHelper.Vec2d(x, 0));
+        }
+        List<Double> distances = List.of(0.0, 4.0, 8.0, 12.0, 16.0);
+        var expected = Round43WidthRasterReference.rasterizeSegments(points, centers, distances, 5);
+        var actual = PathWidthRasterizer.rasterizeSegments(points, centers, distances, 5);
+        assertEquals(5, actual.size());
+        assertEquals(expected, actual);
+        // 复用对象绝不能存进HashSet，否则键的hash随下一列改变，后续输出也会被篡改。
+        for (var station : actual) {
+            assertFalse(station.positions().isEmpty());
+            for (BlockPos position : station.positions()) assertFalse(position instanceof BlockPos.MutableBlockPos);
+        }
+        PathWidthRasterizer.rasterizeStations(List.of(p(100, 70), p(200, 80)), 6);
+        assertEquals(expected, actual);
+    }
+
     private static BlockPos p(int x, int y) { return new BlockPos(x, y, 0); }
 }

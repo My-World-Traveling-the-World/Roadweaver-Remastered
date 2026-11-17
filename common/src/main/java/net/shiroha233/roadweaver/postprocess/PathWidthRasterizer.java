@@ -38,6 +38,8 @@ final class PathWidthRasterizer {
         double halfWidthSq = halfWidth * halfWidth;
         double pathDist = 0;
         int currentCenterIdx = 0;
+        // 查询坐标只在本次调用内复用，集合仍持有不可变坐标，避免重复命中列也分配对象。
+        BlockPos.MutableBlockPos lookup = new BlockPos.MutableBlockPos();
 
         for (int i = 0; i < splinePoints.size() - 1; i++) {
             Vec2d pStart = splinePoints.get(i), pEnd = splinePoints.get(i + 1);
@@ -55,7 +57,9 @@ final class PathWidthRasterizer {
                 for (int z = minZ; z <= maxZ; z++) {
                     if (distToSegmentSq(x, z, pStart, pEnd) <= halfWidthSq) {
                         int station = nearestCenter(x, z, centers, currentCenterIdx);
-                        segmentedBlocks.get(station).add(new BlockPos(x, 0, z));
+                        Set<BlockPos> blocks = segmentedBlocks.get(station);
+                        lookup.set(x, 0, z);
+                        if (!blocks.contains(lookup)) blocks.add(new BlockPos(x, 0, z));
                     }
                 }
             }
