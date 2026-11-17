@@ -394,3 +394,24 @@ python scripts/benchmarks/evidence_history_probe.py：同一路线重复1000/100
 变异12组均实际断言红，精确checkout后逐字比较恢复。表见HANDOFF；11组记录round47-mutations.json，补充非法列记录round47-extra-mutations.json。半径最初夹具两桥同叶，开区间变异仍绿；改成9盒跨叶临界夹具后才红，不把首轮全绿算成功。生产接线一组为AST守卫，其余行为/引用复用/操作数守卫，不混称真机产物守卫。
 
 新增盲点探针:common:shardStampProbe实测STAMP_BLIND_SPOT contentChanged=true maxMtimeUnchanged=true aggregateAccepted=true：非最新分片同长改写mtime1000→2000，另一分片mtime3000，真实computeShardStamp与matches仍接受。只证明统计戳非内容证明；没有修改schema或快速通道，也没完成真实加载后分片修复回归。当前查询从NBT道路聚合重建内存索引，不能因此推断道路已经丢失。此存量缺口列ROADMAP优先任务，代码误导性注释已纠正。
+
+
+## 第48轮：派生分片流式验证与故障修复（2026-11-17）
+
+基线1610/0/0/0，pull --rebase因连接重置未成功，沿本地0cbce38继续。先1926e46等价迁出原验证器及伴随文档类型，1610与Fabric通过；再3ca53ba修复内容验证/IO/重试。新增11项显式登记，最终PASS tests=1621 skipped=0 aborted=0 failed=0，Fabric BUILD SUCCESSFUL，日志round48-delivery.log。Python证据19项、旧版契约拒绝2项及独立契约errors=0。
+
+真实建库先红：同长非最新分片version2→9、mtime1000→2000，另一文件mtime3000且旧统计戳命中；内存道路可读但磁盘仍9（round48-before-fix-stamp.log）。不据此称道路丢失。普通启动原实现传空旧快照，不受引用相等跳过影响；实际重试缺口用NOSHARE_DELETE阻止首次替换、解锁再新增道路复现，现修复意图保留至成功。
+
+性能复现：安装版Gradle8.8/JDK21，添加 -I scripts/benchmarks/persistence-stages.gradle，执行 :common:shardVerificationProbe --daemon --console=plain --dependency-verification=off。512MiB，每个真实临时文件一条long引用；冻结1926e46旧验证器，两组预热、五组交替全量比较，旧全量每轮删统计戳。旧完整含统计扫描与内容验证，新单次列目录后流式核对，引用逐项相同。
+
+| 文件数 | 旧统计扫描p50 ms | 旧完整验证p50 ms | 新流式验证p50 ms | 旧完整最大ms | 新流式最大ms |
+|---|---:|---:|---:|---:|---:|
+| 1000 | 53.74 | 118.36 | 39.77 | 126.14 | 40.53 |
+| 10000 | 568.77 | 1137.34 | 369.26 | 1163.65 | 387.23 |
+| 60000 | 6017.65 | 11184.56 | 2970.12 | 15588.90 | 3218.18 |
+
+日志round48-probe.log。新建后首次读旧/新分别187.44/52.32、1317.79/383.42、14258.90/3521.06ms；未清OS缓存，不能叫冷盘。期间有本地Gradle活动，存在主机干扰；五组最大值不当p95，不外推FPS/总进档倍数或任意磁盘收益。新任务/Future最多8个、旧每文件一个；文件列表/预期表/seen仍O(文件数)。
+
+按schema2、坐标、版本与有序long引用核对，拒绝重复必填字段、小数、尾随文档；generation沿用旧口径忽略，未知扩展跳过。旧shard-verify.json留盘但不信任。Windows NOSHARE_READ验证索引/分片IO不隔离、不改原索引、拒绝新写；NOSHARE_DELETE验证修复重试。12组变异全部实际断言红且逐字恢复，表见HANDOFF，round48-mutations.json及逐项round48-mut-*.log。新建库/重开9项、解析器2项均实际执行。
+
+正常磁盘读取没有硬超时；取消后等待工作者退出最多5秒，迟到工作者只读且存储整体只读降级。无真实冷盘/玩家存档/外部并写原子快照验证。CODEC、chunk2、ledger3、fingerprint1和字段名保持，未制作部署件。

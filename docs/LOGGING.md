@@ -39,3 +39,10 @@ python -B -m unittest discover -s scripts/evidence -p 'test_*.py' -v
 开启既有-Droadweaver.deferredChunkTimings=on时，新增[CHUNK-REPLAY-TIMING] chunk/outcome/replayUs；异常记exception并继续抛出，与NO_PLACEMENT不同。默认关闭逐块日志。回填每次仍最多8块，另在完整区块之间按4ms预算让出；单块、台账flush和候选选择可能超过4ms，该值不是MSPT保证。
 
 大日志可用python scripts/evidence/summarize_route_evidence.py --session 首次 latest.log --mode summary --history-limit 16 --output report.json。摘要只截每阶段尾部历史、错误和无owner样本，保留总计数、latestFailuresByStage、failedObservationsByStage、最新校验、内容版本与区块结果历史；errorCount决定退出码。detail默认保留完整历史。道路/版本/区块仍全保留，不能称全输入恒定内存。
+
+
+### 第48轮：分片内容验证
+
+[SHARD-VERIFY]汇总files、checked、mismatches、malformed、ioFailures、workers、elapsedMs、matches。mismatches含字段/有序引用不一致、重复坐标及缺失；malformed是解析损坏，ioFailures是IO/任务/中断等无法完整读取。计数不是互斥分区，不能相加当文件数。最多8工作者；不一致/解析/IO细节各限前8次并保留汇总，无逐块INFO。目录读失败/预中断早返回可能只有专用错误或上层只读日志，不保证汇总行。
+
+matches=true只证明本次所读分片与聚合根重建引用相符，不证明道路可通行或随后没有外部改写。IO明确“不按损坏隔离”；本会话只读，解锁后新实例重开完整验证才恢复。修复失败表示完整内存快照可查，等下次实际提交重试，成功才清除意图。取消后最多等5秒不等于磁盘或整个启动有5秒硬上限。
