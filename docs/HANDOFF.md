@@ -1947,3 +1947,5 @@ Javac的DocTree.toString会把中文转义，必须扫描TextTree.getBody原文�
 ### 六、我踩到但已解决的坑
 
 新增Java由PowerShell/Python写文件要显式newline=LF，换行守卫实际拦到CRLF。弱查询键初版每get32B，经分配探针发现并改复用；finally不清会强持有道路，新增反例实际红。新增桥跨尖峰测试错误假设校验器必拒绝，被正向回归拦下，改为明确target-height-size非法输入，不改变生产几何。初次抽共享util触发依赖棘轮，明确记录postprocess/generation各新增一条单向基础依赖、pathlogic增加一次，提交说明原因，没有给反向依赖开白名单。
+
+远端同步：开工pull成功；收尾pull与push的GitHub HTTPS请求长时间挂起，终止对应网络子进程，未获得成功确认。加超时重试pull报github.com:443在21070ms后无法连接。代码和文档均在本地提交，最终状态见交付回复，不声称已推送。
