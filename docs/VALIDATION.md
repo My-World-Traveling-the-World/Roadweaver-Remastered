@@ -189,3 +189,16 @@ phase=scan诊断保留原日志标签并增加source=incremental，scanUs现在�
 构建仍使用已安装Gradle8.8、JDK21和--daemon，不用gradlew；完整命令为:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off。独立词法统计693个生产Java文件，超过1000有效行0，超过800行2；文件边界143/123、门面721/537、运行态表93/74行（物理/有效）。
 
 当前故障夹具验收平台为Windows/JDK21的NOSHARE_READ/NOSHARE_DELETE，没有用skip掩盖不支持。关闭等待期间已开始的物理提交可完成，关闭返回后才保证旧IO排空；没有强撤销或断电fsync保证。真实世界规划、三模组最终Mixin次序、4096存档、跨实例并写、实际磁盘性能、FPS/MSPT和进档时间均未验；仍同步全表写盘，不能从本轮正确性守卫推导加载提速。
+
+
+## 第42轮样条投影与宽度落列拆分
+
+基线bc69e3b，开工1494全绿；先新增22项（PathCurveRasterParityTest 9、PathWidthRasterizerContractTest 10、PostProcessedRoadProductTest参数化3），新类逐FQCN登记。冻结bc69e3b的本轮算法及数学函数，先1516全绿提交2a6fc2d，再等价迁出PathSplineSampler与PathWidthRasterizer。7个方法体剥除注释/空白后逐项相同，日志round42-body-verification.log；冻结参照仅把Vec2d嵌套私有字段读改为22处等价record访问器。准备阶段仍共享原简化/松弛/掩码/密化，不用它自证这些未改阶段的独立等价。
+
+三种模式各60条固定种子路线，180组逐项核对样条双精度坐标/顺序、中心站、里程和每站位置列表；另54组三路形×水陆×三宽×三模式直接驱动生产process完整重载，世界读口用原平地Backend。独立轴向闭胶囊预期不调用生产距离函数，覆盖0/1/2/5/6宽度、负坐标及端帽；桥前后岸腿、急弯直线、3D采样密度、交叉高程、重复中心、中点归后站、等距hint和空站锚点均有非空及具体结果断言。生产入口新增缓弯夹具确保忽略曲线模式不能仍绿。
+
+首次拆分仅架构依赖棘轮和S5文件台账红，几何对拍未漂移；补登记并删BridgeMaskTool实际未使用的RoadSegmentPlacement导入，未放宽deps-baseline，1516全绿后提交6a2a608。23组生产变异全部指定JUnit红、零skip/abort；最后三项门面参数误接由完整生产入口产物对拍捕获，详细表见HANDOFF第42轮。脚本预检所有锚点、每项finally精确checkout且逐字恢复，记录.analysis_tmp/round42_cases.py、round42_mutations.py、round42-mutations.json、round42-mutation-run.log及round42-mut-*.log。
+
+还原后完整:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off通过，PASS tests=1516 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL，日志round42-final-after-mutations.log。695个生产Java文件，超过1000有效行0、超过800行2；门面474/320、样条148/117、落列101/84行（物理/有效）。
+
+本轮没有性能基准、真实世界/存档或三模组整链数据；拆分不宣称减少卡顿或加载时间。零宽度/偶数宽度只锁定现行闭区间语义，不新增用户配置范围；保护列夹具验证已接受安全走廊，不代表栅格器新增世界保护查询。长桥正弦仍由BridgeSegment保留，原生产产物用例继续跑；双平滑默认、crossing、QualityGate、跨度回写和协议均未改。

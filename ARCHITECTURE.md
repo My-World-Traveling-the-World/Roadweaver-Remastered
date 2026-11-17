@@ -14,7 +14,7 @@
 ## 职责拆分与局部复用
 
 - `ExistingRoadJunctionService` 保留接路入口及世界适配；`JunctionBatchCoordinator` 承担批量选主、校验、捐赠写回和资源释放。`JunctionSpanIndex` 只在同一份道路输入的一次裁切内复用 X/Z 站号索引，不做跨道路缓存。
-- `PathPostProcessor` 保留几何流水线与生产入口；`PathControlSimplifier` 负责控制点简化和原始点补回，`PathControlRelaxer` 负责限幅、急弯及桥头冻结。两者不读取世界，不改变双平滑默认值。
+- `PathPostProcessor` 保留世界采样、桥掩码及几何流水线编排；`PathControlSimplifier`管简化/补回，`PathControlRelaxer`管限幅/冻结，`PathSplineSampler`管样条和按原站序投影Y，`PathWidthRasterizer`管宽度落列与站点归属。四个纯计算组件不读世界，曲线、保护线性通道和剖面重建共用落列；桥头/急弯、3D采样步数、投影向前窗口、闭区间和等距hint沿用原规则。拆分不移除第二次陆地松弛，不改变任何默认几何。
 - `RoutePreloadWork` 分别约束 32 个在途加载和每 tick 8 个就绪区块消费；后者限制施工批量，不能保证单块施工的毫秒上限。
 
 - `VillageEndpointFilter` 接收同次规划的结构表和路线快照，保留村内过滤与整批撤销阀；首次用到有效快照才建本轮位点索引，重复坐标取第一条有效 ID。

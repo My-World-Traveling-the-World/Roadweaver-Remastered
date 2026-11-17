@@ -40,7 +40,7 @@
 
 ## 最新进度
 
-第41轮已修READY索引写失败仍发布就绪的问题：同步提交成功后才发布，IO/运行时写失败沿原三次规划预算重试并保留原因；读失败先重读，避免部分覆盖表覆写。关闭排空在途写入，迟到成功/失败不影响新条目。先行为等价迁出文件边界9a45ab6，再提交修复afb418e；新增35项（33项文件/运行态行为、2项AST接线），1494全绿、29组生产变异均红。schema2、文件名/指纹和同步节奏保持。真实4096、三模组现场与写盘耗时仍待验；下一项可继续拆后处理样条/宽度栅格化并对拍产物。详见末尾第41轮与[路线](ROADMAP.md)。
+第42轮已等价拆出样条/按站序高度投影与宽度落列：门面从660/481降至474/320行，两个纯计算组件148/117、101/84行（物理/有效）。先冻结bc69e3b加22项守卫，再迁出7个方法体并核对去注释/空白后完全一致；180组种子曲线与54组真实生产入口逐站/逐列对拍，1516全绿、23组变异均红。源码/测试2a6fc2d、6a2a608已推送。双平滑、桥头、急弯、长桥正弦和存档均不改；真机FPS/加载耗时未量。下一项先测宽度落列的临时分配与站号查询成本，再决定有序站号存储优化。详见末尾第42轮与[路线](ROADMAP.md)。
 
 ## 已完成轮次记录
 
@@ -1584,3 +1584,77 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 文件格式搬迁先行为等价提交，故障用例在旧实现先红；不能把“加了异常”当故障已经复现。文件读锁不同于不存在，解析合法前缀也不能让后半段损坏的文件变成可覆写快照。写入失败与成功都须写后复核旧条目，少复核失败分支会把清理后的旧key塞回队列。关闭先失效再等同步写锁，允许已开始的物理提交完成，并明确关闭返回才是旧IO排空边界；不能声称关闭一开始就撤销已接受磁盘操作。变异预检遇到非唯一锚点立即停，重定位后才执行，不把预检错误计为守卫红。
+
+
+---
+
+## 第42轮 ｜ 2026-11-17 13:48 → 14:10 ｜ 后处理样条与落列等价拆分 ｜ 测试 `2a6fc2d`、源码 `6a2a608` ｜ `PASS tests=1516 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| postprocess/PathPostProcessor.java，474/320行（原660/481，物理/有效） | 保留世界采样、掩码、简化/松弛/密化和影子编排；公开及包内入口原样透传曲线模式、目标Y、里程和宽度 | 行为等价6a2a608 |
+| postprocess/PathSplineSampler.java，148/117行 | 迁入样条、中心站及按原站序向前32段的高度投影；桥腿/前后岸腿、急弯直线和3D采样步数不改 | 行为等价6a2a608，无世界读取 |
+| postprocess/PathWidthRasterizer.java，101/84行 | 曲线、线性保护通道和剖面一站一段重建共用原宽度落列；保留闭区间、±2站邻域、并列提示与空站锚点 | 行为等价6a2a608，无世界读取 |
+| BridgeMaskTool.java、S5-POSTPROCESS-LEDGER.md | 删除确实零使用的旧RoadSegmentPlacement导入，新增组件登记KEEP_INPUT；依赖基线未放宽 | 行为等价6a2a608 |
+| LegacyCurveRasterReference、PathCurveRasterParityTest、PathWidthRasterizerContractTest、PostProcessedRoadProductTest与套件 | 冻结本轮算法及数学依赖，新增9+10+3=22项；新测试类按FQCN selectClass登记 | 测试基建2a6fc2d，6a2a608补第三种生产路形和终点取整重复夹具 |
+
+695个生产Java文件，超过1000有效行0，超过800行2；新增逻辑写中文原因注释。7个算法方法体剥除注释和空白后与bc69e3b完全相同（round42-body-verification.log），只调整宿主/静态导入和门面透传。移走的私有HeightProjection及其方法没有外部限定引用，api/common/fabric源码全量匹配计数0；没有动数据编码、配置键、枚举、河流或长城工程，没有打包部署。
+
+### 二、我验证了什么（附负控）
+
+开工status空、pull --rebase已是最新，HEAD bc69e3b；基线1494全绿、Fabric通过。先加独立冻结参照和22项守卫，1516全绿后单独提交2a6fc2d。冻结代码来自明确git基线，包含样条/高度/落列及角度、距离、Bezier数学；不能让参照侧转调新实现来循环对拍。数学函数移出Vec2d所在类后仅将22处私有字段读改为等价record访问器。简化、松弛、掩码和密化仍共享当前入口，本轮不以此宣称这些未修改阶段都有独立旧实现对照。
+
+每个CurveMode固定60条种子路线，共180组，逐点比较双精度样条、中心站及里程，再逐站比较铺装位置列表和顺序；含负坐标、高度变化、短掩码、桥/陆、重合点和宽1/2/5。真实PathPostProcessor.process完整重载另对三路形×水陆×三宽×三模式共54组，使用原平地Backend替代世界读，桥掩码及后处理实际执行。独立闭胶囊夹具不调用生产距离函数，核验宽0/1/2/5/6、负坐标、端帽和紧邻保护列。还直接验桥头岸腿、急弯、3D步数、同X/Z两次经过不同高程、t=0.5归后站、等距交叉按hint、空站锚点和一站一段。
+
+拆分后首次全套几何用例均通过，架构依赖棘轮与S5台账各红1项：补登记，并删除BridgeMaskTool中唯一一次出现且未使用的RoadSegmentPlacement导入后恢复1516全绿，未增大deps-baseline；日志round42-extraction.log、round42-extraction-fixed.log。第三路形与最终重复取整夹具分别指定JUnit正向通过，再提交6a2a608。最终恢复全部变异后再次1516全绿、Fabric通过，日志round42-final-after-mutations.log。
+
+23组变异均触发目标JUnit失败，零skip/abort，不将编译或脚本失败算红。全部锚点先预检，逐项finally精确git checkout一个文件并比较原字节；主脚本末尾再次status空。脚本/JSON/日志：.analysis_tmp/round42_cases.py、round42_mutations.py、round42-mutations.json、round42-mutation-run.log、round42-mut-*.log。表中后三项直接在门面改坏参数，由完整生产入口产物对拍捕获。
+
+| # | 故意破坏 | 指定守卫 | JUnit失败数 |
+|---|---|---|---|
+| 1 | 丢弃全部样条点：`drop-all-spline-samples` | `postprocess.PathCurveRasterParityTest#seededCurvesPreserveEverySampleCenterAndOrderedColumn(net.shiroha233.roadweaver.postprocess.SplineHelper$CurveMode)` | 3，红 |
+| 2 | 陆地缓弯强制直线：`flatten-gentle-land` | `postprocess.PathCurveRasterParityTest#gentleLandCurveActuallyUsesTheRequestedCurveMode` | 1，红 |
+| 3 | 漏掉桥前后岸腿对齐：`omit-bridge-approach-alignment` | `postprocess.PathCurveRasterParityTest#bridgeApproachOnBothSidesRemainsLinearWithoutFlatteningAllLand` | 1，红 |
+| 4 | 桥腿错误要求两端都湿：`bridge-needs-both-wet-endpoints` | `postprocess.PathCurveRasterParityTest#bridgeApproachOnBothSidesRemainsLinearWithoutFlatteningAllLand` | 1，红 |
+| 5 | 不冻结急弯：`ignore-sharp-turns` | `postprocess.PathCurveRasterParityTest#hairpinHasActualSamplesAndNeverLeavesTheTwoStraightLegs` | 1，红 |
+| 6 | 3D步数改为水平步数：`sample-only-horizontal-distance` | `postprocess.PathCurveRasterParityTest#samplingDensityStillUsesThreeDimensionalControlDistance` | 1，红 |
+| 7 | 丢掉最终样条点：`omit-final-sample` | `postprocess.PathCurveRasterParityTest#samplingDensityStillUsesThreeDimensionalControlDistance` | 1，红 |
+| 8 | Bezier错走Catmull：`replace-bezier-with-catmull` | `postprocess.PathCurveRasterParityTest#seededCurvesPreserveEverySampleCenterAndOrderedColumn(net.shiroha233.roadweaver.postprocess.SplineHelper$CurveMode)` | 1，红 |
+| 9 | 交叉投影退回第一遍：`project-back-to-first-pass` | `postprocess.PathCurveRasterParityTest#elevatedCrossingKeepsTheHeightOfTheCurrentPass` | 1，红 |
+| 10 | 截断向前高度搜索窗口：`truncate-forward-projection-window` | `postprocess.PathCurveRasterParityTest#elevatedCrossingKeepsTheHeightOfTheCurrentPass` | 1，红 |
+| 11 | 不插值目标Y：`drop-interpolated-target-height` | `postprocess.PathCurveRasterParityTest#elevatedCrossingKeepsTheHeightOfTheCurrentPass` | 1，红 |
+| 12 | 保留取整重复中心站：`keep-duplicate-rounded-center` | `postprocess.PathCurveRasterParityTest#repeatedRoundedCentersAreSkippedButTheLastDistinctEndpointRemains` | 1，红 |
+| 13 | 中心站距错误加倍：`double-center-spacing` | `postprocess.PathCurveRasterParityTest#repeatedRoundedCentersAreSkippedButTheLastDistinctEndpointRemains` | 1，红 |
+| 14 | 缩小半宽：`shrink-road-half-width` | `postprocess.PathWidthRasterizerContractTest#straightRoadMatchesTheClosedCapsuleIncludingNegativeCoordinatesAndCaps(int)` | 3，红 |
+| 15 | 排除闭区间边界列：`exclude-closed-width-boundary` | `postprocess.PathWidthRasterizerContractTest#straightRoadMatchesTheClosedCapsuleIncludingNegativeCoordinatesAndCaps(int)` | 3，红 |
+| 16 | 中点列错归前站：`midpoint-goes-to-earlier-station` | `postprocess.PathWidthRasterizerContractTest#midpointColumnsStayWithTheLaterStationAtHalfwayAndKeepTargetY` | 1，红 |
+| 17 | 等距交叉忽略hint：`ignore-hint-on-equal-distance` | `postprocess.PathWidthRasterizerContractTest#overlappingPassesUseTheCurrentStationHintForEqualDistances(int)` | 1，红 |
+| 18 | 空站不保留中心锚点：`drop-empty-station-anchor` | `postprocess.PathWidthRasterizerContractTest#repeatedStationsKeepOneToOneOutputAndAnAnchorForAnOtherwiseEmptyStation` | 1，红 |
+| 19 | 铺装列错误携带目标Y：`columns-persist-target-y` | `postprocess.PathWidthRasterizerContractTest#midpointColumnsStayWithTheLaterStationAtHalfwayAndKeepTargetY` | 1，红 |
+| 20 | 剖面重建整路丢弃：`drop-station-rebuild-product` | `postprocess.PathWidthRasterizerContractTest#straightRoadMatchesTheClosedCapsuleIncludingNegativeCoordinatesAndCaps(int)` | 5，红 |
+| 21 | 生产门面传错路宽：`facade-passes-wrong-road-width` | `pathfinding.sampling.PostProcessedRoadProductTest#productionCurveEntryMatchesFrozenSuffixForDryAndWetRoads(net.shiroha233.roadweaver.postprocess.SplineHelper$CurveMode)` | 3，红 |
+| 22 | 生产门面忽略曲线模式：`facade-ignores-requested-mode` | `pathfinding.sampling.PostProcessedRoadProductTest#productionCurveEntryMatchesFrozenSuffixForDryAndWetRoads(net.shiroha233.roadweaver.postprocess.SplineHelper$CurveMode)` | 2，红 |
+| 23 | 生产门面丢目标Y：`facade-loses-target-y` | `pathfinding.sampling.PostProcessedRoadProductTest#productionCurveEntryMatchesFrozenSuffixForDryAndWetRoads(net.shiroha233.roadweaver.postprocess.SplineHelper$CurveMode)` | 3，红 |
+
+### 三、我没能验证什么
+
+- **需要真机的**：真实地形/结构保护、桥头与长桥最终落块、BAND后续修坡及合流、FPS/MSPT、首次加载和Chunky尾延迟；平地Backend与纯几何对拍不能代替这些。
+- **需要真实存档的**：4096规模、旧路重开与施工、三模组最终Mixin和退出重开次序。本轮未读写或重跑河流/长城，守卫均归道路仓库。
+- **怀疑但没有证据的**：宽度落列重复列访问、连续站号HashMap查找和临时对象在现场占多少时间，未做分配/耗时对照，不能声称本轮拆分减少卡顿或加快加载。
+- **已知边界未改的**：桥头邻腿与急弯仍按原规则直线，采样步数仍用3D控制点距离；第二次陆地松弛、crossing、跨度回写/QualityGate默认、长桥正弦、村庄包围盒和存档协议都保留。闭区间使偶数width的轴向截面可含width+1列，这是现行规则，等价拆分没有顺带改宽度含义。保护列测试核验既定安全走廊，不代表纯栅格器新增了世界保护查询。
+
+### 四、遗留半截的东西
+
+无半截实现或临时破坏；两个源码/测试提交和本轮文档按main正常推送，停下前核对工作区空、origin/main与HEAD为0/0。S5两份机器读取路径保持，方法级删除台账无需修改。没有制作/部署新发布件。
+
+### 五、下一轮我会先做什么
+
+1. 先量PathWidthRasterizer的临时分配与列访问工作量，固定同一份点/站/宽度、同JVM交替对照。若连续站号HashMap查找确有成本，用按站号的数组/列表替代，并保持每站HashSet插入、邻域、并列和最终列表顺序；以本轮冻结产物为验收，独立性能提交。
+2. 后处理剩余控制点密化仍在门面，单纯为行数再拆价值较低；只有职责或实际热点证据足够再动。世界采样和影子编排继续留门面，不更换整个架构。
+3. READY/施工台账异步写盘、4096工作集及三模组整链、双平滑默认与crossing继续按路线等现场证据。
+
+### 六、我踩到但已解决的坑
+
+只比较最终铺装并集会漏掉站点归属与目标Y漂移，必须逐站比较中心和位置列表；只看“样条非空”也会让所有曲线变直仍绿。冻结参照若调用新组件就变成自证，数学依赖也需一并冻结。嵌套Vec2d私有字段不能搬到另一个类后直接读，改record访问器并保留浮点运算顺序。新postprocess文件必须登记S5；架构棘轮按文件计入依赖，不能靠放宽基线过关，删除旧的真实未用导入保持依赖计数不增。类拆小本身不等于运行更快，后续优化仍先测工作量与分配。
