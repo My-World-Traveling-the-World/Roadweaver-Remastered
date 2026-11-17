@@ -1,3 +1,4 @@
+# 2026-11-17：施工纯掩码迁出独立协作类，新增一处模型引用；同层到core不新增反向边。
 # 2026-11-17：只读诊断摘要复用基础弱身份缓存，新增一条pathlogic到util单向引用，不增反向依赖。
 # 跨包依赖基线（ratchet：**边与次数**都只许缩小）
 # 格式：源包 -> 目标包    次数
@@ -105,7 +106,7 @@ pathlogic -> config                             78
 #   新增 pathlogic/profile/ExistingRoadProbe 补「已有公路」这条禁地面来源，
 #   需要 RoadData / RoadFootprint / RoadShardStorage（+1 core、+2 persistence）。
 #   方向正确：业务层(pathlogic) 依赖基础设施(persistence)，不是反过来。
-pathlogic -> core                               195
+pathlogic -> core                               196
 pathlogic -> decoration                         21
 pathlogic -> generation                         60
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次

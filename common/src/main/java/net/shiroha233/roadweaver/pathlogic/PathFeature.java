@@ -456,12 +456,14 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         boolean[] isBridge = res.isBridge();
         List<int[]> bridgeRanges = res.mergedRanges();
         boolean[] skipSegments = res.skipSegments();
-        boolean[] preserveCrossingGrade = buildPreserveCrossingGradeMask(
+        // 先只迁出纯跨度计算；桥梁运行期晋级仍使用本区块专属副本。
+        var spanMasks = net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks.build(
                 middlePositions, data, cfg.bridgeRampSegments());
-        boolean[] directCrossing = buildSpanMask(middlePositions, data, SpanType.ROAD_CROSSING);
-        boolean[] networkReuse = buildSpanMask(middlePositions, data, SpanType.NETWORK_REUSE);
-        boolean[] protectedGap = buildSpanMask(middlePositions, data, SpanType.PROTECTED_GAP);
-        boolean[] tunnelMask = buildSpanMask(middlePositions, data, SpanType.TUNNEL);
+        boolean[] preserveCrossingGrade = spanMasks.preserveGrade();
+        boolean[] directCrossing = spanMasks.directCrossing();
+        boolean[] networkReuse = spanMasks.networkReuse();
+        boolean[] protectedGap = spanMasks.protectedGap();
+        boolean[] tunnelMask = spanMasks.tunnel();
 
         boolean useBuoysInstead = bridgeEnabled && cfg.bridgeUseBuoysInstead();
         boolean useBuoysWhenSkipped = bridgeEnabled && cfg.bridgeUseBuoysWhenSkipped();
@@ -720,78 +722,6 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                 + "该值应停止增长)", ROAD_CHUNKS_ABANDONED.get());
     }
 
-    private static boolean[] buildPreserveCrossingGradeMask(List<BlockPos> centers,
-                                                             RoadData road,
-                                                             int rampSegments) {
-        boolean[] result = new boolean[centers.size()];
-        if (road == null || road.spans() == null || road.spans().isEmpty()) return result;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < centers.size(); i++) indices.put(xzKey(centers.get(i)), i);
-        int ramps = Math.max(0, rampSegments);
-        for (var span : road.spans()) {
-            if (span == null || (span.type() != SpanType.BRIDGE
-                    && span.type() != SpanType.ROAD_CROSSING)) continue;
-            Integer first = indices.get(xzKey(span.start()));
-            Integer second = indices.get(xzKey(span.end()));
-            if (first == null || second == null) continue;
-            int start = Math.max(0, Math.min(first, second) - ramps);
-            int end = Math.min(result.length - 1, Math.max(first, second) + ramps);
-            for (int i = start; i <= end; i++) result[i] = true;
-        }
-        return result;
-    }
-
-    /**
-     * 跨度遮罩。0.9.080：端点坐标失配时退化为「最近的站」，不再静默丢弃整段。
-     *
-     * <p>原来的精确 XZ 匹配一旦对不上就 {@code continue}，后果是整段 span 不参与任何处理：
-     * 隧道遮罩全 false 时 {@code RoadTunnelBuilder.processSegment} 的 findSpan 也找不到 span，
-     * 于是隧道一格不挖、连日志都没有。站序列会被 merge/rebuild 重建过，坐标漂 1~2 格是常态。</p>
-     */
-    private static boolean[] buildSpanMask(List<BlockPos> centers, RoadData road, SpanType type) {
-        boolean[] result = new boolean[centers.size()];
-        if (road == null || road.spans() == null || road.spans().isEmpty()) return result;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < centers.size(); i++) indices.put(xzKey(centers.get(i)), i);
-        for (var span : road.spans()) {
-            if (span == null || span.type() != type) continue;
-            Integer first = resolveStationIndex(indices, centers, span.start());
-            Integer second = resolveStationIndex(indices, centers, span.end());
-            if (first == null || second == null) {
-                SPAN_MASK_UNMATCHED.incrementAndGet();
-                continue;
-            }
-            int start = Math.max(0, Math.min(first, second));
-            int end = Math.min(result.length - 1, Math.max(first, second));
-            for (int i = start; i <= end; i++) result[i] = true;
-        }
-        return result;
-    }
-
-    private static final int SPAN_MASK_FALLBACK_TOLERANCE = 4;
-    private static final java.util.concurrent.atomic.AtomicLong SPAN_MASK_UNMATCHED =
-            new java.util.concurrent.atomic.AtomicLong();
-
-    /** 精确 XZ → 最近站（≤4 格漂移）→ null。 */
-    private static Integer resolveStationIndex(Map<Long, Integer> indices, List<BlockPos> centers,
-                                               BlockPos target) {
-        if (target == null || centers == null || centers.isEmpty()) return null;
-        Integer exact = indices.get(xzKey(target));
-        if (exact != null) return exact;
-        int best = -1;
-        int bestDist = Integer.MAX_VALUE;
-        for (int i = 0; i < centers.size(); i++) {
-            BlockPos c = centers.get(i);
-            if (c == null) continue;
-            int d = Math.max(Math.abs(c.getX() - target.getX()), Math.abs(c.getZ() - target.getZ()));
-            if (d < bestDist) {
-                bestDist = d;
-                best = i;
-            }
-        }
-        return (best >= 0 && bestDist <= SPAN_MASK_FALLBACK_TOLERANCE) ? best : null;
-    }
-
     /**
      * T-24: 去重键。roadFingerprint 是内容指纹(与 RoadShardStorage 一致),
      * 原位替换前后保持稳定,因此重跑轮次不会对已处理站点二次铺装。
@@ -799,6 +729,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
     private record ProcessedSegment(long roadFingerprint, int segmentIndex) {
     }
 
+
+    // 拒绝跨度累积仍使用原XZ键，不能随纯掩码计算一起迁走。
     private static long xzKey(BlockPos pos) {
         return pos == null ? Long.MIN_VALUE : ((long) pos.getX() << 32) | (pos.getZ() & 0xffffffffL);
     }
