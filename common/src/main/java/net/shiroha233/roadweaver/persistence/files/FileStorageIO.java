@@ -57,13 +57,13 @@ public final class FileStorageIO {
                     Files.deleteIfExists(path);
                 } catch (IOException e) {
                     if (logger != null) {
-                        logger.warn("【文件存储操作失败】 " + "{}: {}", reason, path, e);
+                        logger.warn("【删除目录项失败】 " + "{}: {}", reason, path, e);
                     }
                 }
             });
         } catch (IOException e) {
             if (logger != null) {
-                logger.warn("【文件存储操作失败】 " + "{}: {}", reason, root, e);
+                logger.warn("【遍历待删除目录失败】 " + "{}: {}", reason, root, e);
             }
         }
     }
@@ -74,11 +74,11 @@ public final class FileStorageIO {
         try {
             Files.move(path, target, StandardCopyOption.REPLACE_EXISTING);
             if (logger != null) {
-                logger.warn("【文件移动或替换失败】 " + "{}: {} -> {}", reason, path, target);
+                logger.warn("【已隔离损坏文件】 " + "{}: {} -> {}", reason, path, target);
             }
         } catch (IOException e) {
             if (logger != null) {
-                logger.warn("【文件存储操作失败】 " + "{}: {}", reason, path, e);
+                logger.warn("【隔离损坏文件失败】 " + "{}: {}", reason, path, e);
             }
         }
     }
