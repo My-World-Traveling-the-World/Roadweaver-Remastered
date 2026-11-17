@@ -46,6 +46,7 @@ final class LegacyTargetProfile {
                     smoothed, terrainY, isCrossing,
                     cfg.slopeLimitEnabled(), cfg.maxSlopeStepPerTwoSegments(), pinnedMask);
         } else {
+            // 河岸附近仍保留地面爬坡，避免桥与隧道交替交织；护栏只影响主动选隧道。
             final int riversideTunnelGuard = Math.max(2, cfg.bridgeRampSegments() + 4);
             boolean[] tunnelGuard = isCrossing.clone();
             for (SpanRange range : crossingRanges) {
@@ -98,6 +99,7 @@ final class LegacyTargetProfile {
                     startVillage, endVillage, startUnknown, endUnknown);
         }
         logEndpointProfile("after-structure-lock", connection, smoothed, terrainY, n, startBoundary, endBoundary);
+        // 世界操作保持交叉剖面在前、海底重分类在后，不能借拆分交换副作用顺序。
         passes.crossing(smoothed);
         smoothed = passes.undersea(smoothed);
 
@@ -109,6 +111,7 @@ final class LegacyTargetProfile {
 
         smoothed = RoadGradePlanner.removeSingleStationSpikes(smoothed, tunnelMask);
 
+        // 后道闭合与去尖峰都可能改入口，末次重座必须晚于它们，避免锁高处留下断崖。
         if (structureGradesLocked) {
             if (pinnedMask[0]) {
                 if (startSharedProfile != null && startSharedProfile.length > 0) {

@@ -470,6 +470,9 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.RouteEvidenceWiringTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pipeline.ConnectionEvidenceTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetTerrainInputsTest"),
+                // 保留模式必须直接跑编排；另用窄语法树守住世界端口接线。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.LegacyTargetProfileTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.LegacyTargetProfileWiringTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotActivationTest"),
                 // 村庄端点过滤必须保留外来道路、阈值边界及整轮撤销原因。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.VillageEndpointFilterTest"),
