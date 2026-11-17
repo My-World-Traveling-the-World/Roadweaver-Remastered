@@ -40,7 +40,7 @@
 
 ## 最新进度
 
-第 32 轮按用户明确顺序补道路消费方前置条件：有长城河流→长城→道路，无长城河流→道路；源码 `bd61dd8`，回归 1222 项，7 项变异。只改道路及其测试，河流发布与长城订阅的测试归对应仓库。下一步包括河流发布方异常语义、三模组现场时序、内部执行预算与 4096 工作集；详见末尾及 ROADMAP。
+第39轮已把大范围网络规划接入有界三通道高度瓦片，源码/测试`a1e21de`，回归1442项；28项新增、26组生产变异均红。64MiB假地形验证2.68亿格近目标、全域走廊和封闭分量；同JVM记录密集成本并优化同块梯度。真实4096存档、NoiseChunk和三模组最终启动仍待验；下一项可独立开工的是READY状态转换封装与全量统计对拍。详见末尾第39轮与[路线](ROADMAP.md)。
 
 ## 已完成轮次记录
 
@@ -1358,3 +1358,81 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 分页缺省零会制造免费源点，缺页读和新页都必须为无穷；冻结位同时守住字、页和目录边界。边缓存必须保持旧预计算西/北→东/南规范方向，单列网格delta=1仍是南边。已知位在回调成功后发布，防止一次故障被永久缓存成正常值。源之间共享代价、不共享到达工作区，防后续源污染旧快照。小堆解析夹具不能代表真实采样器，密集分页退化也不能藏在近目标收益后，因此保留两种独立对照并调整公共切换点。
+
+
+## 第39轮 ｜ 2026-11-17 09:01 → 09:45 ｜ 大域三通道瓦片与梯度复用 ｜ 源码 `a1e21de` ｜ `PASS tests=1442 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+分步提交：fc24f23（性能优化、几何行为等价，有界三通道瓦片和真实规划接线），6e20afa（测试基建、行为等价，真实采样门面交错），e109b9d（测试基建、行为等价，读口只注入世界读取与固定堆探针），a1e21de（性能优化、行为等价，同块梯度一次取图及同JVM冻结版本对照）。不新增配置或持久化字段，不改桥弯、包围盒、crossing、双平滑、QualityGate或GPU弃用决定；既有失败日志和MST降级分支原样保留，本轮未新增算法回退。
+
+| 文件 | 改动与边界 | 类型 |
+|---|---|---|
+| bridge/TiledTerrainField.java，145物理/117有效行 | 全局布局上64×64列三通道瓦片、64块LRU；跨块全域差分，同块一次取图；失败不发布；实际请求/列数/驱逐/载荷统计 | 性能，几何行为等价 |
+| bridge/SampledTerrainField.java，221/113行 | 新planningSurface与FMM共享4194304格分界；小域整场接口保留；水代理兼容并修正合法跨int偏移的long运算 | 行为等价与边界正确性修复 |
+| metric/FastMarchingSolver.java，380/212行 | 暴露只选存储的规模判据，求解循环与全局范围不变 | 行为等价 |
+| planning/impl/PipelinePlanner.java，337/219行 | 只注入GridSampler工厂；布局/策略仍由真实plan决定，生产经原精确采样门面；稠密参考和实际瓦片日志分开 | 性能、诊断口径变更，正常几何等价 |
+| 四个新测试类与总套件 | 15+8+2+3=28项，逐格/路径/权重/最终边与真实门面行为守卫，显式FQCN登记 | 测试基建 |
+| scripts/benchmarks/Measure-TerrainTiles.ps1 / TiledTerrainProbe.java | 64MiB大域夹具；512MiB同JVM整场、首版瓦片、当前瓦片三方对照；首版只重命名类型 | 测试基建 |
+
+独立统计691个生产Java文件，超过1000有效行仍0、超过800仍2；新增类未成为大类。所有新增/改动逻辑配中文原因注释。bridge→metric 12→15、bridge→pathfinding 11→13、planning→bridge 1→2均为原允许方向，并在依赖次数基线逐项说明；没有新增反向白名单。只写道路仓库，河流82cc818和长城5ade8e9b状态空，未改、未重跑外部回归。
+
+### 二、我验证了什么（附负控）
+
+开工status空、pull --rebase成功，HEAD c8e7481；基线1414全绿。先push上轮未同步的c8e7481补记成功。新增后1438、1441、最终1442全绿，Fabric编译通过；最终26组生产变异全部恢复后再次完整回归。新测试直接调用真实plan，只有世界读Fake，不能由测试替生产选择瓦片；合法近边输出非空且原坐标/状态保留，远孤立点不触发整场请求。
+
+高度/梯度/水代理对GridTerrainField逐点比较；场值、早停临时值、三源交替和路径对冻结DenseFmmReference；实际双向GeodesicMatrix和独立Kruskal森林/分量对拍。真实门面验本地驱逐后仍复用原列缓存，两规划对象真实进入AccurateTileClaims等待后后端仅算一次，保存期间关闭不发布可用瓦片。并发夹具等待实际调用栈，不以线程创建次序或立即放行侥幸通过。
+
+首版23组变异全红；同块快路径加入后最终26组完整重跑均红，编译/命令/锚点失败不计。扩展脚本一度因尾块锚点出现两处而中止，finally已恢复；改为完整请求上下文并增加全组预检后从第一项重跑。每项finally精确git checkout单文件并逐字比对。记录：.analysis_tmp/round39_mutations.py、round39-mutations.json、round39-mutation-run-final.log和round39-mut-*.log。
+
+| # | 故意破坏 | 文件（生产包下） | 指定守卫 | JUnit失败数 |
+|---|---|---|---|---|
+| 1 | `factory-still-samples-whole-domain` | `bridge/SampledTerrainField.java` | `bridge.TiledTerrainFieldTest#planningFactoryKeepsSmallBatchAndSelectsBoundedLazyTilesAtTheSolverThreshold` | 1，红 |
+| 2 | `tiled-shadow-water-discarded` | `bridge/SampledTerrainField.java` | `metric.TiledTerrainFmmTest#evictionStillAllowsFullDomainTravelAndOldSnapshotSurvivesReverseSource` | 1，红 |
+| 3 | `walking-height-uses-canopy` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 6，红 |
+| 4 | `tile-key-loses-z` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 4，红 |
+| 5 | `tile-origin-loses-step` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 2，红 |
+| 6 | `tail-tile-keeps-full-width` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 6，红 |
+| 7 | `gradient-clamped-at-tile-seam` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 4，红 |
+| 8 | `gradient-denominator-loses-step` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 2，红 |
+| 9 | `height-snaps-down-instead-of-nearest` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 2，红 |
+| 10 | `tile-cache-unbounded` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#leastRecentlyUsedTilesAreEvictedAndRereadWithoutChangingHeight` | 1，红 |
+| 11 | `sampling-failure-replaced-with-zero-height` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#failedNullAndMismatchedTilesAreNotPublishedAndCanBeRetried(int)` | 2，红 |
+| 12 | `mismatched-tile-not-rejected` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#failedNullAndMismatchedTilesAreNotPublishedAndCanBeRetried(int)` | 1，红 |
+| 13 | `mismatched-tile-published-before-validation` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#failedNullAndMismatchedTilesAreNotPublishedAndCanBeRetried(int)` | 1，红 |
+| 14 | `concurrent-misses-not-serialized` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#sharedTileIsPublishedOnceToConcurrentReaders` | 1，红 |
+| 15 | `water-proxy-uses-walking-height` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 6，红 |
+| 16 | `water-proxy-accepts-nonaligned-columns` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 3，红 |
+| 17 | `real-tile-stats-return-zero` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#leastRecentlyUsedTilesAreEvictedAndRereadWithoutChangingHeight` | 1，红 |
+| 18 | `evicted-payload-never-subtracted` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#leastRecentlyUsedTilesAreEvictedAndRereadWithoutChangingHeight` | 1，红 |
+| 19 | `tile-request-loses-step` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 3，红 |
+| 20 | `small-factory-uses-wrong-height-channel` | `bridge/SampledTerrainField.java` | `bridge.TiledTerrainFieldTest#planningFactoryKeepsSmallBatchAndSelectsBoundedLazyTilesAtTheSolverThreshold` | 1，红 |
+| 21 | `production-plan-does-not-use-world-port` | `planning/impl/PipelinePlanner.java` | `planning.impl.PipelinePlannerSamplingTest#planUsesInjectedSamplingBoundaryAndPreservesActualConnections(int)` | 2，红 |
+| 22 | `propagation-clips-global-domain` | `metric/FastMarchingSolver.java` | `metric.TiledTerrainFmmTest#evictionStillAllowsFullDomainTravelAndOldSnapshotSurvivesReverseSource` | 1，红 |
+| 23 | `sampling-and-solver-threshold-changed-to-eager` | `metric/FastMarchingSolver.java` | `planning.impl.PipelinePlannerSamplingTest#planUsesInjectedSamplingBoundaryAndPreservesActualConnections(int)` | 1，红 |
+| 24 | `same-tile-gradient-uses-canopy` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 6，红 |
+| 25 | `same-tile-z-gradient-loses-row-stride` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#heightsGradientsAndWaterMatchWholeGridAcrossSeamsAndEviction(int)` | 2，红 |
+| 26 | `single-cell-gradient-forces-an-extra-sample` | `bridge/TiledTerrainField.java` | `bridge.TiledTerrainFieldTest#singleCellGradientNeedsNoSamplingButHeightAndWaterStillUseRealChannels` | 1，红 |
+
+固定64MiB：2.68亿格近目标仅1请求/4096列，线程分配p50=224024 B、p50=0.235 ms、p95=0.771 ms；全域走廊16384点、256请求、192次驱逐，最终三图3 MiB；封闭分量只采一块。512MiB同JVM三方（整场/首版e109b9d/当前）：4194304格近目标分配50491656/211944/211928 B、p50 5.610/0.093/0.062 ms；百万格强制分页密集p50 275.554/321.429/295.813 ms，分配72821752/72856792/72856776 B。同块梯度降低首版开销，仍不如整场数组；故小域快路径保留。3轮热身、7轮旋转测量，近目标小堆另8次热身11次测量。均为假地形读口，不含实际世界/文件IO，不能作FPS、加载时间或整合包总堆结论。完整命令与数据见VALIDATION第39轮。
+
+### 三、我没能验证什么
+
+- **需要真机的**：原版NoiseChunk/模组生成器同列高度是否完全一致，后台预算等待与实际中断尾延迟，三模组最终Mixin顺序、停服/重开、FPS/MSPT和桥头实际落块。现有世界读取路径没改不等于现场验收已通过。
+- **需要真实存档的**：4096候选密度、FMM全域密集访问、采样器两级缓存/文件瓦片/临时集合及其他模组的共同峰值；驱逐后磁盘读取、重算与首次生成/重开的尾延迟。
+- **我怀疑但没有证据的**：真实地形上64块是否合适、密集场驱逐是否重复触发NoiseChunk或IO、全部结构扫描是否仍主导等待。已有实际请求/列数/驱逐日志，未据猜测继续调容量或新增空间裁剪。
+- **我知道现在有代价但没消除的**：分页全访问仍受全域工作量限制，FMM页和前沿未设置总硬预算；新瓦片密集夹具仍比整场数组慢。3 MiB只约束本适配器保留的三图载荷，并非整个规划或游戏内存上限。既有QualityGate不拦、不可用世界/异常时MST降级口径及按原道路身份跳过旧完工区块保持。
+
+### 四、遗留半截的东西
+
+没有未提交实现或临时破坏，代码/测试已小步提交；未打包、未部署。最终回归日志round39-final-after-mutations.log，固定堆和三方数据为round39-terrain-smallheap-final.log、round39-terrain-three-way.log。源码及本轮文档按正常main推送，停下前核对工作区为空且与origin/main一致；若网络未同步须在答复单独列明。
+
+### 五、下一轮我会先做什么
+
+1. 可独立推进READY：集中RoadPlanningReadinessIndex状态转换，对拍现有全量扫描、失败重试、代次与停服行为，再决定增量计数；先不无计时证据异步落盘。
+2. 等现场数据核对[PLANNING-WORKSET]、[PLANNING-HEIGHT-TILES]和采样/拓扑/单路/区块施工阶段p50/p95，逐档存档副本验证128到4096。稠密传播/采样器缓存仍大时先定位实际持有者，不裁核心或合法绕行域。
+3. 保持三模组启动的测试归属；真实Mixin次序和重开由各发布/消费工程及整合场景取证。crossing、双平滑默认切换和QualityGate继续等用户尚无的真机数据。
+
+### 六、我踩到但已解决的坑
+
+瓦片梯度若在接缝按本块边界裁切会改变坡度，必须始终按全域邻点；单点零梯度快路径不能为了取中心块额外采样。首轮FMM源格不准备自身代价，反向把它当目标时需补读原源块：全域夹具恰好多1块，不能错误要求零新增。初测密集退化后改同块梯度，并在同JVM冻结e109b9d首版，避免跨进程噪声被当优化收益。请求锚点因快路径复用出现两处时让脚本明确失败、恢复后重定位，禁止静默替换或把脚本失败算守卫红。

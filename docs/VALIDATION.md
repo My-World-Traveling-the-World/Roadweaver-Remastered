@@ -16,7 +16,7 @@ $gradle = 'C:/Users/18364/.gradle/wrapper/dists/gradle-8.8-bin/4u0rgm4geyrm56fyh
 - 新测试类须按 FQCN 加到 `RoadJUnitRegressionSuite` 的 `selectClass` 列表。它不扫描包。
 - 共用模块编译要求相邻的 `../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar`。缺少时先在长城仓库用 Gradle 跑 `:interopJar`。这是编译依赖，不会打进道路发布件。
 - 守卫用负控验收：合法夹具先断言通过；迭代内断言先验证产物非空；故意丢弃产物、绕开判据或改变边界值，看对应断言是否失败。静态检查要覆盖全限定、同一行和通配导入；行数按 CR、LF、CRLF 都能正确识别的方式计算。
-- 复现内核数据：[FMM 基准](../scripts/benchmarks/Measure-Fmm.ps1)和[区块编译基准](../scripts/benchmarks/Measure-ChunkRaster.ps1)。参数及输入、预热、对拍和数据见[交接记录](HANDOFF.md)。记录单位、样本和是否包含调度、查盘或落块。
+- 复现内核数据：[FMM 基准](../scripts/benchmarks/Measure-Fmm.ps1)、[三通道瓦片基准](../scripts/benchmarks/Measure-TerrainTiles.ps1)和[区块编译基准](../scripts/benchmarks/Measure-ChunkRaster.ps1)。参数及输入、预热、对拍和数据见[交接记录](HANDOFF.md)。记录单位、样本和是否包含调度、查盘或落块。
 
 采样并发回归见 `AccurateChunkBatchTest`、`AccurateColumnBatchTest`、`AccurateTileClaimsTest` 与 `AccurateHeightSamplerLifecycleTest`：用锁存器钉住认领、读盘和所有者完成的交错；超时后核对完整键集合，取消后核对健康等待者仍成功，关闭时核对等待者被主动唤醒且关闭后的迟到结果没有重新发布到内存。重算优化同时断言结果非空与后端调用次数，不能只比较两份空集合。生产负控和恢复记录见 [HANDOFF 第 25、26 轮](HANDOFF.md)。网格/逐列双向冲突夹具必须真实进入等待，再检查只计算剩余列；另验读盘期间关闭、保存期间关闭、坐标网格不匹配、进度回调取消和原故障传播。文件缓存后端会吞掉部分 IO 错误并告警，Fake 端口抛错的重试不等价于真实磁盘故障已确认恢复。
 
@@ -118,3 +118,32 @@ CoarsePathTasksTest的创建顺序假设已复现：等待第二个创建线程�
 ```
 
 普通83521格探针也逐位/逐路径通过（round38-normal-grid.log）。其clustered-topology对照直接比较当前GeodesicMatrix的先全量后过滤与先过滤后求解，不是本轮新旧源码对照，不能计成本轮收益。源码恢复后再次全量回归与Fabric编译，日志round38-final-after-mutations.log。真实采样仍有整场三图及缺列集合，4096存档、FPS/MSPT和加载时间未验收。
+
+
+## 第39轮三通道瓦片与密集代价
+
+本轮新增28项：TiledTerrainFieldTest 15项、TiledTerrainFmmTest 8项、PipelinePlannerSamplingTest 2项、TiledSamplerIntegrationTest 3项，均按FQCN登记。1442全绿、零跳过/中止/失败，Fabric通过。小场对整场高度数组和冻结DenseFmmReference逐高度、梯度、水代理、所有场值double位、路径点序、双向权重及独立Kruskal最终边/分量对拍。覆盖负原点、step=1/8、单行单列、尾瓦片、非对齐点、极端合法坐标、断开分量与多源早停；先断言结果非空。
+
+真实plan只注入世界读取，布局和整场/瓦片选择没有移到测试；大域近端合法边仍下发，孤立远点不触发整场采样。真实AccurateHeightSampler门面另验本地驱逐后复用原列缓存、两个规划共享认领、保存期间关闭不发布瓦片或列缓存。原CPU采样预算和世界NoiseChunk未改；这些端口测试不等于真实世界高度已对拍。
+
+26组生产变异在最终快路径版本完整重跑，均出现指定JUnit失败，逐项finally精确checkout并比较原字节。覆盖退回整场、错高度图、键冲突、步长/尾块/吸附、接缝和同块差分、无界缓存、异常填零、错请求提前发布、并发重复加载、水代理、计数器、规划读口旁路与全域截断。快路径新增后锚点出现两处，首次扩展脚本明确拒绝该匹配；修正为请求上下文、增加全组预检后26组完整通过，未把锚点或编译失败计为红。详表见HANDOFF第39轮；本机日志.analysis_tmp/round39-mutation-run-final.log及round39-mut-*.log，脚本与JSON为round39_mutations.py、round39-mutations.json。
+
+可复现命令（JDK21、缓存的SLF4J2与fastutil；不需要世界或MC桩）：
+
+```powershell
+./scripts/benchmarks/Measure-TerrainTiles.ps1 -JavaHome $env:JAVA_HOME -HeapMiB 64 -HugeOnly -Baseline e109b9d
+./scripts/benchmarks/Measure-TerrainTiles.ps1 -JavaHome $env:JAVA_HOME -HeapMiB 512 -Baseline e109b9d
+```
+
+64MiB：268435456格近目标8次热身、11次测量，每次1请求/4096列，线程分配p50=224024 B，耗时p50=0.235 ms、p95=0.771 ms。全域16383格走廊输出16384个路径点，实际256请求/1048576列/192次驱逐，最终64块三图3145728 B；封闭分量只采一块且远点不可达。整场三图3221225472 B是同布局的算术参考，未在64MiB堆中强行分配。日志round39-terrain-smallheap-final.log。
+
+512MiB同JVM三方对照：整场GridTerrainField／冻结首版瓦片e109b9d／当前同块快路径；共享当前FMM，只比较采样策略，非整个旧提交与整个新提交的端到端对照。先核全部密集场值和1025个回溯点、近目标权重和路径，并确认两版瓦片请求数及列数一致；3轮热身、7轮旋转顺序测量。近目标4194304格走公共分页入口；密集1050625格强制三方分页以隔离采样成本，生产百万格仍走整场数组与稠密FMM。
+
+| 场景 | 当前线程分配p50 B（整场／首版瓦片／当前瓦片） | 耗时p50 ms | 耗时p95 ms |
+|---|---|---|---|
+| 4194304格近目标，含首次高度读入 | 50491656／211944／211928 | 5.610／0.093／0.062 | 8.436／0.186／0.078 |
+| 1050625格密集远目标，强制分页 | 72821752／72856792／72856776 | 275.554／321.429／295.813 | 278.122／333.354／317.932 |
+
+密集夹具实际289请求/1050625列，两版均无重复采样，225次驱逐，最终保留64块、三图2128908 B（含尾块）。同块梯度只查一次缓存减轻首版开销，仍比整场数组慢。以上7次p95接近最大样本，线程分配不是存活堆峰值；只替代世界读的固定平地不含真实NoiseChunk、存储IO、认领工作区与其他模组争用。日志round39-terrain-three-way.log；较早两方探针保留为round39-terrain-comparison-final.log、round39-terrain-fast-gradient.log，不能跨JVM直接据此推断快路径收益。
+
+源码恢复后完整回归日志round39-final-after-mutations.log。4096真实存档安全性、世界高度与最终道路产物、FPS/MSPT、开局/游玩期等待、驱逐后磁盘和NoiseChunk成本、真实停止/重开以及河流→长城→道路最终Mixin次序仍未验证；本轮没有打包或部署。
