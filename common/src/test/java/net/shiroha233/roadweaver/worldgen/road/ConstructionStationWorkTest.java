@@ -39,6 +39,7 @@ class ConstructionStationWorkTest {
                 assertEquals("protected-column",now.refusals.get(10));
                 assertFalse(now.events.stream().anyMatch(e->e.startsWith("apply:10")));
                 assertEquals(93,now.state.profile()[7]);
+                assertTrue(now.state.refused(7));assertEquals("protected-column",now.refusals.get(7));
             }
         }
         assertTrue(events>5000,"事件总量必须非空且确实覆盖大量生产操作，不能空集合空转");
@@ -113,7 +114,7 @@ class ConstructionStationWorkTest {
                     case "pave": {
                         int i=(int)args[2];events.add("pave:"+i+":"+Arrays.toString((int[])args[4])+":"+random.nextInt()+":"+(args.length==13?args[12]:"surface"));
                         if(throwAfterPave)throw new IllegalStateException("模拟已产生施工副作用后失败");
-                        if(i==10){refusals.put(i,"protected-column");return false;}return true;
+                        if(i==7 || i==10){refusals.put(i,"protected-column");return false;}return true;
                     }
                     case "apply": {
                         var plan=(TunnelPlan)args[0];events.add("apply:"+(plan.interior().isEmpty()?"none":plan.interior().getFirst().getX()));return null;
