@@ -11,7 +11,7 @@
 # 要消除某条边：改代码，然后把该行从本文件删掉。
 # 要合法地加一条 import：必须同时把这里的次数 +1 并说明理由。
 # 2026-11-17：三通道瓦片适配器增加 bridge->metric 3 次、bridge->pathfinding 2 次；
-# 规划采样端口用 GridLayout 增加 planning->metric 1 次，瓦片观测增加 planning->bridge 1 次。
+# 规划采样端口与瓦片观测增加 planning->bridge 1 次；端口只暴露采样请求，不暴露布局选择。
 # 仍保持原有层依赖方向，不增加反向白名单。
 
 apiimpl -> api                                13
@@ -138,7 +138,7 @@ planning -> config                             74
 planning -> core                               94
 planning -> generation                         30
 planning -> map                                5
-planning -> metric                             4
+planning -> metric                             3
 planning -> network                            5
 planning -> pathfinding                        53
 planning -> pathlogic                          84

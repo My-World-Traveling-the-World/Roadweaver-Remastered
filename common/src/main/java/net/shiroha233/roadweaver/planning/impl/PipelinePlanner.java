@@ -18,7 +18,6 @@ import net.shiroha233.roadweaver.bridge.TiledTerrainField;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
-import net.shiroha233.roadweaver.metric.GridLayout;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.TerrainField;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
@@ -80,7 +79,7 @@ public final class PipelinePlanner implements NetworkPlanner {
     /** 包围盒在结构点外侧额外留的余量（格）—— 给绕行留空间。 */
     private static final int BOUNDS_PADDING = 64;
 
-    private final java.util.function.Function<GridLayout, SampledTerrainField.SurfaceGrid> surfaceSampler;
+    private final java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory;
     private final int step;
 
     public PipelinePlanner(ServerLevel level) {
@@ -89,14 +88,14 @@ public final class PipelinePlanner implements NetworkPlanner {
 
     public PipelinePlanner(ServerLevel level, int step) {
         // 世界读入留在这一处，离线测试注入同一规划入口，不复制拓扑算法。
-        this(step, level == null ? null : layout -> {
+        this(step, level == null ? null : () -> {
             var sampler = AccurateHeightSampler.create(level);
-            return SampledTerrainField.planningSurface(layout, sampler::sampleGrid);
+            return sampler::sampleGrid;
         });
     }
 
-    PipelinePlanner(int step, java.util.function.Function<GridLayout, SampledTerrainField.SurfaceGrid> surfaceSampler) {
-        this.surfaceSampler = surfaceSampler;
+    PipelinePlanner(int step, java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory) {
+        this.samplerFactory = samplerFactory;
         this.step = Math.max(1, step);
     }
 
@@ -105,7 +104,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         if (points == null || points.size() < 2) {
             return List.of();
         }
-        if (surfaceSampler == null) {
+        if (samplerFactory == null) {
             // 没有世界就建不了地形场。退回直线距离的 MST —— 宁可退化也不抛异常：
             // 规划器挂掉会让整局一条路都不生成，那比「用旧算法」严重得多。
             LOGGER.warn("RoadWeaver pipeline planner: level 为 null，退回直线距离 MST（{} 个点）",
@@ -165,7 +164,7 @@ public final class PipelinePlanner implements NetworkPlanner {
             minX = layout.minX(); minZ = layout.minZ();
             width = layout.blockWidth(); depth = layout.blockDepth();
             // 小域仍一次采完；大域复用按需三通道瓦片，真实采样继续走原预算和生命周期。
-            var surface = surfaceSampler.apply(layout);
+            var surface = SampledTerrainField.planningSurface(layout, samplerFactory.get());
             terrain = surface.terrain();
             shadowSurface = BUILDABILITY_SHADOW ? surface : null;
         } catch (RuntimeException samplingFailure) {
