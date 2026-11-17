@@ -8,7 +8,7 @@ gradle.projectsEvaluated {
             'scripts/benchmarks/ReadinessWriteProbe.java', 'scripts/benchmarks/ConstructionLedgerProbe.java',
             'scripts/benchmarks/RoadValidationCacheProbe.java', 'scripts/benchmarks/BridgePairProbe.java',
             'scripts/benchmarks/RoadContentProbe.java', 'scripts/benchmarks/ShardStampProbe.java',
-            'scripts/benchmarks/FrozenRoadShardVerifier.java', 'scripts/benchmarks/ShardVerificationProbe.java', 'scripts/benchmarks/ConstructionInputsProbe.java')
+            'scripts/benchmarks/FrozenRoadShardVerifier.java', 'scripts/benchmarks/ShardVerificationProbe.java', 'scripts/benchmarks/ConstructionInputsProbe.java', 'scripts/benchmarks/BridgeStageProbe.java', 'scripts/benchmarks/CompileStageProbe.java', 'scripts/benchmarks/HeightStageProbe.java')
         classpath = p.sourceSets.test.runtimeClasspath
         destinationDirectory.set(out)
         options.encoding = 'UTF-8'
@@ -16,7 +16,7 @@ gradle.projectsEvaluated {
     [readinessActiveProbe: 'planning.ReadinessActiveProbe', readinessWriteProbe: 'planning.ReadinessWriteProbe',
         constructionLedgerProbe: 'persistence.ConstructionLedgerProbe', roadValidationCacheProbe: 'pathlogic.validation.RoadValidationCacheProbe',
         bridgePairProbe: 'pathlogic.bridge.BridgePairProbe', roadContentProbe: 'pathlogic.metrics.RoadContentProbe',
-        shardStampProbe: 'persistence.chunk.ShardStampProbe', shardVerificationProbe: 'persistence.chunk.ShardVerificationProbe', constructionInputsProbe: 'pathlogic.construction.ConstructionInputsProbe'].each { name, cls ->
+        shardStampProbe: 'persistence.chunk.ShardStampProbe', shardVerificationProbe: 'persistence.chunk.ShardVerificationProbe', constructionInputsProbe: 'pathlogic.construction.ConstructionInputsProbe', bridgeStageProbe: 'pathlogic.bridge.BridgeStageProbe', compileStageProbe: 'worldgen.road.CompileStageProbe', heightStageProbe: 'pathlogic.pathcalc.HeightStageProbe'].each { name, cls ->
         p.tasks.register(name, JavaExec) {
             dependsOn compile
             classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
