@@ -147,3 +147,30 @@ CoarsePathTasksTest的创建顺序假设已复现：等待第二个创建线程�
 密集夹具实际289请求/1050625列，两版均无重复采样，225次驱逐，最终保留64块、三图2128908 B（含尾块）。同块梯度只查一次缓存减轻首版开销，仍比整场数组慢。以上7次p95接近最大样本，线程分配不是存活堆峰值；只替代世界读的固定平地不含真实NoiseChunk、存储IO、认领工作区与其他模组争用。日志round39-terrain-three-way.log；较早两方探针保留为round39-terrain-comparison-final.log、round39-terrain-fast-gradient.log，不能跨JVM直接据此推断快路径收益。
 
 源码恢复后完整回归日志round39-final-after-mutations.log。4096真实存档安全性、世界高度与最终道路产物、FPS/MSPT、开局/游玩期等待、驱逐后磁盘和NoiseChunk成本、真实停止/重开以及河流→长城→道路最终Mixin次序仍未验证；本轮没有打包或部署。
+
+
+## 第40轮READY状态转换与增量统计
+
+开工1442全绿；先以全量扫描集中状态转换，1453全绿并单独提交89666f6，再加入即时计数与实际门面守卫，最终1459全绿、零跳过/中止/失败、Fabric编译通过。新增ReadinessRegionTableTest 12项、ReadinessIndexStateTest 5项，均逐FQCN登记。独立模型12000次变更逐步对拍三个世界；额外覆盖六种初态、提前/重复派发、插入重复键、暂停重排、并发转换总数守恒、clear取消和同坐标旧回调拒绝。
+
+实际旧缺陷：在89666f6同一tick先查询空积压，再加入512个QUEUED，backlogSaturated仍false。修复前指定JUnit真实失败1项，日志round40-cache-reproduction.log。修复后立即随转换更新四计数；不把QUEUE重复键或ACTIVE重叠重复收费。只保证既有服务端线程逐次调用的即时判据；“检查→adoption→插入”尚非跨线程原子配额。
+
+18组生产变异均出现指定JUnit失败，包括不计新增/重复计数、转换漏扣漏增、派发、清理、旧身份、世界混算、pending漏PLANNING、真实供给断开、饱和关闭/边界、暂停未重排、clear未取消，以及完整恢复全量扫描/原tick缓存。每项finally精确checkout并比较原字节；最终再跑完整套件，日志round40-final-after-mutations.log。清单与失败数见HANDOFF第40轮，脚本/JSON/日志在.analysis_tmp/round40_mutations.py、round40-mutations.json、round40-mutation-run.log。
+
+复现纯状态表探针（JDK21，无MC桩或外部依赖）：
+
+```powershell
+./scripts/benchmarks/Measure-Readiness.ps1 -JavaHome $env:JAVA_HOME -Baseline 89666f6
+```
+
+脚本仅重命名冻结的89666f6状态表类型，与实际当前类在同JVM、256MiB堆中比较。基线是“集中转换后仍全量扫描”的版本，并非旧仓库完整游戏。两个世界、先精确核验全部快照字段，5轮热身、11轮交替先后测量；每次500次快照读取，另测1500次状态转换，转换循环回到原状态。结果均为整个批次，不是单次调用。
+
+| 总区域项 | 500次读取p50 ms（全量/增量） | 读取p95 ms | 1500次转换p50 ms | 转换p95 ms |
+|---|---|---|---|---|
+| 512 | 0.8890 / 0.0504 | 1.1208 / 0.0826 | 0.1009 / 0.1217 | 0.2635 / 0.3007 |
+| 8192 | 15.8812 / 0.0473 | 18.1612 / 0.1021 | 0.0444 / 0.0590 | 0.0446 / 0.0593 |
+| 65536 | 143.3067 / 0.0452 | 144.9236 / 0.0504 | 0.0435 / 0.0590 | 0.0464 / 0.0649 |
+
+读取批次两者当前线程分配p50均16000 B，转换批次均0 B，不含探针Measurement对象；没有声称快照零分配。计数更新有小幅CPU成本，频繁读取不再受历史区域数线性影响。11个批次的p95近于最大样本，不能等同现场帧时间尾延迟。日志round40-readiness-benchmark.log。源码工作量守卫在两万历史项上执行三万次快照，精确验证世界键提取回调被调用0次；恢复全表扫描会使该守卫红。
+
+phase=scan诊断保留原日志标签并增加source=incremental，scanUs现在量快照读取；READY全表序列化/原子写仍用原write诊断。此次没有文件读写故障/重开验证、真实ServerLevel规划链或现场Chunky启动数据，不将即时统计改造称为持久化验收。下一步优先守住persistReady写失败只日志、内存仍报告READY的原有分支；尚未注入故障，不能断言真实道路分片损坏。

@@ -40,7 +40,7 @@
 
 ## 最新进度
 
-第39轮已把大范围网络规划接入有界三通道高度瓦片，源码/测试`a1e21de`，回归1442项；28项新增、26组生产变异均红。64MiB假地形验证2.68亿格近目标、全域走廊和封闭分量；同JVM记录密集成本并优化同块梯度。真实4096存档、NoiseChunk和三模组最终启动仍待验；下一项可独立开工的是READY状态转换封装与全量统计对拍。详见末尾第39轮与[路线](ROADMAP.md)。
+第40轮已集中READY运行态并改为每世界即时增量统计，源码/测试`cc0c569`、探针`d69b5f3`，回归1459项；17项新增、18组生产变异均红。修复同tick连续入队仍命中过期“未饱和”缓存，调度/进度/准入不再扫描全部历史区域。真实4096存档与三模组现场仍待验；下一项先补READY文件写入失败、重试和重开的行为守卫，再决定持久化发布边界，当前没有异步写盘。详见末尾第40轮与[路线](ROADMAP.md)。
 
 ## 已完成轮次记录
 
@@ -1436,3 +1436,72 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 瓦片梯度若在接缝按本块边界裁切会改变坡度，必须始终按全域邻点；单点零梯度快路径不能为了取中心块额外采样。首轮FMM源格不准备自身代价，反向把它当目标时需补读原源块：全域夹具恰好多1块，不能错误要求零新增。初测密集退化后改同块梯度，并在同JVM冻结e109b9d首版，避免跨进程噪声被当优化收益。请求锚点因快路径复用出现两处时让脚本明确失败、恢复后重定位，禁止静默替换或把脚本失败算守卫红。
+
+
+---
+
+## 第40轮 ｜ 2026-11-17 11:03 → 11:25 ｜ READY即时计数与同tick准入 ｜ 源码 `cc0c569`、探针 `d69b5f3` ｜ `PASS tests=1459 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 性质 |
+|---|---|---|
+| planning/ReadinessRegionTable.java，91物理/73有效行 | 集中状态与派发标志的写入，条目身份防迟到回调；四项计数与转换同锁更新，读取不扫区域 | 先行为等价搬迁89666f6，再增量实现cc0c569 |
+| planning/RoadPlanningReadinessIndex.java，756/579行（原865/652） | 重试、暂停、开始、失败和完成接同一运行态表；进度/供给共用快照，准入立即看唯一QUEUED+PLANNING | 同tick饱和与重复队列计数修复属行为变更；反射签名、状态名称和文件格式未变 |
+| 两个新测试类与RoadJUnitRegressionSuite | 表模型12项、实际门面状态5项，逐FQCN登记；真实世界读写仍未伪造成离线世界 | 测试基建 |
+| scripts/benchmarks/Measure-Readiness.ps1、ReadinessStateProbe.java | 冻结89666f6全量表，同JVM精确对拍并分别测500次读取、1500次转换 | 测试基建d69b5f3 |
+
+692个生产Java文件，超过1000有效行0、超过800行2；独立词法计数与架构守卫均通过。新增逻辑写中文原因注释，未新增层依赖方向、线程、配置或schema；道路几何、crossing、长桥正弦、村庄包围盒不变。只写道路仓库，本轮未读写或重跑相邻模组。
+
+### 二、我验证了什么（附负控）
+
+开工status空、pull --rebase已是最新，HEAD24bb4c0；基线1442全绿。先以全量统计集中转换，1453全绿并单独提交/推送89666f6。随后新用例在该版本直接调用真实backlogSaturated：同一tick先查询空队列、再加入512项，实得false，TARGET_RESULT passed=0 failed=1 skipped=0 aborted=0。修复后1459全绿、Fabric通过。源码与探针三个小提交均已推送。
+
+独立模型按固定种子跑12000次插入、重复键、转换、派发、清理，每步精确核验三个世界四项统计与条目状态；六种初态和提前/重复派发均验。并发转换期间总数守恒、生命周期取消回调在锁外读表、清理后同坐标替代条目不受旧回调影响均有直接断言。真实门面另外验同tick增长/释放、分世界供给、重复队列/ACTIVE重叠、暂停重排和clearRuntime取消；尚未执行真实ServerLevel下的规划/持久化完成链。
+
+18组生产变异全部产生指定JUnit失败，不把编译或命令失败计为红；包括整段恢复原tick缓存和恢复全量扫描。脚本全组预检替换锚点，每项finally精确checkout一个文件并比较原字节，末尾status为空；源码恢复后再次完整回归。记录：.analysis_tmp/round40_mutations.py、round40-mutations.json、round40-mutation-run.log、round40-mut-*.log；原缺陷复现round40-cache-reproduction.log，最终回归round40-final-after-mutations.log。
+
+| # | 故意破坏 | 指定守卫 | JUnit失败数 |
+|---|---|---|---|
+| 1 | `new-entry-not-counted` | `planning.ReadinessRegionTableTest#everyStateAndDispatchOrderMatchesIndependentFullScan(net.shiroha233.roadweaver.planning.ReadinessRegionTable$State)` | 4，红 |
+| 2 | `duplicate-insertion-counted-again` | `planning.ReadinessRegionTableTest#retriesPauseResumeAndFailureUseTheSameStateAccounting` | 1，红 |
+| 3 | `old-state-not-removed` | `planning.ReadinessRegionTableTest#retriesPauseResumeAndFailureUseTheSameStateAccounting` | 1，红 |
+| 4 | `next-state-not-added` | `planning.ReadinessRegionTableTest#retriesPauseResumeAndFailureUseTheSameStateAccounting` | 1，红 |
+| 5 | `dispatch-does-not-remove-ready-ahead` | `planning.ReadinessRegionTableTest#retriesPauseResumeAndFailureUseTheSameStateAccounting` | 1，红 |
+| 6 | `dispatch-flag-lost` | `planning.ReadinessRegionTableTest#everyStateAndDispatchOrderMatchesIndependentFullScan(net.shiroha233.roadweaver.planning.ReadinessRegionTable$State)` | 6，红 |
+| 7 | `clear-keeps-old-counters` | `planning.ReadinessRegionTableTest#clearedEntriesCannotChangeReplacementAndSnapshotsStayImmutable` | 1，红 |
+| 8 | `stale-completion-accepted` | `planning.ReadinessRegionTableTest#clearedEntriesCannotChangeReplacementAndSnapshotsStayImmutable` | 1，红 |
+| 9 | `world-counters-mixed` | `planning.ReadinessRegionTableTest#retriesPauseResumeAndFailureUseTheSameStateAccounting` | 1，红 |
+| 10 | `planning-not-in-pending` | `planning.ReadinessIndexStateTest#queueDuplicatesAndActiveOverlapCannotConsumeExtraAdmissionSlots` | 1，红 |
+| 11 | `actual-supply-disconnected` | `planning.ReadinessIndexStateTest#actualSupplySeparatesWorldsDispatchAndUniqueBacklog` | 1，红 |
+| 12 | `saturation-disabled` | `planning.ReadinessIndexStateTest#sameTickAdmissionSeesGrowthAndCompletionWithoutWaitingForAnotherTick` | 1，红 |
+| 13 | `saturation-off-by-one` | `planning.ReadinessIndexStateTest#sameTickAdmissionSeesGrowthAndCompletionWithoutWaitingForAnotherTick` | 1，红 |
+| 14 | `pause-leaves-planning-state` | `planning.ReadinessIndexStateTest#actualPauseRequeuesPlanningAndKeepsOtherStatesAndDispatch` | 1，红 |
+| 15 | `runtime-clear-keeps-table` | `planning.ReadinessIndexStateTest#actualClearCancelsWorkAndLateCompletionCannotChangeNewSession` | 1，红 |
+| 16 | `runtime-clear-does-not-cancel` | `planning.ReadinessIndexStateTest#actualClearCancelsWorkAndLateCompletionCannotChangeNewSession` | 1，红 |
+| 17 | `full-scan-restored` | `planning.ReadinessRegionTableTest#repeatedSnapshotsDoNotRevisitAnyHistoricalEntry` | 1，红 |
+| 18 | `original-tick-cache-restored` | `planning.ReadinessIndexStateTest#sameTickAdmissionSeesGrowthAndCompletionWithoutWaitingForAnotherTick` | 1，红 |
+
+同JVM、固定256MiB、两个世界、5次热身/11次交替顺序测量：65536项的500次快照读取p50为全量143.3067 ms、增量0.0452 ms，p95为144.9236/0.0504 ms；同规模1500次转换p50为0.0435/0.0590 ms。读取批次两者均分配16000 B，转换批次均0 B（不含探针结果对象）；这是以少量转换成本换掉历史区域扫描，不宣称零分配或游戏FPS改善。512/8192规模和完整命令见VALIDATION第40轮，日志round40-readiness-benchmark.log。
+
+### 三、我没能验证什么
+
+- **需要真机的**：实际Chunky逐tick请求、服务端ServerLevel的规划与Streams完成链、暂停/恢复的完整代次交错、FPS/MSPT、首次生成和重开尾延迟；离线测试只直接驱动真实门面的运行态部分。
+- **需要存档的**：READY及施工台账排序/原子替换的真实耗时，4096规模持有者与磁盘压力；纯状态表探针不含IO、世界采样、候选图或其他模组。
+- **我怀疑但没有证据的**：真实现场在这三条读取路径中消耗多少毫秒、每世界短锁在非标准并发调用下是否形成争用，未据猜测调整lane/队列/缓存容量。
+- **我确认代码分支存在但尚未故障注入的**：RoadPlanningReadinessIndex:534–550先写内存READY集合/状态；persistReady:652–684捕获IOException只记日志、不通知调用方或设置重试。READY索引写失败后内存仍能报告READY，重新打开时缺少未落盘的就绪记忆；这不证明道路分片本身未保存，也未证明已损坏真实存档。本轮保持同步持久化流程，优先在下一轮为此加真实文件故障、重试及重开守卫。
+- 512是服务端线程逐次准入的即时判据；本轮没有把“检查饱和→adoption→插入”改为跨线程原子准入，不声称任意并发反射调用也有严格总额。ACTIVE查询、暂停/清理枚举和READY文件全表序列化仍存在，不以增量统计冒充全部扫描已清零。
+
+### 四、遗留半截的东西
+
+没有未提交实现或临时破坏；未制作发布包、未部署。阶段1、阶段2、探针已分别小步提交并推送；最终回归后仅更新本轮五份文档。停下前核对status为空、与origin/main为0/0。READY写盘故障契约仍是明确后续项，不能把本轮状态转换守卫称为持久化已验收。
+
+### 五、下一轮我会先做什么
+
+1. 在不改schema2、文件名和指纹的前提下，抽最小同步READY文件读写边界；真实临时文件复现写失败→内存发布/重复调用→重开，再确定如何把失败送回已有重试和最终失败路径，防止只改返回值却让adoption仍报READY。
+2. 对拍成功文件内容、已保存区域复用、并发发布顺序、失败后重试与清理迟到回调。先保持同步；异步/批量合并写入必须另有实际耗时、版本顺序及停服封账证据。
+3. 4096真实工作集、三模组最终Mixin次序与几何/桥隧现场继续按原路线；不以纯内核计时切默认、裁候选或改变crossing。
+
+### 六、我踩到但已解决的坑
+
+原注释声称同tick饱和不会变，与同tick逐个入队矛盾；必须用真实连续插入复现，而不能只测tick键会失效。计数必须同时覆盖插入、重复键、转换、提前派发、暂停重排与clear；只测最终值漏掉中途重复扣减。取消依赖Future的异常也不能证明回调内读取成功，本轮直接等待回调内部的查询结果。基准分别报告读与写，避免只展示读取收益、隐藏转换的额外成本。
