@@ -425,7 +425,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         long roadFingerprint = RoadShardStorage.computeFingerprint(data);
         RefusalAccumulator refusalSink = refusals.computeIfAbsent(roadFingerprint,
                 ignored -> new RefusalAccumulator(data, roadFingerprint));
-        boolean[] constructionRefused = new boolean[data.roadSegmentList() == null ? 0 : data.roadSegmentList().size()];
+
         boolean bridgeEnabled = cfg.bridgeEnabled();
         int roadType = data.roadType();
         if (roadType != 0 && roadType != 1) {
@@ -443,7 +443,9 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                     currentChunk, roadFingerprint, segments == null ? 0 : segments.size());
             return false;
         }
-        boolean[] completed = {true};
+        // 可变状态按片段持有；纯跨度和里程仍单独只读复用，不把世界塞进状态对象。
+        var state = new net.shiroha233.roadweaver.pathlogic.construction.ConstructionSliceState(
+                segments.size(), slice.segmentCount(), slice::segmentIndexAt);
 
         // 中心线与规划期桥范围对同一条路恒定不变（compute 是纯函数、RoadData 不可变），
         // 按「内容指纹 + 配置」缓存一次，避免每个区块都 O(站数) 重扫全条路。
@@ -493,20 +495,20 @@ public class PathFeature extends Feature<PathFeatureConfig> {
         int deckY = server.getSeaLevel() + cfg.bridgeDeckClearance();
         BridgeSegmentPlanner.Context bridgeCtx = BridgeSegmentPlanner.newContext();
 
-        for (int localIndex = 0; localIndex < slice.segmentCount(); localIndex++) {
-            int i = slice.segmentIndexAt(localIndex);
+        // 先接同序同步执行器，完整站之间可恢复；跨tick启用必须另验装饰、台账及巨树租约。
+        state.cursor().runAll(i -> {
             // Shared stations are navigation data for this later road only.
             // The owner road is solely responsible for pavement, clearing,
             // bridge decks/piers, tunnels, and decorations at these stations.
-            if (spanMasks.networkReuseAt(i) || spanMasks.protectedGapAt(i)) continue;
+            if (spanMasks.networkReuseAt(i) || spanMasks.protectedGapAt(i)) return;
             BlockPos middle = middlePositions.get(i);
             int segmentIndex = Math.max(0, Math.min(segments.size() - 2, i));
             boolean centerOwned = contains(currentChunk, middle);
             boolean templateBridgeCandidate = bridgeEnabled && isBridge[i];
             if (!centerOwned && !templateBridgeCandidate)
-                continue;
+                return;
             if (!processedSegments.add(new ProcessedSegment(roadFingerprint, i)))
-                continue;
+                return;
 
             BlockPos prev = middlePositions.get(Math.max(0, i - 2));
             BlockPos next = middlePositions.get(Math.min(middlePositions.size() - 1, i + 2));
@@ -527,23 +529,23 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             RoadSegmentPlacement seg = segments.get(i);
             if (skipSegments != null && i >= 0 && i < skipSegments.length && skipSegments[i]) {
                 if (!centerOwned) {
-                    continue;
+                    return;
                 }
                 if (useBuoysWhenSkipped && buoyMarkersForSkipped != null && i < buoyMarkersForSkipped.length
                         && buoyMarkersForSkipped[i]) {
                     BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
                 }
-                continue;
+                return;
             }
 
             if (useBuoysInstead && isBridge != null && i >= 0 && i < isBridge.length && isBridge[i]) {
                 if (!centerOwned) {
-                    continue;
+                    return;
                 }
                 if (buoyMarkersForBridge != null && i < buoyMarkersForBridge.length && buoyMarkersForBridge[i]) {
                     BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
                 }
-                continue;
+                return;
             }
 
             if (bridgeEnabled && isBridge[i]) {
@@ -554,12 +556,12 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                                 bridgeSegment.isLanding(i));
                 if (!placedTemplate) {
                     if (!centerOwned) {
-                        continue;
+                        return;
                     }
                     boolean placedFallback = BridgeSegmentPlanner.processSegment(world, data, seg, middle, prev, next, roadWidth, actualDeckY,
                             deckY, segmentIndex, random, cfg, bridgeRanges, baseYArr, i, bridgeCtx, line);
                     if (!placedFallback) {
-                        completed[0] = false;
+                        state.fail();
                         LOGGER.warn("【桥梁站点施工失败】 " + "RoadWeaver bridge segment construction failed road={} segment={} pos={}",
                                 data.hasOwnerPair() ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
                                 i, middle);
@@ -608,12 +610,12 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             if (!paved) {
                                 // T-24: 记录拒绝,缺口轮次会把连续失败站落为
                                 // PROTECTED_GAP 并停止该 chunk 的重试循环。
-                                if (refusalSink.stations().containsKey(i)) constructionRefused[i] = true;
-                                completed[0] = false;
+                                if (refusalSink.stations().containsKey(i)) state.refuse(i);
+                                state.fail();
                             }
                             return;
                         }
-                        completed[0] = false;
+                        state.fail();
                         return;
                     }
                     SegmentPaver.SegmentGrade grade = SegmentPaver.planGrade(
@@ -623,8 +625,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             roadType, materials, slabMaterials, random, cfg, refusalSink.stations(),
                             tunnel.portal());
                     if (!paved) {
-                        if (refusalSink.stations().containsKey(i)) constructionRefused[i] = true;
-                        completed[0] = false;
+                        if (refusalSink.stations().containsKey(i)) state.refuse(i);
+                        state.fail();
                         // Do not apply a tunnel shell after its road deck or
                         // clearance preflight failed. That created orphaned
                         // tunnel mouths/platforms and disconnected routes.
@@ -654,7 +656,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             // 村庄/地形里(用户观察点 -523,144,-263 的密集路灯即来源于此)。
             if (centerOwned && !spanMasks.directCrossingAt(i) && !isBridge[i]
                     && !spanMasks.tunnelAt(i)
-                    && !(constructionRefused != null && i < constructionRefused.length && constructionRefused[i])) {
+                    && !state.refused(i)) {
                 // 里程按全路站序共享；仍只给本站读取当前配置，以保持装饰和拒绝分支的顺序。
                 int lampInterval = Math.max(1, cfg.lampInterval());
                 DecorationPlanner.addDecoration(
@@ -671,13 +673,13 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                         lampInterval,
                         (roadType == 0 ? DecorationPlanner.Mode.ARTIFICIAL : DecorationPlanner.Mode.NATURAL));
             }
-        }
+        });
         LOGGER.info("【道路区块片段施工结果】 " + "RoadWeaver road slice result road={} chunk={} segments={} bridge={} tunnel={} "
                         + "reuse={} gap={} completed={}",
                 roadFingerprint, currentChunk, slice.segmentCount(),
                 countMask(isBridge), spanMasks.tunnelCount(),
-                spanMasks.networkReuseCount(), spanMasks.protectedGapCount(), completed[0]);
-        if (!completed[0]) {
+                spanMasks.networkReuseCount(), spanMasks.protectedGapCount(), state.completed());
+        if (!state.completed()) {
             int tunnelStations = 0;
             int tunnelJunctionStations = 0;
             for (int index = 0; index < isBridge.length; index++) {
@@ -688,7 +690,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             + "tunnelJunctionStations={} segments={}",
                     roadFingerprint, currentChunk, tunnelStations, tunnelJunctionStations, segments.size());
         }
-        return completed[0];
+        return state.completed();
     }
 
     private static boolean contains(ChunkPos chunkPos, BlockPos pos) {

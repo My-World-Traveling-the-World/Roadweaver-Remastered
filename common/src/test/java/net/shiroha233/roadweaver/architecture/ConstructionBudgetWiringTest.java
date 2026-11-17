@@ -27,8 +27,8 @@ class ConstructionBudgetWiringTest {
         assertNotNull(bodies);assertEquals(1,bodies.size());
         String body = bodies.getFirst();
         assertTrue(body.contains("BridgePairIndex.sparseBatch("),"离线索引不能脱离生产入口");
-        assertTrue(body.contains("!logPairs") && body.contains("index.after(i, radius)"),"必须保留完整DEBUG并实际消费有序候选");
-        assertTrue(body.contains("nearby.get(pair)"),"不能计算候选后仍忽略索引输出");
+        assertTrue(body.contains("!logPairs") && body.contains("index.afterInts(i, radius)"),"必须保留完整DEBUG并实际消费有序候选");
+        assertTrue(body.contains("nearby.getInt(pair)"),"不能计算候选后仍忽略索引输出");
     }
     @Test void roadConstructionUsesReadOnlySpanMasksAndKeepsMutableHeightAndBridgeCopies() throws Exception {
         var bodies=methods("pathlogic/PathFeature.java").get("processRoadSlice");assertNotNull(bodies);assertEquals(1,bodies.size());
@@ -40,6 +40,15 @@ class ConstructionBudgetWiringTest {
         assertTrue(body.contains("targetY.stream().mapToInt(Integer::intValue).toArray()"),"隧道拒绝会改高度，不能跨区块共享数组");
     }
 
+    @Test void liveConstructionUsesSynchronousCursorAndKeepsFinalizationOutsideIt() throws Exception {
+        String slice=methods("pathlogic/PathFeature.java").get("processRoadSlice").getFirst();
+        assertTrue(slice.contains("new net.shiroha233.roadweaver.pathlogic.construction.ConstructionSliceState"));
+        assertTrue(slice.contains("state.cursor().runAll("));assertTrue(slice.contains("return state.completed()"));
+        assertFalse(slice.contains("markComplete("));assertFalse(slice.contains("releaseChunk("));
+        var all=methods("pathlogic/PathFeature.java").get("placeChunk");
+        assertTrue(all.stream().anyMatch(body->body.contains("DecorationExecutor.tryPlaceDecorations(decorations)")
+                && body.contains("RoadConstructionLedger.markComplete(") && body.contains("finally") && body.contains("HugeTreeReservation.releaseChunk(")));
+    }
     private static Map<String,List<String>> methods(String relative) throws Exception {
         Path root=Path.of("src/main/java/net/shiroha233/roadweaver");
         assertTrue(Files.isRegularFile(root.resolve(relative)),"生产接线源文件必须存在");
