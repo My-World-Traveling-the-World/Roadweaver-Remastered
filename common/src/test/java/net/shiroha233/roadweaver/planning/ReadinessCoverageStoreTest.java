@@ -140,5 +140,45 @@ class ReadinessCoverageStoreTest {
         assertEquals(fixture, Files.readString(file));
     }
 
+    @Test
+    void stageTimingReportsRealBytesAndDoesNotReportDuplicateWrites(@TempDir Path root) throws Exception {
+        Path file = root.resolve("timed-ready.txt");
+        var events = new java.util.ArrayList<ReadinessCoverageStore.WriteTiming>();
+        // 用非ASCII指纹区分UTF-8字节数与字符数，避免诊断指标本身误报。
+        var store = ReadinessCoverageStore.open(file, "世界指纹", FileStorageIO::writeStringAtomic, events::add);
+        assertTrue(store.markReady(pack(-7, 9)));
+        assertFalse(store.markReady(pack(-7, 9)));
+        assertEquals(1, events.size(), "重复READY不能产生虚假写盘样本");
+        var event = events.getFirst();
+        assertTrue(event.written());
+        assertEquals(1, event.regions());
+        assertEquals(Files.size(file), event.bytes());
+        assertTrue(event.bytes() > Files.readString(file).length(), "夹具确实含多字节字符");
+        assertEquals(event.gatherNanos() + event.sortNanos() + event.serializeNanos(), event.buildNanos());
+        assertTrue(ReadinessCoverageStore.open(file, "世界指纹").contains(pack(-7, 9)));
+    }
+
+    @Test
+    void failedWriteTimingRetainsTheExceptionAndNeverPublishesReady(@TempDir Path root) throws Exception {
+        Path file = root.resolve("retry-ready.txt");
+        var events = new java.util.ArrayList<ReadinessCoverageStore.WriteTiming>();
+        var failure = new IOException("模拟替换故障");
+        var attempts = new AtomicInteger();
+        var store = ReadinessCoverageStore.open(file, FINGERPRINT, (p, contents) -> {
+            if (attempts.getAndIncrement() == 0) throw failure;
+            FileStorageIO.writeStringAtomic(p, contents);
+        }, events::add);
+        assertSame(failure, assertThrows(IOException.class, () -> store.markReady(pack(1, -2))));
+        assertFalse(store.contains(pack(1, -2)));
+        assertFalse(Files.exists(file));
+        assertTrue(store.markReady(pack(1, -2)));
+        assertEquals(java.util.List.of(false, true), events.stream()
+                .map(ReadinessCoverageStore.WriteTiming::written).toList());
+        assertEquals(java.util.List.of(1, 1), events.stream().map(ReadinessCoverageStore.WriteTiming::regions).toList());
+        assertEquals(events.getFirst().bytes(), events.getLast().bytes());
+        assertEquals(Files.size(file), events.getLast().bytes());
+        assertTrue(ReadinessCoverageStore.open(file, FINGERPRINT).contains(pack(1, -2)));
+    }
+
     private static long pack(int x, int z) { return ((long) x << 32) ^ (z & 0xffffffffL); }
 }
