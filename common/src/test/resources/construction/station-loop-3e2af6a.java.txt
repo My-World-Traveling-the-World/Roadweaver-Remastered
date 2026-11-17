@@ -1,0 +1,182 @@
+// 冻结原站循环，仅由编译器解析，不需要世界夹具或编译执行。
+class FrozenStationLoop { void run() {
+        for (int localIndex = 0; localIndex < slice.segmentCount(); localIndex++) {
+            int i = slice.segmentIndexAt(localIndex);
+            // Shared stations are navigation data for this later road only.
+            // The owner road is solely responsible for pavement, clearing,
+            // bridge decks/piers, tunnels, and decorations at these stations.
+            if (spanMasks.networkReuseAt(i) || spanMasks.protectedGapAt(i)) continue;
+            BlockPos middle = middlePositions.get(i);
+            int segmentIndex = Math.max(0, Math.min(segments.size() - 2, i));
+            boolean centerOwned = contains(currentChunk, middle);
+            boolean templateBridgeCandidate = bridgeEnabled && isBridge[i];
+            if (!centerOwned && !templateBridgeCandidate)
+                continue;
+            if (!processedSegments.add(new ProcessedSegment(roadFingerprint, i)))
+                continue;
+
+            BlockPos prev = middlePositions.get(Math.max(0, i - 2));
+            BlockPos next = middlePositions.get(Math.min(middlePositions.size() - 1, i + 2));
+
+            BlockPos averaged = null;
+            int baseYForThis = baseYArr != null ? baseYArr[i] : middle.getY();
+            if (centerOwned) {
+                int sea = server.getSeaLevel();
+                int motion = world.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, middle.getX(), middle.getZ());
+                int surface = world.getHeight(Heightmap.Types.WORLD_SURFACE_WG, middle.getX(), middle.getZ());
+                int topYCenter = (motion > sea + 2) ? motion : surface;
+                averaged = new BlockPos(middle.getX(), topYCenter, middle.getZ());
+                if (baseYArr == null) {
+                    baseYForThis = topYCenter;
+                }
+            }
+
+            RoadSegmentPlacement seg = segments.get(i);
+            if (skipSegments != null && i >= 0 && i < skipSegments.length && skipSegments[i]) {
+                if (!centerOwned) {
+                    continue;
+                }
+                if (useBuoysWhenSkipped && buoyMarkersForSkipped != null && i < buoyMarkersForSkipped.length
+                        && buoyMarkersForSkipped[i]) {
+                    BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
+                }
+                continue;
+            }
+
+            if (useBuoysInstead && isBridge != null && i >= 0 && i < isBridge.length && isBridge[i]) {
+                if (!centerOwned) {
+                    continue;
+                }
+                if (buoyMarkersForBridge != null && i < buoyMarkersForBridge.length && buoyMarkersForBridge[i]) {
+                    BuoyBuilder.placeBuoy(world, middle, server.getSeaLevel(), random, cfg);
+                }
+                continue;
+            }
+
+            if (bridgeEnabled && isBridge[i]) {
+                var line = bridgeSegment.getLine(i);
+                int actualDeckY = baseYForThis;
+                boolean placedTemplate = line != null && BridgeSegmentPlannerNew.processSegment(
+                                world, currentChunk, data, line, seg, middle, prev, actualDeckY,
+                                bridgeSegment.isLanding(i));
+                if (!placedTemplate) {
+                    if (!centerOwned) {
+                        continue;
+                    }
+                    boolean placedFallback = BridgeSegmentPlanner.processSegment(world, data, seg, middle, prev, next, roadWidth, actualDeckY,
+                            deckY, segmentIndex, random, cfg, bridgeRanges, baseYArr, i, bridgeCtx, line);
+                    if (!placedFallback) {
+                        completed[0] = false;
+                        LOGGER.warn("【桥梁站点施工失败】 " + "RoadWeaver bridge segment construction failed road={} segment={} pos={}",
+                                data.hasOwnerPair() ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
+                                i, middle);
+                    }
+                }
+            } else {
+                RoadTunnelBuilder.processSegment(world, data, seg, i, middlePositions, baseYArr,
+                        slice.isTunnelJunction(i), tunnel -> {
+                    if (tunnel.blocked()) {
+                        if (tunnel.protectedGap()) {
+                            // One genuinely hard-protected volume (confirmed
+                            // structure block, bedrock, block entity, reserved
+                            // trunk, sanctuary) stops excavation at exactly
+                            // this station. Skip it as an explicit protected
+                            // gap: the span keeps building as a tunnel around
+                            // it, the chunk completes, and the backfill loop
+                            // never retries it.
+                            LOGGER.warn("【隧道站点按保护缺口跳过，跨度仍保持隧道类型】 " + "RoadWeaver tunnel station skipped as PROTECTED_GAP road={} segment={} pos={} action=skip_station span_stays_tunnel",
+                                    data != null && data.hasOwnerPair()
+                                            ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
+                                    i, middle);
+                            return;
+                        }
+                        // Task 4: a rejected tunnel must not leave the station
+                        // half-cleaned or unpaved. Seat the station back on the
+                        // terrain line and build it as an ordinary surface road
+                        // (surface-cut fallback); if even that fails the chunk
+                        // stays incomplete so the backfill pass retries, and
+                        // the ledger never records a half-built tunnel.
+                        BlockPos blockedCenter = seg.middlePos();
+                        if (blockedCenter != null) {
+                            int surfaceY = RoadConstructionSafety.terrainHeight(
+                                    world, blockedCenter.getX(), blockedCenter.getZ());
+                            int[] fallbackY = baseYArr != null ? baseYArr : new int[middlePositions.size()];
+                            fallbackY[i] = surfaceY;
+                            LOGGER.warn("【隧道施工被拒，本段按既有规则转为地表切坡】 " + "RoadWeaver tunnel rejected; falling back to surface-cut build road={} segment={} pos={} y={} reason=see_blocked_tunnel_section",
+                                    data != null && data.hasOwnerPair()
+                                            ? data.ownerA2dKey() + "->" + data.ownerB2dKey() : "unknown",
+                                    i, blockedCenter, surfaceY);
+                            SegmentPaver.SegmentGrade fallbackGrade = SegmentPaver.planGrade(
+                                    world, seg, i, middlePositions, fallbackY, false,
+                                    spanMasks.preserveGradeAt(i));
+                            boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions,
+                                    fallbackY, fallbackGrade, roadType, materials, slabMaterials, random, cfg,
+                                    refusalSink.stations());
+                            if (!paved) {
+                                // T-24: 记录拒绝,缺口轮次会把连续失败站落为
+                                // PROTECTED_GAP 并停止该 chunk 的重试循环。
+                                if (refusalSink.stations().containsKey(i)) constructionRefused[i] = true;
+                                completed[0] = false;
+                            }
+                            return;
+                        }
+                        completed[0] = false;
+                        return;
+                    }
+                    SegmentPaver.SegmentGrade grade = SegmentPaver.planGrade(
+                            world, seg, i, middlePositions, baseYArr, tunnel.active(),
+                            spanMasks.preserveGradeAt(i));
+                    boolean paved = SegmentPaver.paveSegment(world, data, seg, i, middlePositions, baseYArr, grade,
+                            roadType, materials, slabMaterials, random, cfg, refusalSink.stations(),
+                            tunnel.portal());
+                    if (!paved) {
+                        if (refusalSink.stations().containsKey(i)) constructionRefused[i] = true;
+                        completed[0] = false;
+                        // Do not apply a tunnel shell after its road deck or
+                        // clearance preflight failed. That created orphaned
+                        // tunnel mouths/platforms and disconnected routes.
+                        return;
+                    }
+                    RoadTunnelBuilder.apply(world, tunnel);
+                });
+
+                if (cfg.roadAppearance().roadSignsEnabled()) {
+                    SkippedBridgeBankSignPlanner.addIfSkippedBridgeBank(
+                            world,
+                            decorations,
+                            averaged,
+                            next,
+                            prev,
+                            roadWidth,
+                            skipSegments,
+                            i);
+                }
+            }
+
+            // Bridge segments use the dedicated guardrail-lantern system.  Do
+            // not also run the normal road decoration planner here: doing so
+            // places tall roadside lamps on the deck (or below a water span)
+            // and duplicates the bridge lighting.
+            // T-24: 施工拒绝站不放路灯 —— 失败站没有任何路面,路灯会插进
+            // 村庄/地形里(用户观察点 -523,144,-263 的密集路灯即来源于此)。
+            if (centerOwned && !spanMasks.directCrossingAt(i) && !isBridge[i]
+                    && !spanMasks.tunnelAt(i)
+                    && !(constructionRefused != null && i < constructionRefused.length && constructionRefused[i])) {
+                // 里程按全路站序共享；仍只给本站读取当前配置，以保持装饰和拒绝分支的顺序。
+                int lampInterval = Math.max(1, cfg.lampInterval());
+                DecorationPlanner.addDecoration(
+                        world,
+                        decorations,
+                        averaged,
+                        segmentIndex,
+                        next,
+                        prev,
+                        middlePositions,
+                        roadWidth,
+                        random,
+                        buildFrame.stationSpacing().nearestToMultiple(segmentIndex, lampInterval),
+                        lampInterval,
+                        (roadType == 0 ? DecorationPlanner.Mode.ARTIFICIAL : DecorationPlanner.Mode.NATURAL));
+            }
+        }
+} }
