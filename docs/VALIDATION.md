@@ -173,4 +173,19 @@ CoarsePathTasksTest的创建顺序假设已复现：等待第二个创建线程�
 
 读取批次两者当前线程分配p50均16000 B，转换批次均0 B，不含探针Measurement对象；没有声称快照零分配。计数更新有小幅CPU成本，频繁读取不再受历史区域数线性影响。11个批次的p95近于最大样本，不能等同现场帧时间尾延迟。日志round40-readiness-benchmark.log。源码工作量守卫在两万历史项上执行三万次快照，精确验证世界键提取回调被调用0次；恢复全表扫描会使该守卫红。
 
-phase=scan诊断保留原日志标签并增加source=incremental，scanUs现在量快照读取；READY全表序列化/原子写仍用原write诊断。此次没有文件读写故障/重开验证、真实ServerLevel规划链或现场Chunky启动数据，不将即时统计改造称为持久化验收。下一步优先守住persistReady写失败只日志、内存仍报告READY的原有分支；尚未注入故障，不能断言真实道路分片损坏。
+phase=scan诊断保留原日志标签并增加source=incremental，scanUs现在量快照读取；READY全表序列化/原子写仍用原write诊断。此次没有文件读写故障/重开验证、真实ServerLevel规划链或现场Chunky启动数据，不将即时统计改造称为持久化验收。该持久化分支已在第41轮真实复现并修复，见下节；本段1459项仅为第40轮历史结果。
+
+
+## 第41轮READY同步文件提交与故障重试
+
+开工1459全绿。行为等价迁出文件边界9a45ab6并加8项原格式用例，1467全绿后单独提交；在此版本用NOSHARE_DELETE真实阻止FileStorageIO替换，ReadinessCoverageStoreTest#failedReplacementKeepsMemoryAndFileUnchangedAndRetriesAfterUnlock因“未抛IOException”红1项，原缺陷日志round41-write-fault-reproduction.log。修复afb418e后先1468全绿，再补齐故障/运行态及AST接线，总计1494全绿、skipped=0 aborted=0 failed=0，Fabric编译通过。
+
+四类逐FQCN登记：ReadinessCoverageStoreTest 9项、ReadinessCoverageFaultTest 10项、ReadinessPersistenceCompletionTest 14项、ReadinessPersistenceWiringTest 2项，共35项新增。其中33项驱动真实文件或生产运行态；2项只用Javac AST核对服务端完成回调、adoption返回及world load的窄接线，不算真实ServerLevel运行。
+
+覆盖成功文件schema2/指纹/负坐标极值/UTF-8-LF/原字节顺序、重复提交不写；真实写锁/读锁先确认操作失败，再验旧字节及解锁同实例重试、重开合并。另验IO/运行时失败、损坏前缀/非普通路径、父路径失败、串行并发、重复提交、close和真实clearRuntime。阻塞断言要求实际工作线程BLOCKED且栈位于ReadinessCoverageStore的markReady/close；不用线程创建顺序代替真正进入。原三次重试、最终FAILED、具体cause、ACTIVE/QUEUE、代次/替代条目均直接断言。
+
+29组生产变异逐项真实JUnit红，清单及目标方法/失败数在HANDOFF第41轮；没有将编译/命令失败记为红。预检全部锚点，每项finally精确checkout并逐字比较。false && finishPlanning变异曾让新增AST检查仍绿，812dcb5要求条件直接使用提交结果后同一变异红1项；前后日志为round41-shortcircuit-green-before.log、round41-shortcircuit-red-after.log。恢复后全量回归日志round41-final-after-mutations.log；脚本与JSON见.analysis_tmp/round41_cases.py、round41_mutations.py、round41-mutations.json、round41-mutation-run.log及round41-mutation-resume.log。
+
+构建仍使用已安装Gradle8.8、JDK21和--daemon，不用gradlew；完整命令为:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off。独立词法统计693个生产Java文件，超过1000有效行0，超过800行2；文件边界143/123、门面721/537、运行态表93/74行（物理/有效）。
+
+当前故障夹具验收平台为Windows/JDK21的NOSHARE_READ/NOSHARE_DELETE，没有用skip掩盖不支持。关闭等待期间已开始的物理提交可完成，关闭返回后才保证旧IO排空；没有强撤销或断电fsync保证。真实世界规划、三模组最终Mixin次序、4096存档、跨实例并写、实际磁盘性能、FPS/MSPT和进档时间均未验；仍同步全表写盘，不能从本轮正确性守卫推导加载提速。

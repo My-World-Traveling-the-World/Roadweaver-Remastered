@@ -40,7 +40,7 @@
 
 ## 最新进度
 
-第40轮已集中READY运行态并改为每世界即时增量统计，源码/测试`cc0c569`、探针`d69b5f3`，回归1459项；17项新增、18组生产变异均红。修复同tick连续入队仍命中过期“未饱和”缓存，调度/进度/准入不再扫描全部历史区域。真实4096存档与三模组现场仍待验；下一项先补READY文件写入失败、重试和重开的行为守卫，再决定持久化发布边界，当前没有异步写盘。详见末尾第40轮与[路线](ROADMAP.md)。
+第41轮已修READY索引写失败仍发布就绪的问题：同步提交成功后才发布，IO/运行时写失败沿原三次规划预算重试并保留原因；读失败先重读，避免部分覆盖表覆写。关闭排空在途写入，迟到成功/失败不影响新条目。先行为等价迁出文件边界9a45ab6，再提交修复afb418e；新增35项（33项文件/运行态行为、2项AST接线），1494全绿、29组生产变异均红。schema2、文件名/指纹和同步节奏保持。真实4096、三模组现场与写盘耗时仍待验；下一项可继续拆后处理样条/宽度栅格化并对拍产物。详见末尾第41轮与[路线](ROADMAP.md)。
 
 ## 已完成轮次记录
 
@@ -1505,3 +1505,82 @@ Math.multiplyExact(int,int)仍会误拒“中间偏移超int、加负原点后�
 ### 六、我踩到但已解决的坑
 
 原注释声称同tick饱和不会变，与同tick逐个入队矛盾；必须用真实连续插入复现，而不能只测tick键会失效。计数必须同时覆盖插入、重复键、转换、提前派发、暂停重排与clear；只测最终值漏掉中途重复扣减。取消依赖Future的异常也不能证明回调内读取成功，本轮直接等待回调内部的查询结果。基准分别报告读与写，避免只展示读取收益、隐藏转换的额外成本。
+
+
+---
+
+## 第41轮 ｜ 2026-11-17 11:49 → 12:18 ｜ READY同步提交与故障重试 ｜ 源码 `afb418e`、接线守卫 `812dcb5` ｜ `PASS tests=1494 skipped=0 aborted=0 failed=0`
+
+### 一、改了什么
+
+| 文件 | 改动摘要 | 行为变更 / 行为等价 |
+|---|---|---|
+| planning/ReadinessCoverageStore.java，143/123行（物理/有效） | 迁出同步文件边界；提交前不改READY集合，读失败先重读；关闭拒收并排空旧写入 | 先行为等价9a45ab6，后行为变更afb418e |
+| planning/RoadPlanningReadinessIndex.java，721/537行 | 正常完成写失败进入原三次重试/FAILED并保留原因；adoption失败返回false走通常入队；初始覆盖失败告警且不发布；清理关闭世界文件边界，写后复核条目/代次 | 行为变更afb418e；保留成功几何、状态名与反射接口 |
+| planning/ReadinessRegionTable.java，93/74行 | 条目保留lastFailure，成功完成清除；只属于运行态 | 行为变更，无存档字段变化 |
+| ReadinessCoverageStoreTest、ReadinessCoverageFaultTest、ReadinessPersistenceCompletionTest、ReadinessPersistenceWiringTest及套件 | 9+10+14+2项，四类均按FQCN selectClass登记；最后2项仅AST接线 | 测试基建，累计新增35项 |
+
+全量独立词法计数693个生产Java文件，超过1000有效行0、超过800行2；新逻辑写中文原因注释。READY文件schema=2、chunky-ready-regions-v2.txt、指纹输入、UTF-8/LF、带符号packed long排序及重复区域复用不变；RoadData、区块库/施工台账/WorldgenFingerprint格式未动。只改道路仓库，未重新核对或修改河流/长城；没有打包部署。
+
+### 二、我验证了什么（附负控）
+
+开工status空、pull --rebase已是最新，HEAD c32d567；基线1459全绿、Fabric通过。先等价迁出文件边界并加8项成功格式/重开回归，1467全绿后单独提交并推送9a45ab6。随后在这个仍保留原故障的实现上，用Windows NOSHARE_DELETE锁真实目标：先确认真实原子替换辅助失败，再调用markReady，指定JUnit因“未抛异常”真实红1项（round41-write-fault-reproduction.log）。这证明READY记忆提交失败，不等于道路分片损坏。
+
+修复后真实文件替换失败保持旧字节、内存不发布；解锁后同对象重试并重开看到旧+新区域。NOSHARE_READ真实读锁、损坏合法前缀、非普通路径及缺父目录失败均验；只有已确认文件不存在才从空索引开始。串行提交用实际线程BLOCKED且栈帧位于markReady/close确认，不用执行器线程创建顺序猜测已进入。关闭返回前排空已接受写入，关闭期间已开始的物理写入允许完成；关闭后旧实例不能再IO或发布内存。真实clearRuntime、替换条目和迟到成功/失败均直接驱动生产逻辑；服务端外层接线单独用Javac AST验证，不伪装成ServerLevel整链。
+
+29组独立变异均触发指定JUnit失败，skipped=0、aborted=0；编译、脚本或命令错误不算红。先预检全部替换锚点，每项finally精确git checkout一个文件并比较原字节；还原后完整回归1494全绿、Fabric通过。记录：.analysis_tmp/round41_cases.py、round41_mutations.py、round41-mutations.json、round41-mutation-run.log、round41-mutation-resume.log、round41-mut-*.log；最终回归round41-final-after-mutations.log。
+
+另亲手测出并修正新增接线守卫的一处盲点：把生产完成条件改为false && finishPlanning，原AST只找调用会绿（TARGET_RESULT passed=1 failed=0，round41-shortcircuit-green-before.log）。812dcb5改为要求条件直接使用完成结果后，同一生产变异真实红1项（round41-shortcircuit-red-after.log），计入下表第29项。第16项首次直接删除IO调用导致checked catch编译失败，明确不算红；改为可编译但不会进入的提交条件后，真实JUnit红1项。
+
+| # | 故意破坏 | 指定守卫 | JUnit失败数 |
+|---|---|---|---|
+| 1 | 写前发布内存READY：`premature-memory-publication` | `planning.ReadinessCoverageStoreTest#failedReplacementKeepsMemoryAndFileUnchangedAndRetriesAfterUnlock(java.nio.file.Path)` | 1，红 |
+| 2 | 吞掉真实IOException：`ioexception-swallowed` | `planning.ReadinessCoverageStoreTest#failedReplacementKeepsMemoryAndFileUnchangedAndRetriesAfterUnlock(java.nio.file.Path)` | 1，红 |
+| 3 | 提交不保留旧覆盖：`old-coverage-lost-on-write` | `planning.ReadinessCoverageStoreTest#goldenSchemaTwoBytesAndNegativeCoordinatesSurviveReopen(java.nio.file.Path)` | 1，红 |
+| 4 | 重复区域再次写整表：`duplicate-rewritten` | `planning.ReadinessCoverageStoreTest#goldenSchemaTwoBytesAndNegativeCoordinatesSurviveReopen(java.nio.file.Path)` | 1，红 |
+| 5 | 删除提交串行锁：`concurrent-writers-not-serialized` | `planning.ReadinessCoverageFaultTest#inFlightWritesAreInvisibleAndConcurrentCommitsAreSerialized(int,java.nio.file.Path)` | 2，红 |
+| 6 | 读失败按空表提交：`unreadable-index-treated-as-empty` | `planning.ReadinessCoverageFaultTest#unreadableOldFileCannotBeOverwrittenAndUnlockRetriesTheRead(java.nio.file.Path)` | 1，红 |
+| 7 | 不保留读失败：`read-failure-not-retained` | `planning.ReadinessCoverageFaultTest#malformedPrefixCannotBeReplacedUntilTheFileIsRepaired(java.nio.file.Path)` | 1，红 |
+| 8 | 解锁后不重新读取：`read-not-retried-after-unlock` | `planning.ReadinessCoverageFaultTest#unreadableOldFileCannotBeOverwrittenAndUnlockRetriesTheRead(java.nio.file.Path)` | 1，红 |
+| 9 | schema由2改3：`schema-changed` | `planning.ReadinessCoverageStoreTest#goldenSchemaTwoBytesAndNegativeCoordinatesSurviveReopen(java.nio.file.Path)` | 1，红 |
+| 10 | 颠倒packed long排序：`signed-order-reversed` | `planning.ReadinessCoverageStoreTest#goldenSchemaTwoBytesAndNegativeCoordinatesSurviveReopen(java.nio.file.Path)` | 1，红 |
+| 11 | 忽略指纹：`fingerprint-check-disabled` | `planning.ReadinessCoverageStoreTest#differentFingerprintDoesNotAdoptOldCoverage(java.nio.file.Path)` | 1，红 |
+| 12 | 关闭不置失效：`close-does-not-invalidate-store` | `planning.ReadinessCoverageFaultTest#closedInstanceCannotWriteOrReportReady(java.nio.file.Path)` | 1，红 |
+| 13 | 关闭不排空在途写入：`close-does-not-drain-writer` | `planning.ReadinessCoverageFaultTest#closeDrainsAnAcceptedWriteBeforeReopenAndSuppressesOldPublication(java.nio.file.Path)` | 1，红 |
+| 14 | 提交后省略关闭复核：`closed-write-still-publishes` | `planning.ReadinessCoverageFaultTest#closeDrainsAnAcceptedWriteBeforeReopenAndSuppressesOldPublication(java.nio.file.Path)` | 1，红 |
+| 15 | adoption失败仍报成功：`adoption-hides-persist-failure` | `planning.ReadinessPersistenceCompletionTest#adoptionReturnsFalseOnRealWriteFailureAndDoesNotPublishEntry(java.nio.file.Path)` | 1，红 |
+| 16 | 正常完成跳过文件提交：`finisher-does-not-persist` | `planning.ReadinessPersistenceCompletionTest#realReplacementFailureRequeuesAndUnlockAllowsDurableReady(java.nio.file.Path)` | 1，红 |
+| 17 | 忽略最终路径失败：`invalid-path-published` | `planning.ReadinessPersistenceCompletionTest#planningOrFinalPathFailureNeverAttemptsToWriteCoverage(int,java.nio.file.Path)` | 1，红 |
+| 18 | 重试不入队：`retry-queue-omitted` | `planning.ReadinessPersistenceCompletionTest#writeFailureUsesOriginalThreeAttemptLimitAndRetainsExactCause(int,java.nio.file.Path)` | 2，红 |
+| 19 | 错误允许第四次重试：`fourth-attempt-allowed` | `planning.ReadinessPersistenceCompletionTest#writeFailureUsesOriginalThreeAttemptLimitAndRetainsExactCause(int,java.nio.file.Path)` | 1，红 |
+| 20 | 丢掉真实失败原因：`failure-cause-lost` | `planning.ReadinessPersistenceCompletionTest#writeFailureUsesOriginalThreeAttemptLimitAndRetainsExactCause(int,java.nio.file.Path)` | 3，红 |
+| 21 | 写失败重排成READY：`retry-publishes-ready` | `planning.ReadinessPersistenceCompletionTest#writeFailureUsesOriginalThreeAttemptLimitAndRetainsExactCause(int,java.nio.file.Path)` | 2，红 |
+| 22 | 成功不清ACTIVE：`successful-completion-keeps-active` | `planning.ReadinessPersistenceCompletionTest#realReplacementFailureRequeuesAndUnlockAllowsDurableReady(java.nio.file.Path)` | 1，红 |
+| 23 | 成功写后不复核旧条目：`post-write-stale-success-accepted` | `planning.ReadinessPersistenceCompletionTest#replacementDuringWriteCannotPublishOrRequeueIntoTheNewEntry(int,java.nio.file.Path)` | 1，红 |
+| 24 | 失败写后不复核旧条目：`post-write-stale-failure-requeued` | `planning.ReadinessPersistenceCompletionTest#replacementDuringWriteCannotPublishOrRequeueIntoTheNewEntry(int,java.nio.file.Path)` | 1，红 |
+| 25 | 实际clear不关闭文件边界：`clear-does-not-close-world-store` | `planning.ReadinessPersistenceCompletionTest#actualClearDrainsWorldStoreAndLateFailureCannotRequeueOldKey(java.nio.file.Path)` | 1，红 |
+| 26 | 服务端回调绕过文件提交（AST）：`server-callback-bypasses-finisher` | `planning.ReadinessPersistenceWiringTest#realServerCompletionCallsTheTestedFinisherInsideTheServerTask` | 1，红 |
+| 27 | 生产adoption忽略失败返回（AST）：`adoption-ignores-boundary-result` | `planning.ReadinessPersistenceWiringTest#realAdoptionAndWorldLoadReturnTheTestedPersistenceBoundary` | 1，红 |
+| 28 | 生产加载传错指纹（AST）：`world-loader-wrong-fingerprint` | `planning.ReadinessPersistenceWiringTest#realAdoptionAndWorldLoadReturnTheTestedPersistenceBoundary` | 1，红 |
+| 29 | 生产完成条件以false短路（AST）：`server-finisher-short-circuited` | `planning.ReadinessPersistenceWiringTest#realServerCompletionCallsTheTestedFinisherInsideTheServerTask` | 1，红 |
+
+### 三、我没能验证什么
+
+- **需要真机的**：真实ServerLevel/AsyncPlanningOps/Streams及Chunky逐tick完成链、退出重开的服务端事件与Mixin时序；2项AST只能证明窄接线结构。三模组预热、FPS/MSPT和首次加载尾延迟未验；本轮没跑外部模组测试。
+- **需要真实存档的**：4096工作集、实际磁盘/文件系统与整合包争用、索引及施工台账耗时；临时文件重开不代替玩家存档。底层仍是原FileStorageIO的原子move及普通替换回退，没有新增fsync，不宣称突然断电的持久性。
+- **怀疑但没有证据的**：同步全表排序/写盘在现场占多少主线程时间，尚未量；不以此故障修复宣称进档加速或改异步。
+- **已知边界未改的**：第三次失败后进入FAILED，沿用原预算，本会话不无限重试；修复文件/解锁不承诺让耗尽预算的FAILED自动复活，正常重启会重新加载。损坏/不可读旧索引拒绝覆写，修复文件后才可正常重读合并。readiness文件不是道路分片完工证明。512准入仍非任意并发反射调用的原子总额；生命周期、ACTIVE枚举和同步全表写盘仍在。crossing、双平滑默认、QualityGate及旧区块自动重铺按原决定不动。
+
+### 四、遗留半截的东西
+
+本轮无半截实现；临时变异均逐字恢复。源码/测试与文档小步提交推送；停下前核对git status为空、origin/main与HEAD为0/0。没有发布新二进制，RELEASES不增加虚假部署记录。
+
+### 五、下一轮我会先做什么
+
+1. 可独立继续路线第4项：先对PathPostProcessor样条/宽度栅格化固定生产输出、保护列、端点与桥头，再等价迁出纯计算边界；拆分与默认几何改动分开提交，不以文件达标代替职责审查。
+2. 有现场日志后再优化READY/施工台账写盘：分别看收集、排序、编码、替换耗时及条目规模；若确认为热点，必须保留已验发布顺序、失败重试及关闭封账，再评估批量或异步。
+3. 逐档存档副本检查4096与三模组启动顺序；没有桥隧召回/A-B数据不改crossing和二次陆地松弛默认。
+
+### 六、我踩到但已解决的坑
+
+文件格式搬迁先行为等价提交，故障用例在旧实现先红；不能把“加了异常”当故障已经复现。文件读锁不同于不存在，解析合法前缀也不能让后半段损坏的文件变成可覆写快照。写入失败与成功都须写后复核旧条目，少复核失败分支会把清理后的旧key塞回队列。关闭先失效再等同步写锁，允许已开始的物理提交完成，并明确关闭返回才是旧IO排空边界；不能声称关闭一开始就撤销已接受磁盘操作。变异预检遇到非唯一锚点立即停，重定位后才执行，不把预检错误计为守卫红。
