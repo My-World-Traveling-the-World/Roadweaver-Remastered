@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import java.util.ArrayList;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -37,17 +38,27 @@ final class BridgePairIndex {
     }
 
     List<Integer> after(int source, int radius, long[] checks) {
-        var result = new ArrayList<Integer>();
+        IntArrayList values = afterInts(source, radius, checks);
+        return new ArrayList<>(values);
+    }
+
+    /** 生产直接消费基本类型缓冲，避免每个候选装箱；对照入口仍可导出List。 */
+    IntArrayList afterInts(int source, int radius) {
+        return afterInts(source, radius, null);
+    }
+
+    private IntArrayList afterInts(int source, int radius, long[] checks) {
+        var result = new IntArrayList();
         int expand = Math.max(0, radius);
         // 旧叶子判据做int减法；极端越界输入不做空间剪枝，避免“修正”旧溢出口径而漏候选。
         boolean safe = root == null || ((long)root.bounds.minX() - expand >= Integer.MIN_VALUE
                 && (long)root.bounds.minZ() - expand >= Integer.MIN_VALUE);
         query(root, source, expand, result, checks, safe);
-        result.sort(Integer::compare);
+        result.sort((it.unimi.dsi.fastutil.ints.IntComparator) null);
         return result;
     }
 
-    private void query(Node node, int source, int radius, List<Integer> out, long[] checks, boolean safe) {
+    private void query(Node node, int source, int radius, IntArrayList out, long[] checks, boolean safe) {
         if (node == null || node.maxIndex <= source) return;
         var target = boxes.get(source);
         // long防止树节点范围加半径溢出；叶子仍执行旧判据，保持其合法输入行为。

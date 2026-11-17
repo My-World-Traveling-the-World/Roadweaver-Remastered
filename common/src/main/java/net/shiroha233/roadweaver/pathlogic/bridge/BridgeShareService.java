@@ -104,10 +104,10 @@ public final class BridgeShareService {
         BridgePairIndex index = !logPairs && bridges.size() >= 512
                 ? BridgePairIndex.sparseBatch(bridges.stream().map(BridgeRef::bounds).toList(), radius) : null;
         for (int i = 0; i < bridges.size(); i++) {
-            List<Integer> nearby = index == null ? null : index.after(i, radius);
+            var nearby = index == null ? null : index.afterInts(i, radius);
             int pairs = nearby == null ? bridges.size() - i - 1 : nearby.size();
             for (int pair = 0; pair < pairs; pair++) {
-                int j = nearby == null ? i + pair + 1 : nearby.get(pair);
+                int j = nearby == null ? i + pair + 1 : nearby.getInt(pair);
                 BridgeRef a = bridges.get(i);
                 BridgeRef b = bridges.get(j);
                 if (a.roadIndex() == b.roadIndex()) continue;

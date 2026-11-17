@@ -68,6 +68,17 @@ class BridgePairIndexTest {
             else assertEquals(0,now.candidates());
         }
     }
+    @Test void primitiveCandidatesMatchLegacyForHeterogeneousClustersAndLongThinBoxes() {
+        for(int pattern=0;pattern<3;pattern++) {
+            var boxes=new ArrayList<BridgeShareDetector.Bounds>();
+            for(int i=0;i<600;i++){int x=i<150?i%10:i*70;int z=i<150?i%7:i%9*500;
+                boxes.add(new BridgeShareDetector.Bounds(x,z,x+(pattern==1?20000:40),z+(pattern==2?1:10)));}
+            var old=new FrozenBridgePairIndex(boxes);var now=new BridgePairIndex(boxes);int candidates=0;
+            for(int i=0;i<boxes.size();i++) {var expected=old.after(i,24);var actual=now.afterInts(i,24);assertEquals(expected,actual);candidates+=actual.size();
+                for(int k=1;k<actual.size();k++)assertTrue(actual.getInt(k-1)<actual.getInt(k));}
+            assertTrue(candidates>1000);
+        }
+    }
     private static RoadData road(int z,int y) {
         var stations=new ArrayList<RoadSegmentPlacement>();var heights=new ArrayList<Integer>();
         for(int x=0;x<40;x++) {var p=new BlockPos(x,y,z);stations.add(new RoadSegmentPlacement(p,List.of(p)));heights.add(y);}
