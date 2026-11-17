@@ -2063,3 +2063,6 @@ ShardStampProbe真实调用computeShardStamp/matches：两个文件时间1000/30
 ### 六、我踩到但已解决的坑
 
 Gson Reader可能包装IO为RuntimeException，索引先readString才能区分。40站宽3占8块，测试按footprint而非猜3块。负坐标前缀0得到0-1不是合法别名，改00_0对0_0。PowerShell的-PtargetClass带点参数整体引用。新增Java显式LF、替换锚点assert一次命中。旧探针冻结原统计验证器以保留反例，不代表新版仍有盲点。
+
+
+第48轮远端同步结果：收尾pull --rebase成功（Current branch main is up to date），push成功，远端main从8a8be44推进至5e9e4d4，包含此前积压的本地提交及本轮代码/测试/文档。随后补本同步记录并再次提交推送；未部署游戏发布件。最终完整回归1621/0/0/0，全部变异恢复，工作区清洁。
