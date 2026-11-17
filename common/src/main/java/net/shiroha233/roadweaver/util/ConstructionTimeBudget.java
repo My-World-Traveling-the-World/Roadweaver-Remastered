@@ -7,6 +7,8 @@ public final class ConstructionTimeBudget {
     private final LongSupplier clock;
     private final long started;
     private final long limit;
+    /** 默认预算集中在一处，使生产与离线时钟用同一上限。 */
+    public ConstructionTimeBudget(LongSupplier clock) { this(clock, DEFAULT_NANOS); }
     public ConstructionTimeBudget(LongSupplier clock, long limit) {
         this.clock = clock;
         this.limit = Math.max(1,limit);

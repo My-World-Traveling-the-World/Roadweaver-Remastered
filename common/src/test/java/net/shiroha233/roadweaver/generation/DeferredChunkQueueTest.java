@@ -183,6 +183,37 @@ class DeferredChunkQueueTest {
         assertEquals(Set.of(1L,2L,3L),attempted);
     }
 
+    @Test
+    void productionDefaultBudgetExpiresAtFourMillisecondsAndStillAllowsFirstChunk() {
+        long[] clock = {10};
+        var time = new net.shiroha233.roadweaver.util.ConstructionTimeBudget(() -> clock[0]);
+        clock[0] += 3_999_999;
+        assertFalse(time.exhausted());
+        clock[0]++;
+        assertTrue(time.exhausted());
+        var attempted = new HashSet<Long>();
+        var pass = LoadedChunkRoadBackfill.runBackfill(List.of(1L,2L),8,Map.of(1L,"a",2L,"b"),
+                key -> null,key -> false,(key,value) -> LoadedPlacement.NO_PLACEMENT,null,attempted,time);
+        assertEquals(Set.of(1L),attempted);
+        assertEquals(1,pass.processed());
+        assertEquals(0,pass.placed());
+    }
+
+    @Test
+    void completedPrefixCannotConsumeAllTimeAndStarveTheFirstUnsettledChunk() {
+        long[] clock = {0};
+        var attempted = new HashSet<Long>();
+        var writes = new ArrayList<Long>();
+        var time = new net.shiroha233.roadweaver.util.ConstructionTimeBudget(() -> clock[0],4);
+        var pass = LoadedChunkRoadBackfill.runBackfill(List.of(1L,2L,3L),8,
+                Map.of(1L,"a",2L,"b",3L,"c"), key -> null,
+                key -> { clock[0]+=10; return key==1L; },
+                (key,chunk) -> { writes.add(key); return LoadedPlacement.PLACED; },null,attempted,time);
+        assertEquals(List.of(2L),writes);
+        assertEquals(Set.of(1L,2L),attempted);
+        assertEquals(1,pass.processed());
+    }
+
     private static DeferredChunkQueue pending(int count) {
         var queue = new DeferredChunkQueue();
         for (long key = 0; key < count; key++) assertTrue(queue.add(key));

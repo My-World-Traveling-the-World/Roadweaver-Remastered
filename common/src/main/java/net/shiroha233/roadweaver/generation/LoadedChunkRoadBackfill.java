@@ -34,6 +34,9 @@ import net.shiroha233.roadweaver.util.ConstructionTimeBudget;
 /** 仅对已达到FULL的已加载区块回填，避免后台道路强制加载新区块。 */
 public final class LoadedChunkRoadBackfill {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
+    // 逐块计时只在显式诊断时开启，避免每次落块都把日志开销带入预算。
+    private static final boolean CHUNK_TIMINGS = "on".equalsIgnoreCase(
+            System.getProperty("roadweaver.deferredChunkTimings", "off"));
     private static final long RANDOM_SALT = 0x524F41444241434BL;
     private static final long SAME_CHUNK_RETRY_NANOS = 5_000_000_000L;
     /**
@@ -176,10 +179,8 @@ public final class LoadedChunkRoadBackfill {
                 key -> level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)),
                 key -> DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, key)
                         || DeferredInitialRoadConstructionService.isConstructionComplete(level, new ChunkPos(key)),
-                (key, chunk) -> PathFeature.replayLoadedChunk(level, chunk.getPos(),
-                        level.getSeed() ^ key ^ RANDOM_SALT), verified, attempted,
-                new ConstructionTimeBudget(System::nanoTime,
-                        ConstructionTimeBudget.DEFAULT_NANOS));
+                (key, chunk) -> replayTimed(level, key, chunk), verified, attempted,
+                new ConstructionTimeBudget(System::nanoTime));
         if (!pass.noConstruction().isEmpty()) {
             DeferredInitialRoadConstructionService.markNoConstructionRequired(level, pass.noConstruction());
             if (verified != null) verified.addAll(pass.noConstruction());
@@ -192,6 +193,20 @@ public final class LoadedChunkRoadBackfill {
                     pass.fullLookups(), (System.nanoTime() - backfillStartedAt) / 1_000_000L);
         }
         return pass.placed();
+    }
+
+    private static PathFeature.LoadedPlacement replayTimed(ServerLevel level, long key, LevelChunk chunk) {
+        if (!CHUNK_TIMINGS) return PathFeature.replayLoadedChunk(level, chunk.getPos(), level.getSeed() ^ key ^ RANDOM_SALT);
+        long start = System.nanoTime();
+        PathFeature.LoadedPlacement outcome = null;
+        try {
+            outcome = PathFeature.replayLoadedChunk(level, chunk.getPos(), level.getSeed() ^ key ^ RANDOM_SALT);
+            return outcome;
+        } finally {
+            // 异常保留exception状态，与正常无落块分开；单块超时不能靠下一块让出补救。
+            LOGGER.info("【单区块道路回填耗时，异常不算正常无施工】 [CHUNK-REPLAY-TIMING] chunk={} outcome={} replayUs={}",
+                    chunk.getPos(), outcome == null ? "exception" : outcome, (System.nanoTime() - start) / 1_000L);
+        }
     }
 
     record BackfillPass(int loaded, int processed, int placed, List<Long> noConstruction, int fullLookups) {}
@@ -222,7 +237,7 @@ public final class LoadedChunkRoadBackfill {
         int limit = Math.max(1, budget);
         List<Long> noConstruction = new ArrayList<>();
         for (long key : keys) {
-            if (processed >= limit || (loaded + fullLookups > 0 && timeBudget != null && timeBudget.exhausted())) break;
+            if (processed >= limit || (processed > 0 && timeBudget != null && timeBudget.exhausted())) break;
             if (knownLoaded == null) fullLookups++;
             T chunk = knownLoaded == null ? loadedNow.apply(key) : knownLoaded.get(key);
             if (chunk == null) continue;
