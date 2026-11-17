@@ -9,8 +9,8 @@ public final class ShardStampProbe {
         try {
             Files.writeString(first,"{\"roads\":[1]}");Files.writeString(second,"{\"roads\":[2]}");
             Files.setLastModifiedTime(first,FileTime.fromMillis(1000));Files.setLastModifiedTime(second,FileTime.fromMillis(3000));
-            var store=new RoadChunkStore(root);
-            var compute=RoadChunkStore.class.getDeclaredMethod("computeShardStamp",Path.class);compute.setAccessible(true);
+            var store=new RoadShardVerifier(root);
+            var compute=RoadShardVerifier.class.getDeclaredMethod("computeShardStamp",Path.class);compute.setAccessible(true);
             Object before=compute.invoke(store,chunks);String original=Files.readString(first);
             // 不恢复修改时间：只把非最新文件改成另一份同长度内容，最大mtime依然由另一文件持有。
             Files.writeString(first,"{\"roads\":[9]}");Files.setLastModifiedTime(first,FileTime.fromMillis(2000));
