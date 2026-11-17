@@ -18,6 +18,11 @@ class RoadSnapCacheLifecycleTest {
         var method = PathPostProcessor.class.getDeclaredMethod("freezeProduct",List.class);method.setAccessible(true);
         @SuppressWarnings("unchecked") var observed = (List<RoadSegmentPlacement>)method.invoke(null,stations);
         assertEquals(12,observed.size());assertSame(stations.getFirst(),observed.getFirst());
+        for(var invalid:List.of(new RoadSegmentPlacement(new BlockPos(0,64,0),null),
+                new RoadSegmentPlacement(new BlockPos(0,64,0),Arrays.asList((BlockPos)null)))) {
+            var failure=assertThrows(java.lang.reflect.InvocationTargetException.class,() -> method.invoke(null,List.of(invalid)));
+            assertInstanceOf(NullPointerException.class,failure.getCause(),"复用不能放宽原观测方对非法输入的拒绝");
+        }
         stations.clear();assertEquals(12,observed.size());assertEquals(10,anchor.segments().size());
         assertThrows(UnsupportedOperationException.class,observed::clear);
         assertThrows(UnsupportedOperationException.class,anchor.segments()::clear);

@@ -66,7 +66,7 @@ public final class RoadChunkStore implements AutoCloseable {
     private static final String CHUNK_DIRECTORY = "chunks";
     /**
      * 0.8.358：分片校验戳缓存。记录上次全量校验时「文件数 / 最新 mtime / 总字节数」，
-     * 三项都未变即可跳过逐文件等价性校验（见 {@code chunkShardsMatch}）。
+     * 三项命中沿用历史快速通道，但统计相同不证明内容相同（见 {@code chunkShardsMatch}）。
      */
     private static final String SHARD_VERIFY_FILE = "shard-verify.json";
 
@@ -540,13 +540,13 @@ public final class RoadChunkStore implements AutoCloseable {
      *   <li><b>快速通道</b>：若 {@code shard-verify.json} 记录的（文件数、最新
      *       mtime、总字节数）与磁盘目录一致，则直接判定为匹配，不再逐个读文件。
      *       这解决"第二次及以后启动"的耗时。</li>
-     *   <li><b>并行校验</b>：缓存未命中时，用 {@code MAP_READ} 池并行读分片，
-     *       把首次冷启动从分钟级压到数秒级。校验通过后写入缓存戳。</li>
+     *   <li><b>并行校验</b>：缓存未命中时，用临时RW-ShardVerify专用池读分片，
+     *       校验通过后写缓存戳；冷启动耗时须量现场磁盘，不能用历史样本承诺。</li>
      * </ol>
      *
-     * <p>正确性：缓存戳由「目录文件数 + 最大 mtime + 总字节数」构成，任何分片
-     * 的增删改都会改变其中至少一项，因此不会漏检真实变更；缓存本身也不参与
-     * 数据读取，只用于跳过等价性校验。</p>
+     * <p>已知边界：统计戳不是内容证明；非最新文件同长改写可保持三项不变。
+     * ShardStampProbe已复现盲点；聚合道路仍从NBT加载，分片修复不能把此命中当完整验证。
+     * 后续须单独补逐文件证据与强制修复契约，不能为优化启动而宣称任意篡改可检出。</p>
      */
     private boolean chunkShardsMatch(RoadSnapshot expected) {
         Path chunkDirectory = root.resolve(CHUNK_DIRECTORY);
@@ -654,7 +654,7 @@ public final class RoadChunkStore implements AutoCloseable {
         return true;
     }
 
-    /** 目录指纹：文件数 + 最新 mtime + 总字节数。任何增删改都会改变它。 */
+    /** 目录统计提示：文件数、最大mtime和总大小；同长修改非最新文件会碰撞。 */
     private record ShardStamp(long fileCount, long latestMillis, long totalBytes, int references) {
         boolean matches(ShardStamp other) {
             return other != null

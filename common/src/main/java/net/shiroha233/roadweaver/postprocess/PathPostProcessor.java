@@ -131,7 +131,10 @@ public final class PathPostProcessor {
     private static List<RoadSegmentPlacement> freezeProduct(List<RoadSegmentPlacement> road) {
         // 观测方只能获得独立外层快照；分站构造器已冻结内层，不能为每次A/B再复制铺装列。
         // 继续拒绝非法null铺装列表，保持原观测边界的输入契约。
-        for (var station : road) java.util.Objects.requireNonNull(station.positions());
+        for (var station : road) {
+            java.util.Objects.requireNonNull(station.positions());
+            for (var column : station.positions()) java.util.Objects.requireNonNull(column);
+        }
         return List.copyOf(road);
     }
 

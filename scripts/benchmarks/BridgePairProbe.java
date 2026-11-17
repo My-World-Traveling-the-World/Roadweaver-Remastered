@@ -6,15 +6,15 @@ public final class BridgePairProbe {
     public static void main(String[] args) {
         for (int n : new int[]{32,128,512,1024}) for(String scene:List.of("sparse","clustered","dense","long")) {
             var boxes = boxes(n,scene);
-            long expected = direct(boxes);
+            long expected = enumerate(boxes,null);
             if(indexed(boxes)!=expected || selected(boxes)!=expected) throw new AssertionError("候选/顺序校验失败");
             int reps = n==1024 ? 8 : 80;
-            for(int w=0;w<3;w++){ measure(boxes,false,reps);measure(boxes,true,reps);for(int r=0;r<reps;r++)sink=selected(boxes); }
+            for(int w=0;w<3;w++){ measure(boxes,0,reps);measure(boxes,1,reps);measure(boxes,2,reps); }
             long[] old=new long[9],now=new long[9],chosen=new long[9];
             for(int i=0;i<9;i++) {
-                if(i%2==0){old[i]=measure(boxes,false,reps);now[i]=measure(boxes,true,reps);}
-                else {now[i]=measure(boxes,true,reps);old[i]=measure(boxes,false,reps);}
-                long start=System.nanoTime();for(int r=0;r<reps;r++)sink=selected(boxes);chosen[i]=System.nanoTime()-start;
+                if(i%2==0){old[i]=measure(boxes,0,reps);now[i]=measure(boxes,1,reps);}
+                else {now[i]=measure(boxes,1,reps);old[i]=measure(boxes,0,reps);}
+                chosen[i]=measure(boxes,2,reps);
             }
             var index=new BridgePairIndex(boxes);long[] checks={0};long pairs=0;
             for(int i=0;i<n;i++) pairs+=index.after(i,24,checks).size();
@@ -36,23 +36,21 @@ public final class BridgePairProbe {
             boxes.add(new BridgeShareDetector.Bounds(x,z,x+length,z+5));
         }return boxes;
     }
-    private static long direct(List<BridgeShareDetector.Bounds> boxes){
-        long hash=0;for(int i=0;i<boxes.size();i++)for(int j=i+1;j<boxes.size();j++)
-            if(BridgeShareDetector.overlapsPrepared(boxes.get(i),boxes.get(j),24))hash=31*hash+(long)i*boxes.size()+j;
-        return hash;
+    // 三种策略共用同一枚举内核，避免不同调用点的JIT版本被误当成算法差异。
+    private static long enumerate(List<BridgeShareDetector.Bounds> boxes,BridgePairIndex index){
+        long hash=0;
+        for(int i=0;i<boxes.size();i++){
+            List<Integer> nearby=index==null?null:index.after(i,24);
+            int count=nearby==null?boxes.size()-i-1:nearby.size();
+            for(int p=0;p<count;p++){
+                int j=nearby==null?i+p+1:nearby.get(p);
+                if(BridgeShareDetector.overlapsPrepared(boxes.get(i),boxes.get(j),24))hash=31*hash+(long)i*boxes.size()+j;
+            }
+        }return hash;
     }
-    private static long selected(List<BridgeShareDetector.Bounds> boxes){
-        var index=BridgePairIndex.sparseBatch(boxes,24);
-        if(index==null)return direct(boxes);
-        long hash=0;for(int i=0;i<boxes.size();i++)for(int j:index.after(i,24))hash=31*hash+(long)i*boxes.size()+j;
-        return hash;
-    }
-    private static long indexed(List<BridgeShareDetector.Bounds> boxes){
-        var index=new BridgePairIndex(boxes);long hash=0;
-        for(int i=0;i<boxes.size();i++)for(int j:index.after(i,24))hash=31*hash+(long)i*boxes.size()+j;
-        return hash;
-    }
-    private static long measure(List<BridgeShareDetector.Bounds> boxes,boolean useIndex,int repeats){
-        long start=System.nanoTime();for(int r=0;r<repeats;r++)sink=useIndex?indexed(boxes):direct(boxes);return System.nanoTime()-start;
+    private static long selected(List<BridgeShareDetector.Bounds> boxes){return enumerate(boxes,BridgePairIndex.sparseBatch(boxes,24));}
+    private static long indexed(List<BridgeShareDetector.Bounds> boxes){return enumerate(boxes,new BridgePairIndex(boxes));}
+    private static long measure(List<BridgeShareDetector.Bounds> boxes,int strategy,int repeats){
+        long start=System.nanoTime();for(int r=0;r<repeats;r++)sink=switch(strategy){case 0 -> enumerate(boxes,null);case 1 -> indexed(boxes);default -> selected(boxes);};return System.nanoTime()-start;
     }
 }

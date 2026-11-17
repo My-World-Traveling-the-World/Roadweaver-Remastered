@@ -6,14 +6,16 @@ gradle.projectsEvaluated {
         dependsOn p.tasks.named('testClasses')
         source p.rootProject.files('scripts/benchmarks/ReadinessActiveProbe.java',
             'scripts/benchmarks/ReadinessWriteProbe.java', 'scripts/benchmarks/ConstructionLedgerProbe.java',
-            'scripts/benchmarks/RoadValidationCacheProbe.java', 'scripts/benchmarks/BridgePairProbe.java', 'scripts/benchmarks/RoadContentProbe.java')
+            'scripts/benchmarks/RoadValidationCacheProbe.java', 'scripts/benchmarks/BridgePairProbe.java',
+            'scripts/benchmarks/RoadContentProbe.java', 'scripts/benchmarks/ShardStampProbe.java')
         classpath = p.sourceSets.test.runtimeClasspath
         destinationDirectory.set(out)
         options.encoding = 'UTF-8'
     }
     [readinessActiveProbe: 'planning.ReadinessActiveProbe', readinessWriteProbe: 'planning.ReadinessWriteProbe',
         constructionLedgerProbe: 'persistence.ConstructionLedgerProbe', roadValidationCacheProbe: 'pathlogic.validation.RoadValidationCacheProbe',
-        bridgePairProbe: 'pathlogic.bridge.BridgePairProbe', roadContentProbe: 'pathlogic.metrics.RoadContentProbe'].each { name, cls ->
+        bridgePairProbe: 'pathlogic.bridge.BridgePairProbe', roadContentProbe: 'pathlogic.metrics.RoadContentProbe',
+        shardStampProbe: 'persistence.chunk.ShardStampProbe'].each { name, cls ->
         p.tasks.register(name, JavaExec) {
             dependsOn compile
             classpath = p.sourceSets.test.runtimeClasspath + p.files(out)

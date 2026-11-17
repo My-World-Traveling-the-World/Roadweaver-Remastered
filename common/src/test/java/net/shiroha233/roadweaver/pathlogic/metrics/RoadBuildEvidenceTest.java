@@ -162,9 +162,10 @@ class RoadBuildEvidenceTest {
                 first.roadSegmentList(),first.spans(),List.of(64,90),first.ownerA2dKey(),first.ownerB2dKey());
         assertNotEquals(expected,RoadBuildEvidence.content(changed));
         assertEquals(RoadBuildEvidence.contentUncached(changed),RoadBuildEvidence.content(changed));
+        var cold = road(); // 独立实例尚未入缓存，覆盖并发首次编码，而非仅并发热命中。
         try (var workers=java.util.concurrent.Executors.newFixedThreadPool(4)) {
             var jobs = new ArrayList<java.util.concurrent.Callable<String>>();
-            for(int i=0;i<64;i++) jobs.add(() -> RoadBuildEvidence.content(first));
+            for(int i=0;i<64;i++) jobs.add(() -> RoadBuildEvidence.content(cold));
             var results=workers.invokeAll(jobs);
             assertEquals(64,results.size());
             for(var result:results) assertEquals(expected,result.get());
