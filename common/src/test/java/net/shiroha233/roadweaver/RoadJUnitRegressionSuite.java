@@ -28,6 +28,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.architecture.ChineseLogGuardTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.architecture.ChineseCommentGuardTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.FileStorageLogTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.ReadinessOrderingReuseTest"),
