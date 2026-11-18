@@ -1,5 +1,35 @@
 # 交接台账（HANDOFF）
 
+## 第58轮：道路回填分段计时与尾延迟统计（2026-11-18）
+
+### 一、改了什么
+
+`84c69c2`（施工行为等价）在原可选诊断开关下新增 `[BACKFILL-PASS-TIMING]`，分别记录同轮候选准备、复核及施工、结案耗时。新脚本独立汇总单块施工、整轮回填、延迟候选、台账 IO 的 p50/p95/p99 与最大值，异常和正常结果分组。日志采集与使用见 [LOGGING.md](LOGGING.md)。保留落盘条件、计划代次、区块预算、施工顺序和存档格式。
+
+### 二、验证了什么
+
+`ad8d43a` 干净开工，pull 无更新。外置 Gradle 8.8 全量 `PASS tests=1662 skipped=0 aborted=0 failed=0`，`:fabric:compileJava` 和构建成功（`.analysis_tmp/round58-backfill-final.log`）。`python -B -m unittest discover -s scripts/evidence -v` 21 项通过，其中新增 2 项；验证不同分位点、异常单独取样、残缺记录不污染指标。
+
+| 变异 | 结果 |
+|---|---|
+| 生产汇总脚本省略 p99 | `test_tail_and_exceptions_use_separate_samples` 断言红；核对锚点、恢复后全量脚本测试绿（`.analysis_tmp/round58-mutant-p99.log`）。 |
+
+### 三、没能验证什么
+
+搜索工作区 `logs`、`minecraft-numen-1.21.1`、`.analysis_tmp` 下的 `.log`，没有找到有效的真实 `[CHUNK-REPLAY-TIMING]` 样本。未遍历实际整合包实例的压缩日志，未运行真实首次开档、重开、Chunky，未量出 FPS、MSPT 或回填长尾；脚本夹具数字仅验证计算。真机不足以裁决 `crossing`，按用户决定保持现状。
+
+### 四、遗留半截的东西
+
+计时和分析工具已接通。跨 tick 施工尚未开启；没有依据修改施工预算或台账落盘政策。长城缓存、编译和预热改动见其根 `HANDOFF.md` 第39轮。
+
+### 五、下一轮先做什么
+
+在存档副本分场景采集两类开关的日志，再用脚本比较单区块施工、整轮检查和台账 IO。若单块施工主导长尾，切片前先对拍卸载、停服、装饰和台账结案；若 IO 主导，先拆写入耗时与重试频率。继续验证 4096 场景工作集。
+
+### 六、踩到的坑
+
+`flushRequested=true` 仅代表请求落盘，干净台账能直接返回；对应真实 IO 须读 `[CONSTRUCTION-LEDGER-TIMING]`。整轮记录仅正常返回时发出，异常用已有逐块结果区分。诊断开启带来日志开销，采样开关前后也应对照。
+
 ## 第57轮：道路共桥索引建树减分配（2026-11-18）
 
 ### 一、改了什么
