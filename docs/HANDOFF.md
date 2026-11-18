@@ -1,5 +1,37 @@
 # 交接台账（HANDOFF）
 
+## 第54轮：修正负高度二分（2026-11-18）
+
+### 一、改了什么
+
+行为变更：NoiseChunkHeightSampler以lo+((hi-lo)>>>1)取中点，避免负高度无符号和越界。将同一生产二分内核以包内密度/高度输入开放，坐标floorDiv、严格阈值和下降策略保持。新增SurfaceEstimateSearchTest并显式登记。
+
+### 二、验证了什么
+
+开工两仓pull成功。道路基线1657；恢复负控后完整PASS tests=1659 skipped=0 aborted=0 failed=0，Fabric BUILD SUCCESSFUL，.analysis_tmp/round54-final.log。386个含无交点/全高阈值、负坐标量化、查询范围/次数、等阈值和正高度维度均调用实际内核。
+
+| 改坏什么 | 结果 |
+|---|---|
+| 中点恢复(lo+hi)>>>1 | 编译成功，everySignedThresholdStaysInsideWorldAndMatchesDensity断言红；随后checkout精确恢复 |
+
+记录.analysis_tmp/round54-mutations-road.json、road-midpoint.log。无跳过、无临时变异。
+
+### 三、我没能验证什么
+
+未跑实际NoiseChunk/模组密度/真机高度图和耗时；单调替身证明算术与生产入口，不证明任意密度单调。长城同类修复和性能内核在长城仓库验证，不混算道路测试。未改变触底处理、crossing或施工暂停。
+
+### 四、遗留半截的东西
+
+本修复及守卫完整。跨tick施工、稳定世界读契约、真实4096工作集和完工内容政策仍待后续。无实际提速倍数结论。
+
+### 五、下一轮先做什么
+
+实际完整下降对照，及利用已有CHUNK-REPLAY-TIMING采单块/单站长尾；不整体换FMM/DP/弹性带。长城继续首次plan优先/可靠结案及共享采样等路线。
+
+### 六、踩到的坑
+
+Windows Python默认写出CRLF触发行尾守卫，已按原LF还原并全量重跑。密度接口初始化注册表，长城独立测试显式bootstrap，道路已有套件环境；不把编译或初始化错误算作负控红。
+
 > **规则：每次停下前必须更新本文件。** 接手方靠它判断「什么做完了、什么没验证、哪里是半截」。
 > **「我没能验证什么」这一栏是核心** —— 写得越老实，接手方越快。
 

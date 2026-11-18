@@ -196,15 +196,20 @@ final class NoiseChunkHeightSampler {
      * 余量覆盖水面、格内起伏与锯齿，结果与完整行走一致。
      */
     private int preliminarySurface(int blockX, int blockZ) {
-        DensityFunction density = randomState.router().initialDensityWithoutJaggedness();
+        return preliminarySurface(randomState.router().initialDensityWithoutJaggedness(),
+                noiseSettings.minY(), noiseSettings.height(), blockX, blockZ);
+    }
+
+    // 单独接收密度与高度边界，让负高度算术可直接验证，生产仍使用同一采样入口。
+    static int preliminarySurface(DensityFunction density, int minY, int height, int blockX, int blockZ) {
         int qx = Mth.floorDiv(blockX, 4) * 4;
         int qz = Mth.floorDiv(blockZ, 4) * 4;
-        int minY = noiseSettings.minY();
-        int top = minY + noiseSettings.height();
+        int top = minY + height;
         int lo = minY - 1;
         int hi = top;
         while (hi - lo > 1) {
-            int mid = (lo + hi) >>> 1;
+            // 下界可能低于零，先取区间差，避免无符号移位把负和变成巨大的正高度。
+            int mid = lo + ((hi - lo) >>> 1);
             double d = density.compute(new DensityFunction.SinglePointContext(qx, mid, qz));
             if (d > 0.390625) {
                 lo = mid;
