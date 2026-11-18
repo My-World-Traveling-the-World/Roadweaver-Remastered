@@ -38,6 +38,10 @@ python -B -m unittest discover -s scripts/evidence -p 'test_*.py' -v
 
 开启既有-Droadweaver.deferredChunkTimings=on时，新增[CHUNK-REPLAY-TIMING] chunk/outcome/replayUs；异常记exception并继续抛出，与NO_PLACEMENT不同。默认关闭逐块日志。回填每次仍最多8块，另在完整区块之间按4ms预算让出；单块、台账flush和候选选择可能超过4ms，该值不是MSPT保证。
 
+同一开关还输出 `[BACKFILL-PASS-TIMING]`：`selectionUs` 是候选集合准备，`checkAndReplayUs` 包含已加载检查、台账复核与回填，`settlementUs` 包含标记无施工和请求落盘。`flushRequested=true` 表示调用了 flush；干净台账可能直接返回。要拆出真正的收集、排序、编码和写盘耗时，同时开启 `-Droadweaver.constructionLedgerTimings=on`。
+
+首次开档、重开、Chunky 分开保存日志。运行 `python scripts/evidence/summarize_backfill_timings.py first.log reopen.log chunky.log` 汇总各文件的样本数、p50/p95/p99 和最大值；GBK 控制台日志可加 `--encoding gbk`。异常和非施工结果各自分组。整轮明细只在正常返回时输出；异常看逐块记录。汇总值是离线统计的回填耗时，不是帧率或 MSPT。
+
 大日志可用python scripts/evidence/summarize_route_evidence.py --session 首次 latest.log --mode summary --history-limit 16 --output report.json。摘要只截每阶段尾部历史、错误和无owner样本，保留总计数、latestFailuresByStage、failedObservationsByStage、最新校验、内容版本与区块结果历史；errorCount决定退出码。detail默认保留完整历史。道路/版本/区块仍全保留，不能称全输入恒定内存。
 
 

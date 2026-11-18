@@ -175,22 +175,37 @@ public final class LoadedChunkRoadBackfill {
         }
         long backfillStartedAt = System.nanoTime();
         Set<Long> expanded = expandNeighbors ? expand(candidateChunkKeys) : new LinkedHashSet<>(candidateChunkKeys);
+        // 单块计时看不到选块、复核台账和同步落盘；同一轮另记分段时间才能判断卡顿来源。
+        long selectionDoneAt = CHUNK_TIMINGS ? System.nanoTime() : 0;
         BackfillPass pass = runBackfill(expanded, budget, knownLoaded,
                 key -> level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)),
                 key -> DeferredInitialRoadConstructionService.isMarkedNoConstructionRequired(level, key)
                         || DeferredInitialRoadConstructionService.isConstructionComplete(level, new ChunkPos(key)),
                 (key, chunk) -> replayTimed(level, key, chunk), verified, attempted,
                 new ConstructionTimeBudget(System::nanoTime));
+        long replayDoneAt = CHUNK_TIMINGS ? System.nanoTime() : 0;
         if (!pass.noConstruction().isEmpty()) {
             DeferredInitialRoadConstructionService.markNoConstructionRequired(level, pass.noConstruction());
             if (verified != null) verified.addAll(pass.noConstruction());
         }
-        if (pass.placed() > 0 || !pass.noConstruction().isEmpty()) {
+        boolean flushRequested = pass.placed() > 0 || !pass.noConstruction().isEmpty();
+        if (flushRequested) {
             RoadConstructionLedger.flush(level);
+        }
+        long finishedAt = CHUNK_TIMINGS ? System.nanoTime() : 0;
+        if (flushRequested) {
             LOGGER.info("【已加载区块回填的查询、施工和结案统计】 " + "RoadWeaver loaded-chunk construction backfill: candidates={} loaded={} processed={} "
                             + "placed={} noConstruction={} fullLookups={} elapsedMs={}",
                     expanded.size(), pass.loaded(), pass.processed(), pass.placed(), pass.noConstruction().size(),
                     pass.fullLookups(), (System.nanoTime() - backfillStartedAt) / 1_000_000L);
+        }
+        if (CHUNK_TIMINGS) {
+            LOGGER.info("【道路回填分段耗时】 [BACKFILL-PASS-TIMING] candidates={} loaded={} processed={} "
+                            + "flushRequested={} selectionUs={} checkAndReplayUs={} settlementUs={} totalUs={}",
+                    expanded.size(), pass.loaded(), pass.processed(), flushRequested,
+                    (selectionDoneAt - backfillStartedAt) / 1_000L,
+                    (replayDoneAt - selectionDoneAt) / 1_000L,
+                    (finishedAt - replayDoneAt) / 1_000L, (finishedAt - backfillStartedAt) / 1_000L);
         }
         return pass.placed();
     }
