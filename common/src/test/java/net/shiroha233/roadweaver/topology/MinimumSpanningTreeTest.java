@@ -13,8 +13,10 @@ import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -201,6 +203,24 @@ class MinimumSpanningTreeTest {
         assertEquals(4, expected.edgeCount());
         assertEquals(4, actual.componentCount());
         assertEquals(expected, actual);
+    }
+
+    @Test
+    void sparseReachabilityUsesNodeIdsAndKeepsIsolatedDiagonal() {
+        var nodes = List.of(new RoadNode("a", 0, 0), new RoadNode("isolated", 20, 20),
+                new RoadNode("b", 0, 2));
+        var metric = flatMetric(30);
+        MinimumSpanningTree.EdgeFilter allowed = (from, to) -> from == 0 && to == 2;
+        assertNotNull(TopologyCandidates.nearby(nodes, 2, allowed), "夹具必须使用稀疏行");
+        var sparse = GeodesicMatrix.buildWithin(metric, nodes, 2, allowed);
+        // 行内槽 0 存的是节点 2，不能把它当作通向节点 0 或节点 1 的权重。
+        assertTrue(assertDoesNotThrow(() -> sparse.reachable(0, 2)),
+                "目标节点号大于行长度时仍须找到合法边");
+        assertTrue(sparse.reachable(2, 0));
+        assertFalse(sparse.reachable(0, 1));
+        assertFalse(sparse.reachable(1, 0));
+        assertTrue(sparse.reachable(1, 1), "与稠密矩阵一样，孤立点的自身距离仍为零");
+        assertFalse(sparse.hasAnyConnection(1), "自达不能冒充连接了别的节点");
     }
 
     @Test

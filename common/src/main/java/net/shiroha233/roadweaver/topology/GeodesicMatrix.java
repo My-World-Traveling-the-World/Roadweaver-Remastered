@@ -192,7 +192,8 @@ public final class GeodesicMatrix {
 
     /** 两个节点是否互相可达。 */
     public boolean reachable(int i, int j) {
-        return Double.isFinite(distances[i][j]);
+        // 稀疏行的槽位不是节点编号；沿用距离查询对未准入边和对角线的定义。
+        return Double.isFinite(distance(i, j));
     }
 
     /** 某节点是否与至少一个其他节点连通。 */
