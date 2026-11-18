@@ -2,6 +2,8 @@
 
 ## 第54轮：修正负高度二分（2026-11-18）
 
+关联长城收口：第35轮已实施地基快照/稳定Top64、首次plan落块及可靠结案、每plan材料缓存、会话共享地形结果缓存。完整789项零失败/错误/跳过，编译成功，未部署/未真机。长城HANDOFF和docs/STARTUP-OPTIMIZATION-20261118.md记录实现与变异，测试均留长城。窗口编译/范围设置/PlannerScheduler拆分仍待做；本轮道路源码以d259cdf、1659为终检，不在文档提交后重算测试。
+
 ### 一、改了什么
 
 行为变更：NoiseChunkHeightSampler以lo+((hi-lo)>>>1)取中点，避免负高度无符号和越界。将同一生产二分内核以包内密度/高度输入开放，坐标floorDiv、严格阈值和下降策略保持。新增SurfaceEstimateSearchTest并显式登记。
