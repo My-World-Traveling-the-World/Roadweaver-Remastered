@@ -3,21 +3,22 @@ package net.shiroha233.roadweaver.pathlogic.bridge;
 
 import java.util.ArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
+import it.unimi.dsi.fastutil.ints.IntArrays;
 import java.util.List;
 
 /** 只做宽阶段裁剪，不改变原距离、重叠或选主判据；密集重叠时仍须输出全部桥对。 */
 final class BridgePairIndex {
     private static final int LEAF_SIZE = 8;
     private final List<BridgeShareDetector.Bounds> boxes;
+    // 叶子共用桥号数组；建树完成后不再改写，查询不用分配叶子副本。
+    private final int[] order;
     private final Node root;
 
     BridgePairIndex(List<BridgeShareDetector.Bounds> boxes) {
         this.boxes = List.copyOf(boxes);
-        Integer[] order = new Integer[boxes.size()];
+        order = new int[boxes.size()];
         for (int i = 0; i < order.length; i++) order[i] = i;
-        root = build(order, 0, order.length);
+        root = build(0, order.length);
     }
 
     /** 建树只适用于大批稀疏输入；固定采样只选择等价枚举策略，绝不决定哪一对桥能参与。 */
@@ -63,8 +64,9 @@ final class BridgePairIndex {
         var target = boxes.get(source);
         // long防止树节点范围加半径溢出；叶子仍执行旧判据，保持其合法输入行为。
         if (safe && !overlaps(node.bounds, target, radius)) return;
-        if (node.indices != null) {
-            for (int candidate : node.indices) {
+        if (node.left == null) {
+            for (int i = node.from; i < node.to; i++) {
+                int candidate = order[i];
                 if (candidate <= source) continue;
                 if (checks != null) checks[0]++;
                 if (BridgeShareDetector.overlapsPrepared(target, boxes.get(candidate), radius)) out.add(candidate);
@@ -80,7 +82,7 @@ final class BridgePairIndex {
                 && (long)a.minZ() - radius <= b.maxZ() && (long)b.minZ() - radius <= a.maxZ();
     }
 
-    private Node build(Integer[] order, int from, int to) {
+    private Node build(int from, int to) {
         if (from == to) return null;
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE, maxIndex = -1;
@@ -91,20 +93,50 @@ final class BridgePairIndex {
             maxIndex = Math.max(maxIndex, order[i]);
         }
         var bounds = new BridgeShareDetector.Bounds(minX, minZ, maxX, maxZ);
-        if (to - from <= LEAF_SIZE) {
-            int[] indices = new int[to - from];
-            for (int i = from; i < to; i++) indices[i - from] = order[i];
-            return new Node(bounds, maxIndex, indices, null, null);
-        }
+        if (to - from <= LEAF_SIZE) return new Node(bounds, maxIndex, from, to, null, null);
         boolean xAxis = (long)maxX - minX >= (long)maxZ - minZ;
-        // 沿较长轴按中心中分，长桥不需要铺进成千上万空间桶，树深受桥数约束。
-        Arrays.sort(order, from, to, Comparator.<Integer>comparingLong(index -> {
-            var box = boxes.get(index);
-            return xAxis ? (long)box.minX() + box.maxX() : (long)box.minZ() + box.maxZ();
-        }).thenComparingInt(Integer::intValue));
-        int middle = (from + to) >>> 1;
-        return new Node(bounds, maxIndex, null, build(order, from, middle), build(order, middle, to));
+        int middle = from + ((to - from) >>> 1);
+        // 只找中位数。子树只依赖左右成员，不需要为每一层把全部桥号排好。
+        selectMedian(from, to, middle, xAxis);
+        return new Node(bounds, maxIndex, from, to, build(from, middle), build(middle, to));
     }
 
-    private record Node(BridgeShareDetector.Bounds bounds, int maxIndex, int[] indices, Node left, Node right) {}
+    private void selectMedian(int from, int to, int middle, boolean xAxis) {
+        int budget = 2 * (32 - Integer.numberOfLeadingZeros(to - from));
+        while (to - from > 1) {
+            if (budget-- == 0) {
+                // 分割质量不佳时只排序尚未确定的区间，兜住极端排列的建树耗时。
+                IntArrays.quickSort(order, from, to, (a, b) -> compare(a, b, xAxis));
+                return;
+            }
+            int pivot = order[from + ((to - from) >>> 1)];
+            int left = from;
+            int right = to - 1;
+            while (left <= right) {
+                while (compare(order[left], pivot, xAxis) < 0) left++;
+                while (compare(order[right], pivot, xAxis) > 0) right--;
+                if (left <= right) {
+                    int swap = order[left];
+                    order[left++] = order[right];
+                    order[right--] = swap;
+                }
+            }
+            if (middle <= right) to = right + 1;
+            else if (middle >= left) from = left;
+            else return;
+        }
+    }
+
+    private int compare(int a, int b, boolean xAxis) {
+        int byCenter = Long.compare(center(a, xAxis), center(b, xAxis));
+        // 中心并列也沿用桥号排序，使分区成员与旧建树一致。
+        return byCenter != 0 ? byCenter : Integer.compare(a, b);
+    }
+
+    private long center(int index, boolean xAxis) {
+        var box = boxes.get(index);
+        return xAxis ? (long)box.minX() + box.maxX() : (long)box.minZ() + box.maxZ();
+    }
+
+    private record Node(BridgeShareDetector.Bounds bounds, int maxIndex, int from, int to, Node left, Node right) {}
 }

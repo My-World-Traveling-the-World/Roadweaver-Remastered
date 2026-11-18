@@ -79,6 +79,27 @@ class BridgePairIndexTest {
             assertTrue(candidates>1000);
         }
     }
+    @Test void medianPartitionKeepsCandidateOrderAndLegacyLeafChecks() {
+        // 多个桥盒中心重合但长度不同；桥号决定中位分区，不能靠查询结果排序掩盖树形变化。
+        var boxes = new ArrayList<BridgeShareDetector.Bounds>();
+        for (int i = 0; i < 1537; i++) {
+            int center = (i % 13 - 6) * 120;
+            int span = i * 47 % 151 + 1;
+            boxes.add(new BridgeShareDetector.Bounds(center - span, i % 37, center + span, i % 37 + 2));
+        }
+        var frozen = new FrozenBridgePairIndex(boxes);
+        var indexed = new BridgePairIndex(boxes);
+        long[] oldChecks = {0}, newChecks = {0};
+        long pairs = 0;
+        for (int i = 0; i < boxes.size(); i++) {
+            var expected = frozen.after(i, 24, oldChecks);
+            assertEquals(expected, indexed.after(i, 24, newChecks), "桥号：" + i);
+            pairs += expected.size();
+        }
+        assertTrue(pairs > 1000, "夹具必须真的命中共桥候选");
+        assertEquals(oldChecks[0], newChecks[0], "中位分区保持原叶子检查量");
+    }
+
     private static RoadData road(int z,int y) {
         var stations=new ArrayList<RoadSegmentPlacement>();var heights=new ArrayList<Integer>();
         for(int x=0;x<40;x++) {var p=new BlockPos(x,y,z);stations.add(new RoadSegmentPlacement(p,List.of(p)));heights.add(y);}
