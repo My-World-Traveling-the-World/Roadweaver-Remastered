@@ -191,6 +191,17 @@ public final class SegmentPaver {
             ModConfig cfg,
             Map<Integer, String> refusalOut,
             boolean openCutStation) {
+        return paveSegment(world, road, seg, segmentIndex, centers, targetY, grade, roadType,
+                materials, slabMaterials, random, cfg, refusalOut, openCutStation,
+                SegmentPaver::isWallOwned);
+    }
+
+    /** 只替换跨模组列查询边界，离线测试仍执行真实铺设循环和写块分支。 */
+    static boolean paveSegment(WorldGenLevel world, RoadData road, RoadSegmentPlacement seg,
+            int segmentIndex, List<BlockPos> centers, int[] targetY, SegmentGrade grade, int roadType,
+            List<BlockState> materials, List<BlockState> slabMaterials, RandomSource random,
+            ModConfig cfg, Map<Integer, String> refusalOut, boolean openCutStation,
+            java.util.function.Predicate<BlockPos> wallProtection) {
         List<BlockPos> positions = seg.positions();
         if (positions.isEmpty()) return true;
         if (grade == null || grade.heights().length != positions.size()) return false;
@@ -250,6 +261,8 @@ public final class SegmentPaver {
             BlockPos widthBlock = positions.get(i);
             int y = heights[i];
             BlockPos pos = new BlockPos(widthBlock.getX(), y, widthBlock.getZ());
+            // 墙拥有整列，必须先于“只补路面”判断；下层写块守卫覆盖不到这条直接写入分支。
+            if (wallProtection.test(pos)) continue;
 
             // A route-level collision is handled by planning.  This is only a
             // last-resort block guard: do not delete a block entity, a huge
@@ -322,9 +335,7 @@ public final class SegmentPaver {
                 BlockPos under = pos.below();
                 if (world.getBlockState(under).isAir()
                         && world.getBlockState(under.below()).blocksMotion()
-                        && !net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
-                                net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
-                                under.getX(), under.getY(), under.getZ())) {
+                        && !isWallOwned(under)) {
                     world.setBlock(under, baseMats.get(random.nextInt(baseMats.size())), 3);
                     long supports = SHOULDER_SUPPORTS.incrementAndGet();
                     if (supports <= 16 || supports % 256 == 0) {
@@ -336,9 +347,7 @@ public final class SegmentPaver {
 
             if (slabs != null && !slabs.isEmpty()) {
                 if (grade.slabTransition()
-                        && !net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
-                                net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
-                                pos.getX(), pos.getY(), pos.getZ())) {
+                        && !isWallOwned(pos)) {
                     BlockState slabState = slabs.get(random.nextInt(slabs.size()));
                     if (slabState.getBlock() instanceof SlabBlock) {
                         slabState = slabState.setValue(SlabBlock.TYPE, SlabType.BOTTOM);
@@ -355,6 +364,13 @@ public final class SegmentPaver {
             TunnelClearLedger.report(tunnelScope);
         }
         return true;
+    }
+
+    /** 统一主路面、支撑和半砖的查询，避免额外写块分支各自漏接跨模组保护。 */
+    private static boolean isWallOwned(BlockPos pos) {
+        return net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor(
+                net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE,
+                pos.getX(), pos.getY(), pos.getZ());
     }
 
     /**

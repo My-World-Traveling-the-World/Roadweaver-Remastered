@@ -1,0 +1,26 @@
+{
+  "mutations": [
+    {
+      "name": "omit-wall-veto",
+      "target": "common\\src\\main\\java\\net\\shiroha233\\roadweaver\\pathlogic\\construction\\SegmentPaver.java",
+      "junit_failed": 2,
+      "log": "round72-mut-omit-wall-veto.log",
+      "sha256": "87aefcd842ba6e5b24ee27e4834de79b64df1e62a961260ba0e247d865f6c50a"
+    },
+    {
+      "name": "skip-every-column",
+      "target": "common\\src\\main\\java\\net\\shiroha233\\roadweaver\\pathlogic\\construction\\SegmentPaver.java",
+      "junit_failed": 3,
+      "log": "round72-mut-skip-every-column.log",
+      "sha256": "4ee87d9984dc1c512f2dd18a8f78ab1610888dcbac01a556d6020078fd89ff30"
+    },
+    {
+      "name": "overwrite-protected-roadbed",
+      "target": "common\\src\\main\\java\\net\\shiroha233\\roadweaver\\pathlogic\\construction\\SegmentPaver.java",
+      "junit_failed": 2,
+      "log": "round72-mut-overwrite-protected-roadbed.log",
+      "sha256": "40191d3a180a8d46cf3338ddb660c7767608b37bb985f301db10d05e6b3f584c"
+    }
+  ],
+  "restored": true
+}

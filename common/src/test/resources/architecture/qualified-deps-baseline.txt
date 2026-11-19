@@ -14,7 +14,7 @@ generation -> route                          21
 generation -> search                         1
 generation -> structures                     1
 pathfinding -> config                        3
-pathlogic -> compat                          24
+pathlogic -> compat                          22
 pathlogic -> config                          2
 pathlogic -> core                            35
 pathlogic -> decoration                      2
