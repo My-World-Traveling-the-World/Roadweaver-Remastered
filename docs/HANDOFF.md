@@ -1,5 +1,42 @@
 # 交接台账（HANDOFF）
 
+## 第71轮：道路、长城、巨树及河流联动复核（2026-11-20）
+
+### 一、改了什么
+
+行为等价：本轮只核对源码、重跑验证并更新交接，没有修改Java或部署游戏模组。道路main和长城既有分支pull均无更新。
+
+### 二、我验证了什么
+
+道路完整 **PASS tests=1694 skipped=0 aborted=0 failed=0**，Fabric编译、BUILD SUCCESSFUL，日志`.analysis_tmp/interop-audit-20261120.log`。长城定向执行WallRoadGuardTest、WallRoadBatchTest、InteropContractTest，实际3类9项、失败/错误/跳过均0，日志在长城`build-interop-audit-20261120.log`；不能把此定向结果写成新跑967项全量。
+
+长城WallPlanSupport.publishPlannedColumns从计划体素发布X/Z列，空气净空意图也保留；ProductionSession发布及旧计划重建入口已调用。WallRoadApi.blocks保护整列并外扩2格，blocksWithin半径至少2；道路RoadBlockPlacer、RoadConstructionSafety挖填、BridgeSegmentPlannerNew模板/墩/灯、RoadTunnelBuilder与PortalSafetyRules清障、DecorationExecutor均有长城否决接线。它是保护占地，不表示自动修通门洞。
+
+巨树build.gradle确实编入upstream-decompiled，TreePlacer.place在写树前调用PlainCraftRoadReservation，再经StructureReservationApi与ApiBackendImpl进入HugeTreeReservation。预留只取形状类型1100..1199，考虑旋转、镜像、倒伏；BandPathfinder使用路宽外扩快照，最终施工仍查询实时预留。现有测试验证索引/投影，不是完整跨模组TreePlacer实测。
+
+河流自身StreamsServerLifecycleMixin调用publishStartupReadiness，由结果门发布RiverReadinessBroadcast；长城订阅，道路MinecraftServerMixin经RoadStartupGate先等河流再等长城（缺席直接满足长城条件）。道路另按路线预热河流并读取河道、水面及河床供过水判定。无长城时仍先等河流。Chunky负载及河流线程控制有注册方与道路消费方，不能将注册存在等同所有调度场景实测通过。
+
+### 三、我没能验证什么
+
+未进整合包或玩家存档，未检查已安装jar是否对应当前源码，未实测河流—长城—道路启动顺序、真实墙脚施工或巨树所有模板。未证明门洞可以通路；当前墙列保护不区分Y，洞下也不自动放行。没有新守卫交付或变异记录，只有既有回归重跑。
+
+### 四、遗留半截的东西
+
+确认两处尚未修复的缺口：
+
+- 巨树诊断契约：ApiBackendImpl.reserveStructure只要level/center非null，调用void的HugeTreeReservation.reserve后即返回true；后者形状读取异常/空形状/过滤后零列均可能直接返回。因此API“已登记”和巨树侧accepted成功日志不能证明实际非空列已发布。本轮不将其夸大成已复现真机穿树。
+- 长城补铺边界：SegmentPaver.paveSegment在classifyProtectedColumn得到PAVE_SURFACE_ONLY后，调用clearAboveColumn再直接world.setBlock(pos, ...)。classify只读isProtectedPreparedBlock；该判据含巨树/圣域/结构/方块硬保护，不含WallRoadApi。clearAboveColumn自身拒绝墙列不会阻止后续直接写面。prepareRoadGrade的wallColumn只跳过挖填，ConstructionStationWork也无统一长城列否决。故“路面未受其他保护、路基受保护且位于墙列”的分支没有显式墙保护；源码路径已确认，尚未构造真实WorldGenLevel联合复现，不能声称已证明实际存档被改坏。
+
+长城侧占地测试通过不能替代道路实际全部写块通道的联合验收。
+
+### 五、下一轮先做什么
+
+先补PAVE_SURFACE_ONLY与长城整列否决的优先级及真实施工写入集合守卫，再将巨树预留结果从真实发布路径传回API，区分无须预留、成功非空、读取失败，保留跨模组公开签名并补负控；扩展实际墙脚的挖填/模板桥/隧道/装饰联合守卫，测试留各自mod。门洞穿路需要独立通道契约，不可直接取消整列保护。
+
+### 六、踩到的坑
+
+旧注释仍有“纯反射”“全部走API不含反射”等漂移，须以实际调用为准。Gradle的多个--tests过滤中有不存在的模式时，其他模式匹配成功仍可整体通过；必须按XML中的实际类/项计数，不能把未出现的生命周期测试算作已执行。
+
 ## 第70轮：本批五项全部完成、路线同步及双仓收尾（2026-11-20）
 
 ### 一、改了什么
