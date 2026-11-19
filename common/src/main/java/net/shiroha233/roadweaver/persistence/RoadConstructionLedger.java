@@ -85,18 +85,20 @@ public final class RoadConstructionLedger {
     private static void flushLocked(State state, Supplier<Path> path, Consumer<FlushTiming> timing) {
         // 读取失败的状态不是空台账；即使调用方错误请求 flush，也不允许覆盖原文件。
         if (state.readFailure) return;
-        if (!state.dirty.compareAndSet(true, false)) return;
+        // 状态锁已串行提交；路径解析/编码异常也必须保留脏标记，不能提前假称成功。
+        if (!state.dirty.get()) return;
         long started = timing == null ? 0L : System.nanoTime();
 
-        List<Entry> entries = new ArrayList<>();
-        for (Map.Entry<Long, Set<Long>> chunk : state.completed.entrySet()) {
-            for (long roadFingerprint : chunk.getValue()) {
-                entries.add(new Entry(chunk.getKey(), roadFingerprint));
+        // 首次提交按旧路径收集；之后只收集新增项，复用上次成功提交的不可变顺序。
+        List<Entry> additions = new ArrayList<>();
+        if (state.ordered == null) {
+            for (Map.Entry<Long, Set<Long>> chunk : state.completed.entrySet()) {
+                for (long fingerprint : chunk.getValue()) additions.add(new Entry(chunk.getKey(), fingerprint));
             }
-        }
+        } else additions.addAll(state.pending);
         long gathered = timing == null ? 0L : System.nanoTime();
-        entries.sort(Comparator.comparingLong(Entry::chunkKey)
-                .thenComparingLong(Entry::roadFingerprint));
+        additions.sort(ENTRY_ORDER);
+        List<Entry> entries = merge(state.ordered, additions);
         long sorted = timing == null ? 0L : System.nanoTime();
 
         StringBuilder output = new StringBuilder("# RoadWeaver constructed road chunks\n");
@@ -113,6 +115,10 @@ public final class RoadConstructionLedger {
         IOException writeFailure = null;
         try {
             FileStorageIO.writeStringAtomic(target, contents);
+            // 只有原子写成功才推进复用快照；失败时新增项保留，下一次仍提交完整台账。
+            state.ordered = entries;
+            state.pending.clear();
+            state.dirty.set(false);
         } catch (IOException failure) {
             // 写盘失败是待重试，不算干净快照；先标脏再报告。
             state.dirty.set(true);
@@ -127,6 +133,23 @@ public final class RoadConstructionLedger {
             timing.accept(new FlushTiming(entries.size(), contents.length(), writeFailure == null,
                     gathered - started, sorted - gathered, writing - sorted, finished - writing));
         }
+    }
+
+    private static final Comparator<Entry> ENTRY_ORDER = Comparator.comparingLong(Entry::chunkKey)
+            .thenComparingLong(Entry::roadFingerprint);
+
+    /** 已提交部分有序且去重，新增部分来自Set.add成功，无须重新比较全部旧项。 */
+    private static List<Entry> merge(List<Entry> previous, List<Entry> added) {
+        if (previous == null || previous.isEmpty()) return added;
+        var merged = new ArrayList<Entry>(previous.size() + added.size());
+        int old = 0, next = 0;
+        while (old < previous.size() && next < added.size()) {
+            if (ENTRY_ORDER.compare(previous.get(old), added.get(next)) < 0) merged.add(previous.get(old++));
+            else merged.add(added.get(next++));
+        }
+        merged.addAll(previous.subList(old, previous.size()));
+        merged.addAll(added.subList(next, added.size()));
+        return merged;
     }
 
     record FlushTiming(int entries, int bytes, boolean written, long gatherNanos,
@@ -196,6 +219,8 @@ public final class RoadConstructionLedger {
             // 降级期间不接受新的完工项，成功快照可以一次替换而不合并未知旧内容。
             state.completed.clear();
             state.completed.putAll(reloaded.completed);
+            state.ordered = null;
+            state.pending.clear();
             state.readFailure = false;
             LOGGER.info("【施工完工台账完整重读成功，恢复施工和写盘】 chunks={}", state.completed.size());
             return true;
@@ -218,6 +243,9 @@ public final class RoadConstructionLedger {
         private final AtomicBoolean dirty = new AtomicBoolean();
         private volatile boolean readFailure;
         private long lastRetryAtNanos;
+        // 延迟到首次脏flush才保留排序表，纯读取旧台账不额外持有Entry对象。
+        private List<Entry> ordered;
+        private final List<Entry> pending = new ArrayList<>();
 
         synchronized boolean isComplete(ChunkPos chunkPos, long roadFingerprint) {
             // 禁止把未知悄悄降成 false，遗漏入口守卫时也应有明确失败而非错误重铺。
@@ -231,7 +259,10 @@ public final class RoadConstructionLedger {
             Set<Long> roads = completed.computeIfAbsent(
                     chunkPos.toLong(), ignored -> ConcurrentHashMap.newKeySet());
             // 重复完成不能触发重复写盘；只有新增条目才改变磁盘快照。
-            if (roads.add(roadFingerprint)) dirty.set(true);
+            if (roads.add(roadFingerprint)) {
+                if (ordered != null) pending.add(new Entry(chunkPos.toLong(), roadFingerprint));
+                dirty.set(true);
+            }
         }
     }
 }

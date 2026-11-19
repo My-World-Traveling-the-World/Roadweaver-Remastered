@@ -190,6 +190,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.persistence.chunk.RoadChunkStoreReadFaultTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.RoadConstructionLedgerTest"),
+                        // 新增类必须显式登记，避免正确守卫永远不运行。
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.persistence.ConstructionLedgerIncrementalTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.persistence.RoadConstructionLedgerReadFaultTest"),
                         DiscoverySelectors.selectClass(

@@ -1,0 +1,17 @@
+gradle.projectsEvaluated {
+ def p=gradle.rootProject.project(':common')
+ def out=p.layout.buildDirectory.dir('ledger-incremental-probe')
+ def compile=p.tasks.register('compileLedgerIncrementalProbe',JavaCompile){
+  dependsOn p.tasks.named('testClasses')
+  source p.rootProject.files('scripts/benchmarks/FrozenConstructionLedger.java','scripts/benchmarks/LedgerIncrementalProbe.java')
+  classpath=p.sourceSets.test.runtimeClasspath
+  destinationDirectory.set(out)
+  options.encoding='UTF-8'
+ }
+ p.tasks.register('ledgerIncrementalProbe',JavaExec){
+  dependsOn compile
+  classpath=p.sourceSets.test.runtimeClasspath+p.files(out)
+  mainClass='net.shiroha233.roadweaver.persistence.LedgerIncrementalProbe'
+  jvmArgs '-Xms512m','-Xmx512m'
+ }
+}

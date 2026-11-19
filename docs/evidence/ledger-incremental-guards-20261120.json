@@ -1,0 +1,26 @@
+[
+  {
+    "mutation": "drop-pending",
+    "target_red": true,
+    "log": "round69-mutant-drop-pending.log",
+    "sha256": "8a61162f84f27047ab391f3e3e26469de3966575efa6cee8a4c13ca5f085043e"
+  },
+  {
+    "mutation": "reverse-merge",
+    "target_red": true,
+    "log": "round69-mutant-reverse-merge.log",
+    "sha256": "dd5aae926bb091039a951112c895e99d5bb004798f4650081f6e81b9af8b4477"
+  },
+  {
+    "mutation": "advance-on-failure",
+    "target_red": true,
+    "log": "round69-mutant-advance-on-failure.log",
+    "sha256": "663c967c00d1bc65aaa358d9ec4175d75768992784eb83b8be18a7f8f1339b89"
+  },
+  {
+    "mutation": "clear-before-path",
+    "target_red": true,
+    "log": "round69-mutant-clear-before-path.log",
+    "sha256": "841023acca37da9de3526e7ff7444cfa02012e97f177ac547f05fb521306e2ee"
+  }
+]
