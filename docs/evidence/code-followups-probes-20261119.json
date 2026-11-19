@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-19",
+  "kind": "followup_audit_only_not_a_fix_or_guard_delivery",
+  "method": "JDK21 javac + java using existing named test runtime classpath; package-local probes directly call currently built production classes; sources unchanged",
+  "limitations": [
+    "No real world or player save, no full regression rerun because only docs/evidence change",
+    "Probe assertions intentionally confirm the current defect; do not register them as guards for correct behavior",
+    "No timing or FPS performance claim; OwnerCancelProbe demonstrates batch-level thread-interruption behavior, not a full ProductionSession shutdown"
+  ],
+  "baseline": "5a77acb4ba5cc3da60b0f5b9c937ca5374e88226",
+  "production_java_digest": "3f1c1591d7dadc75f0be953c9612ef1986ddce8dcc4ed531f9a88a340869c468",
+  "probes": [
+    {
+      "probe": "PipelineFailureProbe",
+      "status": "reproduced_unfixed",
+      "result": [
+        "PIPELINE_FAILURE cancellation=false returnedConnections=1 status=PLANNED",
+        "PIPELINE_FAILURE cancellation=true returnedConnections=1 status=PLANNED"
+      ],
+      "log_sha256": "17b1aec38a3a56743a8a3d5128459c16e013c77032a6eaa9723f613f8576511d",
+      "probe_java": "package net.shiroha233.roadweaver.planning.impl;\n\nimport java.util.List;\nimport java.util.concurrent.CancellationException;\nimport net.minecraft.core.BlockPos;\n\n/** 对生产plan注入取消/采样失败，核实是否仍返回看似正常的连线。 */\npublic final class PipelineFailureProbe {\n    public static void main(String[] args) {\n        for (boolean cancellation : new boolean[]{false, true}) {\n            var planner = new PipelinePlanner(8, () -> {\n                if (cancellation) throw new CancellationException(\"probe-cancel\");\n                throw new IllegalStateException(\"probe-sample-failed\");\n            });\n            var result = planner.plan(List.of(new BlockPos(0, 64, 0), new BlockPos(24, 64, 0)), 48);\n            System.out.println(\"PIPELINE_FAILURE cancellation=\" + cancellation + \" returnedConnections=\"\n                    + result.size() + \" status=\" + result.getFirst().status());\n            if (result.size() != 1) throw new AssertionError(\"源码行为已经变化\");\n        }\n    }\n}\n",
+      "production_source": "common/src/main/java/net/shiroha233/roadweaver/planning/impl/PipelinePlanner.java",
+      "normalized_source_sha256": "1a643be72283e36213807f4237afe48bd2ce99e795fff3a06adda7ac348aadfa",
+      "actual_compiled_class": "common/build/classes/java/main/net/shiroha233/roadweaver/planning/impl/PipelinePlanner.class",
+      "class_sha256": "b75b746b92f9a99f57becbcf943d0fdb35b5bbad76ec6cca465d4d13a357053b"
+    }
+  ]
+}
