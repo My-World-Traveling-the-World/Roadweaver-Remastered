@@ -1,0 +1,30 @@
+[
+  {
+    "mutation": "sampling-empty",
+    "target": "PipelinePlannerFailureTest",
+    "target_red": true,
+    "log": "round68-mutant-sampling-empty.log",
+    "sha256": "70cbc85843ab24714a369929b82d8fd9a2f8b01dbc3a1d1d3f86034430e3dd35"
+  },
+  {
+    "mutation": "solve-empty",
+    "target": "PipelinePlannerFailureTest",
+    "target_red": true,
+    "log": "round68-mutant-solve-empty.log",
+    "sha256": "b705bcef02ae6162f635de551cf519c604d4eccb3cde0755a7f22832e75642fe"
+  },
+  {
+    "mutation": "interrupt",
+    "target": "PipelinePlannerFailureTest",
+    "target_red": true,
+    "log": "round68-mutant-interrupt.log",
+    "sha256": "36eff805b12eda488c5f6e5135def5fa35599ac3c63b6f7121ff76153f53ba28"
+  },
+  {
+    "mutation": "cancel-wrapped",
+    "target": "PipelinePlannerFailureTest",
+    "target_red": true,
+    "log": "round68-mutant-cancel-wrapped.log",
+    "sha256": "329f719fbe89cbd8e6ee0bd5dd220379c0d0f544a1ce6a66fcb160034863d2be"
+  }
+]

@@ -539,7 +539,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
      * 带世界的版本 —— {@code planningAlgorithm = PIPELINE} 需要它。
      *
      * <p>2026-11-13 加：测地距离规划器必须先采地形，而地形来自世界。
-     * 传 {@code null} 时该规划器会退回直线距离的 MST（见 {@code PipelinePlanner}）。</p>
+     * 真实规划缺少世界时明确失败；取消/采样失败也不转换为空集合或直线MST。</p>
      */
     static List<StructureConnection> planPrimaryEdges(ServerLevel level, List<BlockPos> points,
                                                       ModConfig cfg0) {

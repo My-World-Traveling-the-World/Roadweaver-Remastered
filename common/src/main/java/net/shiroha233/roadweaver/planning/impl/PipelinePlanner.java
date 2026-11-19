@@ -116,13 +116,7 @@ public final class PipelinePlanner implements NetworkPlanner {
         if (points == null || points.size() < 2) {
             return List.of();
         }
-        if (samplerFactory == null) {
-            // 没有世界就建不了地形场。退回直线距离的 MST —— 宁可退化也不抛异常：
-            // 规划器挂掉会让整局一条路都不生成，那比「用旧算法」严重得多。
-            LOGGER.warn("RoadWeaver pipeline planner: level 为 null，退回直线距离 MST（{} 个点）",
-                    points.size());
-            return fallbackMST(points, maxEdgeLenBlocks);
-        }
+        checkInterrupted();
 
         // ① 去重并记录每点的代表坐标（节点只有 x/z，y 要从原 BlockPos 取回）
         List<RoadNode> nodes = new ArrayList<>(points.size());
@@ -141,6 +135,10 @@ public final class PipelinePlanner implements NetworkPlanner {
         }
         if (nodes.size() < 2) {
             return List.of();
+        }
+        if (samplerFactory == null) {
+            // 缺世界读取器是前置失败，不能静默改用直线算法并持久化一张不同的路网。
+            throw new IllegalStateException("测地规划缺少世界读取器，未生成替代路网");
         }
 
         // ② 包围盒
@@ -180,14 +178,13 @@ public final class PipelinePlanner implements NetworkPlanner {
             terrain = surface.terrain();
             shadowSurface = BUILDABILITY_SHADOW ? surface : null;
         } catch (RuntimeException samplingFailure) {
-            // 采样失败（区域过大 / 维度不支持等）时退回直线距离，不让规划整体失败。
-            // 2026-11-14 修复（审计 F）：原来这个异常被完全吞掉、零日志 ——
-            // 表现为「路网莫名其妙变成直线」，事后无从排查。
-            LOGGER.warn("RoadWeaver pipeline planner: 地形采样失败，退回直线距离 MST"
-                    + "（区域 {}x{} step={} points={}）", width, depth, step, points.size(),
-                    samplingFailure);
-            return fallbackMST(points, maxEdgeLenBlocks);
+            // 取消保留原类型和中断位；其他失败也向上游传播，交由区域规划原重试协议处理。
+            if (samplingFailure instanceof java.util.concurrent.CancellationException) throw samplingFailure;
+            LOGGER.warn("测地规划地形采样失败，保留原故障且未改用其他算法（区域 {}x{} step={} points={}）",
+                    width, depth, step, points.size(), samplingFailure);
+            throw samplingFailure;
         }
+        checkInterrupted();
         FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
 
         // ④ 跑拓扑层（测地矩阵 + MST）
@@ -220,12 +217,12 @@ public final class PipelinePlanner implements NetworkPlanner {
                         withinMaxEdge(representatives.get(from), representatives.get(to), maxEdgeLenBlocks));
             }
         } catch (RuntimeException pipelineFailure) {
-            // 2026-11-14 修复（审计 F）：同样原来是静默吞掉。
-            LOGGER.warn("RoadWeaver pipeline planner: 测地拓扑求解失败，退回直线距离 MST"
-                    + "（nodes={}）", nodes.size(), pipelineFailure);
-            return fallbackMST(points, maxEdgeLenBlocks);
+            // 大域按需采样在求解期间发生，不能只修上面的密集采样分支。
+            if (pipelineFailure instanceof java.util.concurrent.CancellationException) throw pipelineFailure;
+            LOGGER.warn("测地拓扑求解失败，保留原故障且未改用其他算法（nodes={}）", nodes.size(), pipelineFailure);
+            throw pipelineFailure;
         }
-
+        checkInterrupted();
         if (terrain instanceof TiledTerrainField tiled) {
             // 统计实际请求与驱逐，不把 3 MiB 瓦片缓存冒充总内存上限。
             var stats = tiled.stats();
@@ -266,6 +263,7 @@ public final class PipelinePlanner implements NetworkPlanner {
             BlockPos to = representatives.get(edge.to());
             out.add(new StructureConnection(from, to, ConnectionStatus.PLANNED));
         }
+        checkInterrupted();
         return out;
     }
 
@@ -277,78 +275,10 @@ public final class PipelinePlanner implements NetworkPlanner {
         return ((long) x << 32) ^ (z & 0xFFFFFFFFL);
     }
 
-    /**
-     * 直线距离的 MST 回退（从 MSTPlanner.planMST 内联，2026-11-13）。
-     *
-     * <p>旧 MSTPlanner 已随「全用最新算法」退役，但本方法仍被三重回退调用：
-     * 没有世界 / 采样失败 / 管线失败时，宁可退化也不抛异常。</p>
-     */
-    private static List<StructureConnection> fallbackMST(List<BlockPos> points, int maxEdgeLenBlocks) {
-        if (points == null || points.size() < 2) return List.of();
-
-        ArrayList<BlockPos> unique = new ArrayList<>();
-        HashSet<Long> seen = new HashSet<>();
-        for (BlockPos p : points) {
-            if (p == null) continue;
-            long key = xzKey(p.getX(), p.getZ());
-            if (seen.add(key)) unique.add(p);
+    /** 不清除中断位，调用方才能把终止与正常无候选区分；也不让已取消请求启动新采样。 */
+    private static void checkInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new java.util.concurrent.CancellationException("测地规划已中断，未发布路网");
         }
-        int n = unique.size();
-        if (n < 2) return List.of();
-
-        record Edge(int a, int b, long d2) {}
-
-        ArrayList<Edge> edges = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            BlockPos pi = unique.get(i);
-            long ix = pi.getX();
-            long iz = pi.getZ();
-            for (int j = i + 1; j < n; j++) {
-                BlockPos pj = unique.get(j);
-                long dx = ix - pj.getX();
-                long dz = iz - pj.getZ();
-                long d2 = dx * dx + dz * dz;
-                // 回退仍按平面距离计价，但是否准入与正常规划使用同一端点长度上限。
-                if (!withinMaxEdge(pi, pj, maxEdgeLenBlocks)) continue;
-                edges.add(new Edge(i, j, d2));
-            }
-        }
-        if (edges.isEmpty()) return List.of();
-
-        edges.sort((e1, e2) -> Long.compare(e1.d2(), e2.d2()));
-
-        int[] parent = new int[n];
-        for (int i = 0; i < n; i++) parent[i] = i;
-
-        ArrayList<StructureConnection> result = new ArrayList<>();
-        HashSet<Long> edgeKeys = new HashSet<>();
-
-        for (Edge e : edges) {
-            int ra = find(parent, e.a());
-            int rb = find(parent, e.b());
-            if (ra == rb) continue;
-            parent[rb] = ra;
-
-            int ia = Math.min(e.a(), e.b());
-            int ib = Math.max(e.a(), e.b());
-            long key = (((long) ia) << 32) ^ (long) ib;
-            if (!edgeKeys.add(key)) continue;
-
-            BlockPos a = unique.get(e.a());
-            BlockPos b = unique.get(e.b());
-            BlockPos pa = new BlockPos(a.getX(), 0, a.getZ());
-            BlockPos pb = new BlockPos(b.getX(), 0, b.getZ());
-            result.add(new StructureConnection(pa, pb));
-        }
-
-        return result;
-    }
-
-    private static int find(int[] parent, int x) {
-        while (parent[x] != x) {
-            parent[x] = parent[parent[x]];
-            x = parent[x];
-        }
-        return x;
     }
 }

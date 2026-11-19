@@ -59,6 +59,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.TiledTerrainFieldTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.TiledTerrainFmmTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.impl.PipelinePlannerSamplingTest"),
+                        // 取消或精确采样失败必须保留失败，不能以旧直线MST掩盖。
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.impl.PipelinePlannerFailureTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.sampling.TiledSamplerIntegrationTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.topology.MinimumSpanningTreeTest"),
