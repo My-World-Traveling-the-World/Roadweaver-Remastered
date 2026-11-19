@@ -1,0 +1,26 @@
+[
+  {
+    "mutation": "sharing",
+    "target_red": true,
+    "log": "round65-mutant-sharing.log",
+    "sha256": "6e07a683d563f8862b1e827f72df8fb6e5787c5e96c745732620b2bbe2839d50"
+  },
+  {
+    "mutation": "config",
+    "target_red": true,
+    "log": "round65-mutant-config.log",
+    "sha256": "e872f3e7fe5ef121c386204d797e8806f9e108a6ff6c375e3e92242d132b2632"
+  },
+  {
+    "mutation": "revision",
+    "target_red": true,
+    "log": "round65-mutant-revision.log",
+    "sha256": "70d0655a22819fa65aacbf010e693d7b1a22d0cb1cba2cae83970064d59d7660"
+  },
+  {
+    "mutation": "interrupt",
+    "target_red": true,
+    "log": "round65-mutant-interrupt.log",
+    "sha256": "032b72e2db343ae5f493d00a3be9a84469485e62eca9c13cc0ad532c4f5534b2"
+  }
+]

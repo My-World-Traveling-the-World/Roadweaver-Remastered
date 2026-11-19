@@ -153,6 +153,8 @@ public final class RoadWorldgenPlanCache {
     static final class Session {
         private final Object cacheLock = new Object();
         private final ChunkPlanVersions versions = new ChunkPlanVersions();
+        // 配置或版本不同的编译不能互相等候；表项只活到真实编译退出，不保留历史。
+        private final Map<ChunkPlanFlight.Key, ChunkPlanFlight> flights = new java.util.HashMap<>();
         /**
          * T-20B:access-order LRU。旧实现是 ConcurrentHashMap + trimIfNeeded()
          * 任意驱逐 —— Chunky 海量生成区块把缓存顶过上限后,玩家周边热点计划被
@@ -196,24 +198,55 @@ public final class RoadWorldgenPlanCache {
             while (true) {
                 ChunkPlanVersions.Claim claim;
                 long compileRevision;
+                ChunkPlanFlight.Key flightKey;
+                ChunkPlanFlight flight;
+                boolean owner;
                 synchronized (cacheLock) {
                     CachedPlan cached = lookup(key);
                     if (cached != null && cached.matches(requested, versions.revision(key), clock.getAsLong()))
                         return cached.plan();
-                    claim = versions.acquire(key);
-                    compileRevision = claim.revision;
+                    compileRevision = versions.revision(key);
+                    flightKey = new ChunkPlanFlight.Key(key, requested, compileRevision);
+                    flight = flights.get(flightKey);
+                    owner = flight == null;
+                    if (owner) {
+                        flight = new ChunkPlanFlight();
+                        flights.put(flightKey, flight);
+                        claim = versions.acquire(key);
+                    } else {
+                        claim = null;
+                        flight.waiters++;
+                    }
                 }
+                if (!owner) {
+                    try { flight.await(); }
+                    finally { synchronized (cacheLock) { flight.waiters--; } }
+                    // 等待期间可能失效或换配置，醒来必须重新核验，不能直接消费旧结果。
+                    continue;
+                }
+                Throwable failure = null;
                 try {
-                    // 编译仍在锁外并行；认领只保住版本对象，不持有世界/区块或施工资格。
+                    if (Thread.currentThread().isInterrupted()) throw new RoadChunkPlan.Deferred();
+                    // 不同键仍在锁外并行，同键仅拥有者取证和编译。
                     RoadChunkPlan compiled = compiler.compile(chunkPos, requested, compileRevision);
                     synchronized (cacheLock) {
+                        if (Thread.currentThread().isInterrupted()) throw new RoadChunkPlan.Deferred();
                         if (claim.revision != compileRevision) continue;
                         // 失效与发布同锁，避免“检查版本后、put 前”出现过期结果发布缝隙。
                         store(key, requested, compiled, clock.getAsLong());
                         return compiled;
                     }
+                } catch (RuntimeException | Error error) {
+                    failure = error;
+                    throw error;
                 } finally {
-                    synchronized (cacheLock) { versions.release(key, claim); }
+                    synchronized (cacheLock) {
+                        flights.remove(flightKey, flight);
+                        versions.release(key, claim);
+                    }
+                    // 完成通知放在锁外，避免等待链/外部回调进入会话时产生锁环。
+                    if (failure == null) flight.completed.complete(null);
+                    else flight.completed.completeExceptionally(failure);
                 }
             }
         }
@@ -281,6 +314,12 @@ public final class RoadWorldgenPlanCache {
 
         int trackedChunks() {
             synchronized (cacheLock) { return versions.size(); }
+        }
+        int runningCompilations() {
+            synchronized (cacheLock) { return flights.size(); }
+        }
+        int waitingCompilations() {
+            synchronized (cacheLock) { return flights.values().stream().mapToInt(f -> f.waiters).sum(); }
         }
     }
 
