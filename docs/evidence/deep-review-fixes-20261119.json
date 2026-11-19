@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-19",
+  "historical_audit": "deep-review-20261119.json",
+  "production_head": "2979234105d3c84f0690818f8bdc6167a04d443c",
+  "completed": [
+    "R1",
+    "R2",
+    "R3"
+  ],
+  "regression": {
+    "tests": 1677,
+    "skipped": 0,
+    "aborted": 0,
+    "failed": 0
+  },
+  "fabric_compile": true,
+  "final_log": ".analysis_tmp/round63-final.log",
+  "final_log_sha256": "a952cfc3401f8cf0de8903e199a738f2c9c4fddd800bd765594e1a4ee6a7b372",
+  "mutations": [
+    {
+      "finding": "R1",
+      "target": "RoadConstructionLedgerReadFaultTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round61-mutant-ledger.log",
+      "sha256": "fe0165f812ca65c63da7ec859fb3b06013597f6eb0d791956e855635e1087521"
+    },
+    {
+      "finding": "R2",
+      "target": "RoadPlanFailureRecoveryTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round62-mutant-compile-all-fails.log",
+      "sha256": "87e5139777aac7133f9dc8abfac6cd2c5c31c4e7975084a4db7dd59975fc6893"
+    },
+    {
+      "finding": "R2",
+      "target": "RoadPlanFailureRecoveryTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round62-mutant-failure-is-empty.log",
+      "sha256": "37a7ab1a1d98a381cf787122f40323a684ff4ffe0996e0648398695401f30f7f"
+    },
+    {
+      "finding": "R2",
+      "target": "DeferredChunkQueueTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round62-mutant-deferred-consumes-attempt.log",
+      "sha256": "efba7f7298cb33b0b190f978e4ee41c25c95e2a0753b40ff67b6c17f6d8b32cb"
+    },
+    {
+      "finding": "R3",
+      "target": "ChunkPlanVersionsTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round63-mutant-late-publish.log",
+      "sha256": "5a20ae5d739b4f8e7bb9ec670846bf6cd995b20bca1c173b984ca24914937f66"
+    },
+    {
+      "finding": "R3",
+      "target": "ChunkPlanVersionsTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round63-mutant-eviction.log",
+      "sha256": "2040f78d2ce67cc9722f1944173f99d09d05d1549fca7a6ededd4e582405353c"
+    },
+    {
+      "finding": "R3",
+      "target": "ChunkPlanVersionsTest",
+      "red": true,
+      "restored": true,
+      "log": ".analysis_tmp/round63-mutant-inflight.log",
+      "sha256": "84365f38270960adb49613f23005487946ff818957d241bbde167b294174209d"
+    }
+  ],
+  "compatibility": "No persisted schema/config key/enum name changes",
+  "not_verified": [
+    "real integrated server",
+    "FPS/MSPT",
+    "large-world heap trace",
+    "crossing remains unchanged"
+  ],
+  "fabric_remapJar": true,
+  "package_log": ".analysis_tmp/round64-package.log",
+  "package_log_sha256": "6359f0ebf5a50fffcb3fd777967c8a0a73cd77bcc646974b4723b05fc2803f9a",
+  "production_java_sha256_normalized_lf": "4c8f23bb75810985e21a2b86d80dc8684c9e96b0d26a0bbc65101b1c46013de6",
+  "wall_production_head": "b291074c",
+  "wall_regression_tests": 931,
+  "combined_targeted_red_mutations": 25
+}
