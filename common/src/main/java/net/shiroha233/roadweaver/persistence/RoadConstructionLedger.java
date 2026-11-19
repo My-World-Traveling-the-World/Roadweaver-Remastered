@@ -38,6 +38,8 @@ public final class RoadConstructionLedger {
                             timing.sortNanos / 1000, timing.serializeNanos / 1000, timing.writeNanos / 1000)
                     : null;
     private static final String FILE_NAME = "constructed-chunks-v3.txt";
+    // 文件被占用时不能让每一站都重读；暂停施工，最多每五秒完整重试一次。
+    private static final long READ_RETRY_NANOS = 5_000_000_000L;
     private static final Map<ServerLevel, State> STATES = new ConcurrentHashMap<>();
 
     private RoadConstructionLedger() {
@@ -45,6 +47,11 @@ public final class RoadConstructionLedger {
 
     public static void preload(ServerLevel level) {
         if (isOverworld(level)) state(level);
+    }
+
+    /** 未知完工状态禁止施工，不能仅禁止落盘而让恢复队列重铺旧路。 */
+    public static boolean isAvailable(ServerLevel level) {
+        return isOverworld(level) && ensureAvailable(state(level), () -> path(level), System.nanoTime());
     }
 
     public static boolean isComplete(ServerLevel level, ChunkPos chunkPos, long roadFingerprint) {
@@ -70,6 +77,14 @@ public final class RoadConstructionLedger {
 
     // 只给脏快照计时；不让收集、排序和原子替换混成一个无法归因的数字。
     static void flush(State state, Supplier<Path> path, Consumer<FlushTiming> timing) {
+        synchronized (state) {
+            flushLocked(state, path, timing);
+        }
+    }
+
+    private static void flushLocked(State state, Supplier<Path> path, Consumer<FlushTiming> timing) {
+        // 读取失败的状态不是空台账；即使调用方错误请求 flush，也不允许覆盖原文件。
+        if (state.readFailure) return;
         if (!state.dirty.compareAndSet(true, false)) return;
         long started = timing == null ? 0L : System.nanoTime();
 
@@ -134,7 +149,8 @@ public final class RoadConstructionLedger {
 
     static State load(Path path) {
         State state = new State();
-        if (!Files.isRegularFile(path)) return state;
+        // notExists 为 false 还可能是权限未知，必须真实读取后才能决定是否降级。
+        if (Files.notExists(path)) return state;
         try {
             List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
             int schema = 0;
@@ -146,7 +162,7 @@ public final class RoadConstructionLedger {
                     schema = Integer.parseInt(value.substring("schema=".length()).trim());
                 } else if (value.startsWith("entry=")) {
                     String[] parts = value.substring("entry=".length()).split(",", 3);
-                    if (parts.length != 3) continue;
+                    if (parts.length != 3) throw new IllegalArgumentException("施工台账条目不完整");
                     int chunkX = Integer.parseInt(parts[0].trim());
                     int chunkZ = Integer.parseInt(parts[1].trim());
                     long roadFingerprint = Long.parseLong(parts[2].trim());
@@ -163,9 +179,27 @@ public final class RoadConstructionLedger {
                         .add(entry.roadFingerprint());
             }
         } catch (RuntimeException | IOException failure) {
-            LOGGER.warn("【施工完工台账读取失败】 " + "RoadWeaver could not read constructed chunk ledger {}.", path, failure);
+            state.readFailure = true;
+            state.lastRetryAtNanos = System.nanoTime();
+            LOGGER.warn("【施工完工台账读取失败，暂停施工和写盘，等待完整重读】 " + "RoadWeaver could not read constructed chunk ledger {}.", path, failure);
         }
         return state;
+    }
+
+    static boolean ensureAvailable(State state, Supplier<Path> path, long now) {
+        synchronized (state) {
+            if (!state.readFailure) return true;
+            if (now - state.lastRetryAtNanos < READ_RETRY_NANOS) return false;
+            state.lastRetryAtNanos = now;
+            State reloaded = load(path.get());
+            if (reloaded.readFailure) return false;
+            // 降级期间不接受新的完工项，成功快照可以一次替换而不合并未知旧内容。
+            state.completed.clear();
+            state.completed.putAll(reloaded.completed);
+            state.readFailure = false;
+            LOGGER.info("【施工完工台账完整重读成功，恢复施工和写盘】 chunks={}", state.completed.size());
+            return true;
+        }
     }
 
     private static Path path(ServerLevel level) {
@@ -182,13 +216,18 @@ public final class RoadConstructionLedger {
     static final class State {
         private final ConcurrentHashMap<Long, Set<Long>> completed = new ConcurrentHashMap<>();
         private final AtomicBoolean dirty = new AtomicBoolean();
+        private volatile boolean readFailure;
+        private long lastRetryAtNanos;
 
-        boolean isComplete(ChunkPos chunkPos, long roadFingerprint) {
+        synchronized boolean isComplete(ChunkPos chunkPos, long roadFingerprint) {
+            // 禁止把未知悄悄降成 false，遗漏入口守卫时也应有明确失败而非错误重铺。
+            if (readFailure) throw new IllegalStateException("施工完工台账未完整读取");
             Set<Long> roads = completed.get(chunkPos.toLong());
             return roads != null && roads.contains(roadFingerprint);
         }
 
-        void markComplete(ChunkPos chunkPos, long roadFingerprint) {
+        synchronized void markComplete(ChunkPos chunkPos, long roadFingerprint) {
+            if (readFailure) throw new IllegalStateException("施工完工台账未完整读取，禁止记账");
             Set<Long> roads = completed.computeIfAbsent(
                     chunkPos.toLong(), ignored -> ConcurrentHashMap.newKeySet());
             // 重复完成不能触发重复写盘；只有新增条目才改变磁盘快照。

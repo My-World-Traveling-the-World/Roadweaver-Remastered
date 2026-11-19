@@ -61,6 +61,11 @@ public final class DeferredInitialRoadConstructionService {
     public static void recover(ServerLevel level) {
         if (!isOverworld(level)) return;
         State state = STATES.computeIfAbsent(level, ignored -> new State());
+        // 启动时文件占用不能被解释成所有道路未施工；tick 会在完整重读后补做恢复。
+        if (!RoadConstructionLedger.isAvailable(level)) {
+            state.needsRecovery = true;
+            return;
+        }
         int recovered = 0;
         for (var road : RoadShardStorage.loadAll(level)) {
             if (road == null) continue;
@@ -75,6 +80,7 @@ public final class DeferredInitialRoadConstructionService {
             }
         }
         state.total = Math.max(state.total, state.completed + state.pending.size());
+        state.needsRecovery = false;
         if (recovered > 0) {
             LOGGER.info("【已从存档恢复延迟施工队列】 " + "RoadWeaver recovered deferred construction queue after restart: chunks={}", recovered);
         }
@@ -90,7 +96,9 @@ public final class DeferredInitialRoadConstructionService {
     public static int tick(ServerLevel level) {
         if (!isOverworld(level) || !level.getServer().isSameThread()) return 0;
         State state = STATES.get(level);
-        if (state == null || state.pending.isEmpty()) return 0;
+        if (state == null || !RoadConstructionLedger.isAvailable(level)) return 0;
+        if (state.needsRecovery) recover(level);
+        if (state.pending.isEmpty()) return 0;
         if (state.cooldownTicks > 0) {
             state.cooldownTicks--;
             return 0;
@@ -261,6 +269,7 @@ public final class DeferredInitialRoadConstructionService {
     }
 
     private static boolean isComplete(ServerLevel level, long key) {
+        if (!RoadConstructionLedger.isAvailable(level)) return false;
         ChunkPos chunk = new ChunkPos(key);
         var roads = RoadShardStorage.queryChunk(level, chunk);
         if (roads.isEmpty()) return true;
@@ -283,6 +292,7 @@ public final class DeferredInitialRoadConstructionService {
         private final Map<Long, Integer> attempts = new ConcurrentHashMap<>();
         private int completed;
         private int total;
+        private boolean needsRecovery;
 
         private State() {
             total = 0;

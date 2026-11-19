@@ -128,6 +128,8 @@ public final class LoadedChunkRoadBackfill {
                                          boolean expandNeighbors) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())
                 || candidateChunkKeys == null || candidateChunkKeys.isEmpty()) return 0;
+        // 台账未知期间不消耗施工重试，也不把区块结案成无施工。
+        if (!RoadConstructionLedger.isAvailable(level)) return 0;
         if (!level.getServer().isSameThread()) {
             throw new IllegalStateException("loaded road backfill must run on the server thread");
         }
@@ -173,6 +175,8 @@ public final class LoadedChunkRoadBackfill {
         if (!level.getServer().isSameThread()) {
             throw new IllegalStateException("loaded road backfill must run on the server thread");
         }
+        // 手绘/延迟队列的已加载重载也必须经过台账闸门，不能只守最外层公共入口。
+        if (!RoadConstructionLedger.isAvailable(level)) return 0;
         long backfillStartedAt = System.nanoTime();
         Set<Long> expanded = expandNeighbors ? expand(candidateChunkKeys) : new LinkedHashSet<>(candidateChunkKeys);
         // 单块计时看不到选块、复核台账和同步落盘；同一轮另记分段时间才能判断卡顿来源。

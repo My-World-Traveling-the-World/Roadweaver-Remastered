@@ -97,6 +97,7 @@ public class PathFeature extends Feature<PathFeatureConfig> {
 
     /** 回填先看当前计划再直接消费同一版本，不在两层各查一次 LRU。 */
     public static LoadedPlacement replayLoadedChunk(ServerLevel server, ChunkPos chunk, long randomSeed) {
+        if (!RoadConstructionLedger.isAvailable(server)) return LoadedPlacement.NO_PLACEMENT;
         ModConfig cfg = ConfigService.get();
         return replayPlan(() -> RoadWorldgenPlanCache.get(server, chunk, cfg),
                 plan -> placeChunk(server, server, chunk, RandomSource.create(randomSeed), cfg, plan));
@@ -111,6 +112,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
 
     private static boolean placeChunk(WorldGenLevel world, ServerLevel server, ChunkPos currentChunk,
                                       RandomSource random, ModConfig cfg, RoadChunkPlan checkedPlan) {
+        // 世界生成和回填都走这里，读失败必须在准备邻块和写第一块之前拒绝。
+        if (!RoadConstructionLedger.isAvailable(server)) return false;
         // 事务所有者统一保证：新鲜计划最多重跑一次，装饰先于台账，所有出口释放保护预留。
         return new net.shiroha233.roadweaver.pathlogic.construction.ConstructionChunkTransaction<>(
                 new net.shiroha233.roadweaver.pathlogic.construction.ConstructionChunkTransaction.Access<RoadChunkPlan>() {
