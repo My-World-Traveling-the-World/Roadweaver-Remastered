@@ -1,0 +1,17 @@
+// 探针依赖测试夹具但不登记成回归；它复现当前缺陷，不能把“复现成功”解释为产品正确。
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.project(':common')
+    def out = p.layout.buildDirectory.dir('deep-audit-probe')
+    def compile = p.tasks.register('compileDeepAuditProbe', JavaCompile) {
+        dependsOn p.tasks.named('testClasses')
+        source p.rootProject.file('scripts/audit/20261119/DeepAuditRoadProbe.java')
+        classpath = p.sourceSets.test.runtimeClasspath
+        destinationDirectory.set(out)
+        options.encoding = 'UTF-8'
+    }
+    p.tasks.register('deepAuditProbe', JavaExec) {
+        dependsOn compile
+        classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
+        mainClass = 'net.shiroha233.roadweaver.persistence.DeepAuditRoadProbe'
+    }
+}
