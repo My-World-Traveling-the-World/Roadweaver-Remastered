@@ -16,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -153,6 +152,7 @@ public final class RoadWorldgenPlanCache {
 
     static final class Session {
         private final Object cacheLock = new Object();
+        private final ChunkPlanVersions versions = new ChunkPlanVersions();
         /**
          * T-20B:access-order LRU。旧实现是 ConcurrentHashMap + trimIfNeeded()
          * 任意驱逐 —— Chunky 海量生成区块把缓存顶过上限后,玩家周边热点计划被
@@ -163,27 +163,29 @@ public final class RoadWorldgenPlanCache {
                 new LinkedHashMap<>(256, 0.75F, true) {
                     @Override
                     protected boolean removeEldestEntry(Map.Entry<Long, CachedPlan> eldest) {
-                        return nonEmptyPlans.size() > MAX_PLANS_PER_LEVEL;
+                        boolean evict = nonEmptyPlans.size() > MAX_PLANS_PER_LEVEL;
+                        if (evict) versions.evicted(eldest.getKey());
+                        return evict;
                     }
                 };
         private final LinkedHashMap<Long, CachedPlan> emptyPlans =
                 new LinkedHashMap<>(256, 0.75F, true) {
                     @Override
                     protected boolean removeEldestEntry(Map.Entry<Long, CachedPlan> eldest) {
-                        return emptyPlans.size() > MAX_EMPTY_PLANS_PER_LEVEL;
+                        boolean evict = emptyPlans.size() > MAX_EMPTY_PLANS_PER_LEVEL;
+                        if (evict) versions.evicted(eldest.getKey());
+                        return evict;
                     }
                 };
         // 故障只在独立的短期表退避，不污染正常空计划；大量坏块也有容量上限。
         private final LinkedHashMap<Long, CachedPlan> failures =
                 new LinkedHashMap<>(64, 0.75F, true) {
                     @Override protected boolean removeEldestEntry(Map.Entry<Long, CachedPlan> eldest) {
-                        return size() > 1024;
+                        boolean evict = size() > 1024;
+                        if (evict) versions.evicted(eldest.getKey());
+                        return evict;
                     }
                 };
-        private final ConcurrentHashMap<Long, Long> chunkRevisions = new ConcurrentHashMap<>();
-        private final AtomicLong revisionSequence = new AtomicLong();
-        private volatile long globalRevision;
-
         RoadChunkPlan get(ServerLevel level, ChunkPos chunkPos, PlanConfig requested) {
             return get(chunkPos, requested, (chunk, config, revision) -> compile(level, chunk, config, revision),
                     System::nanoTime);
@@ -192,21 +194,27 @@ public final class RoadWorldgenPlanCache {
         RoadChunkPlan get(ChunkPos chunkPos, PlanConfig requested, Compiler compiler, LongSupplier clock) {
             long key = chunkPos.toLong();
             while (true) {
-                CachedPlan cached = lookup(key);
-                long expectedRevision = revision(key);
-                if (cached != null && cached.matches(requested, expectedRevision, clock.getAsLong())) {
-                    return cached.plan();
+                ChunkPlanVersions.Claim claim;
+                long compileRevision;
+                synchronized (cacheLock) {
+                    CachedPlan cached = lookup(key);
+                    if (cached != null && cached.matches(requested, versions.revision(key), clock.getAsLong()))
+                        return cached.plan();
+                    claim = versions.acquire(key);
+                    compileRevision = claim.revision;
                 }
-
-                // 编译在锁外执行:compile 可能做整片 shard 查询与逐站遍历,
-                // 持锁编译会把所有 worldgen 线程串行化。并发同 chunk 重复编译
-                // 的结果是确定性的,后写覆盖先写,无正确性影响。
-                long compileRevision = revision(key);
-                RoadChunkPlan compiled = compiler.compile(chunkPos, requested, compileRevision);
-                if (revision(key) != compileRevision) continue;
-
-                store(key, requested, compiled, clock.getAsLong());
-                return compiled;
+                try {
+                    // 编译仍在锁外并行；认领只保住版本对象，不持有世界/区块或施工资格。
+                    RoadChunkPlan compiled = compiler.compile(chunkPos, requested, compileRevision);
+                    synchronized (cacheLock) {
+                        if (claim.revision != compileRevision) continue;
+                        // 失效与发布同锁，避免“检查版本后、put 前”出现过期结果发布缝隙。
+                        store(key, requested, compiled, clock.getAsLong());
+                        return compiled;
+                    }
+                } finally {
+                    synchronized (cacheLock) { versions.release(key, claim); }
+                }
             }
         }
 
@@ -221,9 +229,9 @@ public final class RoadWorldgenPlanCache {
         private void store(long key, PlanConfig requested, RoadChunkPlan compiled, long now) {
             CachedPlan cached = new CachedPlan(requested, compiled, now + FAILURE_RETRY_NANOS);
             synchronized (cacheLock) {
+                removeCached(key);
+                versions.retained(key);
                 if (!compiled.isAvailable()) {
-                    nonEmptyPlans.remove(key);
-                    emptyPlans.remove(key);
                     failures.put(key, cached);
                     return;
                 }
@@ -237,30 +245,17 @@ public final class RoadWorldgenPlanCache {
         }
 
         void invalidate() {
-            globalRevision = revisionSequence.incrementAndGet();
             synchronized (cacheLock) {
                 nonEmptyPlans.clear();
                 emptyPlans.clear();
                 failures.clear();
+                versions.invalidateAll();
             }
-            chunkRevisions.clear();
         }
 
         void invalidate(Collection<Long> chunkKeys) {
-            long revision = revisionSequence.incrementAndGet();
-            for (long packed : chunkKeys) {
-                int chunkX = ChunkPos.getX(packed);
-                int chunkZ = ChunkPos.getZ(packed);
-                for (int deltaZ = -INVALIDATION_RADIUS_CHUNKS;
-                     deltaZ <= INVALIDATION_RADIUS_CHUNKS; deltaZ++) {
-                    for (int deltaX = -INVALIDATION_RADIUS_CHUNKS;
-                         deltaX <= INVALIDATION_RADIUS_CHUNKS; deltaX++) {
-                        long affected = ChunkPos.asLong(chunkX + deltaX, chunkZ + deltaZ);
-                        chunkRevisions.put(affected, revision);
-                    }
-                }
-            }
             synchronized (cacheLock) {
+                long revision = versions.advance();
                 for (long packed : chunkKeys) {
                     int chunkX = ChunkPos.getX(packed);
                     int chunkZ = ChunkPos.getZ(packed);
@@ -269,17 +264,23 @@ public final class RoadWorldgenPlanCache {
                         for (int deltaX = -INVALIDATION_RADIUS_CHUNKS;
                              deltaX <= INVALIDATION_RADIUS_CHUNKS; deltaX++) {
                             long affected = ChunkPos.asLong(chunkX + deltaX, chunkZ + deltaZ);
-                            nonEmptyPlans.remove(affected);
-                            emptyPlans.remove(affected);
-                            failures.remove(affected);
+                            removeCached(affected);
+                            versions.invalidate(affected, revision);
                         }
                     }
                 }
             }
         }
 
-        private long revision(long chunkKey) {
-            return Math.max(globalRevision, chunkRevisions.getOrDefault(chunkKey, 0L));
+        private void removeCached(long key) {
+            nonEmptyPlans.remove(key);
+            emptyPlans.remove(key);
+            failures.remove(key);
+            versions.evicted(key);
+        }
+
+        int trackedChunks() {
+            synchronized (cacheLock) { return versions.size(); }
         }
     }
 

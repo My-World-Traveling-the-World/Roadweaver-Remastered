@@ -192,6 +192,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.persistence.RoadConstructionLedgerReadFaultTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadPlanFailureRecoveryTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.worldgen.road.ChunkPlanVersionsTest"),
                         // 批 5 量尺：perpendicularDistance / reinstateUntilDense 的契约 + 锯齿保真度实测
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.postprocess.PostprocessMeasuringStickTest"),
