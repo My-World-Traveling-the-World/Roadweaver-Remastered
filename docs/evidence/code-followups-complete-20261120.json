@@ -1,0 +1,74 @@
+{
+  "date": "2026-11-20",
+  "completed": [
+    "road planning failure/cancellation propagation",
+    "wall durable publication with bounded retry",
+    "wall cooperative compile cancellation and actual worker completion barrier",
+    "road incremental ledger preparation with schema3 parity",
+    "wall exclusive realization window and incremental retained estimate"
+  ],
+  "mutations": [
+    {
+      "repository": "roadweaver-next",
+      "evidence": "planning-failure-guards-20261120.json",
+      "mutants_red": 4,
+      "sha256": "e6728d1ca168e77343643e902b9415461545a8372a8724aff25d8958501abf31"
+    },
+    {
+      "repository": "roadweaver-next",
+      "evidence": "ledger-incremental-guards-20261120.json",
+      "mutants_red": 4,
+      "sha256": "b60a7a0f4cf292440dc52493b104517a69fb034fab9cc9c626704941db7a4e0c"
+    },
+    {
+      "repository": "plaincraft-great-wall",
+      "evidence": "plan-durability-guards-20261120.json",
+      "mutants_red": 5,
+      "sha256": "6007c02933af488d6e5b7801d933b4491993690d130e5a2062221df5880457f1"
+    },
+    {
+      "repository": "plaincraft-great-wall",
+      "evidence": "compile-cancellation-guards-20261120.json",
+      "mutants_red": 4,
+      "sha256": "be1fc21d314bada8e459bb30162086a93ea2ff70cc97621e80a2d2d19992f371"
+    },
+    {
+      "repository": "plaincraft-great-wall",
+      "evidence": "realization-window-guards-20261120.json",
+      "mutants_red": 6,
+      "sha256": "202352060b28769c3be0f223129386ba521bdca75e1a8f10e1433294dbb7a86d"
+    }
+  ],
+  "road": {
+    "tests": 1694,
+    "failed": 0,
+    "skipped": 0,
+    "aborted": 0,
+    "production_commit": "90595b0",
+    "build": "compileJava/remapJar successful"
+  },
+  "wall": {
+    "tests": 967,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "production_commit": "15699d74",
+    "build": "compileClientJava/remapJar successful"
+  },
+  "unverified": [
+    "real game prewarm time/FPS/MSPT/GC",
+    "player v2 save seams/restart",
+    "full 4096 workload",
+    "river-wall-road integrated order"
+  ],
+  "source_digests": {
+    "roadweaver-next": {
+      "normalized_production_java_sha256": "8c7ce6621fc41c4bd68090557ec2295bc7c46c6ae5aa5010e528721e9ac594ec",
+      "files": 715
+    },
+    "plaincraft-great-wall": {
+      "normalized_production_java_sha256": "171483453119d800d869828ad1fc56e52dfe97762eaa4c77e220eb7f7d8ea5b2",
+      "files": 273
+    }
+  }
+}
