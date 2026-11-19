@@ -29,6 +29,11 @@ import java.util.Set;
  * 道路计划编译器。编译阶段允许 O(road segments)，世界生成阶段只读取 stamp。
  */
 public final class RoadChunkPlanCompiler {
+    /** 读端口归属编译领域，门面只转发查询，避免为离线注入增加新的跨层类型依赖。 */
+    @FunctionalInterface
+    interface Rectangle { List<RoadData> read(int minX, int minZ, int maxX, int maxZ); }
+    record Query(Rectangle rectangle, java.util.function.Function<ChunkPos, List<RoadData>> chunk) {}
+
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final int COLUMN_COUNT = 256;
     static final int BANK_WIDTH = 2;

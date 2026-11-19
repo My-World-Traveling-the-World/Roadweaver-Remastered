@@ -90,14 +90,15 @@ public class PathFeature extends Feature<PathFeatureConfig> {
 
         ModConfig cfg = ConfigService.get();
         if (!cfg.roadAppearance().roadsEnabled()) return false;
-        return placeChunk(world, server, currentChunk, random, cfg, null);
+        try { return placeChunk(world, server, currentChunk, random, cfg, null); }
+        catch (RoadChunkPlan.Deferred unavailable) { return false; }
     }
 
-    public enum LoadedPlacement { PLACED, EMPTY_PLAN, NO_PLACEMENT }
+    public enum LoadedPlacement { PLACED, EMPTY_PLAN, NO_PLACEMENT, DEFERRED }
 
     /** 回填先看当前计划再直接消费同一版本，不在两层各查一次 LRU。 */
     public static LoadedPlacement replayLoadedChunk(ServerLevel server, ChunkPos chunk, long randomSeed) {
-        if (!RoadConstructionLedger.isAvailable(server)) return LoadedPlacement.NO_PLACEMENT;
+        if (!RoadConstructionLedger.isAvailable(server)) return LoadedPlacement.DEFERRED;
         ModConfig cfg = ConfigService.get();
         return replayPlan(() -> RoadWorldgenPlanCache.get(server, chunk, cfg),
                 plan -> placeChunk(server, server, chunk, RandomSource.create(randomSeed), cfg, plan));
@@ -105,9 +106,11 @@ public class PathFeature extends Feature<PathFeatureConfig> {
 
     static LoadedPlacement replayPlan(Supplier<RoadChunkPlan> load, Predicate<RoadChunkPlan> place) {
         RoadChunkPlan plan = load.get();
+        if (!plan.isAvailable()) return LoadedPlacement.DEFERRED;
         // 空计划不用进入施工，也不能提前释放仍供世界生成使用的预留。
         if (plan.slices().isEmpty()) return LoadedPlacement.EMPTY_PLAN;
-        return place.test(plan) ? LoadedPlacement.PLACED : LoadedPlacement.NO_PLACEMENT;
+        try { return place.test(plan) ? LoadedPlacement.PLACED : LoadedPlacement.NO_PLACEMENT; }
+        catch (RoadChunkPlan.Deferred unavailable) { return LoadedPlacement.DEFERRED; }
     }
 
     private static boolean placeChunk(WorldGenLevel world, ServerLevel server, ChunkPos currentChunk,
@@ -127,7 +130,10 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             @Override public RoadChunkPlan loadInitial() {
                 return checkedPlan == null ? RoadWorldgenPlanCache.get(server, currentChunk, cfg) : checkedPlan;
             }
-            @Override public boolean isEmpty(RoadChunkPlan plan) { return plan.slices().isEmpty(); }
+            @Override public boolean isEmpty(RoadChunkPlan plan) {
+                plan.requireAvailable();
+                return plan.slices().isEmpty();
+            }
             @Override public void emptyPlan() {
                 // A chunk that still lists road shards but compiles to an empty
                 // plan means the worldgen plan cache is stale or the compiler

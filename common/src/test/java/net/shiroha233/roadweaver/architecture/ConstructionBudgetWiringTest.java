@@ -89,7 +89,8 @@ class ConstructionBudgetWiringTest {
         var initial=(VariableTree)statements.get(0);
         same.accept("loadInitial","{return "+initial.getInitializer()+";}");
         var empty=(IfTree)statements.get(1);
-        same.accept("isEmpty","{return "+((ParenthesizedTree)empty.getCondition()).getExpression()+";}");
+        // 本轮唯一有意增加的事务语义：临时不可用在旧空判据前拒绝，其他冻结操作继续逐句对拍。
+        same.accept("isEmpty","{plan.requireAvailable();return "+((ParenthesizedTree)empty.getCondition()).getExpression()+";}");
         var emptyBody=((BlockTree)empty.getThenStatement()).getStatements();
         same.accept("emptyPlan","{"+join(emptyBody.subList(0,emptyBody.size()-1))+"}");
         StringBuilder prepare=new StringBuilder("{");

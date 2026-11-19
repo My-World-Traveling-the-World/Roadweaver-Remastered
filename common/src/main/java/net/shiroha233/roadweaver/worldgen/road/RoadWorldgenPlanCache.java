@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 /**
  * 世界生成计划的会话入口。磁盘存储只在首次编译计划时被访问，计划本身不可变。
@@ -30,6 +32,7 @@ public final class RoadWorldgenPlanCache {
     /** T-20B:空计划(擦边/无道路)单独预算,远大于有内容计划,避免 Chunky
      * 海量擦边 chunk 把真正需要施工的计划挤出缓存。 */
     private static final int MAX_EMPTY_PLANS_PER_LEVEL = 16384;
+    private static final long FAILURE_RETRY_NANOS = 5_000_000_000L;
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final ConcurrentHashMap<ServerLevel, Session> SESSIONS = new ConcurrentHashMap<>();
 
@@ -39,8 +42,8 @@ public final class RoadWorldgenPlanCache {
     public static RoadChunkPlan get(ServerLevel level, ChunkPos chunkPos, ModConfig config) {
         if (level == null || chunkPos == null || !Level.OVERWORLD.equals(level.dimension())
                 || config == null || !config.roadAppearance().roadsEnabled()) {
-            return RoadChunkPlan.empty(chunkPos == null ? new ChunkPos(0, 0) : chunkPos,
-                    config == null ? 4 : config.roadAppearance().roadClearHeight(), 0L);
+            return RoadChunkPlan.unavailable(chunkPos == null ? new ChunkPos(0, 0) : chunkPos,
+                    config == null ? 4 : config.roadAppearance().roadClearHeight(), 0L, RoadChunkPlan.Outcome.DISABLED);
         }
         PlanConfig planConfig = PlanConfig.from(config);
         Session session = session(level);
@@ -76,12 +79,19 @@ public final class RoadWorldgenPlanCache {
                                          ChunkPos chunkPos,
                                          PlanConfig config,
                                          long revision) {
+        return compile(chunkPos, config, revision, new RoadChunkPlanCompiler.Query(
+                (minX, minZ, maxX, maxZ) -> RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ),
+                chunk -> RoadShardStorage.queryChunk(level, chunk)));
+    }
+
+    // 离线与生产执行同一编译正文，只有真正读取世界的两处调用允许注入。
+    static RoadChunkPlan compile(ChunkPos chunkPos, PlanConfig config, long revision, RoadChunkPlanCompiler.Query query) {
         int minX = chunkPos.getMinBlockX() - QUERY_MARGIN_BLOCKS;
         int minZ = chunkPos.getMinBlockZ() - QUERY_MARGIN_BLOCKS;
         int maxX = chunkPos.getMaxBlockX() + QUERY_MARGIN_BLOCKS;
         int maxZ = chunkPos.getMaxBlockZ() + QUERY_MARGIN_BLOCKS;
-        try {
-            var roads = RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ);
+        return compileSafely(chunkPos, config.clearHeight(), revision, () -> {
+            var roads = query.rectangle().read(minX, minZ, maxX, maxZ);
             RoadChunkPlan plan = RoadChunkPlanCompiler.compile(chunkPos, roads,
                     !config.bridgeEnabled(), config.clearHeight(), revision);
             // The broad rect query goes through the physical-ownership dedup,
@@ -92,7 +102,7 @@ public final class RoadWorldgenPlanCache {
             // exact chunk shards (single road, no dedup against neighbours) so
             // a planned road is never dropped from construction.
             if (plan.slices().isEmpty()) {
-                var shardRoads = RoadShardStorage.queryChunk(level, chunkPos);
+                var shardRoads = query.chunk().apply(chunkPos);
                 if (shardRoads != null && !shardRoads.isEmpty()) {
                     RoadChunkPlan shardPlan = RoadChunkPlanCompiler.compile(chunkPos, shardRoads,
                             !config.bridgeEnabled(), config.clearHeight(), revision);
@@ -127,13 +137,21 @@ public final class RoadWorldgenPlanCache {
                 }
             }
             return plan;
-        } catch (RuntimeException failure) {
-            LOGGER.warn("编译道路区块计划失败: {}", chunkPos, failure);
-            return RoadChunkPlan.empty(chunkPos, config.clearHeight(), revision);
+        });
+    }
+
+    static RoadChunkPlan compileSafely(ChunkPos chunk, int height, long revision, Supplier<RoadChunkPlan> compile) {
+        try { return compile.get(); }
+        catch (RuntimeException failure) {
+            LOGGER.warn("【道路区块计划编译失败，保留重试资格】 chunk={}", chunk, failure);
+            return RoadChunkPlan.unavailable(chunk, height, revision, RoadChunkPlan.Outcome.RETRYABLE_FAILURE);
         }
     }
 
-    private static final class Session {
+    @FunctionalInterface
+    interface Compiler { RoadChunkPlan compile(ChunkPos chunk, PlanConfig config, long revision); }
+
+    static final class Session {
         private final Object cacheLock = new Object();
         /**
          * T-20B:access-order LRU。旧实现是 ConcurrentHashMap + trimIfNeeded()
@@ -155,16 +173,28 @@ public final class RoadWorldgenPlanCache {
                         return emptyPlans.size() > MAX_EMPTY_PLANS_PER_LEVEL;
                     }
                 };
+        // 故障只在独立的短期表退避，不污染正常空计划；大量坏块也有容量上限。
+        private final LinkedHashMap<Long, CachedPlan> failures =
+                new LinkedHashMap<>(64, 0.75F, true) {
+                    @Override protected boolean removeEldestEntry(Map.Entry<Long, CachedPlan> eldest) {
+                        return size() > 1024;
+                    }
+                };
         private final ConcurrentHashMap<Long, Long> chunkRevisions = new ConcurrentHashMap<>();
         private final AtomicLong revisionSequence = new AtomicLong();
         private volatile long globalRevision;
 
         RoadChunkPlan get(ServerLevel level, ChunkPos chunkPos, PlanConfig requested) {
+            return get(chunkPos, requested, (chunk, config, revision) -> compile(level, chunk, config, revision),
+                    System::nanoTime);
+        }
+
+        RoadChunkPlan get(ChunkPos chunkPos, PlanConfig requested, Compiler compiler, LongSupplier clock) {
             long key = chunkPos.toLong();
             while (true) {
                 CachedPlan cached = lookup(key);
                 long expectedRevision = revision(key);
-                if (cached != null && cached.matches(requested, expectedRevision)) {
+                if (cached != null && cached.matches(requested, expectedRevision, clock.getAsLong())) {
                     return cached.plan();
                 }
 
@@ -172,10 +202,10 @@ public final class RoadWorldgenPlanCache {
                 // 持锁编译会把所有 worldgen 线程串行化。并发同 chunk 重复编译
                 // 的结果是确定性的,后写覆盖先写,无正确性影响。
                 long compileRevision = revision(key);
-                RoadChunkPlan compiled = compile(level, chunkPos, requested, compileRevision);
+                RoadChunkPlan compiled = compiler.compile(chunkPos, requested, compileRevision);
                 if (revision(key) != compileRevision) continue;
 
-                store(key, requested, compiled, compileRevision);
+                store(key, requested, compiled, clock.getAsLong());
                 return compiled;
             }
         }
@@ -183,13 +213,21 @@ public final class RoadWorldgenPlanCache {
         private CachedPlan lookup(long key) {
             synchronized (cacheLock) {
                 CachedPlan plan = nonEmptyPlans.get(key);
-                return plan != null ? plan : emptyPlans.get(key);
+                if (plan == null) plan = emptyPlans.get(key);
+                return plan != null ? plan : failures.get(key);
             }
         }
 
-        private void store(long key, PlanConfig requested, RoadChunkPlan compiled, long revision) {
-            CachedPlan cached = new CachedPlan(requested, compiled);
+        private void store(long key, PlanConfig requested, RoadChunkPlan compiled, long now) {
+            CachedPlan cached = new CachedPlan(requested, compiled, now + FAILURE_RETRY_NANOS);
             synchronized (cacheLock) {
+                if (!compiled.isAvailable()) {
+                    nonEmptyPlans.remove(key);
+                    emptyPlans.remove(key);
+                    failures.put(key, cached);
+                    return;
+                }
+                failures.remove(key);
                 boolean empty = compiled.slices().isEmpty();
                 LinkedHashMap<Long, CachedPlan> own = empty ? emptyPlans : nonEmptyPlans;
                 LinkedHashMap<Long, CachedPlan> other = empty ? nonEmptyPlans : emptyPlans;
@@ -203,6 +241,7 @@ public final class RoadWorldgenPlanCache {
             synchronized (cacheLock) {
                 nonEmptyPlans.clear();
                 emptyPlans.clear();
+                failures.clear();
             }
             chunkRevisions.clear();
         }
@@ -232,6 +271,7 @@ public final class RoadWorldgenPlanCache {
                             long affected = ChunkPos.asLong(chunkX + deltaX, chunkZ + deltaZ);
                             nonEmptyPlans.remove(affected);
                             emptyPlans.remove(affected);
+                            failures.remove(affected);
                         }
                     }
                 }
@@ -247,13 +287,14 @@ public final class RoadWorldgenPlanCache {
         return INVALIDATION_RADIUS_CHUNKS;
     }
 
-    private record CachedPlan(PlanConfig config, RoadChunkPlan plan) {
-        boolean matches(PlanConfig requested, long revision) {
-            return config.equals(requested) && plan.revision() == revision;
+    private record CachedPlan(PlanConfig config, RoadChunkPlan plan, long retryAt) {
+        boolean matches(PlanConfig requested, long revision, long now) {
+            return config.equals(requested) && plan.revision() == revision
+                    && (plan.isAvailable() || now - retryAt < 0);
         }
     }
 
-    private record PlanConfig(int clearHeight, boolean bridgeEnabled) {
+    record PlanConfig(int clearHeight, boolean bridgeEnabled) {
         static PlanConfig from(ModConfig config) {
             return new PlanConfig(config.roadAppearance().roadClearHeight(), config.bridgeEnabled());
         }

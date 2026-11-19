@@ -261,18 +261,21 @@ public final class LoadedChunkRoadBackfill {
             T chunk = knownLoaded == null ? loadedNow.apply(key) : knownLoaded.get(key);
             if (chunk == null) continue;
             loaded++;
-            if (attempted != null) attempted.add(key);
             // 前一块可能写台账或保护缺口；只能复用 FULL 句柄，不能复用排队时的施工资格。
             if (settled.test(key)) {
+                if (attempted != null) attempted.add(key);
                 if (verified != null) verified.add(key);
                 continue;
             }
             PathFeature.LoadedPlacement outcome = replay.place(key, chunk);
-            if (replayed != null && outcome != PathFeature.LoadedPlacement.EMPTY_PLAN) replayed.add(key);
+            if (attempted != null && outcome != PathFeature.LoadedPlacement.DEFERRED) attempted.add(key);
+            if (replayed != null && outcome != PathFeature.LoadedPlacement.EMPTY_PLAN
+                    && outcome != PathFeature.LoadedPlacement.DEFERRED) replayed.add(key);
             switch (outcome) {
                 case PLACED -> placed++;
                 case EMPTY_PLAN -> noConstruction.add(key);
                 case NO_PLACEMENT -> { /* 保留重试资格，不能把失败记成空计划。 */ }
+                case DEFERRED -> { /* 禁用/读盘/编译故障不是施工尝试，不消费队列放弃次数。 */ }
             }
             processed++;
         }

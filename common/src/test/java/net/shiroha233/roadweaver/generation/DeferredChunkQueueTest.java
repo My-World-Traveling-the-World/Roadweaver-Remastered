@@ -138,6 +138,27 @@ class DeferredChunkQueueTest {
     }
 
     @Test
+    void temporarilyUnavailableChunksNeverSettleOrConsumeAbandonAttempts() {
+        var attempted = new HashSet<Long>();
+        var verified = new HashSet<Long>();
+        var chunks = Map.of(1L, "disabled", 2L, "failure");
+        for (int retry = 0; retry < 5; retry++) {
+            var pass = LoadedChunkRoadBackfill.runBackfill(List.of(1L, 2L), 8, chunks,
+                    key -> null, key -> false, (key, chunk) -> LoadedPlacement.DEFERRED,
+                    verified, attempted, null);
+            assertEquals(2, pass.processed());
+            assertTrue(pass.noConstruction().isEmpty());
+            assertTrue(attempted.isEmpty(), "暂缓五轮也不能触发三次失败放弃");
+            assertTrue(verified.isEmpty());
+        }
+        var restored = LoadedChunkRoadBackfill.runBackfill(List.of(1L, 2L), 8, chunks,
+                key -> null, key -> false, (key, chunk) -> LoadedPlacement.PLACED,
+                verified, attempted, null);
+        assertEquals(2, restored.placed());
+        assertEquals(Set.of(1L, 2L), attempted);
+    }
+
+    @Test
     void preloadedBackfillRequiresCompleteLedgerEvenForPartiallyPlacedChunk() {
         var verified = new HashSet<Long>();
         var ledger = new HashSet<>(Set.of(10L));

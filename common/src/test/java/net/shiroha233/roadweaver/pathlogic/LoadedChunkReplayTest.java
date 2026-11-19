@@ -53,4 +53,30 @@ final class LoadedChunkReplayTest {
         }, ignored -> fail("擦边空计划不应该落块或释放预留")));
         assertEquals(1, reads.get());
     }
+
+    @Test
+    void disabledAndFailedPlansNeverBecomeTerminalEmpty() {
+        for (var status : List.of(RoadChunkPlan.Outcome.DISABLED, RoadChunkPlan.Outcome.RETRYABLE_FAILURE)) {
+            var unavailable = RoadChunkPlan.unavailable(CHUNK, 4, 10, status);
+            assertEquals(DEFERRED, PathFeature.replayPlan(() -> unavailable,
+                    ignored -> fail("暂时不可用不能落块或永久结案")));
+            assertThrows(RoadChunkPlan.Deferred.class, unavailable::requireAvailable);
+        }
+    }
+
+    @Test
+    void failureDuringRefreshedPlanIsDeferredRatherThanConstructionAttempt() {
+        var pos = new BlockPos(4, 64, 4);
+        var road = new RoadData(1, 0, List.of(), List.of(),
+                List.of(new RoadSegmentPlacement(pos, List.of(pos)),
+                        new RoadSegmentPlacement(pos.east(), List.of(pos.east())),
+                        new RoadSegmentPlacement(pos.east(2), List.of(pos.east(2)))),
+                List.of(), List.of(64, 64, 64), 11, 13);
+        var plan = RoadChunkPlanCompiler.compile(CHUNK, List.of(road), false, 4, 2);
+        assertFalse(plan.slices().isEmpty());
+        assertEquals(DEFERRED, PathFeature.replayPlan(() -> plan, ignored -> {
+            RoadChunkPlan.unavailable(CHUNK, 4, 3, RoadChunkPlan.Outcome.RETRYABLE_FAILURE).requireAvailable();
+            return true;
+        }));
+    }
 }

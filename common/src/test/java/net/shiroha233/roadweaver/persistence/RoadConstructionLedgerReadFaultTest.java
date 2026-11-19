@@ -86,7 +86,7 @@ class RoadConstructionLedgerReadFaultTest {
         try {
             // 这里只提供维度身份，任何查区块/读存档/拿种子都会失败，证明守卫位于世界副作用之前。
             assertFalse(RoadConstructionLedger.isAvailable(level));
-            assertEquals(net.shiroha233.roadweaver.pathlogic.PathFeature.LoadedPlacement.NO_PLACEMENT,
+            assertEquals(net.shiroha233.roadweaver.pathlogic.PathFeature.LoadedPlacement.DEFERRED,
                     net.shiroha233.roadweaver.pathlogic.PathFeature.replayLoadedChunk(level, first, 17));
             assertDoesNotThrow(() -> net.shiroha233.roadweaver.generation.DeferredInitialRoadConstructionService.recover(level));
         } finally {
