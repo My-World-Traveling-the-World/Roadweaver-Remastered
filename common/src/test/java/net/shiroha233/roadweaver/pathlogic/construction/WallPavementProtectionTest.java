@@ -56,6 +56,38 @@ class WallPavementProtectionTest {
         assertFalse(site.writes.keySet().stream().anyMatch(p -> sameColumn(p, WALL)));
     }
 
+    @Test void publicEntryUsesRealWallQueryRatherThanAnUnprotectedAdapter() throws Exception {
+        // 行为用例替换了外部查询，还需证明公开入口真的把长城API接进同一生产循环。
+        var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+        assertNotNull(compiler);
+        try (var manager = compiler.getStandardFileManager(null, null, java.nio.charset.StandardCharsets.UTF_8)) {
+            var files = manager.getJavaFileObjects(java.nio.file.Path.of(
+                    "src/main/java/net/shiroha233/roadweaver/pathlogic/construction/SegmentPaver.java"));
+            var task = (com.sun.source.util.JavacTask) compiler.getTask(null, manager, null,
+                    List.of("-proc:none"), null, files);
+            var methods = new ArrayList<com.sun.source.tree.MethodTree>();
+            for (var unit : task.parse()) new com.sun.source.util.TreeScanner<Void, Void>() {
+                @Override public Void visitMethod(com.sun.source.tree.MethodTree method, Void ignored) {
+                    methods.add(method);
+                    return super.visitMethod(method, ignored);
+                }
+            }.scan(unit, null);
+            var entry = methods.stream().filter(m -> m.getName().contentEquals("paveSegment")
+                    && m.getParameters().size() == 14).findFirst().orElseThrow();
+            var returned = (com.sun.source.tree.ReturnTree) entry.getBody().getStatements().getFirst();
+            var call = (com.sun.source.tree.MethodInvocationTree) returned.getExpression();
+            assertEquals("paveSegment", call.getMethodSelect().toString());
+            assertEquals(15, call.getArguments().size());
+            assertEquals("SegmentPaver::isWallOwned", call.getArguments().getLast().toString());
+            var adapter = methods.stream().filter(m -> m.getName().contentEquals("isWallOwned")).findFirst().orElseThrow();
+            var query = (com.sun.source.tree.MethodInvocationTree)
+                    ((com.sun.source.tree.ReturnTree) adapter.getBody().getStatements().getFirst()).getExpression();
+            assertEquals("net.shiroha233.roadweaver.compat.GreatWallRoadGuard.blocksFor", query.getMethodSelect().toString());
+            assertEquals(List.of("net.shiroha233.roadweaver.compat.GreatWallRoadGuard.Ch.SURFACE",
+                    "pos.getX()", "pos.getY()", "pos.getZ()"), query.getArguments().stream().map(Object::toString).toList());
+        }
+    }
+
     private static boolean pave(Site site, List<BlockPos> columns, boolean protect) {
         int[] heights = columns.stream().mapToInt(BlockPos::getY).toArray();
         // 采用桥头已确定纵断面，跳过地形预算，仍走正式的单列保护和全部铺材分支。

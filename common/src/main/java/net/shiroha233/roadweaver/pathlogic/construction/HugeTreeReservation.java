@@ -28,26 +28,48 @@ public final class HugeTreeReservation {
     private static final Map<ServerLevel, LevelReservations> RESERVATIONS =
             Collections.synchronizedMap(new WeakHashMap<>());
     private static volatile Method shapeMethod;
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("RoadWeaver/TreeReservation");
+    private static final java.util.concurrent.atomic.AtomicBoolean SHAPE_FAILURE_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** 状态只用于当次诊断，不写入存档；无需预留与读取失败不能混成同一个成功。 */
+    public enum ReservationStatus { RESERVED, INVALID_INPUT, IGNORED_TEMPLATE, SHAPE_UNAVAILABLE, NO_TRUNK_COLUMNS }
+    public record ReservationResult(ReservationStatus status, int columns) {
+        public boolean reserved() { return status == ReservationStatus.RESERVED; }
+    }
 
     private HugeTreeReservation() {
     }
 
     public static void reserve(ServerLevel level, String template, BlockPos center, int[] rotationMirrored, int fallenDirection) {
-        if (level == null || center == null || template == null || template.isBlank() || !isRoadTree(template)) return;
-        short[] shape = shape(template);
-        if (shape.length < 4) return;
-        int rotation = rotationMirrored != null && rotationMirrored.length > 0 ? rotationMirrored[0] : 1;
-        int mirrored = rotationMirrored != null && rotationMirrored.length > 1 ? rotationMirrored[1] : 0;
-        // 先算形状再一次发布，不让规划线程看到同一棵树只预留了一半。
-        LongArrayList columns = new LongArrayList();
-        for (int i = 0; i + 3 < shape.length; i += 4) {
-            int type = Math.abs(shape[i]);
-            if (type < 1100 || type >= 1200) continue;
-            int[] offset = rotateMirror(shape[i + 1], shape[i + 2], shape[i + 3], rotation, mirrored);
-            offset = fallen(offset[0], offset[1], offset[2], fallenDirection);
-            columns.add(BlockPos.asLong(center.getX() + offset[0], 0, center.getZ() + offset[2]));
+        // 保留已有void入口供旧二进制调用；公开API使用带结果入口，不能凭调用未抛错报成功。
+        reserveResult(level, template, center, rotationMirrored, fallenDirection);
+    }
+
+    public static ReservationResult reserveResult(ServerLevel level, String template, BlockPos center,
+            int[] rotationMirrored, int fallenDirection) {
+        if (level == null || center == null || template == null || template.isBlank())
+            return new ReservationResult(ReservationStatus.INVALID_INPUT, 0);
+        if (!isRoadTree(template)) return new ReservationResult(ReservationStatus.IGNORED_TEMPLATE, 0);
+        short[] shape;
+        try {
+            shape = shape(template);
+            if (shape == null || shape.length == 0 || shape.length % 4 != 0)
+                throw new IllegalStateException("巨树形状为空或四元组不完整");
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException failure) {
+            // 故障必须留下可辨识状态和一次告警；不能伪装成模板正常没有树干。
+            Throwable cause = failure instanceof java.lang.reflect.InvocationTargetException wrapped
+                    && wrapped.getCause() != null ? wrapped.getCause() : failure;
+            if (SHAPE_FAILURE_LOGGED.compareAndSet(false, true))
+                LOGGER.warn("【巨树占地读取失败，本次未发布保护列】 TREE_RESERVATION_FAILED template={} failure={}",
+                        template, cause.toString());
+            return new ReservationResult(ReservationStatus.SHAPE_UNAVAILABLE, 0);
         }
-        if (!columns.isEmpty()) RESERVATIONS.computeIfAbsent(level, ignored -> new LevelReservations()).reserveAll(columns);
+        // 先算形状再一次发布，不让规划线程看到同一棵树只预留了一半。
+        var projection = TreeColumnProjection.project(shape, center, rotationMirrored, fallenDirection);
+        if (projection.columns() == 0) return new ReservationResult(ReservationStatus.NO_TRUNK_COLUMNS, 0);
+        RESERVATIONS.computeIfAbsent(level, ignored -> new LevelReservations()).reserve(projection);
+        return new ReservationResult(ReservationStatus.RESERVED, projection.columns());
     }
 
     public static boolean isReserved(ServerLevel level, BlockPos pos) {
@@ -82,6 +104,7 @@ public final class HugeTreeReservation {
 
     public static void clearAll() {
         synchronized (RESERVATIONS) { RESERVATIONS.clear(); }
+        SHAPE_FAILURE_LOGGED.set(false);
     }
 
     private static boolean isRoadTree(String template) {
@@ -89,48 +112,38 @@ public final class HugeTreeReservation {
         return !value.contains("/#nature_stuffs/") && !value.contains("/rock/") && !value.contains("/rock_");
     }
 
-    private static short[] shape(String template) {
-        try {
-            Method method = shapeMethod;
-            if (method == null) {
-                synchronized (HugeTreeReservation.class) {
-                    method = shapeMethod;
-                    if (method == null) {
-                        method = Class.forName(SHAPE_CLASS).getMethod("getTreeShapeData", String.class);
-                        shapeMethod = method;
-                    }
+    private static short[] shape(String template) throws ReflectiveOperationException {
+        Method method = shapeMethod;
+        if (method == null) {
+            synchronized (HugeTreeReservation.class) {
+                method = shapeMethod;
+                if (method == null) {
+                    method = Class.forName(SHAPE_CLASS).getMethod("getTreeShapeData", String.class);
+                    shapeMethod = method;
                 }
             }
-            Object result = method.invoke(null, template);
-            return result instanceof short[] values ? values : new short[0];
-        } catch (ReflectiveOperationException | LinkageError ignored) {
-            return new short[0];
         }
-    }
-
-    private static int[] rotateMirror(int x, int y, int z, int rotation, int mirrored) {
-        int rx = x, rz = z;
-        if (rotation == 2) { rx = z; rz = -x; }
-        else if (rotation == 3) { rx = -x; rz = -z; }
-        else if (rotation == 4) { rx = -z; rz = x; }
-        if (mirrored == 1) rx = -rx;
-        else if (mirrored == 2) rz = -rz;
-        return new int[]{rx, y, rz};
-    }
-
-    private static int[] fallen(int x, int y, int z, int direction) {
-        return switch (direction) {
-            case 1 -> new int[]{y, x, z};
-            case 2 -> new int[]{x, z, y};
-            case 3 -> new int[]{-y, x, z};
-            case 4 -> new int[]{x, z, -y};
-            default -> new int[]{x, y, z};
-        };
+        Object result = method.invoke(null, template);
+        if (!(result instanceof short[] values)) throw new IllegalStateException("巨树形状返回类型不匹配");
+        return values;
     }
 
     static final class LevelReservations {
         // 一份区块索引同时负责列查询和淘汰，避免双索引与陈旧 FIFO 在释放/重入后分叉。
         private final Long2ObjectLinkedOpenHashMap<BitSet> byChunk = new Long2ObjectLinkedOpenHashMap<>();
+
+        /** 一次合并每区块的四个字，发布不再逐列重复拆坐标、查表和设置同一位。 */
+        synchronized void reserve(TreeColumnProjection.Projection projection) {
+            for (var entry : projection.chunks().long2ObjectEntrySet()) {
+                long key = entry.getLongKey();
+                BitSet added = BitSet.valueOf(entry.getValue());
+                BitSet existing = byChunk.get(key);
+                if (existing == null) byChunk.put(key, added);
+                else existing.or(added);
+            }
+            // 按首次出现的区块顺序合并再淘汰，与旧逐列登记的保留集合相同。
+            while (byChunk.size() > MAX_RESERVED_CHUNKS_PER_LEVEL) byChunk.removeFirst();
+        }
 
         synchronized void reserveAll(LongArrayList columns) {
             for (int i = 0; i < columns.size(); i++) {

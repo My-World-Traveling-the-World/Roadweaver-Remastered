@@ -1,0 +1,19 @@
+// 复用实际生产投影与索引，冻结旧默认投影作对照；不把微基准解释成整机性能。
+gradle.projectsEvaluated {
+ def p=gradle.rootProject.project(':common')
+ def out=p.layout.buildDirectory.dir('tree-projection-probe')
+ def compile=p.tasks.register('compileTreeProjectionProbe',JavaCompile){
+  dependsOn p.tasks.named('testClasses')
+  source p.rootProject.files('scripts/benchmarks/TreeProjectionProbe.java')
+  classpath=p.sourceSets.test.runtimeClasspath
+  destinationDirectory.set(out)
+  options.encoding='UTF-8'
+ }
+ p.tasks.register('treeProjectionProbe',JavaExec){
+  dependsOn compile
+  classpath=p.sourceSets.test.runtimeClasspath+p.files(out)
+  mainClass='net.shiroha233.roadweaver.pathlogic.construction.TreeProjectionProbe'
+  args p.rootProject.file('docs/evidence/tree-projection-benchmark-20261120.json').absolutePath
+  jvmArgs '-Xms512m','-Xmx512m'
+ }
+}

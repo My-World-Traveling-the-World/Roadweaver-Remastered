@@ -30,11 +30,11 @@ public final class StructureReservationApi {
      * 登记一块结构占地。
      *
      * @param level            服务端世界
-     * @param structureId      结构标识，如 {@code "tanshugetrees:huge_tree"}，用于诊断日志
+     * @param structureId      当前巨树实现所需的模板路径，透传给形状读取方；不能用任意结构ID代替模板
      * @param center           中心方块坐标
      * @param rotationMirrored 旋转与镜像，长度 2；允许 {@code null}
      * @param fallenDirection  倒伏方向，未倒伏传 {@code -1}
-     * @return {@code true} 已登记；{@code false} RoadWeaver 不可用或参数无效
+     * @return {@code true} 已发布非空占地；{@code false} 不可用、参数无效、模板无需预留或形状读取失败
      */
     public static boolean reserve(ServerLevel level, String structureId, BlockPos center,
                                   int[] rotationMirrored, int fallenDirection) {

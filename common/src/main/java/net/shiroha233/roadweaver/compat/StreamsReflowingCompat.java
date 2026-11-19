@@ -1,4 +1,4 @@
-/* 文件职责：与 Streams Reflowing 的可选集成层：采样会话、水域计划与「是否可用」判定，全部走 api 契约、不含反射。 */
+/* 文件职责：与Streams Reflowing的可选集成层；反射读取河流引擎计划，生命周期就绪另走公开API。 */
 package net.shiroha233.roadweaver.compat;
 
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。

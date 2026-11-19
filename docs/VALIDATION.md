@@ -1,5 +1,25 @@
 # 验证与构建手册
 
+## 第73轮巨树占地发布与长城补铺保护
+
+恢复全部变异后，完整回归 **PASS tests=1712 skipped=0 aborted=0 failed=0**；Fabric编译、API/Fabric remapJar与BUILD SUCCESSFUL，日志`.analysis_tmp/round73-final.log`。本批新增18项：长城真实铺设循环3项及公开入口AST绑定1项、巨树真实API/反射目标/索引发布14项。第72轮3组及第73轮11组负控均为实际JUnit失败，非编译失败，并经git checkout及原字节校对恢复。记录分别为[evidence/wall-pavement-guards-20261120.json](evidence/wall-pavement-guards-20261120.json)、[接线负控](evidence/wall-pavement-wiring-20261120.json)和[巨树负控](evidence/tree-reservation-guards-20261120.json)。
+
+巨树基准运行当前生产TreeColumnProjection和LevelReservations，旧对照冻结默认旋转/未倒伏的逐体素投影并使用旧逐列登记。配置512MiB堆、5轮预热、9次新旧交替样本，每个计时样本128次“投影+新索引发布”；分配为ThreadMXBean当前线程字节/操作。结果见[机器记录](evidence/tree-projection-benchmark-20261120.json)。
+
+| 夹具 | 体素/最终列/合并区块 | 旧→新 p50（毫秒/128操作） | 旧→新分配（字节/操作） |
+| --- | --- | --- | --- |
+| 高树干重复列 | 4096 / 1 / 1 | 4.2760 → 1.4856 | 101008 → 1824 |
+| 分层树干 | 8192 / 1024 / 9 | 8.9515 → 3.8134 | 226536 → 2976 |
+| 独立列 | 4096 / 4096 / 25 | 4.8648 → 1.9240 | 104088 → 7984 |
+
+复现：按下方“离线回归”设置JDK21/GRADLE_OPTS后，调用同一安装版Gradle并附加：
+
+```text
+-I scripts/benchmarks/tree-projection.gradle :common:treeProjectionProbe --daemon --console=plain --dependency-verification=off
+```
+
+运行会覆盖上述JSON为本机新结果。耗时不含外部形状读取、真实世界、GC全停顿、其他模组调度和实际落块；不能据此推断FPS或总加载倍数。形状变换/首次顺序/容量淘汰另由回归对拍，微基准仅测默认变换的三类形状。测试侧Caches类只用于反射边界故障注入，不属于发布包；ServerLevel只作身份键，不能称TreePlacer完整跨模组集成验收。墙脚所有桥隧/装饰通道及安装jar版本仍需现场核对。
+
 ## 第52轮同步区块施工事务
 
 代码4abfd3e、守卫53721f7；恢复全部变异后安装版Gradle8.8执行:common:roadJUnitRegressionSuite :fabric:compileJava --daemon --console=plain --dependency-verification=off，PASS tests=1657 skipped=0 aborted=0 failed=0、BUILD SUCCESSFUL（35s）。日志.analysis_tmp/round52-restored-final.log。基线1651，新增5项事务行为及1项真实世界适配器冻结AST比较；Python19+2、旧版契约25API/82资源errors=[]，713生产Java无有效千行超限，最大物理998。

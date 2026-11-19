@@ -1,0 +1,10 @@
+{
+  "name": "public-wall-adapter-disconnected",
+  "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/SegmentPaver.java",
+  "anchor": "SegmentPaver::isWallOwned);",
+  "replacement": "pos -> false);",
+  "junit_failed": 1,
+  "restored": true,
+  "log": "round73-wall-wiring-mut.log",
+  "sha256": "13527dff79d712a959aa3f244c131cac45a28d5ea956cb4dea62db62f87dc55c"
+}

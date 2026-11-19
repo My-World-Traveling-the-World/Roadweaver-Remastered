@@ -86,8 +86,8 @@ public final class ApiBackendImpl implements RoadWeaverBackend {
         if (level == null || center == null) {
             return false;
         }
-        HugeTreeReservation.reserve(level, structureId, center, rotationMirrored, fallenDirection);
-        return true;
+        // 只有实际发布非空占地才算登记成功，形状读取失败或无需预留不能虚报accepted。
+        return HugeTreeReservation.reserveResult(level, structureId, center, rotationMirrored, fallenDirection).reserved();
     }
 
     @Override
