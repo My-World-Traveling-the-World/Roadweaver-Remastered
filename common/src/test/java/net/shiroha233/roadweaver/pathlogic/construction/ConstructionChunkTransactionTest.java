@@ -34,6 +34,47 @@ class ConstructionChunkTransactionTest {
             if(point.equals("decorate"))assertFalse(fake.events.contains("ledger"),"装饰异常不可提前记台账");
         }
     }
+    @Test void phaseTimingMeasuresRealCallsIncludingSecondPassWithoutChangingEvents() {
+        var original=new Fake(false,true,false);assertTrue(new ConstructionChunkTransaction<>(original).run());
+        var actual=new Fake(false,true,false);
+        var time=new java.util.concurrent.atomic.AtomicLong();
+        var measurements=new ArrayList<ConstructionPhaseTiming.Measurement>();
+        var measured=ConstructionPhaseTiming.wrap(actual,"overworld:1,2",true,
+                ()->time.addAndGet(10),measurements::add);
+        assertTrue(new ConstructionChunkTransaction<>(measured).run());
+        assertEquals(original.events,actual.events);
+        assertEquals(1,measurements.size());
+        var m=measurements.getFirst();
+        assertFalse(m.failed());assertEquals("overworld:1,2",m.context());
+        assertEquals(2,m.calls().get(ConstructionPhaseTiming.Phase.PAINT));
+        assertEquals(20L,m.nanos().get(ConstructionPhaseTiming.Phase.PAINT));
+        assertEquals(10L,m.nanos().get(ConstructionPhaseTiming.Phase.LEDGER));
+        assertEquals(10L,m.nanos().get(ConstructionPhaseTiming.Phase.RELEASE));
+        assertEquals(actual.events.size(),m.calls().values().stream().mapToInt(Integer::intValue).sum());
+        assertEquals(actual.events.size()*20L+10,m.totalNanos());
+    }
+    @Test void failingPhaseRemainsVisibleAndDiagnosticFailureDoesNotMaskOriginal() {
+        for(String point:List.of("process:old","ledger","release")) {
+            var actual=new Fake(false,false,false);actual.fail=point;
+            var measurements=new ArrayList<ConstructionPhaseTiming.Measurement>();
+            var measured=ConstructionPhaseTiming.wrap(actual,point,true,System::nanoTime,m->{
+                measurements.add(m);throw new IllegalStateException("模拟诊断输出异常");
+            });
+            var failure=assertThrows(IllegalStateException.class,()->new ConstructionChunkTransaction<>(measured).run());
+            assertEquals("模拟事务边界故障:"+point,failure.getMessage());
+            assertEquals(1,measurements.size());assertTrue(measurements.getFirst().failed());
+            assertEquals(1,measurements.getFirst().calls().get(ConstructionPhaseTiming.Phase.RELEASE));
+            if(point.equals("process:old"))assertFalse(measurements.getFirst().calls().containsKey(ConstructionPhaseTiming.Phase.LEDGER));
+        }
+    }
+    @Test void disabledTimingReturnsExactPortAndNeverCallsClockOrSink() {
+        var original=new Fake(false,false,false);
+        var wrapped=ConstructionPhaseTiming.wrap(original,"off",false,
+                ()->{throw new AssertionError("关闭计时不应读取时钟");},
+                ignored->{throw new AssertionError("关闭计时不应输出样本");});
+        assertSame(original,wrapped);
+        assertTrue(new ConstructionChunkTransaction<>(wrapped).run());
+    }
     private static final class Fake implements ConstructionChunkTransaction.Access<String> {
         final List<String> events=new ArrayList<>();final boolean empty,repair,emptyFresh;String fail;
         Fake(boolean empty,boolean repair,boolean emptyFresh){this.empty=empty;this.repair=repair;this.emptyFresh=emptyFresh;}

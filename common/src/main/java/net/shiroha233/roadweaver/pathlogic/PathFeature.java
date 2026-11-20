@@ -266,7 +266,8 @@ public class PathFeature extends Feature<PathFeatureConfig> {
             return !completedRoads.isEmpty() || abandoned;
             }
             @Override public void release() { HugeTreeReservation.releaseChunk(server, currentChunk); }
-        }).run();
+        // 维度与区块一起标识样本，不能把多维度的同坐标耗时混在一组。
+        }).run(server.dimension().location()+":"+currentChunk.x+","+currentChunk.z);
     }
 
     /** T-24: 单次 placeChunk 的切片处理循环(替换后用新鲜计划重跑一次)。 */

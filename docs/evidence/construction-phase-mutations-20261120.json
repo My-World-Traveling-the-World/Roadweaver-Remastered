@@ -1,0 +1,35 @@
+{
+  "mutations": [
+    {
+      "name": "paint-measured-as-ledger",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionPhaseTiming.java",
+      "anchor": "measure(Phase.PAINT,()->delegate.process(plan))",
+      "replacement": "measure(Phase.LEDGER,()->delegate.process(plan))",
+      "kind": "behavior",
+      "junit_failed": 2,
+      "log": "round78-mut-paint-measured-as-ledger.log",
+      "sha256": "a1e337793eb75fb8a59633d759c88cbc0f434cb6b7045c219e8cc39e6de45158"
+    },
+    {
+      "name": "exceptions-hidden",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionPhaseTiming.java",
+      "anchor": "failed=true;throw failure;",
+      "replacement": "failed=false;throw failure;",
+      "kind": "behavior",
+      "junit_failed": 1,
+      "log": "round78-mut-exceptions-hidden.log",
+      "sha256": "f195ddd0b5c10999f72042e03d787757edf3f2b7783a6d510a59c77f53ecab93"
+    },
+    {
+      "name": "production-timing-disconnected",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionChunkTransaction.java",
+      "anchor": "execute(ConstructionPhaseTiming.wrap(access,context))",
+      "replacement": "execute(access)",
+      "kind": "AST wiring",
+      "junit_failed": 1,
+      "log": "round78-mut-production-timing-disconnected.log",
+      "sha256": "0b370114421c0da129130b76b767b167c573e80b64dda8578abfdbace684125f"
+    }
+  ],
+  "restored": true
+}

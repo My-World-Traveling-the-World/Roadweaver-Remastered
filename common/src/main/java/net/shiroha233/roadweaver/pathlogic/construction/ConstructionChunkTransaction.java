@@ -24,6 +24,13 @@ public final class ConstructionChunkTransaction<P> {
     public ConstructionChunkTransaction(Access<P> access) { this.access=java.util.Objects.requireNonNull(access); }
     /** 同一对象只执行一次，异常后不能重放已有落块；原调用方是否创建新事务重试仍按既有政策。 */
     public boolean run() {
+        return run(null);
+    }
+    /** 显式诊断才包装真实端口；保留未开启计时的原事务次序。 */
+    public boolean run(String context) {
+        return execute(ConstructionPhaseTiming.wrap(access,context));
+    }
+    private boolean execute(Access<P> access) {
         if(state!=State.NEW)throw new IllegalStateException("区块施工事务不能重复执行: "+state);
         state=State.RUNNING;
         try {

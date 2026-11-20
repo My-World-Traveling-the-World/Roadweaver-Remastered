@@ -56,7 +56,8 @@ $opts = @('--daemon', '--console=plain', '--dependency-verification=off')
 $DaemonSignature = 'Could not connect to the Gradle daemon'
 $MaxAttempts = 4
 # 已验收的最低数量不能因选择器漏登记而倒退；增加测试无需随次更新此下界。
-$MinimumTests = 1744
+# 新增站点索引、真实阶段计时及接线守卫后同步抬高底线，防止漏登记仍假绿。
+$MinimumTests = 1753
 
 function Invoke-GradleWithRetry {
     param([string[]]$Arguments, [string]$Label)

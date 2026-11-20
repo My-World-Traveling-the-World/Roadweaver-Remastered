@@ -115,6 +115,16 @@ class ConstructionBudgetWiringTest {
         same.accept("finish","{"+join(statements.subList(16,statements.size()))+"}");
         same.accept("release",original.getFinallyBlock().toString());
     }
+    @Test void realChunkEntryUsesPhaseObservedTransaction() throws Exception {
+        // 计时组件行为测试不能替代真实入口；同时守住世界入口和事务包装两段接线。
+        var entry=methods("pathlogic/PathFeature.java").get("placeChunk").stream()
+                .map(ConstructionBudgetWiringTest::compact).toList();
+        assertTrue(entry.stream().anyMatch(body->body.contains(
+                ".run(server.dimension().location()+\":\"+currentChunk.x+\",\"+currentChunk.z)")));
+        var run=methods("pathlogic/construction/ConstructionChunkTransaction.java").get("run").stream()
+                .map(ConstructionBudgetWiringTest::compact).toList();
+        assertTrue(run.contains("{returnexecute(ConstructionPhaseTiming.wrap(access,context));}"));
+    }
     private static String join(List<? extends StatementTree> statements) {
         return statements.stream().map(tree->tree.toString()+(tree instanceof VariableTree?";":""))
                 .collect(java.util.stream.Collectors.joining());
