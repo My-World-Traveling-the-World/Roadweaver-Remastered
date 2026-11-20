@@ -192,7 +192,8 @@ structures -> persistence                        4
 topology -> metric                             3
 util -> runtime                            1
 worldgen -> config                             1
-worldgen -> core                               12
+# 2026-11-20：首末站索引迁出，唯一新增引用为RoadSegmentPlacement；无新增层方向。
+worldgen -> core                               13
 worldgen -> persistence                        4
 
 # 2026-11-15：删掉 18 个 [A] 死代码类后，map -> pathfinding / map -> search /

@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -293,6 +292,7 @@ final class RoadPhysicalReuseNormalizer {
         private final Map<RoadData, SecondaryPrepared[]> secondaries = new java.util.IdentityHashMap<>();
         // 归一化只改spans而不改站点；按精确道路实例准备，调用结束即释放，不能跨编译缓存归属。
         private Map<RoadData, RoadReuseGeometry> geometries;
+        private final Map<RoadData, RoadReuseStationIndex> stationIndices = new java.util.IdentityHashMap<>();
         private RoadReuseCandidates candidates;
         boolean direct(List<RoadData> roads) {
             if (roads.size() < 16) return true;
@@ -305,7 +305,11 @@ final class RoadPhysicalReuseNormalizer {
             return candidates.nearby(road);
         }
         OwnerStationIndex owner(RoadData road) {
-            return owners.computeIfAbsent(road, value -> indexPrimaryStations(value, geometry(value)));
+            return owners.computeIfAbsent(road, value -> indexPrimaryStations(value, geometry(value), stations(value)));
+        }
+        RoadReuseStationIndex stations(RoadData road) {
+            // 相同实例的主人、次路和旧让出复核共用索引；跨度变更创建的新实例仍单独准备。
+            return stationIndices.computeIfAbsent(road, value -> new RoadReuseStationIndex(value.roadSegmentList()));
         }
         RoadReuseGeometry geometry(RoadData road) {
             if (geometries == null) geometries = new java.util.IdentityHashMap<>();
@@ -315,15 +319,17 @@ final class RoadPhysicalReuseNormalizer {
             SecondaryPrepared[] modes = secondaries.computeIfAbsent(road, ignored -> new SecondaryPrepared[2]);
             int slot = blockReuse ? 1 : 0;
             if (modes[slot] == null) modes[slot] = new SecondaryPrepared(
-                    physicalReuseBlocked(road, blockReuse), spanKinds(road, blockReuse), geometry(road));
+                    physicalReuseBlocked(road, blockReuse, stations(road)),
+                    spanKinds(road, blockReuse, stations(road)), geometry(road));
             return modes[slot];
         }
     }
     private record SecondaryPrepared(boolean[] blocked, SpanKind[] kinds, RoadReuseGeometry geometry) {}
 
-    private static OwnerStationIndex indexPrimaryStations(RoadData road, RoadReuseGeometry geometry) {
+    private static OwnerStationIndex indexPrimaryStations(RoadData road, RoadReuseGeometry geometry,
+                                                          RoadReuseStationIndex index) {
         List<RoadSegmentPlacement> stations = road.roadSegmentList();
-        boolean[] blocked = physicalReuseBlocked(road, false);
+        boolean[] blocked = physicalReuseBlocked(road, false, index);
         var buckets = new Long2ObjectOpenHashMap<IntArrayList>();
         for (int i = 0; i < stations.size(); i++) {
             RoadSegmentPlacement station = stations.get(i);
@@ -332,7 +338,7 @@ final class RoadPhysicalReuseNormalizer {
             buckets.computeIfAbsent(ownerCellKey(center.getX() >> OWNER_CELL_SHIFT,
                     center.getZ() >> OWNER_CELL_SHIFT), key -> new IntArrayList()).add(i);
         }
-        return new OwnerStationIndex(road, stations, spanKinds(road), buckets, geometry);
+        return new OwnerStationIndex(road, stations, spanKinds(road, true, index), buckets, geometry);
     }
 
     private static ReuseMatch closestReuseOwner(OwnerStationIndex primary, RoadData secondary, RoadReuseGeometry geometry,
@@ -398,14 +404,14 @@ final class RoadPhysicalReuseNormalizer {
     }
 
     static boolean[] physicalReuseBlocked(RoadData road, boolean blockNetworkReuse) {
+        return physicalReuseBlocked(road, blockNetworkReuse, new RoadReuseStationIndex(road.roadSegmentList()));
+    }
+
+    private static boolean[] physicalReuseBlocked(RoadData road, boolean blockNetworkReuse,
+                                                  RoadReuseStationIndex index) {
         boolean[] blocked = new boolean[road.roadSegmentList().size()];
         // 无跨度的普通道路无需为查不到的端点建索引。
         if (road.spans() == null || road.spans().isEmpty()) return blocked;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < road.roadSegmentList().size(); i++) {
-            RoadSegmentPlacement segment = road.roadSegmentList().get(i);
-            if (segment != null && segment.middlePos() != null) indices.put(xzKey(segment.middlePos()), i);
-        }
         for (RoadSpan span : road.spans()) {
             if (span == null || span.start() == null || span.end() == null) continue;
             boolean blocksReuse = switch (span.type()) {
@@ -416,9 +422,9 @@ final class RoadPhysicalReuseNormalizer {
                 default -> false;
             };
             if (!blocksReuse) continue;
-            Integer start = indices.get(xzKey(span.start()));
-            Integer end = indices.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
+            int start = index.last(span.start());
+            int end = index.last(span.end());
+            if (start < 0 || end < 0) continue;
             for (int i = Math.min(start, end); i <= Math.max(start, end); i++) blocked[i] = true;
         }
         return blocked;
@@ -444,37 +450,35 @@ final class RoadPhysicalReuseNormalizer {
      *        真的有人铺吗」。让出这个标记本身不该成为「没人能铺」的理由。
      */
     static SpanKind[] spanKinds(RoadData road, boolean networkReuseIsOther) {
+        return spanKinds(road, networkReuseIsOther, new RoadReuseStationIndex(
+                road == null ? List.of() : road.roadSegmentList()));
+    }
+
+    private static SpanKind[] spanKinds(RoadData road, boolean networkReuseIsOther, RoadReuseStationIndex index) {
         int size = road == null || road.roadSegmentList() == null ? 0 : road.roadSegmentList().size();
         SpanKind[] kinds = new SpanKind[size];
         Arrays.fill(kinds, SpanKind.ORDINARY);
-        markSpanKind(kinds, road, SpanType.TUNNEL, SpanKind.TUNNEL);
-        markSpanKind(kinds, road, SpanType.TUNNEL_JUNCTION, SpanKind.TUNNEL);
-        markSpanKind(kinds, road, SpanType.BRIDGE, SpanKind.OTHER);
-        markSpanKind(kinds, road, SpanType.ROAD_CROSSING, SpanKind.OTHER);
-        markSpanKind(kinds, road, SpanType.PROTECTED_GAP, SpanKind.OTHER);
+        markSpanKind(kinds, road, SpanType.TUNNEL, SpanKind.TUNNEL, index);
+        markSpanKind(kinds, road, SpanType.TUNNEL_JUNCTION, SpanKind.TUNNEL, index);
+        markSpanKind(kinds, road, SpanType.BRIDGE, SpanKind.OTHER, index);
+        markSpanKind(kinds, road, SpanType.ROAD_CROSSING, SpanKind.OTHER, index);
+        markSpanKind(kinds, road, SpanType.PROTECTED_GAP, SpanKind.OTHER, index);
         if (networkReuseIsOther) {
-            markSpanKind(kinds, road, SpanType.NETWORK_REUSE, SpanKind.OTHER);
+            markSpanKind(kinds, road, SpanType.NETWORK_REUSE, SpanKind.OTHER, index);
         }
         return kinds;
     }
 
-    static void markSpanKind(SpanKind[] kinds, RoadData road,
-                                     SpanType type, SpanKind kind) {
+    private static void markSpanKind(SpanKind[] kinds, RoadData road,
+                                     SpanType type, SpanKind kind, RoadReuseStationIndex index) {
         // 只索引确实出现的跨度类型，避免一条长路为不存在的类型反复装箱。
         if (road == null || road.spans() == null || kinds.length == 0
                 || road.spans().stream().noneMatch(span -> span != null && span.type() == type)) return;
-        Map<Long, Integer> indices = new HashMap<>();
-        for (int i = 0; i < road.roadSegmentList().size(); i++) {
-            RoadSegmentPlacement segment = road.roadSegmentList().get(i);
-            if (segment != null && segment.middlePos() != null) {
-                indices.putIfAbsent(xzKey(segment.middlePos()), i);
-            }
-        }
         for (RoadSpan span : road.spans()) {
             if (span == null || span.type() != type || span.start() == null || span.end() == null) continue;
-            Integer start = indices.get(xzKey(span.start()));
-            Integer end = indices.get(xzKey(span.end()));
-            if (start == null || end == null) continue;
+            int start = index.first(span.start());
+            int end = index.first(span.end());
+            if (start < 0 || end < 0) continue;
             for (int i = Math.min(start, end); i <= Math.max(start, end) && i < kinds.length; i++) {
                 kinds[i] = kind;
             }
