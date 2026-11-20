@@ -1,5 +1,31 @@
 # 验证与构建手册
 
+## 第75轮四项剩余优化与测量
+
+恢复全部负控后完整 **PASS tests=1732 skipped=0 aborted=0 failed=0**，Fabric编译、API/Fabric remapJar成功，日志`.analysis_tmp/round75-final.log`。新增20项显式登记。13组道路生产变异（11行为、2 AST接线）逐项实际JUnit失败并精确恢复，锚点、失败数和日志SHA256见[变异记录](evidence/remaining-optimization-mutations-20261120.json)。长城独立972项零失败/跳过及3组行为变异记录属于其仓库HANDOFF第89轮。
+
+按下方离线回归配置JDK21和安装版Gradle，附加以下参数可重跑三项道路基准；会覆盖对应JSON：
+
+```text
+-I scripts/benchmarks/remaining-optimizations.gradle :common:reuseOptimizationProbe :common:streamsBatchProbe :common:heightWindowProbe --daemon --console=plain --dependency-verification=off
+```
+
+工具在build目录从git对象cf128a0生成改动前归一化对照，只替换类名；不是更早缺Preparation的实现。固定512MiB堆，3轮预热、9次新旧交替样本，完整产物先对拍。分配使用ThreadMXBean当前调用线程，不是存活堆峰值，也不含查询工作线程分配。
+
+| 夹具 | 旧→新耗时p50 | 旧→新调用线程分配 |
+| --- | --- | --- |
+| 稀疏96路 | 10.2591→3.0789ms / 4次归一化 | 1255536→152528B / 次 |
+| 密集96路 | 80.3032→84.2803ms / 4次归一化 | 54238160→57546808B / 次 |
+| 小批8路 | 0.1296→0.1553ms / 4次归一化 | 51288→51576B / 次 |
+| 河流纯计算替身16次查询 | 0.3172→0.2572ms / 次运行 | 1568→1152B / 次运行 |
+| 河流纯计算替身256次查询 | 2.9363→2.7808ms / 次运行 | 24608→12960B / 次运行 |
+| 河流纯计算替身1024次查询 | 9.8670→9.5581ms / 次运行 | 98336→50976B / 次运行 |
+| 稳定高度4096站、16独立列 | 7.6988→0.6693ms / 16剖面 | 未测 |
+
+道路的密集/小批两类并无提速结论，准备/调用成本仍在；不能仅展示稀疏结果。河流提交数分别16→1、256→4、1024→16，只适用于无排队同伴的该基准，有同伴时主动让出会增加提交数；湖泊/河道查询按需求执行，不跨列预取。稳定高度每剖面读取69560→16次，但只覆盖Fake稳定读口；动态路径与主线程接线另有守卫。
+
+原始结果：[道路对](evidence/reuseOptimizationProbe-20261120.json)、[查询任务](evidence/streamsBatchProbe-20261120.json)、[高度窗口](evidence/heightWindowProbe-20261120.json)。长城每10000查询旧→新p50：远未命中1.3823→0.2439ms、近未命中2.2435→0.2218ms、边缘命中0.2169→0.2167ms；工具/JSON放长城。本轮未测实际引擎、写块、总加载、FPS/MSPT或4096工作集，性能数值不可直接外推。
+
 ## 第73轮巨树占地发布与长城补铺保护
 
 恢复全部变异后，完整回归 **PASS tests=1712 skipped=0 aborted=0 failed=0**；Fabric编译、API/Fabric remapJar与BUILD SUCCESSFUL，日志`.analysis_tmp/round73-final.log`。本批新增18项：长城真实铺设循环3项及公开入口AST绑定1项、巨树真实API/反射目标/索引发布14项。第72轮3组及第73轮11组负控均为实际JUnit失败，非编译失败，并经git checkout及原字节校对恢复。记录分别为[evidence/wall-pavement-guards-20261120.json](evidence/wall-pavement-guards-20261120.json)、[接线负控](evidence/wall-pavement-wiring-20261120.json)和[巨树负控](evidence/tree-reservation-guards-20261120.json)。
