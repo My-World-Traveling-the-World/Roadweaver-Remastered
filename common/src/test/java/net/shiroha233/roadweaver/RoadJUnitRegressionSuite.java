@@ -387,6 +387,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.worldgen.road.RoadChunkPlanCompilerReuseOwnershipTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadReuseCandidatesTest"),
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.worldgen.road.RoadReuseGeometryTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.compat.StreamsQueryBatchTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.architecture.OptimizationWiringTest"),
                         // 回填计划只查一次的回归走同一生产编排。

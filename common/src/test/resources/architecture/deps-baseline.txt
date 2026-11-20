@@ -192,7 +192,7 @@ structures -> persistence                        4
 topology -> metric                             3
 util -> runtime                            1
 worldgen -> config                             1
-worldgen -> core                               11
+worldgen -> core                               12
 worldgen -> persistence                        4
 
 # 2026-11-15：删掉 18 个 [A] 死代码类后，map -> pathfinding / map -> search /

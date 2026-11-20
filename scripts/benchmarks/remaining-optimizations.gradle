@@ -1,13 +1,18 @@
-// 冻结当前优化前cf128a0，而不是更早缺Preparation的实现；生成源码只进入build。
+// 默认冻结cf128a0；新轮可显式指定基线和记录标签，避免覆盖历史证据。
 gradle.projectsEvaluated {
     def p = gradle.rootProject.project(':common')
+    def baseline = p.providers.gradleProperty('reuseBaseline').getOrElse('cf128a0')
+    def tag = p.providers.gradleProperty('probeTag').getOrElse('20261120')
+    assert baseline ==~ /[0-9a-f]{7,40}/
+    assert tag ==~ /[a-zA-Z0-9-]+/
     def generated = p.layout.buildDirectory.dir('remaining-probe-src')
     def out = p.layout.buildDirectory.dir('remaining-probe')
     def prepare = p.tasks.register('preparePreviousRoadReuse') {
+        inputs.property('baseline', baseline)
         outputs.dir(generated)
         doLast {
             def text = p.providers.exec {
-                commandLine 'git', 'show', 'cf128a0:common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java'
+                commandLine 'git', 'show', "${baseline}:common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java"
                 workingDir p.rootProject.projectDir
             }.standardOutput.asText.get()
             assert text.count('final class RoadPhysicalReuseNormalizer') == 1
@@ -31,7 +36,7 @@ gradle.projectsEvaluated {
             dependsOn compile
             classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
             mainClass = main
-            args p.rootProject.file("docs/evidence/${name}-20261120.json").absolutePath
+            args p.rootProject.file("docs/evidence/${name}-${tag}.json").absolutePath, baseline
             jvmArgs '-Xms512m', '-Xmx512m'
         }
     }

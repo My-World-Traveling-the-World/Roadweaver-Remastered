@@ -6,14 +6,15 @@ import java.nio.file.*;
 import java.util.*;
 import net.shiroha233.roadweaver.core.model.RoadData;
 
-/** 对照改动前cf128a0的真实Preparation路径；不拿更老、尚未缓存的算法冒充基线。 */
+/** 对照显式git基线的真实Preparation路径，不拿更老、尚未缓存的算法冒充基线。 */
 public final class ReuseOptimizationProbe {
     private static volatile Object retained;
     private static final ThreadMXBean MEMORY = (ThreadMXBean) ManagementFactory.getThreadMXBean();
     public static void main(String[] args) throws Exception {
         net.minecraft.SharedConstants.tryDetectVersion();
         net.minecraft.server.Bootstrap.bootStrap();
-        var json = new StringBuilder("{\"baseline\":\"cf128a0\",\"unit\":\"milliseconds_per_4_normalizations\",\"allocation_unit\":\"caller_bytes_per_normalization\",\"warmups\":3,\"samples\":9,\"cases\":[");
+        String baseline = args.length > 1 ? args[1] : "cf128a0";
+        var json = new StringBuilder("{\"baseline\":\"" + baseline + "\",\"unit\":\"milliseconds_per_4_normalizations\",\"allocation_unit\":\"caller_bytes_per_normalization\",\"warmups\":3,\"samples\":9,\"cases\":[");
         String[] names = {"sparse", "dense", "small"};
         for (int c = 0; c < names.length; c++) {
             var roads = new ArrayList<RoadData>();

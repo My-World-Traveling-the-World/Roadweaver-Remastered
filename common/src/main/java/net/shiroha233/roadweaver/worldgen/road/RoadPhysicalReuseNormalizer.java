@@ -18,10 +18,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 物理归属归一化：同一段世界方块只能属于一条路。
@@ -260,7 +258,7 @@ final class RoadPhysicalReuseNormalizer {
             if (secondaryBlocked[i]) continue;
             RoadSegmentPlacement candidate = sec.get(i);
             if (candidate == null || candidate.middlePos() == null) continue;
-            ReuseMatch match = closestReuseOwner(owners, secondary, i, secondaryKinds[i], candidate);
+            ReuseMatch match = closestReuseOwner(owners, secondary, prepared.geometry(), i, secondaryKinds[i], candidate);
             matches[i] = match.index;
             corridorMatches[i] = match.corridor;
         }
@@ -293,6 +291,8 @@ final class RoadPhysicalReuseNormalizer {
     static final class Preparation {
         private final Map<RoadData, OwnerStationIndex> owners = new java.util.IdentityHashMap<>();
         private final Map<RoadData, SecondaryPrepared[]> secondaries = new java.util.IdentityHashMap<>();
+        // 归一化只改spans而不改站点；按精确道路实例准备，调用结束即释放，不能跨编译缓存归属。
+        private Map<RoadData, RoadReuseGeometry> geometries;
         private RoadReuseCandidates candidates;
         boolean direct(List<RoadData> roads) {
             if (roads.size() < 16) return true;
@@ -305,19 +305,23 @@ final class RoadPhysicalReuseNormalizer {
             return candidates.nearby(road);
         }
         OwnerStationIndex owner(RoadData road) {
-            return owners.computeIfAbsent(road, RoadPhysicalReuseNormalizer::indexPrimaryStations);
+            return owners.computeIfAbsent(road, value -> indexPrimaryStations(value, geometry(value)));
+        }
+        RoadReuseGeometry geometry(RoadData road) {
+            if (geometries == null) geometries = new java.util.IdentityHashMap<>();
+            return geometries.computeIfAbsent(road, value -> new RoadReuseGeometry(value.roadSegmentList()));
         }
         SecondaryPrepared secondary(RoadData road, boolean blockReuse) {
             SecondaryPrepared[] modes = secondaries.computeIfAbsent(road, ignored -> new SecondaryPrepared[2]);
             int slot = blockReuse ? 1 : 0;
             if (modes[slot] == null) modes[slot] = new SecondaryPrepared(
-                    physicalReuseBlocked(road, blockReuse), spanKinds(road, blockReuse));
+                    physicalReuseBlocked(road, blockReuse), spanKinds(road, blockReuse), geometry(road));
             return modes[slot];
         }
     }
-    private record SecondaryPrepared(boolean[] blocked, SpanKind[] kinds) {}
+    private record SecondaryPrepared(boolean[] blocked, SpanKind[] kinds, RoadReuseGeometry geometry) {}
 
-    private static OwnerStationIndex indexPrimaryStations(RoadData road) {
+    private static OwnerStationIndex indexPrimaryStations(RoadData road, RoadReuseGeometry geometry) {
         List<RoadSegmentPlacement> stations = road.roadSegmentList();
         boolean[] blocked = physicalReuseBlocked(road, false);
         var buckets = new Long2ObjectOpenHashMap<IntArrayList>();
@@ -328,10 +332,10 @@ final class RoadPhysicalReuseNormalizer {
             buckets.computeIfAbsent(ownerCellKey(center.getX() >> OWNER_CELL_SHIFT,
                     center.getZ() >> OWNER_CELL_SHIFT), key -> new IntArrayList()).add(i);
         }
-        return new OwnerStationIndex(road, stations, spanKinds(road), buckets);
+        return new OwnerStationIndex(road, stations, spanKinds(road), buckets, geometry);
     }
 
-    private static ReuseMatch closestReuseOwner(OwnerStationIndex primary, RoadData secondary,
+    private static ReuseMatch closestReuseOwner(OwnerStationIndex primary, RoadData secondary, RoadReuseGeometry geometry,
                                                 int i, SpanKind secondaryKind,
                                                 RoadSegmentPlacement candidate) {
         BlockPos center = candidate.middlePos();
@@ -361,9 +365,9 @@ final class RoadPhysicalReuseNormalizer {
                             || (distance == bestDistance && j >= best)) continue;
                     SpanKind primaryKind = primary.kinds[j];
                     if (!physicalSpanKindCompatible(primaryKind, secondaryKind)
-                            || !physicalDirectionCompatible(secondary.roadSegmentList(), i, primary.stations, j)) continue;
+                            || !geometry.directionCompatible(i, primary.geometry, j)) continue;
                     boolean sameTunnel = primaryKind == SpanKind.TUNNEL && secondaryKind == SpanKind.TUNNEL;
-                    boolean exactFootprint = footprintsIntersect(owner, candidate);
+                    boolean exactFootprint = primary.geometry.intersects(j, candidate);
                     // 方向相同但足迹不相交的隧道不是同一条；地面路另需满足高差和中心距离。
                     if (sameTunnel ? !exactFootprint
                             : ((!exactFootprint && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)
@@ -383,29 +387,12 @@ final class RoadPhysicalReuseNormalizer {
     }
 
     private record OwnerStationIndex(RoadData road, List<RoadSegmentPlacement> stations,
-                                     SpanKind[] kinds, Long2ObjectOpenHashMap<IntArrayList> buckets) {
+                                     SpanKind[] kinds, Long2ObjectOpenHashMap<IntArrayList> buckets,
+                                     RoadReuseGeometry geometry) {
     }
 
     private record ReuseMatch(int index, boolean corridor) {
         private static final ReuseMatch NONE = new ReuseMatch(-1, false);
-    }
-
-    static boolean physicalDirectionCompatible(List<RoadSegmentPlacement> first, int firstIndex,
-                                                        List<RoadSegmentPlacement> second, int secondIndex) {
-        double[] a = localDirection(first, firstIndex);
-        double[] b = localDirection(second, secondIndex);
-        return a == null || b == null || Math.abs(a[0] * b[0] + a[1] * b[1]) >= 0.75D;
-    }
-
-    static double[] localDirection(List<RoadSegmentPlacement> segments, int index) {
-        if (segments == null || segments.size() < 2) return null;
-        BlockPos first = segments.get(Math.max(0, index - 1)).middlePos();
-        BlockPos last = segments.get(Math.min(segments.size() - 1, index + 1)).middlePos();
-        if (first == null || last == null) return null;
-        double dx = last.getX() - first.getX();
-        double dz = last.getZ() - first.getZ();
-        double length = Math.hypot(dx, dz);
-        return length < 1.0D ? null : new double[]{dx / length, dz / length};
     }
 
     static boolean[] physicalReuseBlocked(RoadData road, boolean blockNetworkReuse) {
@@ -520,24 +507,7 @@ final class RoadPhysicalReuseNormalizer {
     }
 
     static boolean footprintsIntersect(RoadSegmentPlacement first, RoadSegmentPlacement second) {
-        Set<Long> footprint = new HashSet<>();
-        addFootprint(footprint, first);
-        if (second.middlePos() != null && footprint.contains(xzKey(second.middlePos()))) return true;
-        if (second.positions() != null) {
-            for (BlockPos pos : second.positions()) {
-                if (pos != null && footprint.contains(xzKey(pos))) return true;
-            }
-        }
-        return false;
-    }
-
-    static void addFootprint(Set<Long> footprint, RoadSegmentPlacement placement) {
-        if (placement.middlePos() != null) footprint.add(xzKey(placement.middlePos()));
-        if (placement.positions() != null) {
-            for (BlockPos pos : placement.positions()) {
-                if (pos != null) footprint.add(xzKey(pos));
-            }
-        }
+        return RoadReuseGeometry.intersects(first, second);
     }
 
     static long xzKey(BlockPos pos) {
