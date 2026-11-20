@@ -1,0 +1,20 @@
+{
+  "code_commit": "c13b07f65f85aa0d13e968e59b582e2d9375a712",
+  "tests": 1753,
+  "skipped": 0,
+  "aborted": 0,
+  "failed": 0,
+  "artifact": {
+    "path": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+    "bytes": 7160557,
+    "sha256": "faf6b5a5655d9c09cd730a8704869cf67e7dcc3a1cb308014a3b96790382dc9f",
+    "test_class_overlap": []
+  },
+  "logs": {
+    "round78-all-final.log": "c3bbe18715b872f9dbb9a08d7b71275cf9ef86edcd48c131859183df081cbfd2",
+    "round78-verify-final.log": "b74aad676664d29fb1e10017807317f2828b821fbf3754b7c336334e844522a8"
+  },
+  "game_tested": false,
+  "deployed": false,
+  "push_attempted": false
+}

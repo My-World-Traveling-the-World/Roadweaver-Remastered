@@ -1,5 +1,26 @@
 # 验证与构建手册
 
+## 第78轮跨度索引与施工阶段观测
+
+恢复六组道路变异后完整 **1753/0/0/0**，标准:fabric:build、API named/intermediary契约件和实际Windows verify.ps1成功。新测试登记、负控类型、成品/日志hash均见[HANDOFF第78轮](HANDOFF.md)、[索引负控](evidence/reuse-station-mutations-20261120.json)、[计时负控](evidence/construction-phase-mutations-20261120.json)与[成品证据](evidence/station-phase-package-20261120.json)。完整架构/有效行数守卫通过，没有放宽1000有效行限制。
+
+```text
+gradle -I scripts/benchmarks/remaining-optimizations.gradle :common:reuseOptimizationProbe -PreuseBaseline=9e1f887 -PprobeTag=station-index-20261120 --daemon --console=plain --dependency-verification=off
+```
+
+使用下文外置Gradle8.8和JDK21，不能用握手失败的包装器。探针先比较完整真实归属产物，512MiB、3预热、9交替样本；测量限当前调用线程与内核，不含真实世界/IO/GC尾延迟。记录[JSON](evidence/reuseOptimizationProbe-station-index-20261120.json)：
+
+| 夹具 | 旧→新p50，ms/4次 | 旧→新分配，B/次 |
+| --- | --- | --- |
+| 稀疏96路 | 3.7268→3.4565 | 153176→153488 |
+| 密集96路 | 55.8069→54.7714 | 2752800→2530064 |
+| 小批8路 | 0.1423→0.1336 | 52664→42512 |
+| 混合跨度96路 | 31.2751→29.8240 | 4346816→2281384 |
+
+现场可选`-Droadweaver.constructionPhaseTimings=on`，看`[CHUNK-PHASE-TIMING]`的planReadUs/prepareUs/paintUs/repairUs/decorateUs/ledgerUs/finishUs/releaseUs/totalUs；维度+区块作上下文。returned不是完整建成；异常与正常返回分别记录。PLAN_READ包含读取、判空及空计划诊断；PAINT仍是切片整体，LEDGER仅为本事务markComplete调用耗时，尚未分解实际全部写盘，不据此启用异步落盘。默认关闭，生产仍同步。
+
+相邻长城开启`-Dgreatwall.backfillTimings=on`量候选选择、整轮及单块settle；982项、96组故障组合、6组分层负控和建树代价见其HANDOFF第91轮。快照原型没有进成品，也没有改变正式最近64项选择。
+
 ## 第77轮分层隧道与严格验证入口
 
 完整 **PASS tests=1744 skipped=0 aborted=0 failed=0** 与Fabric编译通过；新增五项按FQCN显式登记。原代码先复现4项JUnit失败，修复后23项定向回归及全量通过。同层/反向正例、±1格容差、±2/8格分层、分层后重合、旧共用回收与稀疏候选/缺高度兼容均覆盖。原冻结实现不改，等价对拍排除已经证明错误的隧道分层输入，独立新断言负责正确契约。4组实际生产变异见[高度负控](evidence/reuse-height-mutations-20261120.json)，日志`.analysis_tmp/round77-height-final.log`。
