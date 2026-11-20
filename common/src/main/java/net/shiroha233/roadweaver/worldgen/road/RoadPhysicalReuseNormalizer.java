@@ -364,15 +364,17 @@ final class RoadPhysicalReuseNormalizer {
                     if (distance > MAX_OWNER_DISTANCE || distance > bestDistance
                             || (distance == bestDistance && j >= best)) continue;
                     SpanKind primaryKind = primary.kinds[j];
-                    if (!physicalSpanKindCompatible(primaryKind, secondaryKind)
+                    // XZ足迹不含高度；隧道也必须处于同层，否则次路会整段让出给根本不在该层的主人。
+                    // 先比较持久目标Y，顺便避免为已确定分层的候选准备方向和占地；long差防溢出误认。
+                    if (Math.abs((long) targetY - RoadChunkPlanCompiler.targetAt(primary.road.targetY(), j,
+                            ownerCenter.getY())) > PHYSICAL_REUSE_MAX_HEIGHT_DELTA
+                            || !physicalSpanKindCompatible(primaryKind, secondaryKind)
                             || !geometry.directionCompatible(i, primary.geometry, j)) continue;
                     boolean sameTunnel = primaryKind == SpanKind.TUNNEL && secondaryKind == SpanKind.TUNNEL;
                     boolean exactFootprint = primary.geometry.intersects(j, candidate);
-                    // 方向相同但足迹不相交的隧道不是同一条；地面路另需满足高差和中心距离。
+                    // 高差已统一过滤；隧道还须实际足迹相交，地面近路保留原走廊中心距离规则。
                     if (sameTunnel ? !exactFootprint
-                            : ((!exactFootprint && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)
-                            || Math.abs(targetY - RoadChunkPlanCompiler.targetAt(primary.road.targetY(), j,
-                            ownerCenter.getY())) > PHYSICAL_REUSE_MAX_HEIGHT_DELTA)) continue;
+                            : (!exactFootprint && distance > PHYSICAL_REUSE_MAX_CENTER_DISTANCE)) continue;
                     best = j;
                     bestDistance = distance;
                     bestCorridor = !sameTunnel && !exactFootprint;

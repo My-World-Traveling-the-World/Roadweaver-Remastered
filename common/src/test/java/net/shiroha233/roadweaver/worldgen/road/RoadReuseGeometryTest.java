@@ -93,9 +93,11 @@ class RoadReuseGeometryTest {
                 roads.add(road);
                 roads.add(new RoadData(3, 1, List.of(), List.of(), segments, spans, heights,
                         group * 2 + 100, group * 2 + 101));
-                // 同形但高差超过1，不能因占地缓存共享而误作同层；同时保留原道路顺序。
+                // 这里只对拍行为等价部分；旧实现误认上下层隧道，独立高度回归负责钉住修正后的契约。
+                // 普通道路仍用上下层对照，隧道的同层三路则保留真实共用和确定排序验证。
                 roads.add(new RoadData(3, 1, List.of(), List.of(), segments, spans,
-                        heights.stream().map(h -> h + 8).toList(), group * 2 + 200, group * 2 + 201));
+                        heights.stream().map(h -> h + (spans.isEmpty() ? 8 : 0)).toList(),
+                        group * 2 + 200, group * 2 + 201));
             }
             Collections.shuffle(roads, random);
             var actual = RoadPhysicalReuseNormalizer.normalizePhysicalOverlaps(roads);

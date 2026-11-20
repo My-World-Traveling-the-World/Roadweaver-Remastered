@@ -389,6 +389,9 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.worldgen.road.RoadReuseCandidatesTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadReuseGeometryTest"),
+                        // 独立钉住高度契约，避免只与旧实现对拍而保留同一个上下层误认。
+                        DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.worldgen.road.RoadReuseHeightTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.compat.StreamsQueryBatchTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.architecture.OptimizationWiringTest"),
                         // 回填计划只查一次的回归走同一生产编排。
