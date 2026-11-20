@@ -55,15 +55,19 @@ $opts = @('--daemon', '--console=plain', '--dependency-verification=off')
 # matches it, so retries cannot mask a real failure.
 $DaemonSignature = 'Could not connect to the Gradle daemon'
 $MaxAttempts = 4
+# 已验收的最低数量不能因选择器漏登记而倒退；增加测试无需随次更新此下界。
+$MinimumTests = 1744
 
 function Invoke-GradleWithRetry {
     param([string[]]$Arguments, [string]$Label)
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         $out = & $gradle @Arguments @opts 2>&1
+        # 原生退出码必须随本次输出一起返回，后续格式化或另一阶段不能覆盖它。
+        $code = $LASTEXITCODE
         $txt = ($out | Out-String)
         if ($txt -notmatch [regex]::Escape($DaemonSignature)) {
-            return $out
+            return [pscustomobject]@{ Output = $out; ExitCode = $code }
         }
         if ($attempt -lt $MaxAttempts) {
             Write-Host ("[verify] {0}: gradle daemon did not accept the connection (attempt {1}/{2}); retrying" -f $Label, $attempt, $MaxAttempts)
@@ -71,19 +75,35 @@ function Invoke-GradleWithRetry {
             Start-Sleep -Seconds 5
         }
     }
-    return ($out | Out-String)
+    return [pscustomobject]@{ Output = $out; ExitCode = $code }
+}
+
+function Test-GradleSucceeded {
+    param($Result, [switch]$RequireSuite)
+    $text = ($Result.Output | Out-String)
+    # 任务可先打印PASS再在其他收尾任务失败，日志与退出码必须同时确认成功。
+    if ($Result.ExitCode -ne 0 -or $text -notmatch '(?m)^BUILD SUCCESSFUL(?: in .*)?\r?$' -or
+            $text -match '(?m)^BUILD FAILED(?: in .*)?\r?$') { return $false }
+    if (-not $RequireSuite) { return $true }
+    $summaries = [regex]::Matches($text, '(?m)^[^\r\n]*RoadJUnitRegressionSuite: PASS[^\r\n]*\r?$')
+    # 只接受唯一完整摘要；截断、跳过、终止、失败或重复的摘要都不能算一次完整回归。
+    if ($summaries.Count -ne 1 -or $summaries[0].Value -notmatch
+            'RoadJUnitRegressionSuite: PASS tests=(\d+) skipped=0 aborted=0 failed=0\r?$') { return $false }
+    $tests = 0L
+    return [long]::TryParse($Matches[1], [ref]$tests) -and $tests -ge $MinimumTests
 }
 
 Write-Host "[verify] stage 1/2: :fabric:compileJava (not covered by common tests)"
-$out1 = Invoke-GradleWithRetry -Arguments @(':fabric:compileJava') -Label 'stage 1'
+$result1 = Invoke-GradleWithRetry -Arguments @(':fabric:compileJava') -Label 'stage 1'
+$out1 = $result1.Output
 $txt1 = ($out1 | Out-String)
-if ($txt1 -notmatch 'BUILD SUCCESSFUL') {
+if (-not (Test-GradleSucceeded -Result $result1)) {
     if ($txt1 -match [regex]::Escape($DaemonSignature)) {
         # Say what actually happened; do not blame the source tree.
         Write-Host "[verify] FAIL: gradle daemon unreachable after $MaxAttempts attempts (NOT a compile error)"
         Write-Host "[verify]       the source tree is unverified; re-run, and if it persists check loopback/firewall"
     } else {
-        Write-Host "[verify] FAIL: fabric does not compile"
+        Write-Host "[verify] FAIL: Fabric构建未成功，exit=$($result1.ExitCode)"
         ($out1 | Select-String -Pattern '\.java:\d+: |error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
     }
     exit 1
@@ -91,15 +111,18 @@ if ($txt1 -notmatch 'BUILD SUCCESSFUL') {
 Write-Host "[verify] OK: fabric compiles"
 
 Write-Host "[verify] stage 2/2: :common:roadJUnitRegressionSuite"
-$out2 = Invoke-GradleWithRetry -Arguments @(':common:roadJUnitRegressionSuite') -Label 'stage 2'
+$result2 = Invoke-GradleWithRetry -Arguments @(':common:roadJUnitRegressionSuite') -Label 'stage 2'
+$out2 = $result2.Output
 $txt = ($out2 | Out-String)
-if ($txt -match 'PASS tests=\d+') {
-    Write-Host ("[verify] OK: " + $Matches[0])
+if (Test-GradleSucceeded -Result $result2 -RequireSuite) {
+    # 成功时保留完整计数，便于复核没有跳过或提前终止。
+    $summary = [regex]::Match($txt, 'RoadJUnitRegressionSuite: PASS[^\r\n]*').Value
+    Write-Host ("[verify] OK: " + $summary)
 } else {
     if ($txt -match [regex]::Escape($DaemonSignature)) {
         Write-Host "[verify] FAIL: gradle daemon unreachable after $MaxAttempts attempts (NOT a test failure)"
     } else {
-        Write-Host "[verify] FAIL: regression suite"
+        Write-Host "[verify] FAIL: 回归未完整通过，exit=$($result2.ExitCode)，要求tests>=$MinimumTests且skipped/aborted/failed均为0"
         ($out2 | Select-String -Pattern 'AssertionFailedError|FAILED|error:' | Select-Object -First 20) | ForEach-Object { "    " + $_.Line }
     }
     exit 1

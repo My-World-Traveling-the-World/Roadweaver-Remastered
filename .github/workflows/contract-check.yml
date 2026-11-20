@@ -25,3 +25,6 @@ jobs:
       - name: 检查构建重试不会终止无关进程
         shell: powershell
         run: .\scripts\audit\Test-VerifyRetry.ps1
+      - name: 检查两阶段验证严格拒绝不完整回归
+        shell: powershell
+        run: .\scripts\audit\Test-VerifyGate.ps1

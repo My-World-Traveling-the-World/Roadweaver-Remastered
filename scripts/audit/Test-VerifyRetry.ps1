@@ -26,11 +26,11 @@ $gradle = {
     $script:calls++
     switch ($script:scenario) {
         'recover' {
-            if ($script:calls -eq 1) { 'Could not connect to the Gradle daemon' }
-            else { 'BUILD SUCCESSFUL' }
+            if ($script:calls -eq 1) { $global:LASTEXITCODE = 1; 'Could not connect to the Gradle daemon' }
+            else { $global:LASTEXITCODE = 0; 'BUILD SUCCESSFUL' }
         }
-        'persistent' { 'Could not connect to the Gradle daemon' }
-        'compile-error' { 'BUILD FAILED: compile error' }
+        'persistent' { $global:LASTEXITCODE = 1; 'Could not connect to the Gradle daemon' }
+        'compile-error' { $global:LASTEXITCODE = 2; 'BUILD FAILED: compile error' }
         default { throw '未知模拟场景' }
     }
 }
@@ -54,12 +54,14 @@ function Start-Sleep {
 }
 
 function Assert-Result {
-    param([string]$Scenario, [int]$Calls, [int]$Sleeps, [string]$Expected)
+    param([string]$Scenario, [int]$Calls, [int]$Sleeps, [string]$Expected, [int]$ExitCode)
     $script:scenario = $Scenario
     $script:calls = 0
     $script:sleeps = 0
-    $result = (Invoke-GradleWithRetry -Arguments @(':fabric:compileJava') -Label '模拟回归' | Out-String)
-    if ($script:calls -ne $Calls -or $script:sleeps -ne $Sleeps -or -not $result.Contains($Expected)) {
+    $result = Invoke-GradleWithRetry -Arguments @(':fabric:compileJava') -Label '模拟回归'
+    # 直接检查原函数返回的同次输出和退出码，防止重试成功却残留首轮失败状态。
+    if ($script:calls -ne $Calls -or $script:sleeps -ne $Sleeps -or
+            -not ($result.Output | Out-String).Contains($Expected) -or $result.ExitCode -ne $ExitCode) {
         throw "[VERIFY-RETRY] 重试结果错误 scenario=$Scenario calls=$script:calls sleeps=$script:sleeps"
     }
     if ($script:processQueries -ne 0 -or $script:processStops -ne 0) {
@@ -67,7 +69,7 @@ function Assert-Result {
     }
 }
 
-Assert-Result 'recover' 2 1 'BUILD SUCCESSFUL'
-Assert-Result 'persistent' 4 3 $DaemonSignature
-Assert-Result 'compile-error' 1 0 'BUILD FAILED'
+Assert-Result 'recover' 2 1 'BUILD SUCCESSFUL' 0
+Assert-Result 'persistent' 4 3 $DaemonSignature 1
+Assert-Result 'compile-error' 1 0 'BUILD FAILED' 2
 Write-Output '[VERIFY-RETRY] PASS cases=3 processQueries=0 processStops=0'
