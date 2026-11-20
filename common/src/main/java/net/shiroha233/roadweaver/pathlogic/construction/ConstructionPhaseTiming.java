@@ -57,6 +57,10 @@ final class ConstructionPhaseTiming<P> implements ConstructionChunkTransaction.A
     public void emptyPlan() { measure(Phase.PLAN_READ,delegate::emptyPlan); }
     public void prepare(P plan) { measure(Phase.PREPARE,()->delegate.prepare(plan)); }
     public void process(P plan) { measure(Phase.PAINT,()->delegate.process(plan)); }
+    public boolean processSlice(P plan) { return measure(Phase.PAINT,()->delegate.processSlice(plan)); }
+    public boolean decorateSlice() { return measure(Phase.DECORATE,delegate::decorateSlice); }
+    public boolean ownerAlive() { return delegate.ownerAlive(); }
+    public boolean isCurrent(P plan) { return delegate.isCurrent(plan); }
     public boolean repairRefusals() { return measure(Phase.REPAIR,delegate::repairRefusals); }
     public P loadRefreshed() { return measure(Phase.PLAN_READ,delegate::loadRefreshed); }
     public void resetRefusals() { measure(Phase.REPAIR,delegate::resetRefusals); }

@@ -547,6 +547,7 @@ public final class RoadJUnitRegressionSuite {
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.TreeReservationOutcomeTest"))
                 // 公开河流契约必须实际进入套件，不能靠测试类存在推断覆盖。
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.compat.StreamsPlanContractAccessTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.ConstructionTransactionCursorTest"))
                 .build();
         SummaryGeneratingListener summary = new SummaryGeneratingListener();
         // ★ 2026-11-15：收集「被 Assumptions 静默跳过」的用例。

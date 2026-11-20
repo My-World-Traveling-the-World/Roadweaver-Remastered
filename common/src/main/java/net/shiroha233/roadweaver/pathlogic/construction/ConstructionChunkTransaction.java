@@ -1,10 +1,10 @@
 /* 文件职责：拥有同步区块施工的事务次序，拒绝半写重放，最终释放与成功结案分别守卫。 */
 package net.shiroha233.roadweaver.pathlogic.construction;
 
-/** 端口只搬世界边界；不把同步事务当作已具备跨tick租约、卸载或计划修订隔离。 */
+/** 同步生产门面保留；阶段游标可离线暂停，运行期跨tick租约仍由后续调度器接入。 */
 public final class ConstructionChunkTransaction<P> {
     /** CLOSED表示本次调用结束，包含正常空计划或既定终态放弃，不代表道路完整落成。 */
-    public enum State { NEW, RUNNING, CLOSED, FAILED }
+    public enum State { NEW, RUNNING, CLOSED, CANCELLED, FAILED }
     public interface Access<P> {
         P loadInitial();
         boolean isEmpty(P plan);
@@ -18,6 +18,12 @@ public final class ConstructionChunkTransaction<P> {
         void commitCompleted();
         boolean finish(P evidencePlan, boolean gapRepairApplied);
         void release();
+        /** 默认保持原同步能力；未来回填端口才能在完整站/装饰之间返回未结束。 */
+        default boolean processSlice(P plan) { process(plan); return true; }
+        default boolean decorateSlice() { decorate(); return true; }
+        /** 调度端分别验证世界/区块租约与不可变计划版本，禁止半写旧版继续结案。 */
+        default boolean ownerAlive() { return true; }
+        default boolean isCurrent(P plan) { return true; }
     }
     private final Access<P> access;
     private State state=State.NEW;
@@ -33,31 +39,13 @@ public final class ConstructionChunkTransaction<P> {
     private boolean execute(Access<P> access) {
         if(state!=State.NEW)throw new IllegalStateException("区块施工事务不能重复执行: "+state);
         state=State.RUNNING;
+        var cursor=new ConstructionTransactionCursor<>(access);
         try {
-            P plan=access.loadInitial();
-            if(access.isEmpty(plan)) { access.emptyPlan();return false; }
-            access.prepare(plan);
-            access.process(plan);
-            P evidencePlan=plan;
-            boolean repaired=access.repairRefusals();
-            if(repaired) {
-                P refreshed=access.loadRefreshed();
-                // 新鲜空计划保持旧拒绝集合及证据；非空才重置并做第二轮，不能无限修复循环。
-                if(!access.isEmpty(refreshed)) {
-                    evidencePlan=refreshed;
-                    access.resetRefusals();
-                    access.process(refreshed);
-                }
-            }
-            access.decorate();
-            access.commitCompleted();
-            return access.finish(evidencePlan,repaired);
+            boolean result=cursor.runAll();
+            state=cursor.stage()==ConstructionTransactionCursor.Stage.CANCELLED?State.CANCELLED:State.CLOSED;
+            return result;
         } catch(RuntimeException|Error failure) {
             state=State.FAILED;throw failure;
-        } finally {
-            try { access.release(); }
-            catch(RuntimeException|Error failure) { state=State.FAILED;throw failure; }
-            if(state==State.RUNNING)state=State.CLOSED;
         }
     }
     public State state() { return state; }
