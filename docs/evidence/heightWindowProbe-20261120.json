@@ -1,0 +1,1 @@
+{"unit":"milliseconds_per_16_profiles","fixture":"stable-fake-height-reader","old_reads_per_profile":69560,"new_reads_per_profile":16,"old_ms_p50":7.6988,"new_ms_p50":0.6693}

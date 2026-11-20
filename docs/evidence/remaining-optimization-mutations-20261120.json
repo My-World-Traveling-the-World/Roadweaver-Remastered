@@ -1,0 +1,135 @@
+{
+  "mutations": [
+    {
+      "name": "empty-road-candidates",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseCandidates.java",
+      "kind": "behavior",
+      "anchor": "if (candidates != null) found.addAll(candidates);",
+      "replacement": "if (false && candidates != null) found.addAll(candidates);",
+      "junit_failed": 3,
+      "log": "round75-mut-empty-road-candidates.log",
+      "sha256": "5c31ffbfed6bb371375c033f7aa658ea105d9996b63719986df83543be4ebc55"
+    },
+    {
+      "name": "omit-real-shared-claims",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java",
+      "kind": "behavior",
+      "anchor": "if (candidate >= normalized.size()) break;",
+      "replacement": "if (candidate >= 0) break;",
+      "junit_failed": 2,
+      "log": "round75-mut-omit-real-shared-claims.log",
+      "sha256": "5dee0d52a4c9be84a2ecbbbe376cd728b1d83de3b0e2b1c19fc2f06b7cec05ab"
+    },
+    {
+      "name": "keep-orphan-surrender",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java",
+      "kind": "behavior",
+      "anchor": "if (dropped == 0) return body;",
+      "replacement": "if (dropped >= 0) return body;",
+      "junit_failed": 2,
+      "log": "round75-mut-keep-orphan-surrender.log",
+      "sha256": "7a8ebdb46731510a2cf05d70e265d7e8ea835c2c6d3b730f423a3937fcb303d4"
+    },
+    {
+      "name": "per-query-task-regression",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "private static final int LIMIT = 64;",
+      "replacement": "private static final int LIMIT = 1;",
+      "junit_failed": 2,
+      "log": "round75-mut-per-query-task-regression.log",
+      "sha256": "17e8bb4d7103d639ffb012af6b0af49eee09fe848a64ea4b54f52cdb95cb3621"
+    },
+    {
+      "name": "do-not-interrupt-worker",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "if (worker != null) worker.cancel(true);",
+      "replacement": "if (worker != null) worker.cancel(false);",
+      "junit_failed": 2,
+      "log": "round75-mut-do-not-interrupt-worker.log",
+      "sha256": "96b33682b88e930a132d9282424250cbf55dbc25cae9f67ab0219a9bb54f17cd"
+    },
+    {
+      "name": "lose-caller-interrupt",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "close();\n                Thread.currentThread().interrupt();\n                throw failure;",
+      "replacement": "close();\n                Thread.interrupted();\n                throw failure;",
+      "junit_failed": 1,
+      "log": "round75-mut-lose-caller-interrupt.log",
+      "sha256": "d4d313c692c3f0fde2767bbdb3f1c1db97a0703621c623e3c25b2e1934d8098e"
+    },
+    {
+      "name": "swallow-external-failure",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "if (failure != null) throw new ExecutionException(failure);",
+      "replacement": "if (false && failure != null) throw new ExecutionException(failure);",
+      "junit_failed": 1,
+      "log": "round75-mut-swallow-external-failure.log",
+      "sha256": "1fde368ae1fbe696e22b954ec2ad0fa43b809bcacff56dd42f30f24681487871"
+    },
+    {
+      "name": "hold-idle-lane-ahead-of-peers",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "if (executor instanceof ThreadPoolExecutor pool && !pool.getQueue().isEmpty())",
+      "replacement": "if (false && executor instanceof ThreadPoolExecutor pool && !pool.getQueue().isEmpty())",
+      "junit_failed": 1,
+      "log": "round75-mut-hold-idle-lane-ahead-of-peers.log",
+      "sha256": "ea7832a9e22b4952621412df2c98d60b8feb9c6f81863794d91a66bc1c415a0e"
+    },
+    {
+      "name": "hold-busy-lane-ahead-of-peers",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsQueryBatch.java",
+      "kind": "behavior",
+      "anchor": "boolean yield = executor instanceof ThreadPoolExecutor pool && !pool.getQueue().isEmpty();",
+      "replacement": "boolean yield = false;",
+      "junit_failed": 1,
+      "log": "round75-mut-hold-busy-lane-ahead-of-peers.log",
+      "sha256": "924f1af8cac9690855aadb1c448f5cae1e798ab7a73fa626413c6fd015a54b1b"
+    },
+    {
+      "name": "disconnect-public-batch",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsReflowingCompat.java",
+      "kind": "AST-binding",
+      "anchor": "return StreamsQueryBatch.run(PREWARM_EXECUTOR, STREAMS_QUERY_TIMEOUT_MS, validation);",
+      "replacement": "return validation.get();",
+      "junit_failed": 1,
+      "log": "round75-mut-disconnect-public-batch.log",
+      "sha256": "47130f27ef02bb5927bcbc14d57e8df6be31a533e8306c8f6d897b613135a325"
+    },
+    {
+      "name": "zero-prefix-heights",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/pathcalc/StableHeightWindow.java",
+      "kind": "behavior",
+      "anchor": "sums[i + 1] += columns[column];",
+      "replacement": "sums[i + 1] += 0;",
+      "junit_failed": 4,
+      "log": "round75-mut-zero-prefix-heights.log",
+      "sha256": "07077841cc18ef8afbd4cd924ca8517e8ef29f1de81a6f9a8d4d88451ddf666e"
+    },
+    {
+      "name": "reread-duplicate-columns",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/pathcalc/StableHeightWindow.java",
+      "kind": "behavior",
+      "anchor": "if (!sampled[column]) {",
+      "replacement": "if (true) {",
+      "junit_failed": 1,
+      "log": "round75-mut-reread-duplicate-columns.log",
+      "sha256": "0797f7efb90f8741db7696cd5f7e43dfdb074396a18bb44b05689fa0b1ef0607"
+    },
+    {
+      "name": "allow-background-stable-snapshot",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/pathcalc/HeightProfileService.java",
+      "kind": "AST-binding",
+      "anchor": "world instanceof ServerLevel server && server.getServer().isSameThread()",
+      "replacement": "world instanceof ServerLevel server && true",
+      "junit_failed": 1,
+      "log": "round75-mut-allow-background-stable-snapshot.log",
+      "sha256": "9cdc41fad61d215a25e25a59b8c792371c1749b51fbdccb4e0a2094e532bf475"
+    }
+  ],
+  "restored": true
+}

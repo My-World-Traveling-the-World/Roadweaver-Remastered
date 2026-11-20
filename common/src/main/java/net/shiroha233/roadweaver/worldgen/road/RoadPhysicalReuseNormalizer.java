@@ -91,7 +91,15 @@ final class RoadPhysicalReuseNormalizer {
                 continue;
             }
             boolean[] reused = new boolean[secondary.roadSegmentList().size()];
-            for (RoadData primary : normalized) markPhysicalReuse(primary, secondary, reused, false, preparation);
+            // 密集/小批次直接枚举，避免为原本几乎全中的集合建候选和检查未来道路号。
+            if (preparation.direct(ordered)) {
+                for (RoadData primary : normalized) markPhysicalReuse(primary, secondary, reused, false, preparation);
+            } else {
+                for (int candidate : preparation.candidates(ordered, secondary)) {
+                    if (candidate >= normalized.size()) break;
+                    markPhysicalReuse(normalized.get(candidate), secondary, reused, false, preparation);
+                }
+            }
             RoadData body = hasTrue(reused) ? withPhysicalReuseSpans(secondary, reused) : secondary;
             normalized.add(verifySurrenderedReuse(body, secondary, ordered, reused, preparation));
         }
@@ -143,9 +151,17 @@ final class RoadPhysicalReuseNormalizer {
                 original.roadSegmentList(), original.spans(), SpanType.NETWORK_REUSE);
         if (surrendered == null || !hasTrue(surrendered)) return body;
         boolean[] claimed = new boolean[surrendered.length];
-        for (RoadData other : all) {
-            if (other == null || other == original) continue;
-            markPhysicalReuse(other, original, claimed, true, preparation);
+        if (preparation.direct(all)) {
+            for (RoadData other : all) {
+                if (other == null || other == original) continue;
+                markPhysicalReuse(other, original, claimed, true, preparation);
+            }
+        } else {
+            for (int candidate : preparation.candidates(all, original)) {
+                RoadData other = all.get(candidate);
+                if (other == null || other == original) continue;
+                markPhysicalReuse(other, original, claimed, true, preparation);
+            }
         }
         boolean[] keep = new boolean[surrendered.length];
         int dropped = 0;
@@ -277,6 +293,17 @@ final class RoadPhysicalReuseNormalizer {
     static final class Preparation {
         private final Map<RoadData, OwnerStationIndex> owners = new java.util.IdentityHashMap<>();
         private final Map<RoadData, SecondaryPrepared[]> secondaries = new java.util.IdentityHashMap<>();
+        private RoadReuseCandidates candidates;
+        boolean direct(List<RoadData> roads) {
+            if (roads.size() < 16) return true;
+            if (candidates == null) candidates = new RoadReuseCandidates(roads, MAX_OWNER_DISTANCE);
+            return candidates.usesDirectEnumeration();
+        }
+        int[] candidates(List<RoadData> roads, RoadData road) {
+            // 索引只依赖中心线；本轮归一化仅改spans，原/归一道路共用道路号但准备状态仍按实例隔离。
+            if (candidates == null) candidates = new RoadReuseCandidates(roads, MAX_OWNER_DISTANCE);
+            return candidates.nearby(road);
+        }
         OwnerStationIndex owner(RoadData road) {
             return owners.computeIfAbsent(road, RoadPhysicalReuseNormalizer::indexPrimaryStations);
         }

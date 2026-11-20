@@ -30,7 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
-/** 只读接入河流公开规划API；可选模组缺席由兼容层处理。 */
+/** 只读适配河流引擎；就绪生命周期另用公开API，可选模组缺席由兼容层处理。 */
 public final class StreamsReflowingCompat {
     private static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");
     private static final AtomicBoolean ENABLED_LOGGED = new AtomicBoolean();
@@ -283,6 +283,12 @@ public final class StreamsReflowingCompat {
             return lakes.computeIfAbsent(columnKey(x, z), ignored -> queryLake(x, z));
         }
 
+        /** 校验已备好地形时才占查询lane；缓存命中不提交任务，也不提前查询后续列。 */
+        public <T> T withQueryBatch(java.util.function.Supplier<T> validation) {
+            if (!isAvailable() || failed || degraded) return validation.get();
+            return StreamsQueryBatch.run(PREWARM_EXECUTOR, STREAMS_QUERY_TIMEOUT_MS, validation);
+        }
+
         public void prewarm(List<BlockPos> positions) {
             prewarm(positions, "route", true);
         }
@@ -369,6 +375,14 @@ public final class StreamsReflowingCompat {
          * 超时只报一次(和 logFailure 同一个"只吵一次"的口径),不刷屏。
          */
         private static Object bounded(String what, Callable<Object> call) throws Exception {
+            if (StreamsQueryBatch.active()) {
+                try { return StreamsQueryBatch.query(call); }
+                catch (TimeoutException slow) {
+                    LOGGER.warn("【河流接口响应超时，本条道路后续仅按地形分类】 operation={} timeoutMs={}",
+                            what, STREAMS_QUERY_TIMEOUT_MS);
+                    return BOUNDED_TIMED_OUT;
+                }
+            }
             Future<Object> future = PREWARM_EXECUTOR.submit(call);
             try {
                 return future.get(STREAMS_QUERY_TIMEOUT_MS, TimeUnit.MILLISECONDS);
@@ -378,6 +392,11 @@ public final class StreamsReflowingCompat {
                         + "falling back to terrain-only classification for the rest of this route",
                         what, STREAMS_QUERY_TIMEOUT_MS);
                 return BOUNDED_TIMED_OUT;
+            } catch (InterruptedException stopped) {
+                // 查询被取消时保留中断位并撤销工作，不能让外部调用成为脱离道路任务的孤儿。
+                future.cancel(true);
+                Thread.currentThread().interrupt();
+                throw stopped;
             }
         }
 

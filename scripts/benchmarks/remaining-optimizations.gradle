@@ -1,0 +1,38 @@
+// 冻结当前优化前cf128a0，而不是更早缺Preparation的实现；生成源码只进入build。
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.project(':common')
+    def generated = p.layout.buildDirectory.dir('remaining-probe-src')
+    def out = p.layout.buildDirectory.dir('remaining-probe')
+    def prepare = p.tasks.register('preparePreviousRoadReuse') {
+        outputs.dir(generated)
+        doLast {
+            def text = p.providers.exec {
+                commandLine 'git', 'show', 'cf128a0:common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java'
+                workingDir p.rootProject.projectDir
+            }.standardOutput.asText.get()
+            assert text.count('final class RoadPhysicalReuseNormalizer') == 1
+            def file = generated.get().file('PreviousRoadReuse.java').asFile
+            file.parentFile.mkdirs()
+            file.setText(text.replace('RoadPhysicalReuseNormalizer', 'PreviousRoadReuse'), 'UTF-8')
+        }
+    }
+    def compile = p.tasks.register('compileRemainingOptimizationProbes', JavaCompile) {
+        dependsOn prepare, p.tasks.named('testClasses')
+        source generated, p.rootProject.files('scripts/benchmarks/ReuseOptimizationProbe.java',
+            'scripts/benchmarks/StreamsBatchProbe.java', 'scripts/benchmarks/HeightWindowProbe.java')
+        classpath = p.sourceSets.test.runtimeClasspath
+        destinationDirectory.set(out)
+        options.encoding = 'UTF-8'
+    }
+    ['reuseOptimizationProbe':'net.shiroha233.roadweaver.worldgen.road.ReuseOptimizationProbe',
+     'streamsBatchProbe':'net.shiroha233.roadweaver.compat.StreamsBatchProbe',
+     'heightWindowProbe':'net.shiroha233.roadweaver.pathlogic.pathcalc.HeightWindowProbe'].each { name, main ->
+        p.tasks.register(name, JavaExec) {
+            dependsOn compile
+            classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
+            mainClass = main
+            args p.rootProject.file("docs/evidence/${name}-20261120.json").absolutePath
+            jvmArgs '-Xms512m', '-Xmx512m'
+        }
+    }
+}

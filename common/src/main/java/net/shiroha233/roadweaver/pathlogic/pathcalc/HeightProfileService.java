@@ -5,6 +5,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.ModConfig;
 
 import java.util.List;
@@ -40,6 +41,13 @@ public final class HeightProfileService {
         if (usePersisted) {
             return new HeightProfile(true, null);
         }
+        // 只在服务端主线程、无写块/让出点的同步调用内取稳定快照。
+        // WorldGenRegion及后台调用保留原逐次读取，不能把跨线程高度当稳定值。
+        if (world instanceof ServerLevel server && server.getServer().isSameThread()) {
+            return buildStable(middlePositions, currentChunk, averagingRadius, slopeLimitEnabled,
+                    maxSlopeStepPerTwoSegments,
+                    (x, z) -> world.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z));
+        }
         int[] baseYArr = new int[n];
         for (int ii = 0; ii < n; ii++) {
             // 保持每次世界读取的顺序和次数，只去掉临时列表、装箱与Stream。
@@ -64,6 +72,18 @@ public final class HeightProfileService {
                 baseYArr[ii] = (int) Math.round((double) sum / count);
             }
         }
+        return finish(baseYArr, slopeLimitEnabled, maxSlopeStepPerTwoSegments);
+    }
+
+    /** 显式稳定读口便于对拍；生产只有主线程ServerLevel分支可以调用。 */
+    static HeightProfile buildStable(List<BlockPos> positions, ChunkPos chunk, int radius,
+            boolean slope, int step, java.util.function.IntBinaryOperator height) {
+        return finish(StableHeightWindow.build(positions, chunk, radius, height), slope, step);
+    }
+
+    /** 两条读取路径共用原两遍坡限，稳定窗口只改变读取复用而不另算一套剖面。 */
+    private static HeightProfile finish(int[] baseYArr, boolean slopeLimitEnabled, int maxSlopeStepPerTwoSegments) {
+        int n = baseYArr.length;
         if (!slopeLimitEnabled) {
             int[] noSmoothed = new int[n];
             for (int ii = 0; ii < n; ii++) noSmoothed[ii] = baseYArr[ii];

@@ -111,7 +111,7 @@ public final class FinalRoadWaterValidator {
         // hard failure. A single bad Streams query gets the same fallback.
         boolean streamsUsable = riverSession != null && riverSession.isAvailable();
         int seaLevel = level.getSeaLevel();
-        return validate(road, ConfigService.get().tunnelClearHeight(), (x, z) -> {
+        return riverSession.withQueryBatch(() -> validate(road, ConfigService.get().tunnelClearHeight(), (x, z) -> {
             if (streamsUsable) {
                 StreamsReflowingCompat.LakeColumn lake = riverSession.sampleLake(x, z);
                 if (lake.present()) {
@@ -133,7 +133,7 @@ public final class FinalRoadWaterValidator {
                             sample.worldSurfaceWg(), sample.oceanFloorWg(),
                             waterBiome, seaLevel, true),
                     sample.oceanFloorWg(), "terrain_heightmap");
-        });
+        }));
     }
 
     /** 涵洞查询仅读取水面和海床高度图，避免为轻量水深判断触发精确采样。 */
