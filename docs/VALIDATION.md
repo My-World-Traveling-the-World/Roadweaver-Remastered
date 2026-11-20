@@ -1,5 +1,21 @@
 # 验证与构建手册
 
+## 第77轮分层隧道与严格验证入口
+
+完整 **PASS tests=1744 skipped=0 aborted=0 failed=0** 与Fabric编译通过；新增五项按FQCN显式登记。原代码先复现4项JUnit失败，修复后23项定向回归及全量通过。同层/反向正例、±1格容差、±2/8格分层、分层后重合、旧共用回收与稀疏候选/缺高度兼容均覆盖。原冻结实现不改，等价对拍排除已经证明错误的隧道分层输入，独立新断言负责正确契约。4组实际生产变异见[高度负控](evidence/reuse-height-mutations-20261120.json)，日志`.analysis_tmp/round77-height-final.log`。
+
+实际Windows PowerShell 5.1执行以下三个入口，均退出0：
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/audit/Test-VerifyRetry.ps1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/audit/Test-VerifyGate.ps1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File verify.ps1
+```
+
+重试测试3场景，进程查询/终止0；阶段测试18场景，直接执行真实脚本AST，不自写第二份判据。拒绝跳过/终止/失败、低于1744、零/溢出/截断/重复摘要、缺BUILD成功、先PASS后失败、两阶段非零退出及诊断文字中的伪成功。失败场景必须走正常FAIL出口，语法/运行异常不算正常拒绝。8组脚本变异均红，见[入口负控](evidence/verify-gate-mutations-20261120.json)。真实verify日志`.analysis_tmp/round77-verify-final.log`确认完整1744/0/0/0和ALL GREEN。
+
+标准:fabric:build及API named/intermediary契约件再次通过，七类真实错误包均拒绝。最新开发成品与本次remapJar外层逐字一致、仅多嵌套API；API与本次生产件逐字一致，编译测试类全集与主包class集合无交集。hash/体积及日志SHA见[机器证据](evidence/reuse-height-verify-package-20261120.json)和RELEASES。本轮不包含真机落块、已有完工区块修复或性能测量；无游戏部署、无schema变化。
+
 ## 第76轮密集归属与API成品验收
 
 恢复14组变异后完整 **PASS tests=1739 skipped=0 aborted=0 failed=0**，标准:fabric:build、API named/intermediary契约构建成功，日志`.analysis_tmp/round76-final.log`。新增七项按FQCN登记；负控分9组JUnit、4组Gradle验包/接线、1组PowerShell模拟，不混写成真实游戏或全为JUnit。首次方向破坏仍绿的不足长度夹具已被终态合法宽路交叉替换，随后全组重跑。见[完整记录](evidence/geometry-package-mutations-20261120.json)。

@@ -3,6 +3,24 @@
 > 本节是**持久台账**（不是临时文档）：每次出可部署 jar 都必须记一条，含 commit / 改动 / 回归 / jar 体积 / SHA-256 / 回退方式。
 > 旧仓库（`D:\云游四海-Mod源码\roadweaver`）的历史版本条目在它自己的 `roadweaver-变更历史.md` 里，本项目从 0.9.099 起独立记账。
 
+## 0.9.102 开发复打（2026-11-20，第77轮，未部署）
+
+这是当前源码开发件，覆盖本地同名成品文件但不改下方历史记录；尚未安装游戏，版本号未递增。
+
+| 项 | 值 |
+| --- | --- |
+| 代码提交 | dc282de（分层隧道归属）、bfc88b6（严格验证入口） |
+| 版本 | `2.3.1-1.21.1-plaincraft-direct-core.0.9.102` |
+| jar | `fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar` |
+| 体积 | 7151647 B |
+| SHA-256 | `eec42a56c1cfd6fad6dd89c5c7aecbec8995ad053aef9da74a0500a32c9485a3` |
+| API | 内嵌roadweaver_api 1.0.0，与本次api-fabric生产件逐字一致 |
+| 回归 | 1744/0/0/0、真实verify.ps1、标准Fabric构建、七类错误包、12组分层负控通过 |
+| 变更 | 异层隧道不互相让出，旧共用复核也校验高度；验证工具不再用局部PASS子串判绿 |
+| 回退 | 未部署，无线上回退动作；试装须保留安装件和存档副本，不自动清除既有完工台账 |
+
+外层原文件与本次remapJar逐字一致，仅增加API；按实际编译测试class全集确认未混入测试。证据见[evidence/reuse-height-verify-package-20261120.json](evidence/reuse-height-verify-package-20261120.json)。没有世界落块或FPS验收。
+
 ## 0.9.102 开发复打（2026-11-20，第76轮，未部署）
 
 本条是同版本最新源码的开发构建，不是下方11月14日历史发布件；文件名相同，必须按日期/提交/SHA区分，历史hash不替换。API嵌套成品由标准:fabric:build生成并验包，游戏安装目录未改。
