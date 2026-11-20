@@ -17,3 +17,11 @@ jobs:
         run: python -m unittest discover -s scripts/parity -v
       - name: Test route evidence summaries
         run: python -m unittest discover -s scripts/evidence -v
+  verify_retry:
+    # 验证脚本是Windows入口；使用5.1实际解析BOM及原函数，模拟进程不会触碰宿主Java。
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检查构建重试不会终止无关进程
+        shell: powershell
+        run: .\scripts\audit\Test-VerifyRetry.ps1

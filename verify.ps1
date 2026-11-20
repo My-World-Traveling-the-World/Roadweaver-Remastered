@@ -1,4 +1,4 @@
-# verify.ps1 - two-module verification gate.
+﻿# verify.ps1 - two-module verification gate.
 #
 # Why this exists: on 2026-11-13 we found that roadweaver-next's *fabric* module
 # did NOT compile, while :common:roadJUnitRegressionSuite stayed green -- that
@@ -11,8 +11,7 @@
 #     .\verify.ps1
 #
 # Exit code 0 = all green; non-zero = failure.
-# Keep this file ASCII-only: Windows PowerShell 5 reads .ps1 as ANSI and would
-# otherwise garble non-ASCII text into parse errors.
+# 本文件使用UTF-8 BOM，让Windows PowerShell 5.1正确读取中文注释和诊断。
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
@@ -68,7 +67,7 @@ function Invoke-GradleWithRetry {
         }
         if ($attempt -lt $MaxAttempts) {
             Write-Host ("[verify] {0}: gradle daemon did not accept the connection (attempt {1}/{2}); retrying" -f $Label, $attempt, $MaxAttempts)
-            Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            # 只重试当前调用；不能按java进程名终止游戏或其他模组共用的工作进程。
             Start-Sleep -Seconds 5
         }
     }
