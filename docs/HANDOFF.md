@@ -1,5 +1,60 @@
 # 交接台账（HANDOFF）
 
+## 第76轮：密集道路几何复用、标准API成品与重试进程隔离（2026-11-20）
+
+### 一、改了什么
+
+行为等价/性能，7327271：RoadReuseGeometry迁出方向和足迹准备，在单次归一化内按道路实例、站号惰性复用。保留原Math.hypot、点积绝对值/0.75阈值、int坐标差、XZ足迹（忽略Y）、候选顺序及类型/高差/孤儿回收规则；仅把重复HashSet<Long>换成缓存的LongOpenHashSet。数组首次使用才分配，不跨世界/编译保留。施工标记的单次占地比较也委托同一精确实现。新类84物理行，原归属门面降为517行；无千行超限。
+
+行为变更/构建，e1bab08：标准:fabric:build/check接入embedApiJar、verifyEmbeddedApi及embeddedApiRegression，生成fabric/build/final中的单一可安装包。校验外层声明/依赖、契约包类全集、独立API身份/版本、外层无重复API定义，以及内嵌字节与本次api-fabric:remapJar完全一致；七类真实成品破坏副本必须被拒绝。api-fabric头注释纠正为独立mod身份、随道路嵌套发布，不再宣称必须双文件部署。remapJar仍是中间步骤，不能当安装件。
+
+行为变更/工具修复，68ddbbc：verify.ps1握手失败重试不再按进程名终止所有java进程，保留原重试次数和5秒间隔。新增Windows PowerShell 5.1下的原函数模拟测试及Windows CI任务；脚本UTF-8 BOM保证中文说明可解析。配置、存档、API签名、桥隧几何与预热默认不改，未部署游戏。
+
+### 二、我验证了什么（附变异）
+
+道路488214d干净开工，pull --rebase成功；1732/0/0/0基线及Fabric编译通过。新增RoadReuseGeometryTest七项，显式FQCN登记，覆盖惰性读取次数、零键/负值/极值/空端点/重复足迹、冻结方向、30批宽路/弯路/上下层/隧道完整产物对拍，以及实际生产方向过滤和隧道足迹过滤。生产正反夹具先通过isValidFinalRoad，且每批实际产生非空共用段。worldgen→core计数11→12仅增加新协作类的模型导入，未放宽层方向。
+
+恢复全部破坏后完整 **PASS tests=1739 skipped=0 aborted=0 failed=0**，:fabric:build、API named/intermediary契约件与BUILD SUCCESSFUL，日志`.analysis_tmp/round76-final.log`。标准build实际执行验包及七类错误包回归。Windows PowerShell模拟三场景（瞬态恢复、重试耗尽、真实编译错误）通过；进程查询/终止均为0。Python契约2项、证据工具21项通过，旧版25 API/82资源检查errors=[]。长城本轮未改源码或重跑，工作区干净，972项沿其第89轮历史结果。
+
+| 负控 | 判红层级 | 实际结果 |
+| --- | --- | --- |
+| 每次重新求方向 | JUnit | 1失败 |
+| 每次重建占地 | JUnit | 1失败 |
+| 阈值0.75改0.9 | JUnit | 2失败 |
+| 去掉双向点积绝对值 | JUnit | 1失败 |
+| 占地漏中心列 | JUnit | 1失败 |
+| 占地漏零键 | JUnit | 2失败 |
+| 足迹交集恒false | JUnit | 5失败 |
+| 生产方向过滤断开 | JUnit | 1失败 |
+| 生产隧道足迹恒匹配 | JUnit | 4失败 |
+| 接受未声明API | Gradle错误包回归 | 失败：undeclared-api被误接受 |
+| 接受缺API依赖 | Gradle错误包回归 | 失败：missing-dependency被误接受 |
+| 不核对本次API来源 | Gradle错误包回归 | 失败：different-producer-bytes被误接受 |
+| build/check与验包脱钩 | Gradle直接依赖守卫 | 失败：API-PACKAGE-WIRING |
+| 恢复全局Java终止命令 | PowerShell模拟原函数 | 失败：processQueries=1/processStops=1 |
+
+共14组均实际红且逐项精确git checkout/原字节校对恢复，9组为JUnit、4组Gradle、1组PowerShell，不能合称14组JUnit或真实游戏。初次禁用方向仍绿，因细交叉只有6站符合其他条件，未达到8站走廊最短长度；改用通过终态校验的合法宽足迹交叉，全部负控重跑。记录保留该首次漏报及最终结果，见[evidence/geometry-package-mutations-20261120.json](evidence/geometry-package-mutations-20261120.json)。
+
+完整构建后单独运行基准，单worker、512MiB、3预热、9次交替样本，对照488214d的实际生产归属实现。96路密集p50 **82.8347→48.3170ms/4次归一化**，每次调用线程分配 **54268424→2752800B**；稀疏2.2233→2.3280ms、153168→153176B，小批8路0.1677→0.1642ms、51640→52952B。稀疏略慢、小批近似持平且分配增加，不能称普遍提速。详见VALIDATION及[原始结果](evidence/reuseOptimizationProbe-round76-20261120.json)。
+
+新成品7151649B，SHA256 `9ad5cdad276e5ffa2522e0067b84d0e06c277660aefa0beae836cf9c03aa8ef9`。内含roadweaver_api 1.0.0，26契约类加1个Architectury注入类；与本次生产API逐字一致，所有外层原文件与本次remapJar逐字一致，仅增加嵌套API。确认包含RoadReuseGeometry，不含测试夹具/JUnit。见[成品证据](evidence/api-package-round76-20261120.json)与RELEASES；这是同版本开发复打件，不能与11月14日历史hash混用。
+
+### 三、我没能验证什么
+
+未跑真实游戏、联合河流—长城—道路时序、旧存档、实际墙脚落块、FPS/MSPT/GC或加载总耗时。基准只量16站合成道路归属，不含施工和外部引擎；真实密度/足迹大小及缓存保留峰值待现场。新验包器证明字节来源与声明完整，不等于Fabric Loader/所有下游在真实整合包加载成功。Windows CI仅接线，未声称已在GitHub运行。未部署jar、未改版本号或任何存档schema。
+
+### 四、遗留半截的东西
+
+三项完整、本地代码已分步提交，无半写生产改动或在运行的变异脚本。推送延续第75轮审批阻挡：用户尚未明确确认两个具体远端，未绕过自动审批重试；本轮道路提交保留本地。长城未新增提交。同步施工/台账、crossing、双平滑及实际预热范围不变；需要现场证据的事项继续保留。
+
+### 五、下一轮先做什么
+
+先使用本次含API成品核对实际安装版本，再采首次/重开/Chunky的阶段耗时和尾延迟、密集道路匹配占比、主线程高度路径及河流排队。同一源代码先冻结产物再量工作量，不把旧实现一致当作真实世界正确性证明。没有单块落块/写盘证据不启用跨tick施工或异步台账，不整体替换FMM/DP/弹性带。
+
+### 六、踩到的坑
+
+方向负控首轮全绿说明“调用了生产入口”仍不够，夹具必须跨过所有其他准入阈值。Architectury会合法注入PlatformMethods，不能把所有非契约class一概判为污染；契约包全集加完整生产字节匹配约束来源。Groovy byte[]不支持直接加数组，已用Arrays.copyOf构造合法尾部改动夹具；Gradle执行期不能遍历其他项目状态锁，接线守卫改查本项目标准入口直接依赖。上述实现过程失败均未冒充有效负控。Python首次沙箱临时目录权限失败，按权限流程重跑后23项全过。模拟全局kill只触及Get-Process/Stop-Process替身，没有实际终止任何Java进程。
+
 ## 第75轮：四项剩余优化全部完成代码与离线验收（2026-11-20）
 
 ### 一、改了什么

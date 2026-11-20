@@ -1,0 +1,151 @@
+{
+  "mutations": [
+    {
+      "name": "reread-directions",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "if (!directionReady[index]) {",
+      "replacement": "if (true) {",
+      "junit_failed": 1,
+      "log": "round76-mut-reread-directions.log",
+      "sha256": "0d817422dd23df9e9b0692ab03a003df2c2e95e4dd9cdec9206839403c3212ad"
+    },
+    {
+      "name": "rebuild-footprints",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "if (footprint == null) footprints[index] = footprint = footprint(stations.get(index));",
+      "replacement": "if (true) footprints[index] = footprint = footprint(stations.get(index));",
+      "junit_failed": 1,
+      "log": "round76-mut-rebuild-footprints.log",
+      "sha256": "01beaf75655c200904d55867fcf688bfe6fffd87868ee41115fa6d06a056b151"
+    },
+    {
+      "name": "tighten-direction",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": ">= 0.75D",
+      "replacement": ">= 0.9D",
+      "junit_failed": 2,
+      "log": "round76-mut-tighten-direction.log",
+      "sha256": "350dacf493d2ce28ae0914cfda40f83228e473caf16a610e21e39bac25aec5d6"
+    },
+    {
+      "name": "reject-opposite-direction",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "Math.abs(a[0] * b[0] + a[1] * b[1])",
+      "replacement": "(a[0] * b[0] + a[1] * b[1])",
+      "junit_failed": 1,
+      "log": "round76-mut-reject-opposite-direction.log",
+      "sha256": "d9aa8573d59e56272e819693c26661b6e86ec58389fd26f74922b1141594656d"
+    },
+    {
+      "name": "omit-center-footprint",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "if (station.middlePos() != null) footprint.add(key(station.middlePos()));",
+      "replacement": "if (false && station.middlePos() != null) footprint.add(key(station.middlePos()));",
+      "junit_failed": 1,
+      "log": "round76-mut-omit-center-footprint.log",
+      "sha256": "5a710379dc98d58943d1e82c9bf5fb7201e4654c5ecdd0ddcd901c939ec00987"
+    },
+    {
+      "name": "drop-zero-column",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "for (BlockPos pos : station.positions()) if (pos != null) footprint.add(key(pos));",
+      "replacement": "for (BlockPos pos : station.positions()) if (pos != null && key(pos) != 0L) footprint.add(key(pos));",
+      "junit_failed": 2,
+      "log": "round76-mut-drop-zero-column.log",
+      "sha256": "012636ba13ef2c2f6aec50a6db6af36168dac3677fe560420529579b6b2c325a"
+    },
+    {
+      "name": "empty-footprint-intersection",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadReuseGeometry.java",
+      "kind": "JUnit",
+      "anchor": "return intersects(footprint, candidate);",
+      "replacement": "return false;",
+      "junit_failed": 5,
+      "log": "round76-mut-empty-footprint-intersection.log",
+      "sha256": "332747866d8e1862c69e9d1179bf231321b85a662a0e54b34521098f820bc45e"
+    },
+    {
+      "name": "disconnect-direction-filter",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java",
+      "kind": "JUnit",
+      "anchor": "|| !geometry.directionCompatible(i, primary.geometry, j)) continue;",
+      "replacement": "|| false && !geometry.directionCompatible(i, primary.geometry, j)) continue;",
+      "junit_failed": 1,
+      "log": "round76-mut-disconnect-direction-filter.log",
+      "sha256": "ba7ab1de435da3ff8a7428a902fd8692f06502e41a07be1e2db45bdf3acb9daf"
+    },
+    {
+      "name": "force-tunnel-footprint-match",
+      "target": "common/src/main/java/net/shiroha233/roadweaver/worldgen/road/RoadPhysicalReuseNormalizer.java",
+      "kind": "JUnit",
+      "anchor": "boolean exactFootprint = primary.geometry.intersects(j, candidate);",
+      "replacement": "boolean exactFootprint = true;",
+      "junit_failed": 4,
+      "log": "round76-mut-force-tunnel-footprint-match.log",
+      "sha256": "c144c109a314fe1367abaef7bdc0d34300d4b0d8d5d22298707291789519ec64"
+    },
+    {
+      "name": "accept-undeclared-api",
+      "target": "gradle/embedded-api.gradle",
+      "kind": "Gradle:undeclared-api",
+      "anchor": "if (metadata.jars?.count { it.file == apiPath } != 1)",
+      "replacement": "if (false)",
+      "junit_failed": null,
+      "log": "round76-mut-accept-undeclared-api.log",
+      "sha256": "89160dd36e10dcca4179e4d4840145db3ca9ba4cb1953f69ef26b7ab619ae9fe"
+    },
+    {
+      "name": "accept-missing-dependency",
+      "target": "gradle/embedded-api.gradle",
+      "kind": "Gradle:missing-dependency",
+      "anchor": "if (!metadata.depends?.containsKey('roadweaver_api'))",
+      "replacement": "if (false)",
+      "junit_failed": null,
+      "log": "round76-mut-accept-missing-dependency.log",
+      "sha256": "30d3401772a265e3cf11a6e645fad3123977e9b48a56e68d38fa31ee3a5d3db1"
+    },
+    {
+      "name": "accept-different-producer",
+      "target": "gradle/embedded-api.gradle",
+      "kind": "Gradle:different-producer-bytes",
+      "anchor": "if (!Arrays.equals(nested, apiJar.get().asFile.bytes))",
+      "replacement": "if (false)",
+      "junit_failed": null,
+      "log": "round76-mut-accept-different-producer.log",
+      "sha256": "0e01975d444cd77803c49d0cc0f962d27cd04c3bd263139a2cfe4c0bf01a2666"
+    },
+    {
+      "name": "disconnect-build-check",
+      "target": "gradle/embedded-api.gradle",
+      "kind": "Gradle:API-PACKAGE-WIRING",
+      "anchor": "tasks.named('check') { dependsOn tasks.named('embeddedApiRegression') }\ntasks.named('build') { dependsOn tasks.named('verifyEmbeddedApi') }",
+      "replacement": "tasks.named('check') { }\ntasks.named('build') { }",
+      "junit_failed": null,
+      "log": "round76-mut-disconnect-build-check.log",
+      "sha256": "967c8b600c10b4fdc94dc0fab37b6d20f0814e02d3987f65763df4fad3768e2b"
+    },
+    {
+      "name": "global-java-kill",
+      "target": "verify.ps1",
+      "kind": "PowerShell-mocked-retry",
+      "anchor": "            # 只重试当前调用；不能按java进程名终止游戏或其他模组共用的工作进程。",
+      "replacement": "            Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+      "log": "round76-mut-verify-global-kill.log",
+      "sha256": "2e634f6cf60c2badf4451d2881d4691561bf50f61618918cfa07116d012d1b1c"
+    }
+  ],
+  "restored": true,
+  "initial_green_probe": {
+    "name": "disconnect-direction-filter",
+    "log": "round76-initial-direction-filter.log",
+    "sha256": "1fa19d4d632e32c51246781baca992459634399d1d70287c66716f0df0c4dfe3",
+    "cause": "Thin crossing fixture had fewer than eight eligible corridor stations; replaced with a final-validator-approved wide crossing before rerunning all mutations.",
+    "status": "corrected-and-red-in-final-run"
+  }
+}

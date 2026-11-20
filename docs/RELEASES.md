@@ -3,6 +3,24 @@
 > 本节是**持久台账**（不是临时文档）：每次出可部署 jar 都必须记一条，含 commit / 改动 / 回归 / jar 体积 / SHA-256 / 回退方式。
 > 旧仓库（`D:\云游四海-Mod源码\roadweaver`）的历史版本条目在它自己的 `roadweaver-变更历史.md` 里，本项目从 0.9.099 起独立记账。
 
+## 0.9.102 开发复打（2026-11-20，第76轮，未部署）
+
+本条是同版本最新源码的开发构建，不是下方11月14日历史发布件；文件名相同，必须按日期/提交/SHA区分，历史hash不替换。API嵌套成品由标准:fabric:build生成并验包，游戏安装目录未改。
+
+| 项 | 值 |
+| --- | --- |
+| 代码提交 | 7327271（几何复用）、e1bab08（标准合包）、68ddbbc（重试隔离） |
+| 版本 | `2.3.1-1.21.1-plaincraft-direct-core.0.9.102` |
+| jar | `fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar` |
+| 体积 | 7151649 B |
+| SHA-256 | `9ad5cdad276e5ffa2522e0067b84d0e06c277660aefa0beae836cf9c03aa8ef9` |
+| API | 内嵌roadweaver_api 1.0.0；26契约类及1个Architectury注入类，与本次生产API逐字一致 |
+| 回归 | PASS tests=1739 skipped=0 aborted=0 failed=0；标准Fabric构建、7类错误包、14组分层负控通过 |
+| 变更 | 单轮站点方向/占地惰性复用；build/check强制含API验包；握手重试不再全局终止Java |
+| 回退 | 未部署，无线上回退动作；未来试装前保留当前安装件和存档副本，版本回退不属于运行期算法回退 |
+
+全部外层原文件与本次remapJar逐字一致，仅增加内嵌API；确认含新几何类且无测试夹具/JUnit。机器记录见[evidence/api-package-round76-20261120.json](evidence/api-package-round76-20261120.json)。未跑真实游戏/联合模组加载，不能把构建通过等同现场产物验收。
+
 ## 0.9.102（2026-11-14）
 
 **为什么要出这一版**：本轮修完 2026-11-14 审计的 14 项缺陷 + 完成缺陷 C（纵断面去双跑）之后，

@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-20",
+  "source_commit": "68ddbbc201ad4900d9f796a7db1ecf66e243e2fd",
+  "version": "2.3.1-1.21.1-plaincraft-direct-core.0.9.102",
+  "artifact": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+  "size_bytes": 7151649,
+  "sha256": "9ad5cdad276e5ffa2522e0067b84d0e06c277660aefa0beae836cf9c03aa8ef9",
+  "base_remap_files_byte_equal": true,
+  "only_added_file": "META-INF/jars/roadweaver-api.jar",
+  "nested_api_id": "roadweaver_api",
+  "nested_api_version": "1.0.0",
+  "nested_api_class_count": 27,
+  "contract_class_count": 26,
+  "nested_api_sha256": "a25d2c944b9cbddd6b1a82a6aa213b71bd532f81946869d24e76b315194ce8ef",
+  "nested_matches_current_producer": true,
+  "geometry_class_present": true,
+  "test_classes_absent": true,
+  "game_deployed": false
+}

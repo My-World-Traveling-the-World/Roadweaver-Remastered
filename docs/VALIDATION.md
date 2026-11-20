@@ -1,5 +1,29 @@
 # 验证与构建手册
 
+## 第76轮密集归属与API成品验收
+
+恢复14组变异后完整 **PASS tests=1739 skipped=0 aborted=0 failed=0**，标准:fabric:build、API named/intermediary契约构建成功，日志`.analysis_tmp/round76-final.log`。新增七项按FQCN登记；负控分9组JUnit、4组Gradle验包/接线、1组PowerShell模拟，不混写成真实游戏或全为JUnit。首次方向破坏仍绿的不足长度夹具已被终态合法宽路交叉替换，随后全组重跑。见[完整记录](evidence/geometry-package-mutations-20261120.json)。
+
+复现独立基准（按下方配置JDK21和安装版Gradle）：
+
+```text
+-I scripts/benchmarks/remaining-optimizations.gradle :common:reuseOptimizationProbe -PreuseBaseline=488214d -PprobeTag=round76-20261120 --max-workers=1 --daemon --console=plain --dependency-verification=off
+```
+
+基线为上一轮真实生产实现；源码从git对象生成到build，仅改类名。512MiB、3预热、9次交替样本，先比较完整产物；完整构建后单独运行避免打包并行干扰。原始[结果](evidence/reuseOptimizationProbe-round76-20261120.json)，日志`.analysis_tmp/round76-benchmark-only.log`。不覆盖第75轮JSON，默认旧基准及其标签仍可复现。
+
+| 场景 | 旧→新p50（ms/4次归一化） | 旧→新调用线程分配（B/次） |
+| --- | --- | --- |
+| 稀疏96路 | 2.2233→2.3280 | 153168→153176 |
+| 密集96路 | 82.8347→48.3170 | 54268424→2752800 |
+| 小批8路 | 0.1677→0.1642 | 51640→52952 |
+
+减少的是重复开方/数组及装箱集合，数组首次实际比较才分配。密集受益，稀疏略慢、小批有少量分配开销；未测真实分布、存活堆峰值、世界施工、帧率或总加载。
+
+标准打包现在用`:fabric:build`；`:fabric:check`同样执行合包及错误包回归，`:fabric:verifyEmbeddedApi`可单独验本次输出。检查外层声明/依赖、API包类全集、独立身份/版本、无外层重复定义及与本次remapJar逐字一致；合法Architectury注入类保留。七类副本为缺API、未声明、缺依赖、空API、错身份、缺契约class和合法zip但生产字节不同。脱离标准build/check的负控也会失败。`:fabric:remapJar`仍仅是中间产物，安装取`fabric/build/final`，无须另装API。
+
+Windows脚本守卫用`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/audit/Test-VerifyRetry.ps1`：实际从verify.ps1语法树提取原重试函数，模拟恢复/耗尽/编译错误三种场景，计数进程查询/终止均0；恢复旧全局kill后两个模拟计数均1并失败。替身不会碰真实进程，UTF-8 BOM已由Windows PowerShell 5.1解析验证；CI加Windows任务但未在远端实际运行。旧版契约检查errors=[]，Python2项契约和21项证据工具通过。成品大小、SHA、外层与API逐字对照见[机器证据](evidence/api-package-round76-20261120.json)及RELEASES；没有安装或真实Loader运行验收。
+
 ## 第75轮四项剩余优化与测量
 
 恢复全部负控后完整 **PASS tests=1732 skipped=0 aborted=0 failed=0**，Fabric编译、API/Fabric remapJar成功，日志`.analysis_tmp/round75-final.log`。新增20项显式登记。13组道路生产变异（11行为、2 AST接线）逐项实际JUnit失败并精确恢复，锚点、失败数和日志SHA256见[变异记录](evidence/remaining-optimization-mutations-20261120.json)。长城独立972项零失败/跳过及3组行为变异记录属于其仓库HANDOFF第89轮。
