@@ -1,6 +1,7 @@
-// 文件职责：把 api 契约模块打包成**独立部署**的 Fabric mod（mod id `roadweaver_api`）。
+// 文件职责：把 api 契约模块打包成可独立加载的 Fabric mod（mod id `roadweaver_api`）。
 //
-// 为什么必须独立部署而不是塞进 roadweaver 主 jar：
+// 为什么保持独立mod身份：随道路发布时由embedApiJar嵌入成品，无需玩家另装；
+// 不装道路的下游仍可单独提供契约包，不能把“独立模块”误写成“必须双文件部署”。
 //   1. 超速飞行 / chunky-autogen 等 mod 需要**实现**本契约的接口。若契约只存在于
 //      roadweaver 主 jar，它们就必须硬依赖 roadweaver —— 不装道路就没法加载。
 //   2. 独立部署后，消费方在 fabric.mod.json 里声明 depends: { "roadweaver_api": ">=1" }，

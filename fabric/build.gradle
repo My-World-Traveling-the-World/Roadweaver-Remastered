@@ -164,6 +164,9 @@ tasks.register('embedApiJar', Zip) {
 	destinationDirectory = layout.buildDirectory.dir('final')
 }
 
+// 标准build也要走嵌套与真实验包，防止开发者只拿到缺API的同名中间件。
+apply from: rootProject.file('gradle/embedded-api.gradle')
+
 remapJar {
 	inputFile.set shadowJar.archiveFile
 	dependsOn shadowJar

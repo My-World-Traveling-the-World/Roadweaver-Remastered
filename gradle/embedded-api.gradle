@@ -1,0 +1,135 @@
+// 文件职责：标准构建交付单一含API成品，并实际检查嵌套契约，不把中间包当发布包。
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+def apiPath = 'META-INF/jars/roadweaver-api.jar'
+def finalJar = tasks.named('embedApiJar').flatMap { it.archiveFile }
+def apiJar = project(':api-fabric').tasks.named('remapJar').flatMap { it.archiveFile }
+def apiVersion = project(':api-fabric').version.toString()
+
+// 使用真实契约编译输出作全集，避免只查一个标记类却漏打其他接口。
+def expectedClasses = {
+    def names = [] as Set
+    project(':api').sourceSets.main.output.classesDirs.files.each { dir ->
+        if (dir.isDirectory()) fileTree(dir).matching { include '**/*.class' }.each { file ->
+            names.add(dir.toPath().relativize(file.toPath()).toString().replace('\\', '/'))
+        }
+    }
+    if (names.isEmpty()) throw new GradleException('【API成品校验失败】 契约编译输出为空')
+    names
+}
+
+def verifyArtifact = { File artifact ->
+    def fail = { String reason -> throw new GradleException("【API成品校验失败】 ${reason}") }
+    if (!artifact.isFile()) fail('成品文件不存在')
+    new ZipFile(artifact).withCloseable { outer ->
+        def entries = Collections.list(outer.entries())
+        if (entries.count { it.name == apiPath } != 1) fail('嵌套API必须恰好一份')
+        def metadata = new JsonSlurper().parse(outer.getInputStream(outer.getEntry('fabric.mod.json')), 'UTF-8')
+        if (metadata.id != 'roadweaver') fail('外层不是道路模组')
+        if (metadata.jars?.count { it.file == apiPath } != 1) fail('外层必须声明嵌套API')
+        if (!metadata.depends?.containsKey('roadweaver_api')) fail('外层缺少API依赖声明')
+        if (entries.any { it.name.startsWith('net/shiroha233/roadweaver/api/') && it.name.endsWith('.class') })
+            fail('契约类不得同时出现在外层造成双份定义')
+        byte[] nested = outer.getInputStream(outer.getEntry(apiPath)).bytes
+        def contents = [:]
+        new ZipInputStream(new ByteArrayInputStream(nested)).withCloseable { inner ->
+            for (def entry = inner.nextEntry; entry != null; entry = inner.nextEntry) {
+                if (contents.containsKey(entry.name)) fail('嵌套API存在重复条目')
+                contents[entry.name] = inner.readAllBytes()
+            }
+        }
+        if (!contents.containsKey('fabric.mod.json')) fail('嵌套API缺少模组元数据')
+        def contract = new JsonSlurper().parseText(new String(contents['fabric.mod.json'], 'UTF-8'))
+        if (contract.id != 'roadweaver_api' || contract.version != apiVersion) fail('嵌套API身份或版本错误')
+        // Architectury合法注入PlatformMethods；只比较契约包全集，其他字节由下方来源校验约束。
+        if (contents.keySet().findAll { it.startsWith('net/shiroha233/roadweaver/api/') && it.endsWith('.class') }.toSet() != expectedClasses())
+            fail('嵌套API契约类不完整或混入实现')
+        // 比较完整重映射成品，拒绝named开发包、旧API或内容被替换的同名jar。
+        if (!Arrays.equals(nested, apiJar.get().asFile.bytes)) fail('嵌套API与本次remapJar产物不一致')
+    }
+}
+
+tasks.register('verifyEmbeddedApi') {
+    group = 'verification'
+    description = '检查含API道路成品的元数据、完整契约及本次重映射来源。'
+    dependsOn tasks.named('embedApiJar')
+    inputs.file(finalJar)
+    inputs.file(apiJar)
+    doLast {
+        verifyArtifact(finalJar.get().asFile)
+        logger.lifecycle('[API-PACKAGE] PASS artifact={}', finalJar.get().asFile)
+    }
+}
+
+// 克隆本轮真实成品制造故障；与生产验包共用同一检查器，不能只测另一份理想化实现。
+def rewrite = { File source, File target, Map replacements, Set removed ->
+    new ZipFile(source).withCloseable { input ->
+        new ZipOutputStream(new FileOutputStream(target)).withCloseable { output ->
+            Collections.list(input.entries()).each { entry ->
+                if (!removed.contains(entry.name)) {
+                    output.putNextEntry(new ZipEntry(entry.name))
+                    output.write(replacements.containsKey(entry.name) ? replacements[entry.name]
+                            : input.getInputStream(entry).bytes)
+                    output.closeEntry()
+                }
+            }
+        }
+    }
+}
+
+tasks.register('embeddedApiRegression') {
+    group = 'verification'
+    description = '使用真实成品的破坏副本验证API验包器拒绝缺失、错接及旧内容。'
+    dependsOn tasks.named('verifyEmbeddedApi')
+    doLast {
+        // 验证标准入口的直接依赖，防止手动验包通过而build/check脱钩；不在执行期遍历其他项目状态。
+        def build = tasks.named('build').get()
+        def check = tasks.named('check').get()
+        if (!build.taskDependencies.getDependencies(build).contains(tasks.named('verifyEmbeddedApi').get())
+                || !check.taskDependencies.getDependencies(check).contains(tasks.named('embeddedApiRegression').get()))
+            throw new GradleException('[API-PACKAGE-WIRING] 标准构建未接入成品验证')
+        File directory = layout.buildDirectory.dir('api-package-regression').get().asFile
+        directory.mkdirs()
+        File source = finalJar.get().asFile
+        byte[] api = apiJar.get().asFile.bytes
+        def meta = new ZipFile(source).withCloseable {
+            new JsonSlurper().parse(it.getInputStream(it.getEntry('fabric.mod.json')), 'UTF-8')
+        }
+        def rejects = { String name, Map replacement, Set removed ->
+            File broken = new File(directory, "${name}.jar")
+            rewrite(source, broken, replacement, removed)
+            boolean rejected = false
+            try { verifyArtifact(broken) }
+            catch (Exception expected) { rejected = true }
+            if (!rejected) throw new GradleException("【API验包守卫失效】 错误成品被接受：${name}")
+        }
+        rejects('missing-api', [:], [apiPath] as Set)
+        def undeclared = new LinkedHashMap(meta)
+        undeclared.jars = meta.jars.findAll { it.file != apiPath }
+        rejects('undeclared-api', ['fabric.mod.json': JsonOutput.toJson(undeclared).getBytes('UTF-8')], [] as Set)
+        def noDependency = new LinkedHashMap(meta)
+        noDependency.depends = meta.depends.findAll { key, value -> key != 'roadweaver_api' }
+        rejects('missing-dependency', ['fabric.mod.json': JsonOutput.toJson(noDependency).getBytes('UTF-8')], [] as Set)
+        rejects('invalid-api', [(apiPath): new byte[0]], [] as Set)
+        File modifiedApi = new File(directory, 'modified-api.jar')
+        rewrite(apiJar.get().asFile, modifiedApi, ['fabric.mod.json':
+                JsonOutput.toJson([id: 'wrong_api', version: apiVersion]).getBytes('UTF-8')], [] as Set)
+        rejects('wrong-api-id', [(apiPath): modifiedApi.bytes], [] as Set)
+        rewrite(apiJar.get().asFile, modifiedApi, [:], [expectedClasses().first()] as Set)
+        rejects('missing-contract-class', [(apiPath): modifiedApi.bytes], [] as Set)
+        // 合法zip的尾部附加内容不改变类/元数据，但仍须被本次产物逐字匹配拒绝。
+        byte[] changed = Arrays.copyOf(api, api.length + 1)
+        changed[api.length] = 1
+        rejects('different-producer-bytes', [(apiPath): changed], [] as Set)
+        logger.lifecycle('[API-PACKAGE-REGRESSION] PASS rejected=7')
+    }
+}
+
+// build/check都必须验证真正可安装的成品，remapJar仍是明确的内部中间步骤。
+tasks.named('check') { dependsOn tasks.named('embeddedApiRegression') }
+tasks.named('build') { dependsOn tasks.named('verifyEmbeddedApi') }
