@@ -1,0 +1,72 @@
+{
+  "scope": "final local production artifacts and offline suites; no Minecraft or FPS validation",
+  "deployed": false,
+  "mutation_groups": 21,
+  "added_junit_tests": 24,
+  "records": [
+    {
+      "repo": "streams-reflowing-src",
+      "initial_base": "02dabc6",
+      "production_head": "6018de16567cc909297c765d89564daf1797d495",
+      "artifact": "build/libs/streamsreflowing-2.12.8-fix9.jar",
+      "artifact_sha256": "19aa6e6c492287cfd6981e813f2fcb8da028d8f37c984496393e6170eae1e6e5",
+      "expected_classes": [
+        "dev/streamsreflowing/core/river/RiverCandidateCollector.class",
+        "dev/streamsreflowing/worldgen/TerrainCallBenchmark.class",
+        "dev/streamsreflowing/fabric/mixin/WaterTintMixin.class"
+      ],
+      "river_api_classes": 10,
+      "nested_jars": [
+        "META-INF/jars/lwjgl-opencl-3.3.3.jar"
+      ],
+      "tests": 77,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "build_log": "build/round43-final.log",
+      "build_log_sha256": "d1c421bccf6f59e7b5f0d88564e7215277c8edec8f74f57ccd66007048ae5007"
+    },
+    {
+      "repo": "plaincraft-great-wall",
+      "initial_base": "d8364723",
+      "production_head": "3ef16665da78961994fe321853c3fd7774963de3",
+      "artifact": "build/libs/plaincraft-great-wall-0.7.126-api-standardization.jar",
+      "artifact_sha256": "00f3bd2e9644edb2a396fc12bc521a33c1141c4ee02eb2766dd07215e2fbc11f",
+      "expected_classes": [
+        "local/plaincraft/greatwall/planning/FoundationGroups.class"
+      ],
+      "river_api_classes": 0,
+      "nested_jars": [],
+      "tests": 993,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "build_log": "build/round95-final.log",
+      "build_log_sha256": "bf59cf6277bc9cf45d4f05da6ac3bd72d91ae201b779272b3b39e35ac8781c68"
+    },
+    {
+      "repo": "roadweaver-next",
+      "initial_base": "326742d",
+      "production_head": "43420bc57e71755c20e498f9cb5dcaaac2928598",
+      "artifact": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+      "artifact_sha256": "e261b5eb52a1108c44a8e772eef3558fbc4e625f6e62abd27059dd31f4371882",
+      "expected_classes": [
+        "net/shiroha233/roadweaver/pathlogic/profile/ProfilePairTransitions.class"
+      ],
+      "river_api_classes": 0,
+      "nested_jars": [
+        "META-INF/jars/architectury-fabric-13.0.6.jar",
+        "META-INF/jars/cloth-config-fabric-15.0.130-fabric.jar",
+        "META-INF/jars/lwjgl-3.3.3.jar",
+        "META-INF/jars/lwjgl-opencl-3.3.3.jar",
+        "META-INF/jars/roadweaver-api.jar"
+      ],
+      "tests": 1772,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "build_log": ".analysis_tmp/round84-profile-final.log",
+      "build_log_sha256": "1de947d4495999a3e956fc70da03782b4da051322519629c3fe45fe2dbd5a8e0"
+    }
+  ]
+}

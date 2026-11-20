@@ -1,5 +1,11 @@
 # 验证与构建手册
 
+## 第85轮三模组收尾与全量盘点（2026-11-21）
+
+当前最终：道路1772/0/0/0、河流77/0/0/0、长城993/0/0/0；21组变异实际红且精确恢复。三仓成品、API提供方唯一性、构建日志SHA见[收尾证据](evidence/three-mod-final-artifacts-20261121.json)，变异细表/局部基准边界见[联合报告](THREE-MOD-OPTIMIZATION-20261121.md)。没有部署或现场游戏验收。
+
+`python scripts/audit/three_mod_source_inventory.py`调用JDK21词法器扫描三仓已登记Fabric生产Java，先验证文本块和孤立CR等前置夹具；[全量结果](evidence/three-mod-source-inventory-20261121.json)为1201文件，道路/长城无1000有效行超限，河流仍7个。工具使用JDK内部词法器仅在审计进程，不给模组添加运行期依赖；该盘点不等于逐行功能证明。
+
 ## 第84轮二站纵断面线性转移（2026-11-21）
 
 恢复四组生产变异后，完整 **PASS tests=1772 skipped=0 aborted=0 failed=0**、标准:fabric:build成功，含API验证和7类错误成品拒绝回归。5项新测试比较独立冻结求解器的完整剖面/代价位模式，另做60组独立穷举；不是用新转移重算期望。四组负控均编译成功、全为断言失败且逐字恢复。见[交接第84轮](HANDOFF.md)、[负控](evidence/profile-pair-mutations-20261121.json)和[完整原始基准](evidence/profile-pair-benchmark-20261121.json)。
