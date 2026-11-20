@@ -1,0 +1,6 @@
+{
+  "scope": "actual remapped road jar contains consumer and excludes provider API; no Minecraft launch",
+  "jar": "fabric/build/libs/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+  "sha256": "2602d814dba451ab07589b05c5765c26f8fdb971adb34b6ea73f02d9e866b488",
+  "embedded_provider_api": false
+}

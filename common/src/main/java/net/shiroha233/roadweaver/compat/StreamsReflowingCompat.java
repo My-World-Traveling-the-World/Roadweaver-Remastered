@@ -1,4 +1,4 @@
-/* 文件职责：与Streams Reflowing的可选集成层；反射读取河流引擎计划，生命周期就绪另走公开API。 */
+/* 文件职责：优先消费河流公开计划契约；旧提供方保留隔离适配，生命周期就绪另走公开API。 */
 package net.shiroha233.roadweaver.compat;
 
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Array;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,7 +71,7 @@ public final class StreamsReflowingCompat {
     private static final ConcurrentHashMap<Object, PrewarmCoordinator> PREWARM_COORDINATORS =
             new ConcurrentHashMap<>();
     private static volatile boolean prewarmPausedForDimension;
-    private static volatile Access access;
+    private static volatile StreamsPlanAccess access;
     private static volatile boolean initialized;
     private static volatile boolean accessFailure;
 
@@ -96,10 +96,10 @@ public final class StreamsReflowingCompat {
 
     public static SamplingSession openSession(ServerLevel level) {
         if (level == null) return SamplingSession.disabled();
-        Access current = access();
+        StreamsPlanAccess current = access();
         if (current == null) return accessFailure ? SamplingSession.failed() : SamplingSession.disabled();
         try {
-            Object engine = current.engine().invoke(null, level);
+            Object engine = current.open(level);
             return engine == null ? SamplingSession.failed() : new SamplingSession(current, engine, false);
         } catch (Throwable failure) {
             logFailure(failure);
@@ -147,12 +147,21 @@ public final class StreamsReflowingCompat {
         }
     }
 
-    private static Access access() {
+    private static StreamsPlanAccess access() {
         if (initialized) return access;
         synchronized (StreamsReflowingCompat.class) {
             if (initialized) return access;
             initialized = true;
             try {
+                // 仅在公开契约存在时链接可选适配器；旧版本仍走独立兼容实现。
+                try {
+                    Class.forName("dev.streamsreflowing.api.RiverPlanApi");
+                    access = new StreamsPlanContractAccess();
+                    LOGGER.info("【河流公开计划接口已启用】 contract=1");
+                    return access;
+                } catch (ClassNotFoundException oldProvider) {
+                    // 兼容已部署的旧河流，禁止把旧实现缺类误报成正常无河流。
+                }
                 Class<?> worldgen = Class.forName("dev.streamsreflowing.worldgen.StreamsWorldgen");
                 Class<?> engineClass = Class.forName("dev.streamsreflowing.core.RiverEngine");
                 Class<?> planClass = Class.forName("dev.streamsreflowing.core.compose.ColumnPlan");
@@ -165,7 +174,7 @@ public final class StreamsReflowingCompat {
                         "platesNear", double.class, double.class, double.class);
                 Class<?> plateClass = Class.forName("dev.streamsreflowing.core.plate.PlateKey");
                 Method networkFor = engineClass.getMethod("networkFor", plateClass);
-                Access resolved = new Access(
+                LegacyAccess resolved = new LegacyAccess(
                         engine,
                         plan,
                         lakeAt,
@@ -208,7 +217,7 @@ public final class StreamsReflowingCompat {
         throw new NoSuchMethodException("StreamsWorldgen.engine");
     }
 
-    private record Access(Method engine,
+    private record LegacyAccess(Method engine,
                           Method plan,
                           Method lakeAt,
                           Method plateAt,
@@ -221,7 +230,27 @@ public final class StreamsReflowingCompat {
                           Method distance,
                           Method width,
                           Method lakeLevel,
-                          Method lakeDigDepth) {
+                          Method lakeDigDepth) implements StreamsPlanAccess {
+        @Override public Object open(ServerLevel level) throws Exception { return engine.invoke(null, level); }
+        @Override public RiverColumn column(Object session, int x, int z) throws Exception {
+            Object value = plan.invoke(session, x, z);
+            if (value == null) return RiverColumn.NONE;
+            boolean channel = (boolean) inChannel.invoke(value), corridor = (boolean) inCorridor.invoke(value);
+            if (!channel && !corridor) return RiverColumn.NONE;
+            return new RiverColumn(channel, corridor, (int) waterSurfaceY.invoke(value), (int) bedY.invoke(value),
+                    (double) distance.invoke(value), (double) width.invoke(value));
+        }
+        @Override public LakeColumn lake(Object session, int x, int z) throws Exception {
+            Object value = lakeAt.invoke(session, x, z);
+            if (value == null) return LakeColumn.NONE;
+            int level = (int) lakeLevel.invoke(value);
+            return new LakeColumn(true, level, level - Math.max(1, (int) lakeDigDepth.invoke(value)));
+        }
+        @Override public List<?> platesNear(Object session, double x, double z, double radius) throws Exception {
+            Object[] result = (Object[]) platesNear.invoke(session, x, z, radius);
+            return result == null ? List.of() : java.util.Arrays.asList(result);
+        }
+        @Override public void prewarm(Object session, Object plate) throws Exception { networkFor.invoke(session, plate); }
     }
 
     private static void logFailure(Throwable failure) {
@@ -235,7 +264,7 @@ public final class StreamsReflowingCompat {
         private static final SamplingSession DISABLED = new SamplingSession(null, null, false);
         private static final SamplingSession FAILED = new SamplingSession(null, null, true);
 
-        private final Access access;
+        private final StreamsPlanAccess access;
         private final Object engine;
         private final boolean failed;
         private final PrewarmCoordinator prewarmCoordinator;
@@ -244,14 +273,14 @@ public final class StreamsReflowingCompat {
         private final ConcurrentHashMap<Long, RiverColumn> columns = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Long, LakeColumn> lakes = new ConcurrentHashMap<>();
 
-        private SamplingSession(Access access, Object engine, boolean failed) {
+        private SamplingSession(StreamsPlanAccess access, Object engine, boolean failed) {
             this.access = access;
             this.engine = engine;
             this.failed = failed;
             this.prewarmCoordinator = access == null || engine == null
                     ? null
                     : PREWARM_COORDINATORS.computeIfAbsent(
-                            engine, ignored -> new PrewarmCoordinator(
+                            access.identity(engine), ignored -> new PrewarmCoordinator(
                                     access, engine, PREWARM_GENERATION.get()));
         }
 
@@ -312,12 +341,7 @@ public final class StreamsReflowingCompat {
             try {
                 for (BlockPos pos : positions) {
                     if (pos == null) continue;
-                    Object nearby = access.platesNear().invoke(
-                            engine, (double) pos.getX(), (double) pos.getZ(), PREWARM_RADIUS);
-                    if (nearby == null || !nearby.getClass().isArray()) continue;
-                    int count = Array.getLength(nearby);
-                    for (int i = 0; i < count; i++) {
-                        Object plate = Array.get(nearby, i);
+                    for (Object plate : access.platesNear(engine, pos.getX(), pos.getZ(), PREWARM_RADIUS)) {
                         if (plate != null) plates.add(plate);
                     }
                 }
@@ -413,17 +437,9 @@ public final class StreamsReflowingCompat {
 
         private RiverColumn query(int x, int z) {
             try {
-                Object plan = bounded("plan", () -> access.plan().invoke(engine, x, z));
-                if (plan == BOUNDED_TIMED_OUT) return timedOut();
-                if (plan == null) return RiverColumn.NONE;
-                boolean inChannel = (boolean) access.inChannel().invoke(plan);
-                boolean inCorridor = (boolean) access.inCorridor().invoke(plan);
-                if (!inChannel && !inCorridor) return RiverColumn.NONE;
-                int waterSurfaceY = (int) access.waterSurfaceY().invoke(plan);
-                int bedY = (int) access.bedY().invoke(plan);
-                double distance = (double) access.distance().invoke(plan);
-                double width = (double) access.width().invoke(plan);
-                return new RiverColumn(inChannel, inCorridor, waterSurfaceY, bedY, distance, width);
+                Object result = bounded("plan", () -> access.column(engine, x, z));
+                if (result == BOUNDED_TIMED_OUT) return timedOut();
+                return (RiverColumn) result;
             } catch (Throwable failure) {
                 logFailure(failure);
                 return RiverColumn.UNKNOWN;
@@ -432,12 +448,9 @@ public final class StreamsReflowingCompat {
 
         private LakeColumn queryLake(int x, int z) {
             try {
-                Object lake = bounded("lakeAt", () -> access.lakeAt().invoke(engine, x, z));
-                if (lake == BOUNDED_TIMED_OUT) return lakeTimedOut();
-                if (lake == null) return LakeColumn.NONE;
-                int surfaceY = (int) access.lakeLevel().invoke(lake);
-                int bedY = surfaceY - Math.max(1, (int) access.lakeDigDepth().invoke(lake));
-                return new LakeColumn(true, surfaceY, bedY);
+                Object result = bounded("lakeAt", () -> access.lake(engine, x, z));
+                if (result == BOUNDED_TIMED_OUT) return lakeTimedOut();
+                return (LakeColumn) result;
             } catch (Throwable failure) {
                 logFailure(failure);
                 return LakeColumn.UNKNOWN;
@@ -450,13 +463,13 @@ public final class StreamsReflowingCompat {
     }
 
     private static final class PrewarmCoordinator {
-        private final Access access;
+        private final StreamsPlanAccess access;
         private final Object engine;
         private final long generation;
         private final ConcurrentHashMap<Object, CompletableFuture<Void>> plateFutures =
                 new ConcurrentHashMap<>();
 
-        private PrewarmCoordinator(Access access, Object engine, long generation) {
+        private PrewarmCoordinator(StreamsPlanAccess access, Object engine, long generation) {
             this.access = access;
             this.engine = engine;
             this.generation = generation;
@@ -474,7 +487,7 @@ public final class StreamsReflowingCompat {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 if (PREWARM_GENERATION.get() != generation) return;
                 try {
-                    access.networkFor().invoke(engine, plate);
+                    access.prewarm(engine, plate);
                 } catch (Throwable failure) {
                     throw new CompletionException(failure);
                 }

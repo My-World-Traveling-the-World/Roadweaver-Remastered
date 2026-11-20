@@ -1,5 +1,34 @@
 # 交接台账（HANDOFF）
 
+## 第81轮：道路消费提供方河流计划契约（2026-11-20）
+
+### 一、改了什么
+
+契约/行为等价（原查询、超时和几何规则保留）：StreamsPlanAccess隔离可选提供方，新河流走StreamsPlanContractAccess的RiverPlanApi，旧河流继续隔离LegacyAccess适配；不再从新提供方反射内部ColumnPlan/Lake/PlateKey。保持列/湖缓存、bounded lane、15秒查询/60秒预热、engine身份合并与代次取消。compileOnly真实河流planContractJar，测试也用真契约，不内嵌副本。
+
+### 二、我验证了什么（附变异）
+
+d64ec48干净开工并pull成功，实际基线1753/0/0/0。新增3项按FQCN登记，含真API打开、列/湖/板块/预热转换、真实SamplingSession缓存/查询异常、完全拒绝河流类的加载器、旧反射端口实际调用。完整回归与Fabric编译成功PASS tests=1756 skipped=0 aborted=0 failed=0；真实:fabric:remapJar成功。床面+1、预热不转发分别让正式全套中StreamsPlanContractAccessTest出现1个AssertionFailedError，精确checkout与字节恢复后再完整1756通过。见streams-plan-consumer-mutations-20261120.json及.analysis_tmp/round81-api-*。
+
+生产jar包含新消费者且无dev/streamsreflowing/api副本，SHA见streams-plan-consumer-package-20261120.json。河流提供端4ec0b9b已单独提交59项；同一消费者字节码在named/intermediary契约上通过的证据归河流仓库。长城92425c47已消费公开失败状态。
+
+### 三、我没能验证什么
+
+没有真实Minecraft可选模组装卸、正常新世界/重开、查询超时压力或FPS/MSPT。旧版本用旧形状端口夹具，未实际启动旧成品。API artifact检查不是全部worldgen/Mixin兼容证明；河流remapJar的三条BiomeColors映射告警尚未调查。未改或标定15/60秒历史阈值。
+
+### 四、遗留半截的东西
+
+外层可恢复施工事务继续，生产同步默认保留；河流第五项大类迁移目前只完成细湖阶段，其他阶段未完成。没有部署。推送仍被既有自动审批拒绝阻挡（指定目标传输授权未确认），未重试或绕过。
+
+### 五、下一轮先做什么
+
+迁出施工外层状态并对拍独立冻结同步事务：任意阶段暂停、修复后新计划、卸载/换代取消、异常和释放；不以已有内部游标声称单块长帧已消除。
+
+### 六、踩到的坑
+
+新文件需要第一行中文职责头，已有职责头守卫正确报错后补齐，未放宽基线。可选API类必须隔离加载；主兼容层与端口签名均不引用河流类型。新API存在但提供方失败时是UNKNOWN/错误，不混为正常无河。
+
+
 ## 第79轮：河流—长城—道路联合复查（2026-11-20）
 
 ### 一、改了什么

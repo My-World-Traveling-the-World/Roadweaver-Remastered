@@ -34,6 +34,11 @@ dependencies {
                 "（道路与长城是两个独立仓库，道路不收录长城的任何产物。）")
     }
     compileOnly(files(greatWallInterop))
+    // 纯Java的河流提供方契约，不把可选河流实现或契约重复打入道路成品。
+    def streamsPlanApi = rootProject.file("../streams-reflowing-src/build/contract/streams-plan-api.jar")
+    if (!streamsPlanApi.exists()) throw new GradleException("缺河流计划契约，请先在streams-reflowing-src执行planContractJar")
+    compileOnly(files(streamsPlanApi))
+    testImplementation(files(streamsPlanApi))
 
     // LWJGL OpenCL - 编译时依赖，运行时 native 由平台模块提供
     compileOnly("org.lwjgl:lwjgl-opencl:3.3.3")

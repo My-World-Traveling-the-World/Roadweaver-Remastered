@@ -1,5 +1,9 @@
 # 验证与构建手册
 
+## 河流公开计划契约（第81轮）
+
+先在相邻streams-reflowing-src用其外置Gradle9.4.1/JDK21执行planContractJar，再编道路。common仅compileOnly引用build/contract/streams-plan-api.jar；testImplementation确保套件吃真契约。运行时由河流mod自身提供，缺席/旧版走隔离可选边界，禁止往道路成品重复内嵌。完整1756/0/0/0和两个实际生产负控见HANDOFF第81轮。河流tools/review/plan_contract_probe.py会用同一编译消费者分别加载named契约与正式intermediary成品；这仍不替代Minecraft启动。
+
 ## 第78轮跨度索引与施工阶段观测
 
 恢复六组道路变异后完整 **1753/0/0/0**，标准:fabric:build、API named/intermediary契约件和实际Windows verify.ps1成功。新测试登记、负控类型、成品/日志hash均见[HANDOFF第78轮](HANDOFF.md)、[索引负控](evidence/reuse-station-mutations-20261120.json)、[计时负控](evidence/construction-phase-mutations-20261120.json)与[成品证据](evidence/station-phase-package-20261120.json)。完整架构/有效行数守卫通过，没有放宽1000有效行限制。
