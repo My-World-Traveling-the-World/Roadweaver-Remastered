@@ -1,0 +1,26 @@
+[
+  {
+    "name": "prefix-last-tie",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfilePairTransitions.java",
+    "assertion_failures": 2,
+    "restored_sha256": "e417fea86a52d3b82c483acaad55ad24b78cef722f7d3e59a71336d1fbb4e8cb"
+  },
+  {
+    "name": "suffix-first-tie",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfilePairTransitions.java",
+    "assertion_failures": 3,
+    "restored_sha256": "e417fea86a52d3b82c483acaad55ad24b78cef722f7d3e59a71336d1fbb4e8cb"
+  },
+  {
+    "name": "step-limit-ignored",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfilePairTransitions.java",
+    "assertion_failures": 3,
+    "restored_sha256": "e417fea86a52d3b82c483acaad55ad24b78cef722f7d3e59a71336d1fbb4e8cb"
+  },
+  {
+    "name": "cost-subtracted",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfilePairTransitions.java",
+    "assertion_failures": 3,
+    "restored_sha256": "e417fea86a52d3b82c483acaad55ad24b78cef722f7d3e59a71336d1fbb4e8cb"
+  }
+]

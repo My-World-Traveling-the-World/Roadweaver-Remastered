@@ -29,10 +29,9 @@ import java.util.Optional;
  * 用单调队列把转移从 {@code O(H·d)} 降到 {@code O(H)}，整体
  * 一次遍历就得到<b>全局最优</b>，而不是「每道 pass 局部最优」。</p>
  *
- * <p><b>2026-11-14（审计 H）更正</b>：下面「复杂度」一节写的 {@code O(n·H)} 只对
- * 一阶（只看当前高度）成立。实际实现走<b>二阶</b>分支 —— 状态是
- * (站 i, 高度 y, 前一站高度 y')，同一站要枚举前一站高差窗口，因此真实复杂度是
- * {@code O(n·H·D)}（D 是两个 y 的联合窗口宽度，见 {@code O(n·H·(2N+1)²)} 那处注释）。</p>
+ * <p>二阶状态为(站、高度、前一高差)，D=2N+1。2026-11-21利用可行前驱
+ * 必为前缀/后缀这一性质，将高差两两枚举的O(n·H·D²)降为O(n·H·D)；
+ * 同价父节点和完整回溯顺序保持旧契约。</p>
  *
  * <h2>为什么它比 15 道 pass 更可维护</h2>
  * <ul>
@@ -44,9 +43,8 @@ import java.util.Optional;
  *
  * <h2>复杂度</h2>
  * <p>{@code O(n · H · D)}，其中 {@code n} 是站数、{@code H} 是高度窗口宽度，
- * {@code D} 是「前一站高差窗口」宽度。二阶坡度约束下同一站要枚举前一站的高度，
- * 所以状态是三元组 (站 i, 高度 y, 前一站高度 y′)，见下方
- * {@code O(n·H·(2N+1)²)} 那处逐方法说明。</p>
+ * {@code D=2N+1} 是高差状态数。二阶状态是(站i、高度y、高差d)，
+ * 每个前一高度用前缀/后缀最小值一次求出所有后继；不再两两枚举高差。</p>
  *
  * <p>本行在 2026-11-15 复核时更正：原来只写 {@code O(n · H)}，与本文件
  * 顶部的「时效性更正」及方法级说明自相矛盾。一阶约束下才退化为 {@code O(n · H)}。</p>
@@ -241,7 +239,7 @@ public final class ProfileDpSolver {
      * </pre>
      * <p>所以状态必须是 {@code (站, 当前高度, 上一站高差)}。高差只有
      * {@code [−N, N]} 共 {@code 2N+1} 个取值 —— N=1 时只有 3 个，
-     * 整体 {@code O(n·H·(2N+1)²)}，N=1 时仍不足毫秒级。</p>
+     * 整体 {@code O(n·H·(2N+1))}；实际耗时应由具体站数、窗口和机器测量。</p>
      *
      * <h2>★ 与一阶的关键差别</h2>
      * <p>一阶 {@code maxStep=1} 允许 {@code +1,+1,+1}（三站升 3 格）；
@@ -289,39 +287,8 @@ public final class ProfileDpSolver {
 
         for (int i = 1; i < n; i++) {
             java.util.Arrays.fill(cur, INF);
-            for (int k = 0; k < width; k++) {
-                int y = minH + k;
-                if (!allowed(p, i, y)) continue;
-                double c = costAt(p, i, y);
-                for (int dIdx = 0; dIdx < dCount; dIdx++) {
-                    int d = dIdx - zero;
-                    if (Math.abs(d) > p.maxStep()) continue;      // 一阶上限同时生效
-                    int kPrev = k - d;                            // y_{i−1} = y_i − d_i
-                    if (kPrev < 0 || kPrev >= width) continue;
-                    double best = INF;
-                    int bestPrev = -1;
-                    if (i == 1) {
-                        // 第 1 站还没有「上一站高差」，只查第 0 站的 dummy 状态
-                        double v = prev[kPrev * dCount + zero];
-                        if (v < INF) {
-                            best = v;
-                            bestPrev = zero;
-                        }
-                    } else {
-                        for (int pdIdx = 0; pdIdx < dCount; pdIdx++) {
-                            if (Math.abs(d + (pdIdx - zero)) > lim) continue;   // ★ 二阶约束
-                            double v = prev[kPrev * dCount + pdIdx];
-                            if (v < best) {
-                                best = v;
-                                bestPrev = pdIdx;
-                            }
-                        }
-                    }
-                    if (bestPrev < 0 || best == INF) continue;
-                    cur[k * dCount + dIdx] = best + c;
-                    parent[i][k * dCount + dIdx] = kPrev * dCount + bestPrev;
-                }
-            }
+            // 二站可行前驱是前缀或后缀；线性扫描替代高差两两枚举，父节点同价规则保留。
+            ProfilePairTransitions.advance(p, i, minH, width, prev, cur, parent[i]);
             double[] tmp = prev;
             prev = cur;
             cur = tmp;
@@ -355,13 +322,14 @@ public final class ProfileDpSolver {
         return Optional.of(new Solution(profile, bestCost));
     }
 
-    private static boolean allowed(Problem p, int i, int y) {
+    // 转移阶段共用原判据，避免为性能重写一套窗口/钉住语义。
+    static boolean allowed(Problem p, int i, int y) {
         if (y < p.lo()[i] || y > p.hi()[i]) return false;
         int[] pin = p.pin();
         return pin == null || pin[i] < 0 || pin[i] == y;
     }
 
-    private static double costAt(Problem p, int i, int y) {
+    static double costAt(Problem p, int i, int y) {
         double[][] cost = p.cost();
         if (cost == null || cost[i] == null) return 0.0;
         int idx = y - p.lo()[i];

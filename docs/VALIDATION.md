@@ -1,5 +1,11 @@
 # 验证与构建手册
 
+## 第84轮二站纵断面线性转移（2026-11-21）
+
+恢复四组生产变异后，完整 **PASS tests=1772 skipped=0 aborted=0 failed=0**、标准:fabric:build成功，含API验证和7类错误成品拒绝回归。5项新测试比较独立冻结求解器的完整剖面/代价位模式，另做60组独立穷举；不是用新转移重算期望。四组负控均编译成功、全为断言失败且逐字恢复。见[交接第84轮](HANDOFF.md)、[负控](evidence/profile-pair-mutations-20261121.json)和[完整原始基准](evidence/profile-pair-benchmark-20261121.json)。
+
+`python scripts/benchmarks/profile_pair_probe.py`使用本机JDK21编译真实三源文件，无Minecraft替身数学实现。5预热、7交替样本、每样本4次求解，384站/96高度窗口。L=1 p50 3.4444→2.7456ms/4次，L=16 69.0290→16.7181ms/4次；其余窗口及全部样本在JSON。线程分配量未变；不能推算预热总时长或FPS。二阶计算O(nHD²)→O(nHD)，回溯矩阵仍O(nHD)。
+
 ## 第82～83轮施工恢复与预热完成时序
 
 恢复全部临时变异后，道路完整 **PASS tests=1767 skipped=0 aborted=0 failed=0** 和Fabric编译通过。第82轮独立冻结旧同步事务960组精确对拍，7项正式测试；忽略所有者/版本、未完铺设推进、重复释放均产生真实断言失败。第83轮在旧时序上先实际复现即时失败Future留表，再把失败订阅迁到入表后，新增4项真实协调器端口测试。证据与未覆盖真机条件见HANDOFF第82～83轮及evidence中的transaction/prewarm-completion记录。
