@@ -1,0 +1,20 @@
+[
+  {
+    "name": "failure-cached",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsReflowingCompat.java",
+    "assertion_failures": 2,
+    "restored_sha256": "b0a178aca9afacbd8dbea8925348d8b7d3ac35c1386642d85839f2d143c45c81"
+  },
+  {
+    "name": "success-forgotten",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsReflowingCompat.java",
+    "assertion_failures": 2,
+    "restored_sha256": "b0a178aca9afacbd8dbea8925348d8b7d3ac35c1386642d85839f2d143c45c81"
+  },
+  {
+    "name": "obsolete-builds",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsReflowingCompat.java",
+    "assertion_failures": 1,
+    "restored_sha256": "b0a178aca9afacbd8dbea8925348d8b7d3ac35c1386642d85839f2d143c45c81"
+  }
+]

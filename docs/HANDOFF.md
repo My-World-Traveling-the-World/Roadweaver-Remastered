@@ -1,5 +1,46 @@
 # 交接台账（HANDOFF）
 
+## 第83轮：即时失败预热重试与三仓交付汇总（2026-11-20）
+
+### 一、改了什么
+
+行为修复：StreamsReflowingCompat真实PrewarmCoordinator原在submit内订阅失败，但任务可在computeIfAbsent入表前失败，清理找不到条目，随后失败Future留表。已把订阅迁到入表之后，条件删除只移除自身；成功继续缓存、排队去重、取消/代次和原线程池保留。执行器只加私有注入端口以控制时序。没有改超时、并发、几何或schema。
+
+汇总与当前路线同步到THREE-MOD-REVIEW-20261120.md、ROADMAP.md和VALIDATION.md。七项中1～4、6及7的离线边界已交付；第5项完成细湖/原始堆/链编号首批迁移，其他大类未完成；第7项生产跨tick仍未启用。不得把“全绿”写成已证明游戏无卡顿。
+
+### 二、我验证了什么（附变异）
+
+先在8bc918b旧清理时序上只注入执行器和测试，真实全套中immediateFailureIsEvictedAfterInsertionAndCanRetry报1个AssertionFailedError：第二次拿到同一个失败Future，日志.analysis_tmp/round83-immediate-original.log。修复后4项新测试显式按FQCN登记，实际覆盖即时失败、入表后失败、成功共享、排队去重、执行器拒绝、取消后迟到任务与旧代次。
+
+| 临时改坏什么 | 实际断言失败数 |
+| --- | --- |
+| 失败永不移除 | 2 |
+| 成功也移除 | 2 |
+| 旧代次也进提供方 | 1 |
+
+三组实际完整回归均编译成功且由AssertionFailedError失败，精确checkout与SHA256恢复。见evidence/prewarm-completion-mutations-20261120.json。恢复后完整 **PASS tests=1767 skipped=0 aborted=0 failed=0**、标准:fabric:build成功，含API成品验证及7类错误包拒绝回归通过；日志.analysis_tmp/round83-all-final.log。
+
+相邻河流eac79a1完整63项、compileJava/planContractJar/remapJar通过；长城d8364723完整988项、compileClientJava/remapJar通过，失败/错误/跳过0。河流最终成品再次跑同一消费者字节码的named/intermediary契约探针，两端CONTRACT_PASS。最终成品SHA及未内嵌河流契约检查见evidence/three-mod-final-artifacts-20261120.json；没有部署。
+
+### 三、我没能验证什么
+
+没有真实三模组新建/退出/重开、4096工作集、模板实景、总预热时间、FPS/MSPT/GC或阶段尾延迟。即时完成端口精确复现竞态，但没有游戏中的发生频率。API签名/字节码验证不证明ServerLevel/全部Mixin，河流BiomeColors三条remap告警仍未调查。
+
+### 四、遗留半截的东西
+
+河流NetworkTracer仍3705物理行、build约1247行；雕刻/预取/世界注册大类尚待拆，不能因新增文件达标就说全项目架构完成。生产跨tick尚需真实世界/区块租约/计划版本与队列接线及停服取消，先取阶段数据。巨树提供方形状契约属于相邻后续。本轮未动crossing、双平滑或已完工区块自动重铺政策。
+
+三个仓库所有临时变异已恢复。push仍受此前自动审批拒绝阻挡（指定目标传输授权未确认），没有重试或绕过；河流无remote。
+
+### 五、下一轮先做什么
+
+按联合报告验新建/重开/退出、河流→长城→道路和大范围工作集；用已有开关量单块读取/准备/落块/修复/装饰/元数据/写盘p50/p95/最长单次。架构继续先定义单板块BuildContext和独立整板旧产物，再迁洪泛/路由/跨板连接；不在缺证据时换FMM、提高并发或启用异步写盘。
+
+### 六、踩到的坑
+
+computeIfAbsent的映射函数返回前不能依赖完成回调移除尚未发布的条目；仅用慢worker测试会漏掉这个时序。用即时执行器确定先后，比重复跑随机竞争可靠。旧失败回调只按(key,future)条件删除，避免误删更新的重试；成功必须保留，不能把修复退化成每次重新构建。
+
+
 ## 第82轮：施工外层事务的恢复与取消边界（2026-11-20）
 
 ### 一、改了什么

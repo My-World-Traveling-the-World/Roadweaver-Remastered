@@ -466,19 +466,32 @@ public final class StreamsReflowingCompat {
         private final StreamsPlanAccess access;
         private final Object engine;
         private final long generation;
+        private final java.util.concurrent.Executor executor;
         private final ConcurrentHashMap<Object, CompletableFuture<Void>> plateFutures =
                 new ConcurrentHashMap<>();
 
         private PrewarmCoordinator(StreamsPlanAccess access, Object engine, long generation) {
+            this(access, engine, generation, PREWARM_EXECUTOR);
+        }
+
+        /** 执行器端口允许复现任务在入表前完成，生产仍使用原有后台池。 */
+        private PrewarmCoordinator(StreamsPlanAccess access, Object engine, long generation,
+                                   java.util.concurrent.Executor executor) {
             this.access = access;
             this.engine = engine;
             this.generation = generation;
+            this.executor = executor;
         }
 
         private List<CompletableFuture<Void>> schedule(Iterable<Object> plates) {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (Object plate : plates) {
-                futures.add(plateFutures.computeIfAbsent(plate, this::submit));
+                CompletableFuture<Void> future = plateFutures.computeIfAbsent(plate, this::submit);
+                // 先完成入表再订阅失败；即时完成也能移除自身，不能把失败Future永久缓存。
+                future.whenComplete((ignored, failure) -> {
+                    if (failure != null) plateFutures.remove(plate, future);
+                });
+                futures.add(future);
             }
             return futures;
         }
@@ -491,10 +504,7 @@ public final class StreamsReflowingCompat {
                 } catch (Throwable failure) {
                     throw new CompletionException(failure);
                 }
-            }, PREWARM_EXECUTOR);
-            future.whenComplete((ignored, failure) -> {
-                if (failure != null) plateFutures.remove(plate, future);
-            });
+            }, executor);
             return future;
         }
 

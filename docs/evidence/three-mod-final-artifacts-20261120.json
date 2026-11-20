@@ -1,0 +1,78 @@
+{
+  "scope": "final local production artifacts and offline suites; no Minecraft/FPS validation",
+  "deployed": false,
+  "records": [
+    {
+      "repo": "streams-reflowing-src",
+      "initial_base": "6f838f6",
+      "artifact": "build/libs/streamsreflowing-2.12.8-fix9.jar",
+      "artifact_sha256": "342012e93de0a8e48764bd07771b3cb1b524cfaa75be7331310fa8e715228ced",
+      "expected_new_class": "dev/streamsreflowing/core/river/RiverChains.class",
+      "river_api_classes": 10,
+      "tests": 63,
+      "failures": 0,
+      "skipped": 0,
+      "build_log": "build/round40-primitives-final.log",
+      "build_log_sha256": "2c2e1dc9d27484f0faa9c64b2f2599b9fe7b4cca0a2acdef088dc9e4f348b12b",
+      "changed_production_source_sha256": {
+        "src/main/java/dev/streamsreflowing/api/RiverPlanApi.java": "19e7d4fc1ddb5dc3a256be2be4654932389824efc4ad658af13339ef320c88fb",
+        "src/main/java/dev/streamsreflowing/compat/StreamsPlanProvider.java": "16003200dc961198ae2de3683609b1973ac375951593aac9ace9b8283f675a7b",
+        "src/main/java/dev/streamsreflowing/compat/WorldBoundRiverSession.java": "7ba57c1d3710285bd39dd99c21037973a152b21afb1301591712579c71ef1fc1",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupReadiness.java": "3dbcfb182c657eb549c9a77b412e57c5b4a06c1f9444f84234877e4663836ed0",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java": "60c7ae9cbe2f3d17485b21c55a60dfb0759e7fa7519ec2ebaa233410d257536f",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java": "67d6cbaf55e5f84db9574edbd192232fcc0f1be56b8016823be67506e70d227f",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsPrewarmService.java": "584f75a2c62013c73316c77a07d90c9d0578b90a7b2038c11290a8e9580cdc65",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsRuntimeLoadPolicy.java": "83e7087f37ba3521ef7ccc18c48643f6bbf07d4635777305212ae4e53f660cc7",
+        "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java": "e251c1111d55f8a33d3c2d702d0ca5886b705ad72aee3b1594b74f24bda1a402",
+        "src/main/java/dev/streamsreflowing/core/river/DoubleMinHeap.java": "8c2c7341f69819dcb386767c9103bdf2503455b20cc60defe56802e3b7eece6b",
+        "src/main/java/dev/streamsreflowing/core/river/FineLakeRefiner.java": "9942c6edac9eda703f4f49c4b4e67dab7ece7994cb6f69e5529c12f8a0891385",
+        "src/main/java/dev/streamsreflowing/core/river/NetworkTracer.java": "d9f7c349248d0517ed4a3364c142af3b688ef80bed32461b534ce42726488a0d",
+        "src/main/java/dev/streamsreflowing/core/river/RiverChains.java": "c7f665ab13e36ca4d8931f41734ab934b3b0d40332904f442bfdb2ff4b90321d",
+        "src/main/java/dev/streamsreflowing/core/river/TouchedCellMask.java": "124528c67fe831e76a89d41ad21b00d67c8d3092b9709fc9200d2270ffa478ee",
+        "src/main/java/dev/streamsreflowing/fabric/StreamsReflowingFabric.java": "a06c97f3698ada220fdc85218d861423876ebf437d193202e60224af56c6cf0d",
+        "src/main/java/dev/streamsreflowing/worldgen/BoundedPlanTable.java": "f9fe558f6ca73047df9840d67a54df4a302aa9d7f5580c9a049af510dc4015b2",
+        "src/main/java/dev/streamsreflowing/worldgen/ChunkPlanCache.java": "38c0031645c5ebf9358cdfa95a26fa4cd4408a17f2708d368dd9b88b7cdce90e"
+      }
+    },
+    {
+      "repo": "plaincraft-great-wall",
+      "initial_base": "2586f745",
+      "artifact": "build/libs/plaincraft-great-wall-0.7.126-api-standardization.jar",
+      "artifact_sha256": "e584f4158e1c8b1af582aa6afe09018929bbc11cfb1dd4ac12caa9ecb1b70d58",
+      "expected_new_class": "local/plaincraft/greatwall/generation/WallSettlementCursor.class",
+      "river_api_classes": 0,
+      "tests": 988,
+      "failures": 0,
+      "skipped": 0,
+      "build_log": "build/round94-transaction-final.log",
+      "build_log_sha256": "fd3f7f240bff50ff0aa7fe0a82fd7a2e17998bb6344b1cff5515f39677340092",
+      "changed_production_source_sha256": {
+        "src/main/java/local/plaincraft/greatwall/command/GreatWallCommands.java": "23d7191345bd68c3483a5d2d5f374e57e10854ff0d14dd6ac402c9726cbf7399",
+        "src/main/java/local/plaincraft/greatwall/compat/RiverStartupQuery.java": "8784fe54d2a65d7535b268bc58d375dec3fe68d4c2c9425886cf0eaf9589653a",
+        "src/main/java/local/plaincraft/greatwall/generation/WallBodyBackfill.java": "20e12708d12bbe90cb23a969b4374eef2df19acbb55027c761f11bc528f27881",
+        "src/main/java/local/plaincraft/greatwall/generation/WallSettlementCursor.java": "03c395b08c54256967bf4a5837c6ed341f6680df42b7135832e9519491376707"
+      }
+    },
+    {
+      "repo": "roadweaver-next",
+      "initial_base": "d64ec48",
+      "artifact": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+      "artifact_sha256": "22218350e62bb67e53bdf987477d1d2b0b98b77c527d29d8d716413f6af7502e",
+      "expected_new_class": "net/shiroha233/roadweaver/pathlogic/construction/ConstructionTransactionCursor.class",
+      "river_api_classes": 0,
+      "tests": 1767,
+      "failures": 0,
+      "skipped": 0,
+      "build_log": ".analysis_tmp/round83-all-final.log",
+      "build_log_sha256": "707d9566590d0109dfb61df10f4ab5e4d291e53c0276758c19e197112348a9b6",
+      "changed_production_source_sha256": {
+        "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsPlanAccess.java": "784981ea19e29e60c6d200a271c5feb210463c8c65868e1302273ebad205ab00",
+        "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsPlanContractAccess.java": "5c9736dabcc67ffc10d4e177acce98c08d5c13dc7080467c6bb615e865e5eed0",
+        "common/src/main/java/net/shiroha233/roadweaver/compat/StreamsReflowingCompat.java": "b0a178aca9afacbd8dbea8925348d8b7d3ac35c1386642d85839f2d143c45c81",
+        "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionChunkTransaction.java": "04a53325d9f3f4a6cbcce3d013d3bd32d113fa80c656ab3c9028b6838b1bfdc3",
+        "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionPhaseTiming.java": "ecd139cf837116a8a8ef986b262ef5037e30f151827bedfdc393a8ff0ab1a6a3",
+        "common/src/main/java/net/shiroha233/roadweaver/pathlogic/construction/ConstructionTransactionCursor.java": "42cd229a66b14e7f1a11a59ee60b9af74e3be3649201ed91000a8d1fbad99530"
+      }
+    }
+  ]
+}

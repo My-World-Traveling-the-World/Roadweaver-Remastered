@@ -1,5 +1,11 @@
 # 验证与构建手册
 
+## 第82～83轮施工恢复与预热完成时序
+
+恢复全部临时变异后，道路完整 **PASS tests=1767 skipped=0 aborted=0 failed=0** 和Fabric编译通过。第82轮独立冻结旧同步事务960组精确对拍，7项正式测试；忽略所有者/版本、未完铺设推进、重复释放均产生真实断言失败。第83轮在旧时序上先实际复现即时失败Future留表，再把失败订阅迁到入表后，新增4项真实协调器端口测试。证据与未覆盖真机条件见HANDOFF第82～83轮及evidence中的transaction/prewarm-completion记录。
+
+河流完整63项、compileJava/planContractJar/remapJar通过；长城完整988项、compileClientJava/remapJar通过。两者测试各自留在提供方仓库，没有注册到道路。道路和长城默认仍同步runAll；外层游标的阶段预算不能作为单次世界写入硬实时保证。
+
 ## 河流公开计划契约（第81轮）
 
 先在相邻streams-reflowing-src用其外置Gradle9.4.1/JDK21执行planContractJar，再编道路。common仅compileOnly引用build/contract/streams-plan-api.jar；testImplementation确保套件吃真契约。运行时由河流mod自身提供，缺席/旧版走隔离可选边界，禁止往道路成品重复内嵌。完整1756/0/0/0和两个实际生产负控见HANDOFF第81轮。河流tools/review/plan_contract_probe.py会用同一编译消费者分别加载named契约与正式intermediary成品；这仍不替代Minecraft启动。
