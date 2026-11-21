@@ -31,11 +31,14 @@ public interface GreatWallReadiness {
     String ownerId();
 
     /**
-     * 非阻塞询问：长城是否已经预热完成（或已失败、或本次根本不会跑）。
+     * 非阻塞询问：长城是否已放行道路；已失败的会话不能返回就绪。
      *
      * @return {@code true} 表示道路可以开始了
      */
     boolean isReady();
+
+    /** 已确认本世界不会继续预热时才返回 true；旧提供方没有此信号，仍按原等待规则处理。 */
+    default boolean isTerminalFailure() { return false; }
 
     /**
      * 阻塞等待至多 {@code timeoutMillis}。

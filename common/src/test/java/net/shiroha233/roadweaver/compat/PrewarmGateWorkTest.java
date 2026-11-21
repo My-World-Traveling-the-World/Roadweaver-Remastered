@@ -5,6 +5,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import net.shiroha233.roadweaver.api.outgoing.GreatWallReadiness;
@@ -42,6 +43,7 @@ class PrewarmGateWorkTest {
     private static final class Fixture implements PrewarmGateWork.Probe, PrewarmGateWork.Scheduler {
         boolean required = true;
         boolean ready;
+        boolean failed;
         String signature = "working";
         boolean reject;
         boolean throwOnSchedule;
@@ -51,6 +53,7 @@ class PrewarmGateWorkTest {
         final List<PrewarmGateWork.Resolution> resolutions = new ArrayList<>();
         @Override public boolean required() { return required; }
         @Override public boolean ready() { queries++; return ready; }
+        @Override public boolean terminalFailure() { return failed; }
         @Override public String signature() { return signature; }
         @Override public boolean schedule(Runnable task, long delayMillis) {
             if (throwOnSchedule) throw new RejectedExecutionException("stopped");
@@ -80,6 +83,42 @@ class PrewarmGateWorkTest {
         f.required = false;
         f.assertResolved(f.start(0), PrewarmGateWork.Resolution.ABSENT);
         assertEquals(0, f.queries);
+    }
+
+    @Test void confirmedWallFailureStopsTheStartupChainOnTheNextPoll() {
+        Fixture f = new Fixture();
+        var gate = RoadStartupGate.await(() -> true, () -> f.ready, () -> f.start(10_000),
+                (task, delay) -> fail("河流就绪后应只轮询长城"));
+        f.pollAt(0);
+        assertFalse(gate.isDone());
+        // 同时送入矛盾的就绪信号和不变的进度签名，防止失败被宽限、ready 或停滞规则遮住。
+        f.ready = true;
+        f.failed = true;
+        f.pollAt(250);
+        assertTrue(gate.isCompletedExceptionally(), "本次查询就必须结束，不能等停滞窗口");
+        assertInstanceOf(GreatWallPrewarmCompat.WallPrewarmFailedException.class,
+                assertThrows(CompletionException.class, gate::join).getCause());
+        assertEquals(List.of(PrewarmGateWork.Resolution.WALL_FAILED), f.resolutions);
+        assertTrue(f.queue.isEmpty(), "终态不能排下一次查询");
+    }
+
+    @Test void registeredFailureCannotPassTheRealReadyFastPath() {
+        GreatWallReadinessRegistry.register(new GreatWallReadiness() {
+            @Override public String ownerId() { return "prewarm-failure-test"; }
+            @Override public boolean isReady() { return true; }
+            @Override public boolean isTerminalFailure() { return true; }
+            @Override public boolean awaitReady(long timeoutMillis) { throw new AssertionError("不能阻塞"); }
+            @Override public String progressSignature() { return null; }
+        });
+        try {
+            // 假提供方故意矛盾，生产快路径也必须让失败优先。
+            assertFalse(GreatWallPrewarmCompat.isPrewarmComplete());
+            var gate = GreatWallPrewarmCompat.awaitPrewarmAsync().orTimeout(5, TimeUnit.SECONDS);
+            assertInstanceOf(GreatWallPrewarmCompat.WallPrewarmFailedException.class,
+                    assertThrows(CompletionException.class, gate::join).getCause());
+        } finally {
+            GreatWallReadinessRegistry.unregister("prewarm-failure-test");
+        }
     }
 
     @Test void installedWallKeepsStartupGraceAndWaitsForRealCompletion() {

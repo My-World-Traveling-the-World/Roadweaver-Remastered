@@ -11,6 +11,7 @@ final class PrewarmGateWork {
     interface Probe {
         boolean required();
         boolean ready();
+        boolean terminalFailure();
         String signature();
     }
 
@@ -19,7 +20,7 @@ final class PrewarmGateWork {
         boolean schedule(Runnable task, long delayMillis);
     }
 
-    enum Resolution { ABSENT, READY, TIMEOUT, STALLED, ABSOLUTE_CAP, POLLER_UNAVAILABLE }
+    enum Resolution { ABSENT, READY, WALL_FAILED, TIMEOUT, STALLED, ABSOLUTE_CAP, POLLER_UNAVAILABLE }
 
     record Limits(long pollMillis, long firstReadyGraceMillis, long stallMillis, long absoluteMillis) {}
 
@@ -60,6 +61,11 @@ final class PrewarmGateWork {
         if (result.isDone()) return;
         long now = clock.getAsLong();
         long elapsed = now - startedAt;
+        // 终态不能靠进度签名推断，也不能被启动宽限或等待超时掩盖。
+        if (probe.terminalFailure()) {
+            finish(Resolution.WALL_FAILED);
+            return;
+        }
         if (probe.ready()) {
             if (elapsed >= nanos(limits.firstReadyGraceMillis())) finish(Resolution.READY);
             else arm(limits.pollMillis());
@@ -107,7 +113,11 @@ final class PrewarmGateWork {
             resolved.accept(reason);
         } finally {
             // 诊断失败也不能把已经有结论的门留在等待态。
-            result.complete(null);
+            if (reason == Resolution.WALL_FAILED) {
+                result.completeExceptionally(new GreatWallPrewarmCompat.WallPrewarmFailedException());
+            } else {
+                result.complete(null);
+            }
         }
     }
 

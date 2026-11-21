@@ -492,6 +492,10 @@ public final class InitialGenManager {
         try {
             GreatWallPrewarmCompat.awaitPrewarmForInitialGeneration(level).join();
         } catch (Throwable failure) {
+            // 严格入口之后仍可能收到终态失败，交给初始流程统一结案，不能继续施工。
+            if (failure.getCause() instanceof GreatWallPrewarmCompat.WallPrewarmFailedException terminal) {
+                throw terminal;
+            }
             LOGGER.warn("【长城兼容等待失败，恢复当前流程；本条未确认长城就绪】 " + "RoadWeaver Great Wall compatibility wait failed; resuming this flow without confirming wall readiness.", failure);
         } finally {
             InitialGenerationProgressTracker.enterStage(

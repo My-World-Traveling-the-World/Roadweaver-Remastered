@@ -15,7 +15,8 @@ plugins {
 // 契约模块走**独立版本号**：它的 API 契约与道路主 mod 的版本节奏无关，
 // 而且消费方的 fabric.mod.json 写的是 depends: roadweaver_api >= 1 ——
 // 用道路那种 2.3.1-1.21.1-... 的长版本号去比 >=1 语义不清。
-version = '1.0.0'
+// 终态失败是向后兼容的新增能力；提高次版本避免加载器选中不含该方法的旧包。
+version = '1.1.0'
 
 architectury {
     fabric()

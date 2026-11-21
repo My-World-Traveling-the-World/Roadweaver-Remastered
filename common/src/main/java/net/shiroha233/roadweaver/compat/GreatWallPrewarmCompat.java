@@ -35,6 +35,13 @@ public final class GreatWallPrewarmCompat {
 
     private GreatWallPrewarmCompat() {}
 
+    /** 明确失败与探针超时分开，兼容等待只有在后一种情况下保留原行为。 */
+    public static final class WallPrewarmFailedException extends IllegalStateException {
+        WallPrewarmFailedException() {
+            super("长城预热已失败，本次不启动初始道路");
+        }
+    }
+
     /** 安装但未注册也必须等，不能把提供方接线故障当成预热成功。 */
     public static boolean wallPresent() {
         try {
@@ -50,7 +57,8 @@ public final class GreatWallPrewarmCompat {
 
     /** API 内部故障返回未就绪，保留既有 fail-closed 契约。 */
     public static boolean isPrewarmComplete() {
-        return isAvailable() ? GreatWallReadinessApi.isReady() : !wallPresent();
+        return isAvailable() ? GreatWallReadinessApi.isReady() && !GreatWallReadinessApi.isTerminalFailure()
+                : !wallPresent();
     }
 
     /** 没装长城直接通过，已安装仍保留原先的宽限和退出策略。 */
@@ -64,6 +72,7 @@ public final class GreatWallPrewarmCompat {
     private static final PrewarmGateWork.Probe PROBE = new PrewarmGateWork.Probe() {
         @Override public boolean required() { return wallPresent() || isAvailable(); }
         @Override public boolean ready() { return isPrewarmComplete(); }
+        @Override public boolean terminalFailure() { return GreatWallReadinessApi.isTerminalFailure(); }
         @Override public String signature() { return GreatWallReadinessApi.progressSignature(); }
     };
 
@@ -83,6 +92,7 @@ public final class GreatWallPrewarmCompat {
         switch (reason) {
             case ABSENT -> { /* 没有长城就没有等待阶段，不打印虚假的完成日志。 */ }
             case READY -> LOGGER.info("【长城预热门已释放，进入后续启动检查】 " + "Great Wall prewarm gate resolved; RoadWeaver initial generation may start.");
+            case WALL_FAILED -> LOGGER.warn("【长城预热已终态失败，立即结束等待，本次不启动初始道路】 reason=WALL_FAILED");
             case TIMEOUT, STALLED, ABSOLUTE_CAP, POLLER_UNAVAILABLE -> LOGGER.warn(
                     "【长城预热门未确认就绪便结束，后续仍须检查前置条件】 " + "Great Wall prewarm gate ended without confirmed readiness: reason={}; strict startup prerequisites still apply.", reason);
         }

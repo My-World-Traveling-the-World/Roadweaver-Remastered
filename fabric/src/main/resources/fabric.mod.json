@@ -34,7 +34,7 @@
 		}
 	],
 	"depends": {
-		"roadweaver_api": ">=1",
+		"roadweaver_api": ">=1.1.0",
 		"fabricloader": ">=0.16.10",
 		"minecraft": "~1.21.1",
 		"java": ">=21",

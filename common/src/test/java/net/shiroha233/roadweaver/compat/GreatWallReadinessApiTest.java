@@ -71,6 +71,7 @@ class GreatWallReadinessApiTest {
     void unlinkedContractAnswersNotReady() {
         assertFalse(GreatWallReadinessApi.isLinked());
         assertFalse(GreatWallReadinessApi.isReady(), "no provider must never read as ready");
+        assertFalse(GreatWallReadinessApi.isTerminalFailure());
         assertFalse(GreatWallReadinessApi.awaitReady(0L));
         assertFalse(GreatWallReadinessApi.awaitReady(50L));
         assertNull(GreatWallReadinessApi.progressSignature());
@@ -82,6 +83,8 @@ class GreatWallReadinessApiTest {
         GreatWallReadinessRegistry.register(Fake.ready("a|b|c"));
         assertTrue(GreatWallReadinessApi.isLinked());
         assertTrue(GreatWallReadinessApi.isReady());
+        // 旧提供方只实现原契约：没有信号时保留旧的等待策略。
+        assertFalse(GreatWallReadinessApi.isTerminalFailure());
         assertTrue(GreatWallReadinessApi.awaitReady(0L));
         assertTrue(GreatWallReadinessApi.awaitReady(10L));
         assertEquals("a|b|c", GreatWallReadinessApi.progressSignature());
@@ -95,6 +98,20 @@ class GreatWallReadinessApiTest {
         assertFalse(GreatWallReadinessApi.awaitReady(10L));
         assertNull(GreatWallReadinessApi.progressSignature(),
                 "a broken snapshot must read as 'no signal', never as a constant");
+    }
+
+    @Test
+    void brokenTerminalProbeDoesNotInventAnExplicitFailure() {
+        GreatWallReadinessRegistry.register(new GreatWallReadiness() {
+            @Override public String ownerId() { return "broken-terminal"; }
+            @Override public boolean isReady() { return false; }
+            @Override public boolean awaitReady(long timeoutMillis) { return false; }
+            @Override public String progressSignature() { return null; }
+            @Override public boolean isTerminalFailure() { throw new LinkageError("探针不可用"); }
+        });
+        // 探针坏了只能继续保守等待，不能替上游宣告失败或成功。
+        assertFalse(GreatWallReadinessApi.isTerminalFailure());
+        assertFalse(GreatWallReadinessApi.isReady());
     }
 
     @Test

@@ -10,11 +10,15 @@
 
 ## 安装需要什么
 
-**Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API 和 Cloth Config API。** 安装 RoadWeaver 重制版成品即可；其中已包含 **RoadWeaver API**，请只保留一份 API。
+**Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API 和 Cloth Config API。** 安装 RoadWeaver 重制版成品即可；成品已包含 **RoadWeaver API**，无需另装独立 API。
 
 ## 一起安装有什么变化
 
-单装道路也能生成路网。一起安装兼容版本的 StreamsReflowing 时，道路会读取河流规划，用于选线和规划跨水段。一起安装[万里长城](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall)时，道路会等长城预热，并在施工时避让长城的保护范围。
+单装道路也能生成路网。以下模组均为可选：
+
+- **StreamsReflowing（河流）**：道路读取兼容版本的河流规划，用于选线和安排跨水路段。
+- [**万里长城**](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall)：道路等长城预热并发布保护范围，铺路时避开受保护的墙体。
+- **Tans Huge Trees（巨树）**：兼容版本可登记巨树占地，供道路避让。
 
 三者都装时，开局顺序是 **河流 → 长城 → 道路**；只装河流和道路时，就是 **河流 → 道路**。
 

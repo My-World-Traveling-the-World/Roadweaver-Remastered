@@ -47,6 +47,17 @@ public final class GreatWallReadinessApi {
         }
     }
 
+    /** 只采信明确的终态失败，探针缺失或异常不代表长城已经结案。 */
+    public static boolean isTerminalFailure() {
+        GreatWallReadiness p = GreatWallReadinessRegistry.get();
+        if (p == null) return false;
+        try {
+            return p.isTerminalFailure();
+        } catch (RuntimeException | LinkageError failure) {
+            return false;
+        }
+    }
+
     /** 进度签名；未接线、无信号或异常时 {@code null}。 */
     public static String progressSignature() {
         GreatWallReadiness p = GreatWallReadinessRegistry.get();
