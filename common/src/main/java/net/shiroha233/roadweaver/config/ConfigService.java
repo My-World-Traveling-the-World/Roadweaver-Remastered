@@ -104,6 +104,8 @@ public final class ConfigService {
         JsonObject root = new JsonObject();
         root.add("structurePrediction", GSON.toJsonTree(INSTANCE.structurePrediction()));
         root.add("planning", GSON.toJsonTree(INSTANCE.planning()));
+        // 绕行倍率改变候选路径，挖填与海底策略改变最终剖面；两类缓存均不能复用旧身份。
+        root.add("terrainProfile", GSON.toJsonTree(INSTANCE.terrainProfile()));
         root.add("pathfindingCost", GSON.toJsonTree(INSTANCE.pathfindingCost()));
         root.add("roadAppearance", GSON.toJsonTree(INSTANCE.roadAppearance()));
         root.add("bridge", GSON.toJsonTree(INSTANCE.bridge()));
@@ -131,6 +133,8 @@ public final class ConfigService {
         root.addProperty("planningAlgorithm", INSTANCE.planning().planningAlgorithm().name());
         root.addProperty("terrainSamplingMode", INSTANCE.planning().terrainSamplingMode().name());
         root.addProperty("terrainProfileMode", INSTANCE.planning().terrainProfileMode().name());
+        // 已完成覆盖也依赖地形策略；性能和界面配置仍不参与，避免无关调参重跑预热。
+        root.add("terrainProfile", GSON.toJsonTree(INSTANCE.terrainProfile()));
         root.addProperty("pathfindingAlgorithm", INSTANCE.pathfindingCost().pathfindingAlgorithm().name());
         root.addProperty("pathGridStep", INSTANCE.pathfindingCost().pathGridStep());
         root.addProperty("orthoStepCost", INSTANCE.pathfindingCost().orthoStepCost());

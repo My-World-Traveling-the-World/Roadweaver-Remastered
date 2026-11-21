@@ -69,6 +69,26 @@ final class CurrentConfigContractTest {
     }
 
     @Test
+    void terrainPolicyInvalidatesBothRealCachePayloadsButDisplayAndBudgetDoNot() throws Exception {
+        ModConfig baseline = new ModConfig();
+        List<String> before = payloads(baseline);
+        var fields = baseline.terrainProfile().getClass().getDeclaredFields();
+        assertEquals(10, fields.length, "地形字段增减后须重新审查缓存依赖");
+        for (Field field : fields) {
+            ModConfig changed = new ModConfig();
+            field.setAccessible(true);
+            Number value = (Number) field.get(changed.terrainProfile());
+            if (field.getType() == int.class) field.setInt(changed.terrainProfile(), value.intValue() + 1);
+            else field.setDouble(changed.terrainProfile(), value.doubleValue() + 0.1);
+            changed.sanitize();
+            assertBothChanged(before, payloads(changed));
+        }
+        baseline.client().setLoadingProgressEnabled(false);
+        baseline.performance().setGameplayThreadCap(1);
+        assertEquals(before, payloads(baseline), "显示或调度预算不能触发形态缓存失效");
+    }
+
+    @Test
     void currentGridStepSurvivesJsonSnapshotAndClamp() {
         PathfindingCostConfig config = GSON.fromJson("{\"pathGridStep\":16}", PathfindingCostConfig.class);
         config.sanitize();

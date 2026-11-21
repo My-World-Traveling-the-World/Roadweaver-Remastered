@@ -55,7 +55,8 @@ public final class RoadGenerationConfig implements SubConfig {
         averagingRadius = Math.max(RoadConstants.AVERAGING_RADIUS_MIN,
                 Math.min(RoadConstants.AVERAGING_RADIUS_MAX, averagingRadius));
         tunnelClearHeight = Math.max(2, Math.min(16, tunnelClearHeight));
-        maxSlopeStepPerTwoSegments = Math.max(0, Math.min(RoadConstants.MAX_SLOPE_STEP_MAX, maxSlopeStepPerTwoSegments));
+        // 数值只表示启用后的上限；关闭统一由 slopeLimitEnabled 控制，避免 0 在不同求解器里语义相反。
+        maxSlopeStepPerTwoSegments = Math.max(1, Math.min(RoadConstants.MAX_SLOPE_STEP_MAX, maxSlopeStepPerTwoSegments));
         bridgeMinWaterDepth = Math.max(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MIN,
                 Math.min(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MAX, bridgeMinWaterDepth));
         bridgeDeckClearance = Math.max(RoadConstants.BRIDGE_DECK_CLEARANCE_MIN,

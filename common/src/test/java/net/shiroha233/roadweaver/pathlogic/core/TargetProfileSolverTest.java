@@ -65,6 +65,37 @@ class TargetProfileSolverTest {
                         ProfileDpSource.Constraints constraints) {}
 
     @Test
+    void zeroNormalizesToOneAndExplicitSwitchAloneDisablesSlope() {
+        for (int requested : new int[]{0, 1, 8}) {
+            var config = new ModConfig();
+            config.roadAppearance().setMaxSlopeStepPerTwoSegments(requested);
+            config.sanitize();
+            int expected = Math.max(1, requested);
+            assertEquals(expected, config.maxSlopeStepPerTwoSegments());
+            var runtime = RoadGenerationConfig.from(config);
+            assertEquals(expected, runtime.snapshot().maxSlopeStepPerTwoSegments());
+            var called = new AtomicReference<Call>();
+            var result = TargetProfileSolver.solve(null, centers(), TERRAIN, TERRAIN, CROSSING,
+                    TUNNEL, PINNED, 71, 71, runtime, LIMITS, null, (i, c) -> 72,
+                    (t, c, cut, fill, step, two, constraints) -> {
+                        called.set(new Call(t, c, cut, fill, step, two, constraints));
+                        return Optional.of(t);
+                    });
+            assertTrue(result.isPresent());
+            assertNotNull(called.get());
+            assertEquals(expected, called.get().perTwo());
+        }
+        var config = new ModConfig();
+        config.roadAppearance().setMaxSlopeStepPerTwoSegments(0);
+        config.roadAppearance().setSlopeLimitEnabled(false);
+        var result = TargetProfileSolver.solve(null, centers(), TERRAIN, TERRAIN, CROSSING,
+                TUNNEL, PINNED, 71, 71, RoadGenerationConfig.from(config), LIMITS, null,
+                (i, c) -> { throw new AssertionError("关闭后不应采样"); },
+                (t, c, cut, fill, step, two, constraints) -> { throw new AssertionError("关闭后不应求解"); });
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
     void passesSeparateBridgeTunnelPinsAndProductionLimitsThenReturnsSolvedProfile() {
         var calls = new AtomicReference<Call>();
         var samples = new ArrayList<Integer>();

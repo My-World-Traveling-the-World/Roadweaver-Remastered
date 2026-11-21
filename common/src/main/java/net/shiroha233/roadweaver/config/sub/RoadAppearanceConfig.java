@@ -69,7 +69,8 @@ public final class RoadAppearanceConfig implements SubConfig {
         tunnelClearHeight = Math.max(RoadConstants.TUNNEL_CLEAR_HEIGHT_MIN, Math.min(RoadConstants.TUNNEL_CLEAR_HEIGHT_MAX, tunnelClearHeight));
         bumpCutMaxBlocks = Math.max(0, Math.min(24, bumpCutMaxBlocks));
         bumpCutMaxColumnRatio = Math.max(0.0D, Math.min(1.0D, bumpCutMaxColumnRatio));
-        maxSlopeStepPerTwoSegments = Math.max(0, Math.min(RoadConstants.MAX_SLOPE_STEP_MAX, maxSlopeStepPerTwoSegments));
+        // 数值只表示启用后的上限；关闭统一由 slopeLimitEnabled 控制，避免 0 在不同求解器里语义相反。
+        maxSlopeStepPerTwoSegments = Math.max(1, Math.min(RoadConstants.MAX_SLOPE_STEP_MAX, maxSlopeStepPerTwoSegments));
     }
 
     @Override
