@@ -1,0 +1,102 @@
+[
+  {
+    "id": "R1",
+    "mutation": "隧道权限不参与高程窗口",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/TargetProfileRepair.java",
+    "tests": 26,
+    "failed": 3,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "a6de297989e22a2313aa02652f10d7f013c67aabdb5ea9e461d57d471f19ab5c"
+  },
+  {
+    "id": "R2",
+    "mutation": "修复器重新发布原地形跳变",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfileFallback.java",
+    "tests": 26,
+    "failed": 4,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "e16ac6c9030dc032c3d0cc358e36ec38a187f5f042f10bbf2ec37924aafa22ce"
+  },
+  {
+    "id": "R3",
+    "mutation": "丢掉没有地表洞口的深挖引道",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathfinding/TunnelFootprintSampler.java",
+    "tests": 26,
+    "failed": 4,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "15f5cdfa97edc50cbc021620c10ddfa234fb27550c3b1de37e94e52543a68270"
+  },
+  {
+    "id": "R4",
+    "mutation": "Road正式入口断开物理隧道选择器",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/Road.java",
+    "tests": 26,
+    "failed": 1,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "a73ae0406ebc345c951ba9791e5bf00ac3084b90db251736f233cce17fc344c0"
+  },
+  {
+    "id": "R5",
+    "mutation": "包络漏掉隔站坡限",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile/ProfileFeasibility.java",
+    "tests": 26,
+    "failed": 5,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError",
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "753b127f46e71b4403894b8a044b5151f93349cdf59f83d17e32a71459c54dff"
+  },
+  {
+    "id": "R6",
+    "mutation": "普通地表挖方取消施工上限",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/TargetProfileRepair.java",
+    "tests": 26,
+    "failed": 1,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "a6de297989e22a2313aa02652f10d7f013c67aabdb5ea9e461d57d471f19ab5c"
+  },
+  {
+    "id": "R7",
+    "mutation": "TargetY正式入口旁路约束修复",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/TargetYComputation.java",
+    "tests": 26,
+    "failed": 1,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "6f41d810c2cad72fa8aa179e46a3bf1affd503512da0a2722c130030547579d2"
+  },
+  {
+    "id": "R8",
+    "mutation": "洞口重新被当成覆土洞身",
+    "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/TargetProfileRepair.java",
+    "tests": 26,
+    "failed": 1,
+    "failureTypes": [
+      "org.opentest4j.AssertionFailedError"
+    ],
+    "restoredSha256": "a6de297989e22a2313aa02652f10d7f013c67aabdb5ea9e461d57d471f19ab5c"
+  }
+]

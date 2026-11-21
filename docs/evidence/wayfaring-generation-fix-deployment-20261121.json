@@ -1,0 +1,66 @@
+{
+  "state": "deployed-hashes-verified",
+  "time": "2026-11-21T23:54:07.26296+08:00",
+  "instance": "WAYFARING",
+  "entries": [
+    {
+      "id": "roadweaver",
+      "version": "2.3.1-1.21.1-plaincraft-direct-core.0.9.106",
+      "jar": "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.106.jar",
+      "sha256": "be5810eab430cc5c889bd715840d34beda49745cf56b86c0b6ca33828cd68dcf",
+      "bytes": 7153544,
+      "tests": 1819,
+      "productionHead": "38c159b",
+      "previousJar": "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.104.jar",
+      "previousSha256": "e2aa074ee6d20c0cd95021f0c2fe8279886667188772d5d66c1bbc3484671a77"
+    },
+    {
+      "id": "plaincraft_great_wall",
+      "version": "0.7.128-api-standardization",
+      "jar": "plaincraft-great-wall-0.7.128-api-standardization.jar",
+      "sha256": "6f0d884dceae23ac1d9ed1ddad8e83bde38bb1e9691dd81ea78f847bd910927a",
+      "bytes": 3685365,
+      "tests": 1000,
+      "productionHead": "fe9989ef",
+      "previousJar": "plaincraft-great-wall-0.7.127-api-standardization.jar",
+      "previousSha256": "32d420ea31cb649754bde68f5d50df243891e8caa536653b0133e80e46a9b788"
+    }
+  ],
+  "backupRelativeToWorkspace": "build/wayfaring-generation-fix-20261121/backup",
+  "rollbackDryRunPassed": true,
+  "rollbackApplied": false,
+  "gameStarted": false,
+  "configsOrSavesChanged": false,
+  "postflight": {
+    "activeJarCount": 533,
+    "targetIds": {
+      "plaincraft_great_wall": [
+        [
+          "plaincraft-great-wall-0.7.128-api-standardization.jar",
+          "0.7.128-api-standardization"
+        ]
+      ],
+      "roadweaver": [
+        [
+          "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.106.jar",
+          "2.3.1-1.21.1-plaincraft-direct-core.0.9.106"
+        ]
+      ],
+      "roadweaver_api": [
+        [
+          "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.106.jar!/META-INF/jars/roadweaver-api.jar",
+          "1.0.0"
+        ]
+      ],
+      "streamsreflowing": [
+        [
+          "streamsreflowing-2.12.8-fix10.jar",
+          "2.12.8-fix10"
+        ]
+      ]
+    },
+    "publicRoadApiClassesUnchanged": 26,
+    "unchangedRiverSha256": "ad3dfd9809cceba3ce26c1f06ace79498a35e19e0da85bd982580aa524257b19",
+    "thirdPartyMetadataWithControlCharacters": 7
+  }
+}

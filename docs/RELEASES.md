@@ -3,6 +3,20 @@
 > 本节是**持久台账**（不是临时文档）：每次出可部署 jar 都必须记一条，含 commit / 改动 / 回归 / jar 体积 / SHA-256 / 回退方式。
 > 旧仓库（`D:\云游四海-Mod源码\roadweaver`）的历史版本条目在它自己的 `roadweaver-变更历史.md` 里，本项目从 0.9.099 起独立记账。
 
+## 0.9.106 现场高程修复（2026-11-21，第97轮，已部署待实测）
+
+| 项 | 值 |
+| --- | --- |
+| 生产提交 / 测试提交 | `38c159b` / `7816397` |
+| 成品 | `fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.106.jar` |
+| 体积 | 7153544 B |
+| SHA-256 | `be5810eab430cc5c889bd715840d34beda49745cf56b86c0b6ca33828cd68dcf` |
+| 改动 | 地表约束无解时按物理判据选隧道后重算；保留洞口和深挖引道，拒绝不可施工剖面；含0.9.105的新版配置菜单 |
+| 回归 | 1819/0/0/0；标准Fabric构建和API验包通过，7类错误包被拒；8组高程负控均红，逐组恢复后重跑全套 |
+| 安装 | 23:54已装WAYFARING，与长城0.7.128同批更新；河流fix10、配置及存档未变，待新世界实测 |
+| 回退 | 关闭游戏后到工作区 `build/wayfaring-generation-fix-20261121`，先预演 `Rollback.ps1`；加 `-Apply` 恢复已验SHA的道路0.9.104和长城0.7.127。回退包不撤销已生成的方块 |
+| 证据 | [高程变异](evidence/road-profile-repair-mutations-20261121.json) · [部署核验](evidence/wayfaring-generation-fix-deployment-20261121.json) |
+
 ## 0.9.105 配置统一接线与分类（2026-11-21，第95轮，未部署）
 
 | 项 | 值 |
