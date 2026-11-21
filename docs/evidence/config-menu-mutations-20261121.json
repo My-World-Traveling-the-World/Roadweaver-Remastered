@@ -1,0 +1,208 @@
+{
+  "date": "2026-11-21",
+  "productionCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+  "positiveFocused": {
+    "tests": 35,
+    "skipped": 0,
+    "aborted": 0,
+    "failed": 0
+  },
+  "mutations": [
+    {
+      "id": "C1",
+      "change": "算法载荷遗漏地形配置",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/ConfigService.java",
+      "time": "2026-11-21T19:05:49.141049+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "65b0fa938fc45e5f6ec58956938a4651e044802dc2eb04e84a46139419a22d22",
+      "log": "build\\config-checks\\C1.log",
+      "logSha256": "bbed42f911c522f3044eaf6ae4301bb3d4fdd169877119bbdcaadcd6edcd1b26"
+    },
+    {
+      "id": "C2",
+      "change": "持久配置重新接受零坡度",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/sub/RoadAppearanceConfig.java",
+      "time": "2026-11-21T19:06:04.308863+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "dcf4f123640f58fd61715733d96aaa3575a69e1accecfc6886ec7eae18effd75",
+      "log": "build\\config-checks\\C2.log",
+      "logSha256": "92aac9857a55fbe9fdcd2440387e37cb82a17baa123af130bd9200a1ace8577f"
+    },
+    {
+      "id": "C3",
+      "change": "菜单setter保存原值而非请求值",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/meta/ConfigOption.java",
+      "time": "2026-11-21T19:06:19.699862+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 2,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError",
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "847485b0f06e9e6008ec4d6cc8e50ce6ad87ec60d5670c339d099491b9fd9934",
+      "log": "build\\config-checks\\C3.log",
+      "logSha256": "a27a7f4769adf845cf76663a3a2dcefc8f1a25cea92dcae4f1001e3f117bab8e"
+    },
+    {
+      "id": "C4",
+      "change": "动态菜单错误放宽为开局上限",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/meta/PlanningKeys.java",
+      "time": "2026-11-21T19:07:37.217918+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 2,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError",
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "4c40eaffac77f5b008eb48875f9e2e3c1bf6f23b872eeeba2a0e82c5143bac6f",
+      "log": "build\\config-checks\\C4.log",
+      "logSha256": "066344f94898efcab3f5de092f959541a6a756fa4530e326186b8108280258a6"
+    },
+    {
+      "id": "C5",
+      "change": "坡度权重接回硬编码",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/bridge/ConfiguredRouteSolvers.java",
+      "time": "2026-11-21T19:07:47.346205+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 4,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError",
+        "org.opentest4j.AssertionFailedError",
+        "org.opentest4j.AssertionFailedError",
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "8eaca96ea744b7756e8926bbc5b3573087d148f36bcd0eff55ce8db546679bc3",
+      "log": "build\\config-checks\\C5.log",
+      "logSha256": "e8effce86da2e39cbdd3283c6d311c610ee8a1824e3ec3a23d81cbec7060c63d"
+    },
+    {
+      "id": "C6",
+      "change": "保形权重接回硬编码",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/bridge/ConfiguredRouteSolvers.java",
+      "time": "2026-11-21T19:07:57.208844+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "8eaca96ea744b7756e8926bbc5b3573087d148f36bcd0eff55ce8db546679bc3",
+      "log": "build\\config-checks\\C6.log",
+      "logSha256": "d67619ed21a898f6eeaca917743188ce092100439de108de39a1d9b7cd953106"
+    },
+    {
+      "id": "C7",
+      "change": "桥灯间隔接回固定16格",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/pathlogic/bridge/BridgeSegmentPlannerNew.java",
+      "time": "2026-11-21T19:10:04.503625+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "8409c12c238295d4096a32da2ff11e49d2353deb94b07922d0b0db77b38d3eef",
+      "log": "build\\config-checks\\C7.log",
+      "logSha256": "fcb07eb5b7d1189071411abc0a0cc855579e20194984f9bd1798821cc1cc6846"
+    },
+    {
+      "id": "C8",
+      "change": "拓扑入口旁路配置度量",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/planning/impl/PipelinePlanner.java",
+      "time": "2026-11-21T19:10:16.244360+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "6e84703b993d6f1fe0fa1eb41c87fce96018fe8c02fc4acf17733e3674b4d945",
+      "log": "build\\config-checks\\C8.log",
+      "logSha256": "0c64bd7de33772989e25b4eb8b395cbc022178cb94c2436c062b2d4f9130ddfa"
+    },
+    {
+      "id": "C9",
+      "change": "JSON夹取不再拦截非有限数",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/sub/PlanningConfig.java",
+      "time": "2026-11-21T19:10:33.823887+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "3ca913a3740c19aff8ab883e5ff35ff466c96ac85970c6d62efee356e89a16cd",
+      "log": "build\\config-checks\\C9.log",
+      "logSha256": "f7e9e89af64dd0291e4710fac37bdc9acafdac35a2faac5fdf2b4bc03d5b2219"
+    },
+    {
+      "id": "C10",
+      "change": "软避障权重接回硬编码",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/bridge/ConfiguredRouteSolvers.java",
+      "time": "2026-11-21T19:10:44.852350+08:00",
+      "baseCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+      "tests": 35,
+      "skipped": 0,
+      "aborted": 0,
+      "failed": 1,
+      "exceptionTypes": [
+        "org.opentest4j.AssertionFailedError"
+      ],
+      "assertionRed": true,
+      "restored": true,
+      "sourceSha256": "8eaca96ea744b7756e8926bbc5b3573087d148f36bcd0eff55ce8db546679bc3",
+      "log": "build\\config-checks\\C10.log",
+      "logSha256": "a03b17356588b5b4519c5a8ff13b9b1399602d42dc2b2ce30620f3c9a34e78e2"
+    }
+  ],
+  "scope": "Real JUnit assertions; not a Minecraft UI or world-generation playtest. Each file restored using git checkout and SHA256."
+}

@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-21",
+  "productionCommit": "d4f954b10a44edf943349c8e275ad87c684a7ef6",
+  "versionCommit": "fa58a5c481358e3a6734b4a37bdb3363c49817d3",
+  "version": "2.3.1-1.21.1-plaincraft-direct-core.0.9.105",
+  "jar": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.105.jar",
+  "bytes": 7147217,
+  "sha256": "140fad6666027b6c1e0fa251ceeec2197157380b1d10dcb74f64b21ea28f66aa",
+  "regression": {
+    "tests": 1800,
+    "skipped": 0,
+    "aborted": 0,
+    "failed": 0
+  },
+  "fabricBuild": "BUILD SUCCESSFUL",
+  "embeddedApiRegression": {
+    "rejectedMalformedPackages": 7
+  },
+  "buildLog": "build/config-checks/final-build.log",
+  "buildLogSha256": "9d2d593a58db6ea9e017cb1d5085152cf136b11caa6a61f9f9e775a8562b728d",
+  "deployed": false,
+  "installedVersion": "0.9.104",
+  "playtested": false,
+  "sourceCommit": "f039bf78e4ac19a8e682d33b4341014f93eaf9d1",
+  "packagedMenuOptionsPerLanguage": 196,
+  "packagedLegacySections": 0
+}
