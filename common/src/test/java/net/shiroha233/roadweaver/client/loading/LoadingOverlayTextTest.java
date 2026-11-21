@@ -154,14 +154,14 @@ class LoadingOverlayTextTest {
 
     @Test
     void 详情行数必须随阶段与回退原因变化() {
-        assertEquals(7, LoadingOverlayText.detailLineCount(null, null));
-        assertEquals(7, LoadingOverlayText.detailLineCount(null, ""));
-        assertEquals(8, LoadingOverlayText.detailLineCount(null, "no_opencl"));
-        assertEquals(9, LoadingOverlayText.detailLineCount(
-                InitialGenerationStage.ROAD_GENERATION, null));
+        assertEquals(8, LoadingOverlayText.detailLineCount(null, null));
+        assertEquals(8, LoadingOverlayText.detailLineCount(null, ""));
+        assertEquals(9, LoadingOverlayText.detailLineCount(null, "no_opencl"));
         assertEquals(10, LoadingOverlayText.detailLineCount(
+                InitialGenerationStage.ROAD_GENERATION, null));
+        assertEquals(11, LoadingOverlayText.detailLineCount(
                 InitialGenerationStage.ROAD_GENERATION, "no_opencl"));
-        assertEquals(9, LoadingOverlayText.detailLineCount(
+        assertEquals(10, LoadingOverlayText.detailLineCount(
                 InitialGenerationStage.POST_PROCESSING, null));
     }
 }

@@ -614,5 +614,7 @@
   "config.roadweaver.path_grid_step": "Pathfinding grid spacing (blocks)",
   "config.roadweaver.path_grid_step.tooltip": "Sampling spacing for BAND/Fast Marching and local terrain repair. Larger spacing means fewer samples and coarser detail; it does not set road width or final station spacing.",
   "config.roadweaver.pathfinding_algorithm.fixed_band": "Pathfinding: BAND (Finsler metric + Fast Marching + elastic band).",
-  "config.roadweaver.planning_algorithm.fixed_pipeline": "Planning algorithm: PIPELINE (geodesic MST)."
+  "config.roadweaver.planning_algorithm.fixed_pipeline": "Planning algorithm: PIPELINE (geodesic MST).",
+  "gui.roadweaver.initgen.stage.corridor_check": "Checking route corridors",
+  "gui.roadweaver.initgen.round": " · Round %s"
 }

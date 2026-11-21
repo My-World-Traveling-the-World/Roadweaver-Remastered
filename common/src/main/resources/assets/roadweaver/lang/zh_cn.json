@@ -614,5 +614,7 @@
   "config.roadweaver.slope_by_arc_length": "坡度按真实弧长归一",
   "config.roadweaver.slope_by_arc_length.tooltip": "斜向一步实际走 √2 格，按站号限坡会让斜向更陡。开启后按相邻站真实水平距离换算（只放宽长边，关掉时与旧行为逐位相同）。默认关闭，建议先开关对比同一片区域。",
   "config.roadweaver.path_grid_step": "寻路网格间距（方块）",
-  "config.roadweaver.path_grid_step.tooltip": "BAND/Fast Marching及局部地形修复的采样间距。数值越大采样点越少、细节越粗；不代表道路宽度或最大站距。"
+  "config.roadweaver.path_grid_step.tooltip": "BAND/Fast Marching及局部地形修复的采样间距。数值越大采样点越少、细节越粗；不代表道路宽度或最大站距。",
+  "gui.roadweaver.initgen.stage.corridor_check": "检查路线走廊",
+  "gui.roadweaver.initgen.round": " · 第%s轮"
 }

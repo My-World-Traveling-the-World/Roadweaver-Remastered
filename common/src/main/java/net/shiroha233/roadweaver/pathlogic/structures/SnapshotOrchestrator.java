@@ -336,8 +336,8 @@ public final class SnapshotOrchestrator {
                 ? ThreadPoolManager.TaskRole.INITIAL
                 : requestedRole == null ? ThreadPoolManager.TaskRole.STRUCTURE : requestedRole;
         if (trackInitialProgress) {
-            InitialGenerationProgressTracker.enterStage(
-                    InitialGenerationStage.PLANNING, "predicting_road_corridor_structures");
+            // 此时已生成候选路径，走廊细查只更新子操作，保留真实路径阶段。
+            InitialGenerationProgressTracker.enterCorridorCheck();
         }
 
         return ThreadPoolManager.supplyAsync(predictionRole, () -> {

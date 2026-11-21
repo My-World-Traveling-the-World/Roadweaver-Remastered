@@ -189,11 +189,21 @@ public final class LoadingOverlayText {
      * <p>渲染器要先知道这个数才能算出面板高度，所以它是<b>布局</b>的一部分，
      * 但它只依赖阶段与回退原因两件事，和绘制无关，所以放这里。</p>
      */
+    /** 只把真实经过的分支列入步进器，未来公共阶段保留空心节点。 */
+    public static java.util.List<InitialGenerationStage> displayStages(java.util.List<InitialGenerationStage> visited) {
+        var result = new java.util.ArrayList<InitialGenerationStage>(visited);
+        for (var stage : java.util.List.of(InitialGenerationStage.ROAD_GENERATION,
+                InitialGenerationStage.POST_PROCESSING, InitialGenerationStage.FINISHED)) {
+            if (!result.contains(stage)) result.add(stage);
+        }
+        return java.util.List.copyOf(result);
+    }
+
     public static int detailLineCount(InitialGenerationStage stage, String fallbackReason) {
         boolean showDebug = stage == InitialGenerationStage.ROAD_GENERATION
                 || stage == InitialGenerationStage.POST_PROCESSING;
         boolean showFallback = fallbackReason != null && !fallbackReason.isBlank();
         // summary + 2 route phases + mode + step + device + tiles + throughput
-        return 7 + (showDebug ? 2 : 0) + (showFallback ? 1 : 0);
+        return 8 + (showDebug ? 2 : 0) + (showFallback ? 1 : 0);
     }
 }

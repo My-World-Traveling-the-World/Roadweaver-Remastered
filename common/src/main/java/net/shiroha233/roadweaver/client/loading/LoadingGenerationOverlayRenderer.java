@@ -92,26 +92,20 @@ public final class LoadingGenerationOverlayRenderer {
         Font font = mc.font;
         int sw = mc.getWindow().getGuiScaledWidth();
         int sh = mc.getWindow().getGuiScaledHeight();
-        // 卡片占据屏幕宽度 9/10；线稿带固定 120px（调好的显示比例），详情区一直显示，不再折叠。
-        int cardWidth = Math.max(360, (sw * 9) / 10);
+        // 布局与绘制使用同一份采样会话，回退原因不能在算高度后再换来源。
+        TerrainSamplingSessionSnapshot session = samplingSession(mc, config);
+        String fallbackReason = session.hasFallbackReason() ? session.fallbackReason() : snapshot.fallbackReason();
+        int detailLines = LoadingOverlayText.detailLineCount(snapshot.stage(), fallbackReason);
+        LoadingCardLayout layout = LoadingCardLayout.fit(sw, sh, 360, detailLines);
+        int cardWidth = layout.width();
         int innerWidth = cardWidth - CARD_PADDING * 2;
-        int bandHeight = 120;
-
-        int detailLines = detailLineCount(snapshot);
-        int cardHeight = CARD_PADDING
-                + LINE                  // title row
-                + bandHeight            // road band
-                + 6
-                + LINE                  // stepper
-                + 4
-                + LINE                  // status
-                + LINE                  // eta
-                + detailLines * LINE + 4
-                + CARD_PADDING;
-
-        int left = (sw - cardWidth) / 2;
-        // 道路卡锚定在屏幕底部居中，但抬离底边约屏幕高的 12%，不贴角落。
-        int top = Math.max(20, sh - cardHeight - Math.max(40, (sh * 12) / 100));
+        int bandHeight = layout.bandHeight();
+        int cardHeight = layout.height();
+        graphics.pose().pushPose();
+        graphics.pose().translate(layout.x(), layout.y(), 0);
+        graphics.pose().scale(layout.scale(), layout.scale(), 1F);
+        int left = 0;
+        int top = 0;
         int right = left + cardWidth;
         int bottom = top + cardHeight;
         int x = left + CARD_PADDING;
@@ -130,8 +124,13 @@ public final class LoadingGenerationOverlayRenderer {
         String pct = snapshot.overallPercent() + "%";
         graphics.drawString(font, pct, right - CARD_PADDING - font.width(pct), y, THEME, false);
         Component stage = Component.translatable(snapshot.stageLabel());
-        graphics.drawString(font, stage,
-                right - CARD_PADDING - font.width(pct) - 6 - font.width(stage), y, TEXT_ACCENT, false);
+        // 真实扩域允许重算，但必须告诉玩家这是第几轮。
+        if (snapshot.planningRound() > 0 && snapshot.stage().basePercent() < 60) {
+            stage = stage.copy().append(Component.translatable("gui.roadweaver.initgen.round", snapshot.planningRound()));
+        }
+        int stageX = x + 10 + font.width(title) + 8;
+        drawFitted(graphics, font, stage, stageX, y,
+                Math.max(0, right - CARD_PADDING - font.width(pct) - 6 - stageX), TEXT_ACCENT);
 
         y += LINE;
         drawBand(graphics, x, y, innerWidth, bandHeight, snapshot);
@@ -150,7 +149,8 @@ public final class LoadingGenerationOverlayRenderer {
         drawFitted(graphics, font, etaLine(snapshot), x, y, innerWidth, TEXT_MUTED);
 
         y += LINE + 4;
-        drawDetail(graphics, mc, font, config, snapshot, x, y, innerWidth);
+        drawDetail(graphics, font, snapshot, session, fallbackReason, x, y, innerWidth);
+        graphics.pose().popPose();
     }
 
     // -----------------------------------------------------------------------------------------
@@ -265,9 +265,9 @@ public final class LoadingGenerationOverlayRenderer {
 
     private static void drawStepper(GuiGraphics graphics, int x, int y, int width,
                                     InitialGenerationProgressSnapshot snapshot) {
-        InitialGenerationStage[] stages = InitialGenerationStage.values();
-        int count = stages.length;
-        int activeOrdinal = snapshot.stage().ordinal();
+        var stages = LoadingOverlayText.displayStages(snapshot.visitedStages());
+        int count = stages.size();
+        int activeOrdinal = stages.indexOf(snapshot.stage());
         int step = count > 1 ? width / (count - 1) : width;
         int lineY = y + 5;
         graphics.fill(x, lineY, x + width, lineY + 1, STEP_PENDING);
@@ -289,17 +289,10 @@ public final class LoadingGenerationOverlayRenderer {
     // 详情区：保留道路此前的全部字段，按阶段切换逻辑原样呈现。
     // -----------------------------------------------------------------------------------------
 
-    /** 详情区占几行 —— 计算在 {@link LoadingOverlayText}，这里只做取字段。 */
-    private static int detailLineCount(InitialGenerationProgressSnapshot snapshot) {
-        return LoadingOverlayText.detailLineCount(snapshot.stage(), snapshot.fallbackReason());
-    }
-
-    private static int drawDetail(GuiGraphics graphics, Minecraft mc, Font font, ModConfig config,
-                                  InitialGenerationProgressSnapshot snapshot, int x, int y, int width) {
-        TerrainSamplingSessionSnapshot samplingSession = samplingSession(mc, config);
-        String fallbackReason = samplingSession.hasFallbackReason()
-                ? samplingSession.fallbackReason()
-                : snapshot.fallbackReason();
+    private static int drawDetail(GuiGraphics graphics, Font font,
+                                  InitialGenerationProgressSnapshot snapshot,
+                                  TerrainSamplingSessionSnapshot samplingSession, String fallbackReason,
+                                  int x, int y, int width) {
         boolean showFallback = fallbackReason != null && !fallbackReason.isBlank();
         boolean showDebug = snapshot.stage() == InitialGenerationStage.ROAD_GENERATION
                 || snapshot.stage() == InitialGenerationStage.POST_PROCESSING;

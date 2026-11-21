@@ -135,7 +135,32 @@ public final class InitialGenerationProgressTracker {
         if (stage != null) STAGE_PLANNED[stage.ordinal()].set(true);
     }
 
+    // 保存真实进入顺序，粗采样与精采样不是两条必经的串行分支。
+    private static final java.util.concurrent.CopyOnWriteArrayList<InitialGenerationStage> VISITED_STAGES = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final AtomicInteger PLANNING_ROUND = new AtomicInteger();
+    private static final AtomicBoolean CORRIDOR_CHECK = new AtomicBoolean();
+
+    /** 扩域是明确的新一轮工作，不能让上一轮的勾选冒充本轮已完成。 */
+    public static void beginPlanningRound(int round) {
+        if (ROUTE_GENERATION_LOCKED.get()) return;
+        PLANNING_ROUND.set(Math.max(1, round));
+        VISITED_STAGES.clear();
+        enterStage(InitialGenerationStage.PLANNING, "discovering_structures");
+    }
+
+    /** 路径后的走廊复查是子操作，不把主阶段倒退到初始结构扫描。 */
+    public static void enterCorridorCheck() {
+        if (!ROUTE_GENERATION_LOCKED.get() && STAGE.get() != InitialGenerationStage.FINISHED) {
+            CORRIDOR_CHECK.set(true);
+            CURRENT_OPERATION.set("predicting_road_corridor_structures");
+        }
+    }
+
     public static void reset() {
+        VISITED_STAGES.clear();
+        VISITED_STAGES.add(InitialGenerationStage.PLANNING);
+        PLANNING_ROUND.set(0);
+        CORRIDOR_CHECK.set(false);
         STARTED_AT.set(System.currentTimeMillis());
         STAGE.set(InitialGenerationStage.PLANNING);
         PEAK_OVERALL_PERCENT.set(0);
@@ -191,6 +216,7 @@ public final class InitialGenerationProgressTracker {
     }
 
     public static void finish() {
+        CORRIDOR_CHECK.set(false);
         STAGE.set(InitialGenerationStage.FINISHED);
         CURRENT_OPERATION.set("finished");
         ACTIVE_WORKERS.set(0);
@@ -208,7 +234,9 @@ public final class InitialGenerationProgressTracker {
         if (stage == InitialGenerationStage.ROAD_GENERATION) {
             ROUTE_GENERATION_LOCKED.set(true);
         }
+        CORRIDOR_CHECK.set(false);
         STAGE.set(stage);
+        VISITED_STAGES.addIfAbsent(stage);
         if (operation != null && !operation.isBlank()) {
             CURRENT_OPERATION.set(operation);
         }
@@ -566,7 +594,8 @@ public final class InitialGenerationProgressTracker {
         return new InitialGenerationProgressSnapshot(
                 active,
                 stage,
-                stage.labelKey(),
+                CORRIDOR_CHECK.get()
+                        ? "gui.roadweaver.initgen.stage.corridor_check" : stage.labelKey(),
                 startedAt,
                 elapsed,
                 overallPercent,
@@ -612,7 +641,9 @@ public final class InitialGenerationProgressTracker {
                 AccurateSamplingStats.updateAndGetSamplesPerSecond(),
                 phaseProgress(RoutePhase.ORIGINAL),
                 phaseProgress(RoutePhase.LOCAL_REPAIR),
-                phaseProgress(RoutePhase.CANDIDATE)
+                phaseProgress(RoutePhase.CANDIDATE),
+                PLANNING_ROUND.get(),
+                java.util.List.copyOf(VISITED_STAGES)
         );
     }
 

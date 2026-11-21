@@ -246,6 +246,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.loading.LoadingOverlayTextTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.client.loading.StartupProgressUiTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.map.MapSearchControllerTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.client.map.MapRoutePreloadEstimatorTest"),

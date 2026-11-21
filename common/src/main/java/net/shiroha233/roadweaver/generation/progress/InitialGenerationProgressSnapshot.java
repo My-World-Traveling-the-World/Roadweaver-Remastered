@@ -53,10 +53,16 @@ public record InitialGenerationProgressSnapshot(
         double accurateBaseHeightPerSec,
         RoutePhaseProgress originalRoutes,
         RoutePhaseProgress localRepairRoutes,
-        RoutePhaseProgress candidateRoutes
+        RoutePhaseProgress candidateRoutes,
+        int planningRound,
+        java.util.List<InitialGenerationStage> visitedStages
 ) {
     /** 提供当前阶段的可读子进度，让界面区分等待和实际工作。 */
     public String subProgressLabel() {
+        // 走廊检查沿用路径主阶段，却应展示结构计数，不能继续显示已完成的路径数。
+        if ("gui.roadweaver.initgen.stage.corridor_check".equals(stageLabel)) {
+            return planningStartsTotal > 0 ? "结构 " + planningStartsDone + "/" + planningStartsTotal : "";
+        }
         return switch (stage) {
             case PLANNING -> planningStartsTotal > 0
                     ? "结构 " + planningStartsDone + "/" + planningStartsTotal
@@ -136,7 +142,9 @@ public record InitialGenerationProgressSnapshot(
                 0.0,
                 RoutePhaseProgress.zero(),
                 RoutePhaseProgress.zero(),
-                RoutePhaseProgress.zero()
+                RoutePhaseProgress.zero(),
+                0,
+                java.util.List.of()
         );
     }
 }

@@ -171,8 +171,8 @@ public final class AsyncPlanningOps {
         final int[] candidateBounds = AdaptiveCandidateBounds
                 .boundsWithMargin(coreBounds, state.margin()).toArray();
         if (startupProgress) {
-            InitialGenerationProgressTracker.enterStage(
-                    InitialGenerationStage.PLANNING, "discovering_structures");
+            // 每次扩域显式发布轮次，界面不把重新规划误认成阶段乱跳。
+            InitialGenerationProgressTracker.beginPlanningRound(state.rounds());
             // Structure discovery is one bounded startup work item. The
             // connection count is published once the topology pass has a
             // stable snapshot, before terrain sampling takes over the HUD.
