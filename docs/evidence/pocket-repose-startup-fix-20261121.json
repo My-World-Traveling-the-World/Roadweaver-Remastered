@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-11-21T10:52:48.7141535+08:00",
+  "installed": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\plaincraft-pocket-repose-stability-0.1.3-pocket-repose-1.5.4.jar",
+  "installed_sha256": "8c5eeec11c1740e4142f0f351186889cbdc252d00912a9886d954093e0f0ea0c",
+  "retired": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\[防崩补丁]Pocket Repose]plaincraft-pocket-repose-stability-0.1.2-nonblocking-chunk-scan.jar",
+  "backup": "D:\\云游四海-Mod源码\\build\\pocket-repose-compat-20261121\\backup\\[防崩补丁]Pocket Repose]plaincraft-pocket-repose-stability-0.1.2-nonblocking-chunk-scan.jar",
+  "old_sha256": "78351f4223435a4e9aa4550a1f91e5d1b34cb92270d273171319caf18ef0b3bf",
+  "upstream_sha256": "a399906910920a31a74adc1f89c6bfeaed365213ee6f6f3353919711c2fc0d32",
+  "active_jars": 533,
+  "minecraft_running_before": 0,
+  "tests": {
+    "name": "restored-build",
+    "exit": 0,
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "failed_methods": []
+  },
+  "mutations": [
+    {
+      "name": "M1-old-target",
+      "exit": 1,
+      "tests": 11,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "mobReturnHasThreeRequiredMappedRedirects()"
+      ],
+      "file": "src/main/java/local/plaincraftpocketrepose/mixin/PocketReposeMixin.java",
+      "mutation": "method = \"findSuitcaseAndTeleportMob\" -> method = \"scanContainerForSuitcases\"",
+      "expected": "mobReturnHasThreeRequiredMappedRedirects"
+    },
+    {
+      "name": "M2-blocking-chunk",
+      "exit": 1,
+      "tests": 11,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "productionChunkAdapterNeverCallsBlockingGetChunk()"
+      ],
+      "file": "src/main/java/local/plaincraftpocketrepose/PocketReposeScanLimiter.java",
+      "mutation": "level.getChunkSource().getChunkNow(chunkX, chunkZ) -> level.getChunk(chunkX, chunkZ)",
+      "expected": "productionChunkAdapterNeverCallsBlockingGetChunk"
+    },
+    {
+      "name": "M3-null-chunk",
+      "exit": 1,
+      "tests": 11,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "absentChunkDoesNotDereferenceReader()"
+      ],
+      "file": "src/main/java/local/plaincraftpocketrepose/ScanAccess.java",
+      "mutation": "return chunk == null ? Map.of() : read.apply(chunk); -> return read.apply(chunk);",
+      "expected": "absentChunkDoesNotDereferenceReader"
+    },
+    {
+      "name": "M4-bad-slot",
+      "exit": 1,
+      "tests": 11,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "brokenSlotReportsExactFailureAndFollowingSlotStillWorks()"
+      ],
+      "file": "src/main/java/local/plaincraftpocketrepose/ScanAccess.java",
+      "mutation": "return empty; -> throw exception;",
+      "expected": "brokenSlotReportsExactFailureAndFollowingSlotStillWorks"
+    },
+    {
+      "name": "M5-version-wildcard",
+      "exit": 1,
+      "tests": 11,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_methods": [
+        "packagedMetadataPinsVerifiedUpstreamAndRegistersBothMixins()"
+      ],
+      "file": "src/main/resources/fabric.mod.json",
+      "mutation": "\"pocket-repose\": \"1.5.4-1.21.1\" -> \"pocket-repose\": \"*\"",
+      "expected": "packagedMetadataPinsVerifiedUpstreamAndRegistersBothMixins"
+    }
+  ],
+  "loader_selected": 786,
+  "loader_changes": {
+    "plaincraft-pocket-repose-stability": [
+      "0.1.2-nonblocking-chunk-scan",
+      "0.1.3-pocket-repose-1.5.4"
+    ]
+  },
+  "validation_limit": "真实成品字节码契约和依赖求解，不包含客户端Mixin实际应用、主菜单或世界返程验收。",
+  "source_commit": "60c9c27"
+}

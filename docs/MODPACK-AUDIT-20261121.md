@@ -1,5 +1,11 @@
 # WAYFARING安装目录核对（2026-11-21）
 
+10:25实机随后揭示本报告边界：Pocket Repose旧补丁的Mixin资源齐全，
+但目标方法已从上游1.5.4删除，实际应用失败。第88轮已在对应工程适配并部署0.1.3，
+新增11项测试及五组变异守卫；重新求解仍786项，仅补丁版本变化。
+详见[修复证据](evidence/pocket-repose-startup-fix-20261121.json)。
+下方完整性和清理前后SHA均为第87轮历史快照；本轮新补丁SHA单独记载，未声称仍与旧补丁相同。
+
 目标：`D:\minecraft\Plain Craft Launcher 2\.minecraft\versions\【云游四海】WAYFARING\mods`。
 当前启用jar为533个；Loader选中786个模组，包含内嵌依赖与内置模组。
 本轮未发现额外的声明级硬依赖或互斥阻断；没有启动游戏，不能据此断言全部运行兼容。
