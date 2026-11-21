@@ -2,14 +2,22 @@
 
 English | [简体中文](README_CN.md)
 
-RoadWeaver generates and builds roads between villages and configured structures in Minecraft. This repository is the remaster for **Minecraft 1.21.1, Fabric and Java 21**.
+RoadWeaver builds a road network between villages and other structures in Minecraft. Follow the roads to discover settlements, cross rivers on bridges, or travel through tunnels under steep terrain.
 
-- Routes adapt to terrain and avoid protected structures. Construction includes ordinary roads, bridges and tunnels.
-- Presets control road materials. Signs, lamps and roadside decorations can be configured.
-- Press **H** in-game to open the road network map, inspect routes, or create connections manually.
+- Roads follow the landscape and route around protected structures.
+- Road surfaces, signs, lamps, and roadside decorations give the network a consistent look.
+- Press **H** to view the road network or draw a connection yourself.
 
-Terrain overhauls change the inputs to planning and construction. Check the [validation notes](docs/VALIDATION.md) before assuming compatibility or performance for a particular modpack.
+## What you need
 
-Developers: start with the [documentation index](docs/README.md), the [current status](docs/STATUS.md), or the [release ledger](docs/RELEASES.md).
+**Minecraft 1.21.1, Fabric Loader 0.16.10 or later, Java 21 or later, Fabric API, and Cloth Config API.** Install the RoadWeaver Remastered mod. The packaged mod includes **RoadWeaver API**; install only one copy of that API.
 
-The original [RoadWeaver](https://github.com/shiroha-233/RoadWeaver) has its own distribution pages on [Modrinth](https://modrinth.com/mod/roadweaver) and [CurseForge](https://www.curseforge.com/minecraft/mc-mods/roadweaver), and a [Discord community](https://discord.gg/tUJMJkbbr2). The mod draws on [Countered's Settlement Roads](https://modrinth.com/mod/countereds-settlement-roads); the map was inspired by [RoadArchitect](https://github.com/FranckRJ/RoadArchitect).
+## Playing with other mods
+
+RoadWeaver works without a river or wall mod. With a compatible StreamsReflowing build, it reads the planned waterways and uses them when routing roads and planning crossings. With [PlainCraft Great Wall](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall), it waits for the wall's startup work and respects the wall's protected footprint when building roads.
+
+With all three installed, startup runs **rivers → Great Wall → roads**. With rivers and roads only, it runs **rivers → roads**.
+
+[Developer documentation](docs/README.md) · [Release notes](docs/RELEASES.md) · [MIT license](LICENSE)
+
+Based on [RoadWeaver by shiroha233](https://github.com/shiroha-233/RoadWeaver), with inspiration from [Countered’s Settlement Roads](https://modrinth.com/mod/countereds-settlement-roads) and [RoadArchitect](https://github.com/FranckRJ/RoadArchitect).
