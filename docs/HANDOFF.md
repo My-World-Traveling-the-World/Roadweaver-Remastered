@@ -1,5 +1,48 @@
 # 交接台账（HANDOFF）
 
+## 第91轮：复核开局进度与H地图调用链（2026-11-21）
+
+### 一、改了什么
+
+仅继续核查并更新台账；无生产代码、配置或安装件变更。
+用户本轮同时询问道路/长城开局进度调用和游戏内默认H键路线地图，不扩大到游戏内补建开发。
+
+### 二、我验证了什么（附变异）
+
+ClientInit:126-130登记默认H，:177-181消费按键并打开RoadMapScreen；
+fabric.mod.json的client入口确实登记ClientInit，初始化也登记地图网络接收器。
+RoadMapScreen:123-144恢复维度缓存并请求视野，:754-781依次加载结构/道路/连接，
+单机经MapSnapshotLoading/MapDataCollector，联机经MapNetworkFabric对应收发；
+MapRoadCollector:33读取RoadShardStorage.queryRect的新版RoadData，
+RoadMapGeometry.visiblePolylines复用实际物理归属视图，RoadMapScreen:193/231绘制道路和连接状态。
+接收结果:912-927核对请求序号和维度，合并快照后推进下一批；未发现H入口或新版数据入口被删。
+MapRoadPolylineCacheTest等地图测试、LoadingOverlayTextTest和进度Tracker测试已显式登记回归套件。
+本轮实际执行离线完整roadJUnitRegressionSuite及fabric:compileJava，
+PASS tests=1779 skipped=0 aborted=0 failed=0，BUILD SUCCESSFUL in 41s。
+日志build/startup-map-ui-check-20261121.log。未新增守卫/测试或做生产变异。
+
+### 三、我没能验证什么
+
+未实际按H、观察线路颜色/筛选/刷新，未验证当前整合包键位冲突、联机端到端同步或完整开局画面。
+现有纯逻辑回归不能证明字体/绘制实际无错；本轮未重新跑长城993项。
+
+### 四、遗留半截的东西
+
+第90轮的预热UI显示缺口均尚未修复；“调用已接通”不能改写为“所有阶段显示完全正常”。
+地图按当前视野和筛选加载，快照有数量上限，不承诺一次展示整个世界全部路线。
+道路0.9.103仍未部署，本轮未替换实际0.9.102。
+
+### 五、下一轮先做什么
+
+按第90轮清单修开局UI状态和布局，再在同一新世界验河流→长城→道路，
+进入世界后按H核对实际道路折线、连接状态、拖动缩放、刷新和重开地图。
+
+### 六、踩到的坑
+
+Gradle首次在沙箱内因native-platform.dll无法初始化失败，授权后离线使用本机缓存成功；
+未为测试访问远端。现有图形相关测试不等价于真实Minecraft界面验收。
+本轮仅本地文档提交，继续遵守既有远端传输限制。
+
 ## 第90轮：开局预热进度界面接线核对（2026-11-21）
 
 ### 一、改了什么
