@@ -35,13 +35,13 @@ public final class PathfindingCostKeys {
             ConfigKey.decimal("orthoStepCost", RoadConstants.DEFAULT_ORTHO_STEP_COST, 0.0, 1000.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "正交步代价", "Orthogonal step cost",
-                    "沿 x/z 方向走一步的基础代价。与对角步代价的比例决定路径偏好哪个方向",
+                    "仅局部修复使用，不改变BAND主度量。沿 x/z 方向走一步的基础代价。与对角步代价的比例决定路径偏好哪个方向",
                     "代价", ""),
 
             ConfigKey.decimal("diagStepCost", RoadConstants.DEFAULT_DIAG_STEP_COST, 0.0, 1000.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "对角步代价", "Diagonal step cost",
-                    "沿斜向走一步的基础代价",
+                    "仅局部修复使用，不改变BAND主度量。沿斜向走一步的基础代价",
                     "代价", "局部修复搜索的对角步成本"),
 
             ConfigKey.integer("pathGridStep", RoadConstants.DEFAULT_PATH_GRID_STEP, RoadConstants.PATH_GRID_STEP_MIN, RoadConstants.PATH_GRID_STEP_MAX,
@@ -53,13 +53,13 @@ public final class PathfindingCostKeys {
             ConfigKey.decimal("heuristicWeight", RoadConstants.DEFAULT_HEURISTIC_WEIGHT, 0.0, 10.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "启发权重", "Heuristic weight",
-                    "局部地形修复搜索的启发倍数；不改变BAND的FMM求解",
+                    "仅局部修复使用，不改变BAND主度量。局部地形修复搜索的启发倍数；不改变BAND的FMM求解",
                     "倍", ""),
 
             ConfigKey.decimal("deviationWeight", RoadConstants.DEFAULT_DEVIATION_WEIGHT, 0.0, 1000.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "偏离权重", "Deviation weight",
-                    "偏离起点终点连线的惩罚权重，防止路绕太远",
+                    "仅局部修复使用，不改变BAND主度量。偏离起点终点连线的惩罚权重，防止路绕太远",
                     "权重", ""),
 
             ConfigKey.decimal("softGradeLimit", RoadConstants.DEFAULT_SOFT_GRADE_LIMIT, 0.0, 1.0D,
@@ -89,7 +89,7 @@ public final class PathfindingCostKeys {
             ConfigKey.integer("elevationWeight", RoadConstants.DEFAULT_ELEVATION_WEIGHT, 0, 1000,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "高程权重", "Elevation weight",
-                    "爬升在总代价里的基础权重",
+                    "仅局部修复使用，不改变BAND主度量。爬升在总代价里的基础权重",
                     "权重", ""),
 
             // BAND实际消费水陆差价，这两个类别及权重仍是有效控制项。
@@ -102,7 +102,7 @@ public final class PathfindingCostKeys {
             ConfigKey.integer("stabilityWeight", RoadConstants.DEFAULT_STABILITY_WEIGHT, 0, 1000,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "稳定性权重", "Stability weight",
-                    "地形稳定度（陡坡/悬崖密度）在总代价里的权重",
+                    "仅局部修复使用，不改变BAND主度量。地形稳定度（陡坡/悬崖密度）在总代价里的权重",
                     "权重", ""),
 
             ConfigKey.integer("waterDepthWeight", RoadConstants.DEFAULT_WATER_DEPTH_WEIGHT, 0, 1000,
@@ -180,25 +180,25 @@ public final class PathfindingCostKeys {
             ConfigKey.decimal("headingFlipCost", 16.0D, 0.0, 100000.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "掉头代价", "Heading flip cost",
-                    "原地掉头的固定代价，防止路径来回折返",
+                    "仅局部修复使用，不改变BAND主度量。原地掉头的固定代价，防止路径来回折返",
                     "代价", ""),
 
             ConfigKey.decimal("headingCurveCost", 0.0D, 0.0, 100000.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "转向代价", "Heading curve cost",
-                    "每次转向的代价，鼓励走直",
+                    "仅局部修复使用，不改变BAND主度量。每次转向的代价，鼓励走直",
                     "代价", ""),
 
             ConfigKey.decimal("headingShortLegBlocks", 48.0D, 1.0D, 512.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "短腿判定长度", "Heading short leg blocks",
-                    "两点间距小于此值算「短腿」",
+                    "仅局部修复使用，不改变BAND主度量。两点间距小于此值算「短腿」",
                     "格", ""),
 
             ConfigKey.decimal("headingShortLegMultiplier", 3.0D, 1.0, 100.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
                     "短腿代价倍数", "Heading short leg multiplier",
-                    "短腿段的转向代价倍数，用来压制密集小折角",
+                    "仅局部修复使用，不改变BAND主度量。短腿段的转向代价倍数，用来压制密集小折角",
                     "倍", "")
     );
 }

@@ -142,6 +142,12 @@ final class ConfigMenuBindingTest {
                         assertTrue(json.has(key), language + ":" + key);
                         assertFalse(json.get(key).getAsString().isBlank(), language + ":" + key);
                     }
+                    if (language.equals("zh_cn")) {
+                        // 实际菜单读语言资源，不能允许元数据保留另一份过时的中文解释。
+                        assertEquals(option.key().nameZh(), json.get(option.labelKey()).getAsString(), option.id());
+                        assertEquals(option.key().tooltipZh(),
+                                json.get(option.labelKey() + ".tooltip").getAsString(), option.id());
+                    }
                     // 数值范围与单位在真实界面中共同展示，不能只检查参数标题翻译。
                     if (option.key().min() != null) {
                         assertTrue(json.has("config.roadweaver.value_range"), language);
