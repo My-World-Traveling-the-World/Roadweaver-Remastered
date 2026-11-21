@@ -795,7 +795,11 @@ public final class Road {
                                  RoadGenerationConfig cfg,
                                  StreamsReflowingCompat.SamplingSession streams) {
         return TargetYComputation.computeTargetY(level, segments, spans, cache, terrain, cfg, streams,
-                connection, routeBridgeMinWaterDepth());
+                connection, routeBridgeMinWaterDepth(),
+                // 物理选址仍经原入口，剖面内核只消费逐站隧道权限，避免反向依赖采样与几何实现。
+                preview -> RoadSpanProfileOps.excavationMask(
+                        segments.stream().map(RoadSegmentPlacement::middlePos).toList(),
+                        PathSpanExtractor.refineTunnelSpans(spans, segments, preview, level, cache)));
     }
 
 

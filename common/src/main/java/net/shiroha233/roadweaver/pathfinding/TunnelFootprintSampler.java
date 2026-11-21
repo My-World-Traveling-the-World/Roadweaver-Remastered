@@ -86,10 +86,12 @@ public final class TunnelFootprintSampler {
             // Otherwise the same stations fall back to ordinary-road paving
             // and are rejected later as cut-too-deep, leaving a gap instead
             // of excavating the planned tunnel.
-            int fallbackStart = buriedStart;
-            int fallbackEnd = buriedEnd;
-            if (fallbackStart > 0 && !bridge[fallbackStart - 1]) fallbackStart--;
-            if (fallbackEnd + 1 < centers.size() && !bridge[fallbackEnd + 1]) fallbackEnd++;
+            // 搜索已经确认中间全是无法按地表施工的引道；只留洞身±1会把这些深挖站丢回普通铺路。
+            // 扫描遇桥即停，边界向内一站，不能借修复吞掉相邻桥或越过路端。
+            int fallbackStart = Math.max(0, leftMouth);
+            if (bridge[fallbackStart]) fallbackStart++;
+            int fallbackEnd = Math.min(centers.size() - 1, rightMouth);
+            if (bridge[fallbackEnd]) fallbackEnd--;
             if (fallbackEnd - fallbackStart + 1 >= TUNNEL_RUN_MIN_LENGTH) {
                 result.add(new RoadSpan(centers.get(fallbackStart), centers.get(fallbackEnd), SpanType.TUNNEL));
                 LOGGER.warn("【深挖段未找到稳定地表洞口，仍保留隧道】 " + "RoadWeaver retained deep-cut tunnel without stable surface mouths "

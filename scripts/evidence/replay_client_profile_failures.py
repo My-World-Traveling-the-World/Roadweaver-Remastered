@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE = ROOT / "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile"
-SOURCES = ("ProfileDpSolver", "ProfilePairTransitions", "CostModel", "ProfileDpSource", "ProfileFallback")
+SOURCES = ("ProfileDpSolver", "ProfilePairTransitions", "CostModel", "ProfileDpSource", "ProfileFallback", "ProfileFeasibility")
 PROBE = r"""
 import java.nio.file.*;
 import java.util.*;
@@ -21,9 +21,15 @@ public class ClientProfileFailureReplay {
             String[] columns = line.split("\t");
             int[] terrain = Arrays.stream(columns[1].split(",")).mapToInt(Integer::parseInt).toArray();
             var solved = ProfileDpSource.solve(terrain, null, 5, 4, 1, 1, ProfileDpSource.Constraints.none());
-            int[] fallback = ProfileFallback.terrainFollowing(terrain, 5, 4, 1, 1, null, null, 8, null);
-            System.out.printf("REPLAY stations=%d dpFeasible=%s fallbackViolations=%d tag=%s%n",
-                    terrain.length, solved.isPresent(), ProfileFallback.violations(fallback, 1, 1), columns[0]);
+            String result;
+            try {
+                int[] fallback = ProfileFallback.terrainFollowing(terrain, 5, 4, 1, 1, null, null, 8, null);
+                result = "violations=" + ProfileFallback.violations(fallback, 1, 1);
+            } catch (IllegalArgumentException infeasible) {
+                result = "rejected-infeasible";
+            }
+            System.out.printf("REPLAY stations=%d dpFeasible=%s fallback=%s tag=%s%n",
+                    terrain.length, solved.isPresent(), result, columns[0]);
         }
     }
 }

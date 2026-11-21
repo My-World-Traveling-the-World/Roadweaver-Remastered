@@ -92,6 +92,20 @@ import static net.shiroha233.roadweaver.pathlogic.core.EndpointProfileOps.*;
  * 判据与阈值一字未改（含缩进）。</p>
  */
 public final class RoadSpanProfileOps {
+    /** 使用当前站序列的精确端点；拒绝靠最近坐标扩大隧道权限。 */
+    public static boolean[] excavationMask(List<BlockPos> centers, List<RoadSpan> spans) {
+        var positions = new HashMap<BlockPos, Integer>();
+        for (int i = 0; i < centers.size(); i++) positions.putIfAbsent(centers.get(i), i);
+        var mask = new boolean[centers.size()];
+        for (var span : spans) {
+            if (span.type() != SpanType.TUNNEL && span.type() != SpanType.TUNNEL_JUNCTION) continue;
+            var a = positions.get(span.start());
+            var b = positions.get(span.end());
+            if (a == null || b == null) throw new IllegalArgumentException("隧道跨度与当前站序列不一致");
+            Arrays.fill(mask, Math.min(a, b), Math.max(a, b) + 1, true);
+        }
+        return mask;
+    }
     public static boolean isSharedElevationEndpoint(ServerLevel level,
                                                      StructureConnection connection,
                                                      boolean from) {

@@ -11,6 +11,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RouteEvidenceWiringTest {
     @Test
+    void realProfileRepairReceivesThePhysicalTunnelSelectorAndTheCurrentWorld() throws Exception {
+        var road = parse("pathlogic/core/Road.java");
+        var dispatch = (MethodInvocationTree)only(calls(road, "TargetYComputation.computeTargetY")).getLeaf();
+        var selector = assertInstanceOf(LambdaExpressionTree.class, dispatch.getArguments().getLast());
+        var mask = assertInstanceOf(MethodInvocationTree.class, selector.getBody());
+        assertEquals("RoadSpanProfileOps.excavationMask", mask.getMethodSelect().toString());
+        var extraction = assertInstanceOf(MethodInvocationTree.class, mask.getArguments().get(1));
+        assertEquals("PathSpanExtractor.refineTunnelSpans", extraction.getMethodSelect().toString());
+        assertEquals(List.of("spans", "segments", "preview", "level", "cache"),
+                extraction.getArguments().stream().map(Object::toString).toList());
+        var target = parse("pathlogic/core/TargetYComputation.java");
+        var solve = (MethodInvocationTree)only(calls(target, "TargetProfileSolver.applyProfileSolver")).getLeaf();
+        var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().getLast());
+        var call = assertInstanceOf(MethodInvocationTree.class, repair.getBody());
+        assertEquals("TargetProfileRepair.solve", call.getMethodSelect().toString());
+        assertEquals("tunnelSelector", call.getArguments().getLast().toString());
+    }
+
+    @Test
     void realValidationCallsUseFinalResultsBehindTheExactDiagnosticGate() throws Exception {
         var unit = parse("pathlogic/core/Road.java");
         var calls = calls(unit, "RoadBuildEvidence.validation");

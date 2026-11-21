@@ -33,16 +33,28 @@ final class TargetProfileSolver {
                               int step, int perTwo, ProfileDpSource.Constraints constraints);
     }
 
+    /** 纯编排测试和无世界调用共用严格投影；实际路线另外注入物理隧道选择端口。 */
+    static Optional<int[]> applyProfileSolver(ServerLevel level, List<BlockPos> centers,
+            int[] smoothed, int[] terrainY, boolean[] isCrossing, boolean[] tunnelMask, boolean[] pinnedMask,
+            int startBoundary, int endBoundary, RoadGenerationConfig cfg,
+            SurfaceGradeLimits gradeLimits, StructureConnection connection) {
+        return applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
+                startBoundary, endBoundary, cfg, gradeLimits, connection,
+                (t, c, cut, fill, step, two, constraints) -> Optional.of(ProfileFallback.terrainFollowing(
+                        t, cut, fill, step, two, constraints.pin(), constraints.mustBeCovered(),
+                        constraints.minCover(), constraints.deckFloor())));
+    }
+
     static Optional<int[]> applyProfileSolver(
             ServerLevel level, List<BlockPos> centers,
             int[] smoothed, int[] terrainY, boolean[] isCrossing,
             boolean[] tunnelMask, boolean[] pinnedMask,
             int startBoundary, int endBoundary, RoadGenerationConfig cfg,
-            SurfaceGradeLimits gradeLimits, StructureConnection connection) {
+            SurfaceGradeLimits gradeLimits, StructureConnection connection, Solver repair) {
         return solve(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
                 startBoundary, endBoundary, cfg, gradeLimits, connection,
                 (station, clearance) -> RoadConstructionSafety.bridgeDeckSurfaceY(
-                        level, centers, station, clearance, Integer.MIN_VALUE), ProfileDpSource::solve);
+                        level, centers, station, clearance, Integer.MIN_VALUE), ProfileDpSource::solve, repair);
     }
 
     /**
@@ -80,6 +92,18 @@ final class TargetProfileSolver {
             RoadGenerationConfig cfg,
             SurfaceGradeLimits gradeLimits,
             StructureConnection connection, DeckFloorSampler deckSampler, Solver solver) {
+        return solve(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
+                startBoundary, endBoundary, cfg, gradeLimits, connection, deckSampler, solver,
+                (t, c, cut, fill, step, two, constraints) -> Optional.of(ProfileFallback.terrainFollowing(
+                        t, cut, fill, step, two, constraints.pin(), constraints.mustBeCovered(),
+                        constraints.minCover(), constraints.deckFloor())));
+    }
+
+    /** 世界边界只提供修复输入；优化器失败后仍须经过可行性判定，不能发布带跳变的数组。 */
+    static Optional<int[]> solve(ServerLevel level, List<BlockPos> centers,
+            int[] smoothed, int[] terrainY, boolean[] isCrossing, boolean[] tunnelMask, boolean[] pinnedMask,
+            int startBoundary, int endBoundary, RoadGenerationConfig cfg, SurfaceGradeLimits gradeLimits,
+            StructureConnection connection, DeckFloorSampler deckSampler, Solver solver, Solver repair) {
         if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
             return java.util.Optional.empty();
         }
@@ -134,63 +158,32 @@ final class TargetProfileSolver {
             LOGGER.warn("【桥面下界采样失败，本次不施加该下界】 " + "RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
                     deckFailure.toString());
         }
+        var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor);
+        int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
+        int maxStep = Math.max(1, (perTwo + 1) / 2);
+        int maxCut = Math.max(0, gradeLimits.plainCut());
+        int maxFill = Math.max(0, gradeLimits.plainFill());
+        Optional<int[]> solved;
         try {
-            var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor);
-            int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
-            // 一阶上限 = 把「每两站 N 格」折算成每站（向上取整）。它只是兜底，
-            // 真正绑定的是二阶约束 |d_i + d_{i−1}| ≤ perTwo。
-            int maxStep = Math.max(1, (perTwo + 1) / 2);
-            // 窗口取施工端的实时上限 —— 与旧流水线同一套，DP 才不会挖出施工端拒收的深度。
-            int maxCut = Math.max(0, gradeLimits.plainCut());
-            int maxFill = Math.max(0, gradeLimits.plainFill());
-
-            var solved = solver.solve(terrainY, isCrossing,
-                    maxCut, maxFill, maxStep, perTwo, constraints);
-            if (solved.isEmpty()) {
-                // 2026-11-14（缺陷 C 收尾）：DP 不可行 ⇒ 用无状态回落解，
-                // **不再跑旧 15 道 pass**。
-                //
-                // 这是「旧 pass 退出生产路径」的关键一步：改动前 DP 不可行会
-                // 返回 empty，调用方就去跑旧 pass；现在它返回 ProfileFallback 的解，
-                // 调用方直接采用。于是 empty 只剩两种「DP 不适用」的情形：
-                //   · profileSolver 不是 DP（显式 -Droadweaver.profileSolver=legacy）
-                //   · 玩家关掉了坡度限制（旧 pass 也不夹坡，DP 的硬约束会打架）
-                // 那两种情形本来就该走旧链路，语义没问题。
-                //
-                // 回落解取的是同一套硬约束（窗口 / 一阶二阶坡度 / 站钉 / 桥面下界 /
-                // 隧道覆土），所以结果一定合规 —— 它只是不做全局最优，不像旧 pass
-                // 那样有一堆互相打架的事后修正。
-                LOGGER.warn("【纵断面DP无可行解，采用约束修复器】 " + "RoadWeaver profile solver=dp infeasible, using constraint fallback"
-                                + " stations={} cut={} fill={} perTwo={} pins={} decks={}"
-                                + " connection={}->{}",
-                        n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
-                        connection == null ? "?" : connection.from(),
-                        connection == null ? "?" : connection.to());
-                return java.util.Optional.of(ProfileFallback.terrainFollowing(
-                        terrainY, maxCut, maxFill, maxStep, perTwo,
-                        pin, tunnelMask, minCover, deckFloor));
-            }
-            LOGGER.info("【纵断面DP求解完成】 " + "RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
-                    n, perTwo, maxStep, maxCut, maxFill, minCover,
-                    connection == null ? "?" : connection.from(),
-                    connection == null ? "?" : connection.to());
-            return java.util.Optional.of(solved.get());
-        } catch (Throwable t) {
-            // 实验性求解器绝不能让一条路算不出来。
-            // 2026-11-15（独立复核修复）：回落参数与「不可行」分支**完全一致** ——
-            // pin / tunnelMask / minCover / deckFloor 都在 try 外构造好了，
-            // 不再像原来那样在异常路径把 pin 与 deckFloor 传 null（那会丢掉
-            // 结构端点钉高与桥面水位下界，而它们正是硬契约）。
-            LOGGER.warn("【纵断面DP执行失败，采用约束修复器】 " + "RoadWeaver profile solver=dp failed, using constraint fallback"
-                            + " stations={} pins={} decks={}: {}",
-                    n, countPinned(pin), countDeckFloors(deckFloor), t.toString());
-            return java.util.Optional.of(ProfileFallback.terrainFollowing(
-                    terrainY, Math.max(0, gradeLimits.plainCut()),
-                    Math.max(0, gradeLimits.plainFill()),
-                    Math.max(1, (Math.max(1, cfg.maxSlopeStepPerTwoSegments()) + 1) / 2),
-                    Math.max(1, cfg.maxSlopeStepPerTwoSegments()),
-                    pin, tunnelMask, minCover, deckFloor));
+            solved = solver.solve(terrainY, isCrossing, maxCut, maxFill, maxStep, perTwo, constraints);
+        } catch (RuntimeException failure) {
+            // 不捕获虚拟机错误；数学窗口修复放到 catch 外，真正无解不能再被当作求解器异常兜一遍。
+            LOGGER.warn("【纵断面DP执行失败，转入施工窗口复核】 stations={} cause={}", n, failure.toString());
+            solved = Optional.empty();
         }
+        if (solved.isPresent()) {
+            LOGGER.info("【纵断面DP求解完成】 RoadWeaver profile solver=dp stations={} perTwo={} maxStep={} cut={} fill={} minCover={} connection={}->{}",
+                    n, perTwo, maxStep, maxCut, maxFill, minCover,
+                    connection == null ? "?" : connection.from(), connection == null ? "?" : connection.to());
+            return solved;
+        }
+        LOGGER.warn("【纵断面地表窗口不可行，复核已选隧道与局部施工预算】 stations={} cut={} fill={} perTwo={} pins={} decks={} connection={}->{}",
+                n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
+                connection == null ? "?" : connection.from(), connection == null ? "?" : connection.to());
+        var repaired = repair.solve(terrainY, isCrossing, maxCut, maxFill, maxStep, perTwo, constraints);
+        if (repaired.isEmpty()) {
+            throw new IllegalArgumentException("纵断面在桥面锁高、已选隧道和施工预算下仍无解，拒绝发布，stations=" + n);
+        }
+        return repaired;
     }
-
 }

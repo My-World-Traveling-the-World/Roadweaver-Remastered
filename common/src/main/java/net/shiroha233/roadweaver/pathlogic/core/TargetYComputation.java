@@ -55,7 +55,7 @@ public final class TargetYComputation {
                                                    RoadGenerationConfig cfg,
                                                    StreamsReflowingCompat.SamplingSession streams,
                                      StructureConnection connection,
-                                     int bridgeMinWaterDepth) {
+                                     int bridgeMinWaterDepth, java.util.function.Function<List<Integer>, boolean[]> tunnelSelector) {
         int n = segments.size();
         throwIfInterrupted();
         List<BlockPos> centers = new ArrayList<>(n);
@@ -192,37 +192,25 @@ public final class TargetYComputation {
         // station standing one block above both neighbours of the same tunnel
         // run is seated on them. Normal tunnel grades and ordinary one-block
         // steps are untouched; bridges/crossings keep their own deck profile.
-        boolean[] tunnelMask = new boolean[n];
-        if (spans != null) {
-            Map<Long, Integer> spanStationIndex = new HashMap<>();
-            for (int i = 0; i < n; i++) {
-                BlockPos centre = centers.get(i);
-                if (centre != null) spanStationIndex.putIfAbsent(centre.asLong(), i);
-            }
-            for (RoadSpan sp : spans) {
-                if (sp == null || sp.start() == null || sp.end() == null) continue;
-                if (sp.type() != SpanType.TUNNEL && sp.type() != SpanType.TUNNEL_JUNCTION) continue;
-                Integer start = spanStationIndex.get(sp.start().asLong());
-                Integer end = spanStationIndex.get(sp.end().asLong());
-                if (start == null || end == null) continue;
-                for (int k = Math.min(start, end); k <= Math.max(start, end); k++) tunnelMask[k] = true;
-            }
-        }
+        SurfaceGradeLimits gradeLimits = SurfaceGradeLimits.capture();
+        // 洞口是开放施工区，不能把整条 TUNNEL（含两端）一律套上覆土上界。
+        boolean[] tunnelMask = TargetProfileRepair.coveredCore(terrainY, smoothed,
+                RoadSpanProfileOps.excavationMask(centers, spans == null ? List.of() : spans),
+                Math.max(1, gradeLimits.tunnelCoreOverburden()));
 
         // 施工端的真实挖填上限。DP 与旧流水线必须用同一套窗口，否则 DP 会挖出
         // 施工端直接拒收的深度（审计实测：24/12 实验窗口下约 0.3% 的站被判死）。
-        SurfaceGradeLimits gradeLimits =
-                SurfaceGradeLimits.capture();
-
         // ── 2026-11-14（缺陷 C 第三步）：先跑 DP，成功就**跳过整段旧 pass**。
         //
         // 改动前：旧 15 道 pass 无条件跑完 → 再用 DP 结果整条覆盖（双跑）。
         // 改动后：DP 拿到全部输入（含上移的 tunnelMask / gradeLimits）后立刻求解；
-        // 成功 ⇒ 旧 pass 一行不跑。不可行 / 不适用 ⇒ empty ⇒ 照旧跑旧 pass，
-        // 与改动前逐行相同，只在外面多了一层 if。
+        // 普通窗口无解时先复核物理隧道与有界路堑；修复仍无解就明确失败。
+        // 只有显式保留模式或关闭坡限才返回 empty，不能把 DP 无解转交旧 pass。
         java.util.Optional<int[]> dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
                 terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary, endBoundary,
-                cfg, gradeLimits, connection);
+                cfg, gradeLimits, connection,
+                (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solve(
+                        heights, crossing, cut, fill, step, two, constraints, tunnelSelector));
         final int[] legacySnapshot;
         if (dpProfile.isPresent()) {
             // DP 成功：不跑旧 pass。AB 观测器的 legacy 臂因此不存在（见下方 null 守卫）。
