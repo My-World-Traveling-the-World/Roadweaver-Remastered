@@ -1,5 +1,22 @@
 # 验证与构建手册
 
+## 第89轮新版配置清理（2026-11-21）
+
+基线1772/0/0/0；清理29键后新增7项，最终1779/0/0/0、标准Fabric构建成功。
+内嵌API校验通过，错误包回归PASS rejected=7。实际成品无遗留页class，双语和配置class已独立核。
+
+| 负控 | 指定失败测试 | 结果 |
+| --- | --- | --- |
+| 复活contourDiscount字段 | retiredKeysAreAbsentFromSerializationAndMetadata | 红，逐字恢复 |
+| 复活knnK字段 | retiredKeysAreAbsentFromSerializationAndMetadata | 红，逐字恢复 |
+| 删除pathGridStep快照复制 | currentGridStepSurvivesJsonSnapshotAndClamp | 红，逐字恢复 |
+| 算法指纹漏softGradePenalty | activeControlsStillChangeActualFingerprints | 红，逐字恢复 |
+| hardGradePenalty界面保存变空操作 | currentUiKeepsRealControlsAndDropsRetiredPage | 红，逐字恢复 |
+
+复放：干净基线运行`python scripts/evidence/verify_current_config_mutations.py`，工具逐组改坏、跑完整套件并checkout恢复。
+[机器证据](evidence/config-cleanup-20261121.json)记录实际退出码、指定失败方法、恢复SHA及最终成品SHA。
+0.9.103尚未安装，不以离线测试代替游戏内界面/真实产物验证，不宣称FPS或预热收益。
+
 ## 第87轮安装目录审计（2026-11-21）
 
 实际Loader0.19.3声明级解析通过786项；802份Mixin配置、536顶层/449内嵌CRC已核。

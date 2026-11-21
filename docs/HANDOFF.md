@@ -21,7 +21,12 @@
 完整回归PASS tests=1779 skipped=0 aborted=0 failed=0，Fabric编译成功。
 覆盖真实Gson往返、未知旧键不影响真实指纹、有效参数改变指纹、快照与夹取、UI保存绑定和双语。
 依赖基线只删已消失的config→pathfinding import边及对应双向项；Java行尾维持LF。
-变异验证与最终成品构建正在本轮后续步骤执行，尚未记为完成。
+五组负控均由指定CurrentConfigContractTest报错且无PASS：复活废弃寻路字段、复活KNN字段、
+丢失网格间距快照、算法指纹漏软坡单价、界面硬坡单价保存空操作。逐组checkout并核SHA逐字恢复。
+恢复后完整1779/0/0/0、标准Fabric构建成功，内嵌API通过，七类错误包全部拒绝。
+最终jar独立检查CRC、无旧页面类、新语言键、编译配置类无废弃字段。
+详见[evidence/config-cleanup-20261121.json](evidence/config-cleanup-20261121.json)，
+负控可通过scripts/evidence/verify_current_config_mutations.py在干净基线上复放。
 
 ### 三、我没能验证什么
 
@@ -31,7 +36,10 @@
 
 ### 四、遗留半截的东西
 
-待本轮完成负控、记录变异与SHA、生成最终发布jar。沿用已拒绝的远程push限制，未重试或绕过。
+代码b218b6a，负控工具72d3a86；成品0.9.103已生成（7150448B，SHA256 e1e8d0d746e2a0320c5a76e43b99c238466eea1b5e37ccd6221749ff65735f6b）。
+尚未部署：WAYFARING启用道路仍为0.9.102，SHA256 e261b5eb52a1108c44a8e772eef3558fbc4e625f6e62abd27059dd31f4371882。
+配置/存档/游戏jar本轮未写入；需换包重启才能看到新界面。
+沿用已拒绝的远程push限制，未重试或绕过；本轮pull也因GitHub连接超时未成功。
 
 ### 五、下一轮先做什么
 

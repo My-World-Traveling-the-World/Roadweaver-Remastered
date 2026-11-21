@@ -1,0 +1,122 @@
+{
+  "round": 89,
+  "date": "2026-11-21",
+  "baseline_commit": "2e52862",
+  "implementation_commit": "b218b6a",
+  "mutation_runner_commit": "72d3a86",
+  "removed_serialized_keys": [
+    "aStarMaxSteps",
+    "biomeCostDesert",
+    "biomeCostForest",
+    "biomeCostMountain",
+    "biomeCostPlains",
+    "biomeCostSwamp",
+    "contourDiscount",
+    "contourFollowWeight",
+    "elevationCliffThreshold",
+    "elevationCliffWeight",
+    "elevationGentleMax",
+    "elevationGentleWeight",
+    "elevationSegmentedCost",
+    "elevationSteepWeight",
+    "gradientAlignPenalty",
+    "knnAlpha",
+    "knnDegreeCap",
+    "knnK",
+    "knnMinAngleDeg",
+    "pathfindingAlgorithm",
+    "pfWaterBasePenalty",
+    "planningAlgorithm",
+    "slopePenaltyByLength",
+    "waterProximityCost",
+    "bridge.keepLamps",
+    "bridge.minLength",
+    "roadAppearance.placeWaypoints",
+    "terrainProfile.oceanBridgeMinDepth",
+    "performance.chunkyRoadThreadCap"
+  ],
+  "renamed": {
+    "pathfindingCost.aStarStep": "pathfindingCost.pathGridStep"
+  },
+  "legacy_aliases_added": false,
+  "tests": {
+    "baseline": {
+      "file": "build/config-cleanup-baseline.log",
+      "sha256": "d8a387a571434cb294b89b03f7c8aeaf322413cac76bac582efa7d81a5b66504",
+      "result": "PASS tests=1772 skipped=0 aborted=0 failed=0"
+    },
+    "final": {
+      "file": "build/config-cleanup-final.log",
+      "sha256": "d2052643b581cfa365c5ddd961fcadb69e6e57fb6a1e03940a13346348a5fc2c",
+      "result": "PASS tests=1779 skipped=0 aborted=0 failed=0"
+    }
+  },
+  "mutations": [
+    {
+      "case": "retired_cost",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/sub/PathfindingCostConfig.java",
+      "expected": "retiredKeysAreAbsentFromSerializationAndMetadata",
+      "failed_as_expected": true,
+      "exit_code": 1,
+      "log": "build/config-cleanup-mutations/retired_cost.log",
+      "restored_sha256": "60a58c476c977c477a0d39a2995353eff58a2a97bf4bb04664bf2188e10913fd"
+    },
+    {
+      "case": "retired_knn",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/sub/PlanningConfig.java",
+      "expected": "retiredKeysAreAbsentFromSerializationAndMetadata",
+      "failed_as_expected": true,
+      "exit_code": 1,
+      "log": "build/config-cleanup-mutations/retired_knn.log",
+      "restored_sha256": "51673c5e9efda6d6e82f3405971cb8550c0ee42dad08ea02f5c69b846142172c"
+    },
+    {
+      "case": "lost_grid_snapshot",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/sub/PathfindingCostConfig.java",
+      "expected": "currentGridStepSurvivesJsonSnapshotAndClamp",
+      "failed_as_expected": true,
+      "exit_code": 1,
+      "log": "build/config-cleanup-mutations/lost_grid_snapshot.log",
+      "restored_sha256": "60a58c476c977c477a0d39a2995353eff58a2a97bf4bb04664bf2188e10913fd"
+    },
+    {
+      "case": "lost_active_fingerprint",
+      "file": "common/src/main/java/net/shiroha233/roadweaver/config/ConfigService.java",
+      "expected": "activeControlsStillChangeActualFingerprints",
+      "failed_as_expected": true,
+      "exit_code": 1,
+      "log": "build/config-cleanup-mutations/lost_active_fingerprint.log",
+      "restored_sha256": "3c8dec8032ba225af64d186c1b6390af9b060a33e21828663f5a0e218ed68d08"
+    },
+    {
+      "case": "lost_ui_binding",
+      "file": "fabric/src/main/java/net/shiroha233/roadweaver/client/fabric/PathfindingCostsSection.java",
+      "expected": "currentUiKeepsRealControlsAndDropsRetiredPage",
+      "failed_as_expected": true,
+      "exit_code": 1,
+      "log": "build/config-cleanup-mutations/lost_ui_binding.log",
+      "restored_sha256": "3b1220777a7d7d48b607d191ead1d7aa50d2fdc7c67787cdf3ecdf9c8e951b9d"
+    }
+  ],
+  "artifact": {
+    "file": "fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.103.jar",
+    "bytes": 7150448,
+    "sha256": "e1e8d0d746e2a0320c5a76e43b99c238466eea1b5e37ccd6221749ff65735f6b",
+    "version": "2.3.1-1.21.1-plaincraft-direct-core.0.9.103",
+    "legacy_ui_class_absent": true,
+    "final_language_and_config_classes_checked": true,
+    "embedded_api_check": "PASS",
+    "wrong_package_regression": "PASS rejected=7"
+  },
+  "deployed": false,
+  "currently_installed": {
+    "file": "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+    "sha256": "e261b5eb52a1108c44a8e772eef3558fbc4e625f6e62abd27059dd31f4371882"
+  },
+  "unverified": [
+    "游戏内新界面、保存与重开",
+    "真实世界道路桥隧产物",
+    "帧时与预热耗时"
+  ],
+  "remote_sync": "pull连接GitHub超时；未重试此前被拒绝的远程push"
+}
