@@ -3,6 +3,24 @@
 > 本节是**持久台账**（不是临时文档）：每次出可部署 jar 都必须记一条，含 commit / 改动 / 回归 / jar 体积 / SHA-256 / 回退方式。
 > 旧仓库（`D:\云游四海-Mod源码\roadweaver`）的历史版本条目在它自己的 `roadweaver-变更历史.md` 里，本项目从 0.9.099 起独立记账。
 
+## 0.9.102 开发实机件（2026-11-21，第86轮，已部署待实测）
+
+| 项 | 值 |
+| --- | --- |
+| 生产代码 | 43420bc；部署前文档HEAD为1bfb833 |
+| 成品 | `fabric/build/final/roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar` |
+| 体积 | 7169473 B |
+| SHA-256 | `e261b5eb52a1108c44a8e772eef3558fbc4e625f6e62abd27059dd31f4371882` |
+| API | 内嵌roadweaver_api 1.0.0；安装目录顶层及一层嵌套仅此一份 |
+| 最近完整验证 | 1772/0/0/0，标准Fabric构建成功，7类错误包拒绝；本轮无生产改动，复用该已测试件 |
+| 改动 | 累积开发件含二阶剖面线性转移及前轮修复；版本号未递增，须按SHA识别 |
+| 部署 | WAYFARING实例mods，替换11月14日旧件；同批更新河流并新增长城 |
+| 备份 | 工作区`build/three-mod-playtest-20261121-091158/backup`；原道路SHA `22751e3b3f0954dbe19589a607303d699c245348d4289d1c1d3ace1cfe62cb16` |
+| 回退 | 退出游戏后该目录Rollback.ps1检查，显式-Apply才恢复；未实际回退，备份SHA已验 |
+
+三个安装件安装后完整验hash，目标ID唯一；未启动游戏，配置/存档/第三方包未改。
+既有polytone/chestfill/punchy重复ID须确认版本，详见[验收清单](PLAYTEST-20261121.md)和[机器回执](evidence/three-mod-playtest-deployment-20261121.json)。
+
 ## 0.9.102 开发复打（2026-11-20，第78轮，未部署）
 
 本地同名开发成品已覆盖第77轮文件，下方历史hash继续保留；本轮不代表游戏安装件已更新。
