@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ChineseLogGuardTest {
     private static final Set<String> LEVELS = Set.of("info", "warn", "error", "debug", "trace", "fatal");
-    private record Call(String file, long line, String level, String description) {
+    private record Call(String file, long line, String level, String description, int valueArguments) {
         boolean chinese() { return description.codePoints().anyMatch(c -> c >= 0x3400 && c <= 0x9fff); }
     }
 
@@ -102,6 +102,29 @@ final class ChineseLogGuardTest {
         assertEquals(List.of(false, true, false), calls.stream().map(Call::chinese).toList());
     }
 
+    @Test
+    void protectedGapDiagnosticKeepsCoordinatesDeltaAndOwnersAligned() throws IOException {
+        assertDiagnosticArguments("pathlogic/validation/RoadDataValidator.java",
+                "RoadWeaver protected-gap height step", 11);
+    }
+
+    @Test
+    void continuityDiagnosticKeepsRangeWidthAndOwnersAligned() throws IOException {
+        assertDiagnosticArguments("pathlogic/pathcalc/RoadPathCalculator.java",
+                "RoadWeaver continuity preflight:", 12);
+    }
+
+    private static void assertDiagnosticArguments(String relative, String marker, int expected) throws IOException {
+        Path source = Path.of("src/main/java/net/shiroha233/roadweaver").resolve(relative);
+        var calls = parse(List.of(source), null).stream().filter(c -> c.description().contains(marker)).toList();
+        assertEquals(1, calls.size(), "必须找到真实生产诊断，不能因入口删除而空转");
+        var call = calls.getFirst();
+        assertEquals(expected, call.valueArguments(), "诊断必须保留完整坐标、范围及身份参数");
+        // 这两条日志没有尾随Throwable或Object[]，每个参数都必须占一个格式槽。
+        assertEquals(expected, call.description().split("\\{\\}", -1).length - 1,
+                "占位符数量不符会把后续字段串错；中文主说明检查无法发现这种错误");
+    }
+
     private static List<Call> snippet(String text) throws IOException {
         return parse(List.of(), new SimpleJavaFileObject(URI.create("string:///Example.java"), JavaFileObject.Kind.SOURCE) {
             @Override public CharSequence getCharContent(boolean ignored) { return text; }
@@ -134,7 +157,8 @@ final class ChineseLogGuardTest {
                                 && loggerReceiver(method.getExpression(), aliases)) {
                             long line = unit.getLineMap().getLineNumber(positions.getStartPosition(unit, call));
                             String message = call.getArguments().isEmpty() ? "" : description(call.getArguments().getFirst());
-                            calls.add(new Call(unit.getSourceFile().getName(), line, method.getIdentifier().toString(), message));
+                            calls.add(new Call(unit.getSourceFile().getName(), line, method.getIdentifier().toString(),
+                                    message, Math.max(0, call.getArguments().size() - 1)));
                         }
                         return super.visitMethodInvocation(call, unused);
                     }

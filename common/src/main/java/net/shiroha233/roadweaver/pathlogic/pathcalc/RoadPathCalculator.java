@@ -464,8 +464,9 @@ public final class RoadPathCalculator {
                         ? Integer.MAX_VALUE
                         : continuity.minimumTerrainBySegment()[continuity.conflictSegment()];
                 FillConflictWidth width = conflictWidth(road, continuity);
+                // 冲突范围有起止两项；少一个占位符会使宽度和道路身份变成错误诊断。
                 LOGGER.info("【施工连续性预检的挖填与冲突位置】 " + "RoadWeaver continuity preflight: sampledColumns={} maxFillDepth={} maxCutDepth={} "
-                            + "conflictSegment={} conflictPos={} targetY={} terrainY={} unsafeFillRange={} "
+                            + "conflictSegment={} conflictPos={} targetY={} terrainY={} unsafeFillRange={}..{} "
                             + "unsafeWidthBlocks={} owners={} -> {}",
                         continuity.sampledColumns(), continuity.maxFillDepth(), continuity.maxCutDepth(),
                         continuity.conflictSegment(), conflict, target, terrain,

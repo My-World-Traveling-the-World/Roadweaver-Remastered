@@ -321,7 +321,8 @@ public final class RoadDataValidator {
                     && ((gapStart.equals(span.start()) && gapEnd.equals(span.end()))
                     || (gapStart.equals(span.end()) && gapEnd.equals(span.start()))));
             if (!alreadyMarked) {
-                LOGGER.warn("【保护缺口内部存在高度突变】 " + "RoadWeaver protected-gap height step idx={}..{} from=({},y={}) to=({},y={}) delta={} owners={} -> {}",
+                // 两端都输出完整三维坐标，避免遗漏z占位符后把高差和道路身份全部错位。
+                LOGGER.warn("【保护缺口内部存在高度突变】 " + "RoadWeaver protected-gap height step idx={}..{} from=({},y={},z={}) to=({},y={},z={}) delta={} owners={} -> {}",
                         gapIndex - 1, gapIndex,
                         gapStart.getX(), previous, gapStart.getZ(),
                         gapEnd.getX(), current, gapEnd.getZ(),
