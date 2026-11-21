@@ -17,7 +17,7 @@ import java.util.Locale;
 /**
  * 寻路代价配置分区。
  *
- * <p>各寻路算法的代价权重。</p>
+ * <p>BAND网格与水陆选线、桥隧经济判据及局部修复的有效控制项。</p>
  *
  * <p>从 {@code ConfigScreenFactoryImpl} 抽出的一个分区：原文件 1791 行、12 个分区挤在一起，
  * 改一个分区要翻过另外 11 个。抽取是<b>纯搬运，零逻辑改动</b>。</p>
@@ -42,19 +42,11 @@ public final class PathfindingCostsSection {
                 .build());
 
         category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.a_star_step"), cfg.aStarStep())
-                .setDefaultValue(def.aStarStep())
-                .setTooltip(Component.translatable("config.roadweaver.a_star_step.tooltip"))
-                .setMin(RoadConstants.ASTAR_STEP_MIN).setMax(RoadConstants.ASTAR_STEP_MAX)
-                .setSaveConsumer(cfg::setAStarStep)
-                .build());
-
-        category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.a_star_max_steps"), cfg.aStarMaxSteps())
-                .setDefaultValue(def.aStarMaxSteps())
-                .setTooltip(Component.translatable("config.roadweaver.a_star_max_steps.tooltip"))
-                .setMin(100).setMax(RoadConstants.ASTAR_MAX_STEPS_MAX)
-                .setSaveConsumer(cfg::setAStarMaxSteps)
+                .startIntField(Component.translatable("config.roadweaver.path_grid_step"), cfg.pathGridStep())
+                .setDefaultValue(def.pathGridStep())
+                .setTooltip(Component.translatable("config.roadweaver.path_grid_step.tooltip"))
+                .setMin(RoadConstants.PATH_GRID_STEP_MIN).setMax(RoadConstants.PATH_GRID_STEP_MAX)
+                .setSaveConsumer(cfg::setPathGridStep)
                 .build());
 
         category.addEntry(eb
@@ -114,14 +106,6 @@ public final class PathfindingCostsSection {
                 .build());
 
         category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.water_proximity_cost"), cfg.waterProximityCost())
-                .setDefaultValue(def.waterProximityCost())
-                .setTooltip(Component.translatable("config.roadweaver.water_proximity_cost.tooltip"))
-                .setMin(0)
-                .setSaveConsumer(cfg::setWaterProximityCost)
-                .build());
-
-        category.addEntry(eb
                 .startDoubleField(Component.translatable("config.roadweaver.heuristic_weight"), cfg.heuristicWeight())
                 .setDefaultValue(def.heuristicWeight())
                 .setTooltip(Component.translatable("config.roadweaver.heuristic_weight.tooltip"))
@@ -135,6 +119,55 @@ public final class PathfindingCostsSection {
                 .setTooltip(Component.translatable("config.roadweaver.deviation_weight.tooltip"))
                 .setMin(0)
                 .setSaveConsumer(cfg::setDeviationWeight)
+                .build());
+
+        // 这些参数仍供桥隧判据或BAND水域代价读取，不能随旧页面误删。
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.soft_grade_limit"), cfg.softGradeLimit())
+                .setDefaultValue(def.softGradeLimit())
+                .setTooltip(Component.translatable("config.roadweaver.soft_grade_limit.tooltip"))
+                .setMin(0).setMax(1)
+                .setSaveConsumer(cfg::setSoftGradeLimit)
+                .build());
+
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.hard_grade_limit"), cfg.hardGradeLimit())
+                .setDefaultValue(def.hardGradeLimit())
+                .setTooltip(Component.translatable("config.roadweaver.hard_grade_limit.tooltip"))
+                .setMin(0).setMax(1)
+                .setSaveConsumer(cfg::setHardGradeLimit)
+                .build());
+
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.soft_grade_penalty"), cfg.softGradePenalty())
+                .setDefaultValue(def.softGradePenalty())
+                .setTooltip(Component.translatable("config.roadweaver.soft_grade_penalty.tooltip"))
+                .setMin(0)
+                .setSaveConsumer(cfg::setSoftGradePenalty)
+                .build());
+
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.hard_grade_penalty"), cfg.hardGradePenalty())
+                .setDefaultValue(def.hardGradePenalty())
+                .setTooltip(Component.translatable("config.roadweaver.hard_grade_penalty.tooltip"))
+                .setMin(0)
+                .setSaveConsumer(cfg::setHardGradePenalty)
+                .build());
+
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.biome_cost_water"), cfg.biomeCostWater())
+                .setDefaultValue(def.biomeCostWater())
+                .setTooltip(Component.translatable("config.roadweaver.biome_cost_water.tooltip"))
+                .setMin(-1000).setMax(1000)
+                .setSaveConsumer(cfg::setBiomeCostWater)
+                .build());
+
+        category.addEntry(eb
+                .startDoubleField(Component.translatable("config.roadweaver.biome_cost_other"), cfg.biomeCostOther())
+                .setDefaultValue(def.biomeCostOther())
+                .setTooltip(Component.translatable("config.roadweaver.biome_cost_other.tooltip"))
+                .setMin(-1000).setMax(1000)
+                .setSaveConsumer(cfg::setBiomeCostOther)
                 .build());
 
         // ===== 0.8.409 麻花/重叠判定（禁麻花 + 允许丁字/十字）=====
@@ -153,10 +186,6 @@ public final class PathfindingCostsSection {
                 .setMin(0).setMax(1.0)
                 .setSaveConsumer(cfg::setBraidNearParallelDot)
                 .build());
-        // 0.8.418 起移除「允许丁字/十字路口」条目：这个开关在全仓库没有任何读取方
-        // （RoadSnapService 只用 braidMinDirectionDot / braidNearParallelDot /
-        // braidAllowParallelOverlap 三个），留在界面上等于骗玩家去调一个死参数。
-        // 字段与语言键保留，以免破坏已有配置文件、也便于将来真接上时一键恢复。
         category.addEntry(eb
                 .startBooleanToggle(Component.translatable("config.roadweaver.braid_allow_parallel_overlap"), cfg.braidAllowParallelOverlap())
                 .setDefaultValue(def.braidAllowParallelOverlap())

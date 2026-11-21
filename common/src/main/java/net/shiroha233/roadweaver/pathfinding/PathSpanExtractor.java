@@ -539,7 +539,7 @@ public final class PathSpanExtractor {
     static TunnelEnvelopeCriterion.Costs tunnelCosts() {
         try {
             var cfg = ConfigService.get().pathfindingCost();
-            double step = Math.max(1, cfg.effectiveAStarStep());
+            double step = Math.max(1, cfg.effectivePathGridStep());
             return new TunnelEnvelopeCriterion.Costs(
                     cfg.orthoStepCost() / step,
                     cfg.softGradePenalty(),

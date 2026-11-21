@@ -17,21 +17,14 @@ public final class RoadConstants {
     /** 单条路允许的超限步进次数上限。 */
     public static final int MAX_HEIGHT_STEP_EXCEPTIONS = 3;
 
-    public static final int DEFAULT_ASTAR_STEP = 8;
-    public static final int DEFAULT_ASTAR_MAX_STEPS = 200_000;
-    public static final int ASTAR_MAX_STEPS_MIN = 3_000;
-    public static final int ASTAR_MAX_STEPS_MAX = 200_000;
-    public static final int ASTAR_STEP_MAX = 128;
+    public static final int DEFAULT_PATH_GRID_STEP = 8;
+    public static final int PATH_GRID_STEP_MAX = 128;
     /** 局部修复允许降至一格采样，避免粗格漏过狭小通路。 */
-    public static final int ASTAR_STEP_MIN = 1;
+    public static final int PATH_GRID_STEP_MIN = 1;
 
     public static final int DEFAULT_PLAN_MAX_EDGE_LEN_BLOCKS = 2048;
     public static final int DEFAULT_BRIDGE_JOIN_LEN_BLOCKS = 1536;
-    public static final double DEFAULT_KNN_ALPHA = 1.8;
-    public static final double DEFAULT_KNN_MIN_ANGLE_DEG = 40.0;
     public static final double DEFAULT_COMPONENT_MIN_ANGLE_DEG = 35.0;
-    public static final int DEFAULT_KNN_K = 2;
-    public static final int DEFAULT_KNN_DEGREE_CAP = 2;
     public static final int DEFAULT_COMPONENT_DEGREE_CAP = 3;
     public static final int DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS = 128;
     // 开局可主动等待更大覆盖；单独设上限，避免连带放大游玩期规划窗口和地图 AOI。
@@ -86,9 +79,6 @@ public final class RoadConstants {
     public static final int DEFAULT_BRIDGE_MIN_WATER_DEPTH = 1;
     public static final int BRIDGE_MIN_WATER_DEPTH_MIN = 1;
     public static final int BRIDGE_MIN_WATER_DEPTH_MAX = 10;
-    public static final int DEFAULT_BRIDGE_MIN_LENGTH = 5;
-    public static final int BRIDGE_MIN_LENGTH_MIN = 1;
-    public static final int BRIDGE_MIN_LENGTH_MAX = 32;
     public static final int DEFAULT_BRIDGE_MERGE_GAP = 8;
     public static final int BRIDGE_MERGE_GAP_MIN = 1;
     public static final int BRIDGE_MERGE_GAP_MAX = 32;
@@ -158,13 +148,6 @@ public final class RoadConstants {
      */
     public static final String STEEP_LENGTH_CAP_PROPERTY = "roadweaver.steepLengthCap";
     /**
-     * 0.9.062（②）：坡度罚计费基准的运行时开关。
-     *
-     * <p>默认 {@code length}（按水平长度收）。写成 {@code -Droadweaver.slopePenaltyBasis=legacy}
-     * （也认 per-step/false/0/off）即逐位回到「按步收」的旧公式。</p>
-     */
-    public static final String SLOPE_PENALTY_BASIS_PROPERTY = "roadweaver.slopePenaltyBasis";
-    /**
      * 0.9.062（④）：局部搜索返回 null 时是否保留原候选的运行时开关。
      *
      * <p>{@code -Droadweaver.keepNullCandidate=false}（也认 0/off）即回到 0.9.061 的行为 ——
@@ -227,31 +210,12 @@ public final class RoadConstants {
     public static final double DEFAULT_DIAG_STEP_COST = 1.414;
     public static final int DEFAULT_ELEVATION_WEIGHT = 80;
     public static final int DEFAULT_BIOME_WEIGHT = 2;
-    // ── 0.8.418「蜿蜒优先」新默认值（预设 C + dev0，实测依据见下）──────────────────
-    // 10 种地形原型 × 300 种子 × 20 配置的指标矩阵（原型等权，见
-    // roadweaver-参数调优.md §15）三套目标全部第一：
-    //   meander +1.640（最差原型 +0.431）/ efficiency +0.888（最差 −0.167）/ balanced +1.264。
-    // 形态变化：缓弯 +21.1%、急转弯（抖动）−44.4%、涉水 +11.7%、平均坡度 −17.2%。
-    // 逐项依据：stabilityWeight 15→30（贴地、砍抖动）；hardGradeLimit 0.15→0.10（少硬爬）；
-    // biomeCostMountain 0→25（山地略避让）；nearWaterCost 100→0（允许贴水岸走，反而多弯）；
-    // deviationWeight 0.2→0（势场法原先没有这道闸，接线后 0.2 会真实生效并把路拉直——默认关，
-    // 想「不许偏离直线太远」的玩家可以调回去）。
+    // 保留局部修复现行默认值；旧势场原型的调参成绩不能当作BAND质量证明。
     public static final int DEFAULT_STABILITY_WEIGHT = 30;
     public static final int DEFAULT_WATER_DEPTH_WEIGHT = 160;
     public static final int DEFAULT_NEAR_WATER_COST = 0;
-    public static final int DEFAULT_WATER_PROXIMITY_COST = 30;
     public static final double DEFAULT_HEURISTIC_WEIGHT = 2.0;
     public static final double DEFAULT_DEVIATION_WEIGHT = 0.0;
-
-    // ── 0.8.409 分段/软惩罚代价参数（最细粒度奖励惩罚体系）──────────────────────
-    // 坡度分段：温和坡度便宜、陡崖重罚。默认值 = 原线性 80 按「温和=30、陡崖=400」重排，
-    // 使温和起伏不再被过度惩罚，而陡崖被强制绕开。gentleMax 以下的每格代价走 gentleWeight，
-    // (gentleMax, cliffThreshold] 走 steepWeight，超过 cliffThreshold 走 cliffWeight。
-    public static final int DEFAULT_ELEVATION_GENTLE_MAX = 2;
-    public static final int DEFAULT_ELEVATION_GENTLE_WEIGHT = 30;
-    public static final int DEFAULT_ELEVATION_STEEP_WEIGHT = 120;
-    public static final int DEFAULT_ELEVATION_CLIFF_THRESHOLD = 5;
-    public static final int DEFAULT_ELEVATION_CLIFF_WEIGHT = 400;
 
     // ── 0.8.409 麻花/重叠判定（禁麻花 + 允许丁字/十字）────────────────────────
     // 两条路方向点积 ≥ 此值视为「平行可合并」（麻花危险区）；< 此值则视为「相交」（丁字/十字，允许）。
@@ -310,7 +274,6 @@ public final class RoadConstants {
     public static final int BELOW_DEPTH_2 = 2;
 
     // 2026-11-13：GRADIENT_DESCENT_* / POTENTIAL_FIELD_* 五个常量随旧 A* 寻路器一并删除。
-    public static final double DEFAULT_CONTOUR_DISCOUNT = 0.55;
     public static final double DEFAULT_SOFT_GRADE_LIMIT = 0.08;
     // 0.8.418：0.15 → 0.10。收紧硬坡闸门后道路更少硬爬（急转弯 −45%、贴地更好），
     // 三套目标同时改善（见上方 0.8.418 新默认值说明）。
@@ -363,26 +326,12 @@ public final class RoadConstants {
      */
     public static final double LEGACY_ORTHO_REFERENCE_PENALTY = 7837.5;
     public static final double LEGACY_DIAG_REFERENCE_PENALTY = 62.9126073624;
-    public static final double DEFAULT_GRADIENT_ALIGN_PENALTY = 80.0;
-    public static final double DEFAULT_PF_WATER_BASE_PENALTY = 800.0;
 
     // ── 蜿蜒 / 群系走向（0.8.413 起）────────────────────────────────────────
-    // 逐群系类别路由代价（正=避让，负=偏好）。默认只保留水=36（与旧 BIOME_BASE_COST*3 一致），
-    // 其余类别中性 0，由调参决定是否给山/林/沼泽/沙漠赋予偏好或避让。
+    // BAND只使用水陆差价，细分陆地群系没有采样读口，不能保留看似有效的旋钮。
     public static final double DEFAULT_BIOME_COST_WATER = 36.0;
-    public static final double DEFAULT_BIOME_COST_PLAINS = 0.0;
-    public static final double DEFAULT_BIOME_COST_FOREST = 0.0;
-    // 0.8.418：山地 0 → 25（略微避让高山，帮道路走山谷/垭口而非硬翻山头）。
-    public static final double DEFAULT_BIOME_COST_MOUNTAIN = 25.0;
-    public static final double DEFAULT_BIOME_COST_SWAMP = 0.0;
-    public static final double DEFAULT_BIOME_COST_DESERT = 0.0;
     public static final double DEFAULT_BIOME_COST_OTHER = 0.0;
-    // 等高线跟随强度：>1 放大柔和地形上的等高线折扣，产生更蜿蜒的走向。
-    public static final double DEFAULT_CONTOUR_FOLLOW_WEIGHT = 1.0;
 
-    // 竖向代价模型：true=0.8.409 三段台阶（默认，Q1 已接入）；false=旧二次式
-    // （高度²×elevationWeight×0.5），保留以便对比与回退。
-    public static final boolean DEFAULT_ELEVATION_COST_SEGMENTED = true;
 
     public static final int SPATIAL_INDEX_GRID_SIZE = 8;
     public static final int SPATIAL_INDEX_GRID_SHIFT = 3;

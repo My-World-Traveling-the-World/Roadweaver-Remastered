@@ -174,7 +174,7 @@ public final class InitialPlanWaiter {
                 Map<PlannedPathKey, GenResult> protectedGapFallbacks = new HashMap<>();
                 List<RoadData> generatedRoads = new ArrayList<>();
                 List<StructureConnection> remaining = new ArrayList<>(roadTasks);
-                int configuredStep = ConfigService.get().pathfindingCost().effectiveAStarStep();
+                int configuredStep = ConfigService.get().pathfindingCost().effectivePathGridStep();
                 int[] startupBounds = ConflictWindowOps.initialSamplingBounds(level, roadTasks);
                 List<Integer> tiers = RoutePrecisionRetryPolicy.initialBatchSteps(configuredStep);
                 int candidateCompleted = 0;

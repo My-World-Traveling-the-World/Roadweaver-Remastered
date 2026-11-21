@@ -173,7 +173,7 @@ public final class StructureRoadOffsetService {
         int cx = endpoint.getX() >> 4;
         int cz = endpoint.getZ() >> 4;
         int searchRadius = 1;
-        int tolerance = Math.max(MATCH_TOLERANCE_BLOCKS, ConfigService.get().aStarStep() + 8);
+        int tolerance = Math.max(MATCH_TOLERANCE_BLOCKS, ConfigService.get().pathGridStep() + 8);
         long tol2 = (long) tolerance * (long) tolerance;
 
         List<StructureInfo> villageInfos = StructurePredictor.predictOverworldStructuresInRect(

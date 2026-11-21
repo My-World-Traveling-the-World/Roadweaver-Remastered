@@ -99,15 +99,15 @@ public final class Road {
         this.genConfig = genConfig;
     }
 
-    public RoadData generateRoad(int maxSteps) {
-        return generateRoad(maxSteps, true);
+    public RoadData generateRoad() {
+        return generateRoad(true);
     }
 
-    public RoadData generateRoad(int maxSteps, boolean persistImmediately) {
-        return generateRoad(maxSteps, persistImmediately, 0);
+    public RoadData generateRoad(boolean persistImmediately) {
+        return generateRoad(persistImmediately, 0);
     }
 
-    RoadData generateRoad(int maxSteps, boolean persistImmediately, int finalStructureAttempt) {
+    RoadData generateRoad(boolean persistImmediately, int finalStructureAttempt) {
         if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
         long roadStartedAt = System.nanoTime();
         // 跨度回写（批 2 方案 A）：开场清掉上一条路可能残留的解。
@@ -157,7 +157,7 @@ public final class Road {
                         planned.get(), width, level, cache, genConfig, connection);
             } else {
                 pathResult = PathMetricsOps.calculateAStarRoadPathDetailed(
-                        rawStart, rawEnd, width, level, maxSteps, cache, genConfig);
+                        rawStart, rawEnd, width, level, cache, genConfig);
             }
 
             List<RoadSegmentPlacement> rawSegments = pathResult.segments();
@@ -827,7 +827,7 @@ public final class Road {
      * "missing persisted route path".
      */
     int localRetryStep() {
-        int configured = genConfig == null ? 4 : Math.max(1, genConfig.pathfinding().effectiveAStarStep());
+        int configured = genConfig == null ? 4 : Math.max(1, genConfig.pathfinding().effectivePathGridStep());
         return RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0);
     }
 

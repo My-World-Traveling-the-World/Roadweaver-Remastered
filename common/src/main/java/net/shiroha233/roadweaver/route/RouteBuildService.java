@@ -184,12 +184,12 @@ public final class RouteBuildService {
      *
      * <h2>★ 为什么要循环注册多个 step 版本</h2>
      * {@code PlannedPathCache} 的命中依赖**指纹匹配**，而指纹里包含
-     * {@code config.effectiveAStarStep()}（见 {@code PlannedPathFingerprintService} 行 48）。
+     * {@code config.effectivePathGridStep()}（见 {@code PlannedPathFingerprintService} 行 48）。
      *
      * <p>问题是 {@code RoadGenerationService.generateTaskInternal} 在**精度重试**路径下会
      * 改写这一个字段：</p>
      * <pre>
-     *   genCfg.pathfinding().setAStarStep(precisionStep);   // 重试时 step 可能不是默认值
+     *   genCfg.pathfinding().setPathGridStep(precisionStep);   // 重试时 step 可能不是默认值
      * </pre>
      *
      * <p>如果只按默认 step 注册，重试时指纹就对不上 —— 缓存未命中，
@@ -199,7 +199,7 @@ public final class RouteBuildService {
      * <p>所以按「默认 step + 常见重试 step（1、2）」各注册一份。
      * 同一连接只是多几个缓存条目，开销可忽略，换来的是任何 step 下都能命中。
      * 这沿用了工程既有做法（{@code RoadPlanningService.rebindGeneratedRouteForRetry}
-     * 也是用 {@code withAStarStep(...)} 造匹配 config 再注册）。</p>
+     * 也是用 {@code withPathGridStep(...)} 造匹配 config 再注册）。</p>
      */
     private static void primePlannedPaths(ServerLevel level, InjectionPlan plan) {
         try {
@@ -212,11 +212,11 @@ public final class RouteBuildService {
             }
             // 默认 step + 重试可能用到的 step，全部注册，保证任何精度下都命中
             java.util.LinkedHashSet<Integer> steps = new java.util.LinkedHashSet<>();
-            steps.add(base.effectiveAStarStep());
+            steps.add(base.effectivePathGridStep());
             steps.add(1);
             steps.add(2);
             for (int step : steps) {
-                var cfg = base.withAStarStep(step);
+                var cfg = base.withPathGridStep(step);
                 RouteInjector.primeCache(level, plan, mode, cfg);
             }
             LOGGER.info("手绘路径已预置 steps={} 分段={}", steps, plan.size());

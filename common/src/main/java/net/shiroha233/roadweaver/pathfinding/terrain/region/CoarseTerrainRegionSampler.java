@@ -64,7 +64,7 @@ public final class CoarseTerrainRegionSampler {
         CoarseTerrainSamplingProgress progressSink = progress == null
                 ? CoarseTerrainSamplingProgress.NONE
                 : progress;
-        int safeStep = Math.max(RoadConstants.ASTAR_STEP_MIN, step);
+        int safeStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN, step);
         CoarseRegionBounds bounds = CoarseRegionBounds.aligned(
                 level.dimension().location(), minBlockX, minBlockZ, maxBlockX, maxBlockZ, safeStep);
         boolean initialGeneration = InitialGenManager.isActive()
@@ -197,7 +197,7 @@ public final class CoarseTerrainRegionSampler {
     }
 
     static int expandedSamplesPerTile(int tileSizeChunks, int step) {
-        int safeStep = Math.max(RoadConstants.ASTAR_STEP_MIN, step);
+        int safeStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN, step);
         int tileBlocks = Math.max(1, tileSizeChunks) * RoadConstants.CHUNK_SIZE_BLOCKS;
         int sampleWidth = Math.floorDiv(tileBlocks + safeStep - 1, safeStep) + 1;
         int haloSamples = Math.max(1, Math.floorDiv(

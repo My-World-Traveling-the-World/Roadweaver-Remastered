@@ -12,7 +12,7 @@ final class PathControlSimplifier {
     /**
      * Douglas-Peucker 垂直距离容差（格）。
      *
-     * <p>取 4 = {@code RoadConstants.DEFAULT_ASTAR_STEP / 2}，即 A* 网格量化误差的上限：
+     * <p>取 4 = {@code RoadConstants.DEFAULT_PATH_GRID_STEP / 2}，即 A* 网格量化误差的上限：
      * 被删掉的点偏离保留折线不超过半步长，与「网格离散化本身的不确定度」不可区分，
      * 因此不会削掉真实的地形弯曲（沿山谷/绕山脊的弯曲振幅是几十格量级）。</p>
      *
@@ -39,7 +39,7 @@ final class PathControlSimplifier {
     /**
      * 步距感知版本（O-13）：容差跟步长走，{@code clamp(0.5×step, 2, 4)}。
      *
-     * <p>写死 4 时，一旦有人把 {@code aStarStep} 调到 2（局部修复档就是 2），容差 4
+     * <p>写死 4 时，一旦有人把 {@code pathGridStep} 调到 2（局部修复档就是 2），容差 4
      * 会把 2 格网格上的**所有转角**一起抹平 —— 因为 DP 只看「偏离保留折线多远」。
      * 而默认档 {@code step=8} 时 {@code 0.5×8 = 4} 与原常量完全相同，所以
      * <b>默认档逐位不变</b>。</p>

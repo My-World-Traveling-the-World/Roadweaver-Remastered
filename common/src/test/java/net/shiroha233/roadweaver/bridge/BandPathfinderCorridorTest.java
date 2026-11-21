@@ -95,12 +95,12 @@ final class BandPathfinderCorridorTest {
         BlockPos start = new BlockPos(-5, 64, -3), end = new BlockPos(-2, 64, -3);
         BandPathfinder solver = new BandPathfinder();
         // 同格的跨度是 3 格；走生产入口可抓到 set(0)/set(last) 覆盖同一站的退化。
-        PathResult open = solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config());
+        PathResult open = solver.findPath(start, end, 1, null, null, new FlatTerrain(32), config());
         assertTrue(open.success(), "同一采样格不等于同一现实端点");
         assertEquals(List.of(start, end), open.rawPath(), "两端都要留给后处理");
 
         // x=-4 的缺口不在粗采样格上，只有真实世界坐标的短接线检查能看到。
-        PathResult blocked = solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32, true), config());
+        PathResult blocked = solver.findPath(start, end, 1, null, null, new FlatTerrain(32, true), config());
         assertFalse(blocked.success(), "粗网格可达不能掩盖接线中间缺一列");
     }
 
@@ -109,14 +109,14 @@ final class BandPathfinderCorridorTest {
         BlockPos start = new BlockPos(-2, 64, -2), end = new BlockPos(1, 64, 1);
         var config = config();
         var solver = new BandPathfinder();
-        assertTrue(solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config).success());
+        assertTrue(solver.findPath(start, end, 1, null, null, new FlatTerrain(32), config).success());
         // (-1,0) 在公共角另一侧；两个端点都不在这一片禁行量化格内。
         CorridorBan ban = ban(List.of(new BlockPos(-1, 64, 0)));
         assertFalse(ban.blocks(start.getX(), start.getZ()));
         assertFalse(ban.blocks(end.getX(), end.getZ()));
         assertTrue(ban.intersectsSegment(start.getX(), start.getZ(), end.getX(), end.getZ()));
         config.setCorridorBan(ban);
-        assertFalse(solver.findPath(start, end, 1, null, 100, null, new FlatTerrain(32), config).success(),
+        assertFalse(solver.findPath(start, end, 1, null, null, new FlatTerrain(32), config).success(),
                 "同格连接也不能从禁行角钻过");
     }
 
@@ -126,13 +126,13 @@ final class BandPathfinderCorridorTest {
         var end = new BlockPos(64, 64, 0);
         var terrain = new FlatTerrain(0);
         var config = config();
-        assertTrue(new BandPathfinder().findPath(start, end, 1, null, 1000, null, terrain, config).success());
+        assertTrue(new BandPathfinder().findPath(start, end, 1, null, null, terrain, config).success());
         // 不扩大夹具，令两侧粗格都可达；必须由边检查拒绝，不能靠点掩码碰巧变红。
         var mask = HugeTreeReservationTest.mask(-128, -64, 128, 64, 0, new BlockPos(-5, 64, 0));
         assertFalse(mask.blocks(-8, 0));
         assertFalse(mask.blocks(0, 0));
         var solver = new BandPathfinder((level, x0, z0, x1, z1, radius) -> mask);
-        assertFalse(solver.findPath(start, end, 1, null, 1000, null, terrain, config).success());
+        assertFalse(solver.findPath(start, end, 1, null, null, terrain, config).success());
     }
 
     @Test
@@ -140,11 +140,11 @@ final class BandPathfinderCorridorTest {
         var config = config();
         var tree = new BlockPos(0, 64, 6);
         var terrain = new FlatTerrain(32);
-        assertTrue(new BandPathfinder().findPath(START, END, 15, null, 1000, null, terrain, config)
+        assertTrue(new BandPathfinder().findPath(START, END, 15, null, null, terrain, config)
                 .rawPath().stream().allMatch(p -> p.getZ() == 0));
         var solver = new BandPathfinder((level, x0, z0, x1, z1, radius) ->
                 HugeTreeReservationTest.mask(x0, z0, x1, z1, radius, tree));
-        var result = solver.findPath(START, END, 15, null, 1000, null, terrain, config);
+        var result = solver.findPath(START, END, 15, null, null, terrain, config);
         assertTrue(result.success(), "一列预留有绕路，不能直接拒绝");
         assertEquals(START, result.rawPath().getFirst());
         assertEquals(END, result.rawPath().getLast());
@@ -167,12 +167,12 @@ final class BandPathfinderCorridorTest {
 
     private static PathfindingCostConfig config() {
         var config = new PathfindingCostConfig();
-        config.setAStarStep(8);
+        config.setPathGridStep(8);
         return config;
     }
 
     private static PathResult find(PathfindingCostConfig config, int zBound) {
-        return new BandPathfinder().findPath(START, END, 1, null, 1000, null, new FlatTerrain(zBound), config);
+        return new BandPathfinder().findPath(START, END, 1, null, null, new FlatTerrain(zBound), config);
     }
 
     private record FlatTerrain(int zBound, boolean missingColumn) implements PathTerrainField {

@@ -224,7 +224,7 @@ public final class PathPostProcessor {
     /**
      * 从 A* 原始路径推断步距。
      *
-     * <p>A* 的邻接偏移恒为 {@code d = effectiveAStarStep()} 的整数倍，所以原始路径的
+     * <p>A* 的邻接偏移恒为 {@code d = effectivePathGridStep()} 的整数倍，所以原始路径的
      * 相邻距离只可能是 {@code d} 或 {@code d√2}。<b>取最小相邻距离</b>即得 {@code d}
      * （纯对角路径会得到 {@code d√2}，这是可接受的保守值 —— 密化只是少插几个点，
      * 不会插错位置）。读不到时退回 8（出厂默认步距）。</p>

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TerrainArchetypeTest {
 
-    /** A* 步长（与 PathfindingCostConfig 的 aStarStep 生产取值一致）。 */
+    /** A* 步长（与 PathfindingCostConfig 的 pathGridStep 生产取值一致）。 */
     private static final int STEP = 4;
     /** 采样步长（比 STEP 稀疏，够快又够代表性）。 */
     private static final int SAMPLE = 8;

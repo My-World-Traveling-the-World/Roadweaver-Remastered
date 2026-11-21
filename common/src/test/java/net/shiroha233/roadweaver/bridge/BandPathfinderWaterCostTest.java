@@ -63,7 +63,7 @@ class BandPathfinderWaterCostTest {
 
     private static PathfindingCostConfig config(int weight, double wet, double dry) {
         var config = new PathfindingCostConfig();
-        config.setAStarStep(8);
+        config.setPathGridStep(8);
         config.setBiomeWeight(weight);
         config.setBiomeCostWater(wet);
         config.setBiomeCostOther(dry);
@@ -71,7 +71,7 @@ class BandPathfinderWaterCostTest {
     }
 
     private static List<BlockPos> route(Terrain terrain, PathfindingCostConfig config) {
-        var result = new BandPathfinder().findPath(START, END, 1, null, 1000, null, terrain, config);
+        var result = new BandPathfinder().findPath(START, END, 1, null, null, terrain, config);
         assertTrue(result.success(), "同一夹具必须完成两端间的生产寻路");
         var path = result.rawPath();
         assertFalse(path.isEmpty());

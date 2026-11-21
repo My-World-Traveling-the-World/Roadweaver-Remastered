@@ -379,7 +379,7 @@ public final class RoadPathCalculator {
 
         RoadGenerationConfig cfg = RoadGenerationConfig.from(ConfigService.get());
         PathfindingCostConfig fine = cfg.pathfinding().snapshot();
-        fine.setAStarStep(1);
+        fine.setPathGridStep(1);
         fine.sanitize();
         List<BlockPos> profile = new ArrayList<>(road.roadSegmentList().size());
         for (int i = 0; i < road.roadSegmentList().size(); i++) {

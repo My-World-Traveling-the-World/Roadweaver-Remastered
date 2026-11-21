@@ -1,27 +1,16 @@
-/* 文件职责：TerrainProfileConfig 11 个键的元数据。 */
+/* 文件职责：TerrainProfileKeys当前配置的元数据。 */
 package net.shiroha233.roadweaver.config.meta;
 
 import java.util.List;
 
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
-/**
- * {@code TerrainProfileConfig} 的键元数据表。
- *
- * <h2>倍率是「上限」不是「惩罚」</h2>
- * <p>{@code *DetourMultiplier} 问的是「为避开这类地形，最多能接受相对直连距离的几倍」。
- * 它是接受门限，调低会更容易放弃绕行、直接穿过地形。</p>
- *
- * <h2>一个已实证的死键</h2>
- * <p>{@code oceanBridgeMinDepth} 全仓 0 处外部引用。</p>
- *
- * @see ConfigKeyTable
- */
+/** 当前生产读取项的元数据；删除未接线控件，避免把显示或日志读取误判为生效。 */
 public final class TerrainProfileKeys {
 
     private TerrainProfileKeys() {}
 
-    /** 11 个键，顺序与同名字段声明顺序一致。 */
+    /** 字段与元数据的双向一致性由回归强制检查。 */
     public static final java.util.List<ConfigKey> ALL = java.util.List.of(
             ConfigKey.integer("mountainSurfaceCutMaxBlocks", 3, 0, 1000000,
                     ConfigCategory.PROFILE, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
@@ -76,12 +65,6 @@ public final class TerrainProfileKeys {
                     "海洋绕行倍率", "Ocean detour multiplier",
                     "为避开海洋最多接受几倍绕行",
                     "倍", ""),
-
-            ConfigKey.integer("oceanBridgeMinDepth", 1, 0, 1000000,
-                    ConfigCategory.CROSSING, ConfigTier.EXPERT, ConfigStatus.UNWIRED,
-                    "海洋架桥最小水深", "Ocean bridge min water depth",
-                    "水深超过这个值才在海上架桥",
-                    "格", "★ 已实证未接线：全仓 0 处外部引用，改了不会有任何效果"),
 
             ConfigKey.decimal("oceanUnderseaChance", 0.50D, 0.0, 1000000.0,
                     ConfigCategory.CROSSING, ConfigTier.EXPERT, ConfigStatus.ACTIVE,

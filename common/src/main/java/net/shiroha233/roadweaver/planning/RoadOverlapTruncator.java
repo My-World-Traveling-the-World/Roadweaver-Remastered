@@ -102,7 +102,7 @@ public final class RoadOverlapTruncator {
         // 0.9.086：路径缓存按 fingerprint 匹配，而 fingerprint 里含 AStarStep。
         //
         // 真机取证（0.9.085 那局，存档 20:07）：village merge 恰好 0 次 ——
-        // planRoadTerrain 注册路径时用的是 config.pathfindingCost().withAStarStep(step)
+        // planRoadTerrain 注册路径时用的是 config.pathfindingCost().withPathGridStep(step)
         // （RoadPlanningService:696/:718），而这里原先用不带 step 的 config，
         // fingerprint 永远对不上 ⇒ 每条连接都 find 不到路径 ⇒ 机制静默失效。
         //
@@ -143,7 +143,7 @@ public final class RoadOverlapTruncator {
     private static int[] stepCandidates(ModConfig config) {
         int configured = 8;
         try {
-            configured = config.pathfindingCost().aStarStep();
+            configured = config.pathfindingCost().pathGridStep();
         } catch (Throwable ignored) {
             // 读不到就用默认 8
         }
@@ -158,7 +158,7 @@ public final class RoadOverlapTruncator {
         for (int step : stepCandidates) {
             try {
                 Optional<List<BlockPos>> path = PlannedPathCache.find(level, connection, mode,
-                        config.pathfindingCost().withAStarStep(step));
+                        config.pathfindingCost().withPathGridStep(step));
                 if (path.isPresent() && path.get().size() >= 2) {
                     return path.get();
                 }

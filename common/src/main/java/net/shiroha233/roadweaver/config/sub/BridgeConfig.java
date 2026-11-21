@@ -17,10 +17,8 @@ public final class BridgeConfig implements SubConfig {
     private int pierInterval = RoadConstants.DEFAULT_BRIDGE_PIER_INTERVAL;
     private int pierWidth = RoadConstants.DEFAULT_BRIDGE_PIER_WIDTH;
     private int pierMaxHeight = RoadConstants.DEFAULT_BRIDGE_PIER_MAX_HEIGHT;
-    private boolean keepLamps = true;
     private int rampSegments = RoadConstants.DEFAULT_BRIDGE_RAMP_SEGMENTS;
     private int minWaterDepth = RoadConstants.DEFAULT_BRIDGE_MIN_WATER_DEPTH;
-    private int minLength = RoadConstants.DEFAULT_BRIDGE_MIN_LENGTH;
     private int mergeGap = RoadConstants.DEFAULT_BRIDGE_MERGE_GAP;
     /** 0.9.029 / R-03：跨路并行桥共享半径（格）。0 = 关闭；默认 24。 */
     private int shareRadius = 24;
@@ -46,8 +44,6 @@ public final class BridgeConfig implements SubConfig {
         rampSegments = Math.max(0, Math.min(RoadConstants.BRIDGE_RAMP_SEGMENTS_MAX, rampSegments));
         minWaterDepth = Math.max(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MIN,
                 Math.min(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MAX, minWaterDepth));
-        minLength = Math.max(RoadConstants.BRIDGE_MIN_LENGTH_MIN,
-                Math.min(RoadConstants.BRIDGE_MIN_LENGTH_MAX, minLength));
         mergeGap = Math.max(RoadConstants.BRIDGE_MERGE_GAP_MIN,
                 Math.min(RoadConstants.BRIDGE_MERGE_GAP_MAX, mergeGap));
         shareRadius = Math.max(0, Math.min(96, shareRadius));
@@ -67,10 +63,8 @@ public final class BridgeConfig implements SubConfig {
         copy.pierInterval = this.pierInterval;
         copy.pierWidth = this.pierWidth;
         copy.pierMaxHeight = this.pierMaxHeight;
-        copy.keepLamps = this.keepLamps;
         copy.rampSegments = this.rampSegments;
         copy.minWaterDepth = this.minWaterDepth;
-        copy.minLength = this.minLength;
         copy.mergeGap = this.mergeGap;
         copy.shareRadius = this.shareRadius;
         copy.clearHeight = this.clearHeight;
@@ -96,8 +90,6 @@ public final class BridgeConfig implements SubConfig {
     public void setPierWidth(int v) { this.pierWidth = v; }
     public int pierMaxHeight() { return pierMaxHeight; }
     public void setPierMaxHeight(int v) { this.pierMaxHeight = v; }
-    public boolean keepLamps() { return keepLamps; }
-    public void setKeepLamps(boolean v) { this.keepLamps = v; }
     /** 桥面净空高度（格）；0 = 跟随 {@code roadAppearance.tunnelClearHeight}。见字段注释。 */
     public int clearHeight() { return clearHeight; }
     public void setClearHeight(int v) { this.clearHeight = v; }
@@ -109,9 +101,6 @@ public final class BridgeConfig implements SubConfig {
     public int minWaterDepth() { return minWaterDepth; }
     public void setMinWaterDepth(int v) { this.minWaterDepth = Math.max(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MIN,
             Math.min(RoadConstants.BRIDGE_MIN_WATER_DEPTH_MAX, v)); }
-    public int minLength() { return minLength; }
-    public void setMinLength(int v) { this.minLength = Math.max(RoadConstants.BRIDGE_MIN_LENGTH_MIN,
-            Math.min(RoadConstants.BRIDGE_MIN_LENGTH_MAX, v)); }
     public int mergeGap() { return mergeGap; }
     /** 0.9.029 / R-03：跨路并行桥共享半径（格），0 关闭。 */
     public int shareRadius() { return shareRadius; }

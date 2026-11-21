@@ -107,14 +107,6 @@ public final class TerrainProfileSection {
                 .setSaveConsumer(cfg::setOceanDetourMultiplier)
                 .build());
         category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.ocean_bridge_min_depth"),
-                        cfg.oceanBridgeMinDepth())
-                .setDefaultValue(def.oceanBridgeMinDepth())
-                .setTooltip(Component.translatable("config.roadweaver.ocean_bridge_min_depth.tooltip"))
-                .setMin(1).setMax(10)
-                .setSaveConsumer(cfg::setOceanBridgeMinDepth)
-                .build());
-        category.addEntry(eb
                 .startDoubleField(Component.translatable("config.roadweaver.ocean_undersea_chance"),
                         cfg.oceanUnderseaChance())
                 .setDefaultValue(def.oceanUnderseaChance())

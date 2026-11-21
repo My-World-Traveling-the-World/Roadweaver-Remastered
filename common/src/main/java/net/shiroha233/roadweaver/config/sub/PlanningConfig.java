@@ -29,7 +29,6 @@ public final class PlanningConfig implements SubConfig {
     private boolean dynamicPlanEnabled = true;
     private int dynamicPlanRadiusChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_RADIUS_CHUNKS;
     private int dynamicPlanStrideChunks = RoadConstants.DEFAULT_DYNAMIC_PLAN_STRIDE_CHUNKS;
-    private PlanningAlgorithm planningAlgorithm = PlanningAlgorithm.PIPELINE;
     private TerrainSamplingMode terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
     /** 局部修复以冲突为圆心限制搜索范围，避免升级为全路重搜。 */
     private int localConflictRadiusBlocks = 100;
@@ -267,18 +266,7 @@ public final class PlanningConfig implements SubConfig {
      */
     private int heightAnomalyDetourMaxBlocks = 96;
 
-    // ── 0.8.420：KNN 路网拓扑参数（原为 RoadConstants 硬编码）────────────────
-    // 这六项决定「哪些结构互相连路」⇒ 它们已经在 planning() 段里，随
-    // ConfigService.planningFingerprintPayload() 整体序列化自动进规划指纹；
-    // 改任一值 ⇒ 指纹变 ⇒ 已有缓存路线重算（刻意行为，建新世界前先定好）。
-    /** KNN：每个点尝试连的最近邻个数。默认 2；调大路网更密（冗余边多）。 */
-    private int knnK = RoadConstants.DEFAULT_KNN_K;
-    /** KNN：候选距离放大系数（相对最近邻距离）。默认 1.8；<=0 关闭该过滤。 */
-    private double knnAlpha = RoadConstants.DEFAULT_KNN_ALPHA;
-    /** KNN：同一顶点任意两条边的最小夹角（度）。默认 40；调小允许更扁的扇形。 */
-    private double knnMinAngleDeg = RoadConstants.DEFAULT_KNN_MIN_ANGLE_DEG;
-    /** KNN：单点最大度数（边数上限）。默认 2；调大允许枢纽。 */
-    private int knnDegreeCap = RoadConstants.DEFAULT_KNN_DEGREE_CAP;
+    // 只保留现行连通分支合并读取的约束，旧KNN调节项不再保存。
     /** 连通分支合并：同一顶点两条边的最小夹角（度）。默认 35。 */
     private double componentMinAngleDeg = RoadConstants.DEFAULT_COMPONENT_MIN_ANGLE_DEG;
     /** 连通分支合并：单点最大度数。默认 3。 */
@@ -322,10 +310,6 @@ public final class PlanningConfig implements SubConfig {
             dynamicPlanStrideChunks = dynamicPlanRadiusChunks;
         }
         dynamicPlanStrideChunks = Math.min(RoadConstants.PLAN_TILE_MAX, dynamicPlanStrideChunks);
-        if (planningAlgorithm == null) planningAlgorithm = PlanningAlgorithm.PIPELINE;
-        // 2026-11-13：旧规划器已全部删除，枚举只剩 PIPELINE 一种。
-        // 老配置里写着的旧枚举名（KNN/DELAUNAY/RNG/MST/SNAP_BRANCH/ALPHA_MODEL）
-        // 会被 GSON 当成未知值返回 null，这里统一回落到 PIPELINE。
         if (terrainSamplingMode == null) terrainSamplingMode = TerrainSamplingMode.COARSE_CORRIDOR;
         localConflictRadiusBlocks = Math.max(16, Math.min(512, localConflictRadiusBlocks));
         structureDetourRadiusStartBlocks = Math.max(16, Math.min(512, structureDetourRadiusStartBlocks));
@@ -372,11 +356,7 @@ public final class PlanningConfig implements SubConfig {
         maxGradeFraction = finiteFraction(maxGradeFraction, 0.5D);
         gradeRepairParallelism = Math.max(0, Math.min(Runtime.getRuntime().availableProcessors(),
                 gradeRepairParallelism));
-        // KNN 路网拓扑
-        knnK = Math.max(1, Math.min(8, knnK));
-        knnAlpha = Math.max(0.0D, Math.min(5.0D, knnAlpha));
-        knnMinAngleDeg = Math.max(0.0D, Math.min(89.0D, knnMinAngleDeg));
-        knnDegreeCap = Math.max(1, Math.min(8, knnDegreeCap));
+        // 连通分支合并约束
         componentMinAngleDeg = Math.max(0.0D, Math.min(89.0D, componentMinAngleDeg));
         componentDegreeCap = Math.max(1, Math.min(8, componentDegreeCap));
         planMaxEdgeLenBlocks = Math.max(128, Math.min(16384, planMaxEdgeLenBlocks));
@@ -396,7 +376,6 @@ public final class PlanningConfig implements SubConfig {
         copy.dynamicPlanEnabled = this.dynamicPlanEnabled;
         copy.dynamicPlanRadiusChunks = this.dynamicPlanRadiusChunks;
         copy.dynamicPlanStrideChunks = this.dynamicPlanStrideChunks;
-        copy.planningAlgorithm = this.planningAlgorithm;
         copy.terrainSamplingMode = this.terrainSamplingMode;
         copy.localConflictRadiusBlocks = this.localConflictRadiusBlocks;
         copy.structureDetourRadiusStartBlocks = this.structureDetourRadiusStartBlocks;
@@ -443,10 +422,6 @@ public final class PlanningConfig implements SubConfig {
         copy.localRepairWindowClusterRadiusBlocks = this.localRepairWindowClusterRadiusBlocks;
         copy.preferUnsmoothedOnProtectionGap = this.preferUnsmoothedOnProtectionGap;
         copy.heightAnomalyDetourMaxBlocks = this.heightAnomalyDetourMaxBlocks;
-        copy.knnK = this.knnK;
-        copy.knnAlpha = this.knnAlpha;
-        copy.knnMinAngleDeg = this.knnMinAngleDeg;
-        copy.knnDegreeCap = this.knnDegreeCap;
         copy.componentMinAngleDeg = this.componentMinAngleDeg;
         copy.componentDegreeCap = this.componentDegreeCap;
         copy.planMaxEdgeLenBlocks = this.planMaxEdgeLenBlocks;
@@ -463,10 +438,7 @@ public final class PlanningConfig implements SubConfig {
     public void setDynamicPlanRadiusChunks(int v) { this.dynamicPlanRadiusChunks = v; }
     public int dynamicPlanStrideChunks() { return dynamicPlanStrideChunks; }
     public void setDynamicPlanStrideChunks(int v) { this.dynamicPlanStrideChunks = v; }
-    public PlanningAlgorithm planningAlgorithm() { return planningAlgorithm; }
-    public void setPlanningAlgorithm(PlanningAlgorithm v) { this.planningAlgorithm = v; }
-    public PlanningAlgorithm algorithm() { return planningAlgorithm; }
-    public void setAlgorithm(PlanningAlgorithm v) { this.planningAlgorithm = v; }
+    public PlanningAlgorithm planningAlgorithm() { return PlanningAlgorithm.PIPELINE; }
     public TerrainSamplingMode terrainSamplingMode() { return terrainSamplingMode; }
     public void setTerrainSamplingMode(TerrainSamplingMode v) { this.terrainSamplingMode = v; }
     public int localConflictRadiusBlocks() { return localConflictRadiusBlocks; }
@@ -581,15 +553,7 @@ public final class PlanningConfig implements SubConfig {
     public int heightAnomalyDetourMaxBlocks() { return heightAnomalyDetourMaxBlocks; }
     public void setHeightAnomalyDetourMaxBlocks(int v) { this.heightAnomalyDetourMaxBlocks = v; }
 
-    // KNN 路网拓扑（0.8.420）
-    public int knnK() { return knnK; }
-    public void setKnnK(int v) { this.knnK = v; }
-    public double knnAlpha() { return knnAlpha; }
-    public void setKnnAlpha(double v) { this.knnAlpha = v; }
-    public double knnMinAngleDeg() { return knnMinAngleDeg; }
-    public void setKnnMinAngleDeg(double v) { this.knnMinAngleDeg = v; }
-    public int knnDegreeCap() { return knnDegreeCap; }
-    public void setKnnDegreeCap(int v) { this.knnDegreeCap = v; }
+    // 连通分支合并约束，修改后随规划配置进入缓存指纹。
     public double componentMinAngleDeg() { return componentMinAngleDeg; }
     public void setComponentMinAngleDeg(double v) { this.componentMinAngleDeg = v; }
     public int componentDegreeCap() { return componentDegreeCap; }

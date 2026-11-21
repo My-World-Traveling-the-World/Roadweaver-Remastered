@@ -40,7 +40,7 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
         CoarseTerrainRegion terrain = null;
         try {
             Bounds bounds = request.bounds();
-            int step = request.pathfinding().effectiveAStarStep();
+            int step = request.pathfinding().effectivePathGridStep();
             long startedAt = System.nanoTime();
             terrain = CoarseTerrainRegionSampler.sample(
                     request.level(), bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ(), step,

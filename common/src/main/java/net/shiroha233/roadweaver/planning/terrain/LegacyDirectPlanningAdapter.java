@@ -25,7 +25,7 @@ final class LegacyDirectPlanningAdapter implements RoadTerrainPlanningPort {
 
         TerrainSamplingCache cache = new TerrainSamplingCache();
         PathTerrainField terrain = new CacheBackedTerrainField(request.level(), cache,
-                request.pathfinding().effectiveAStarStep());
+                request.pathfinding().effectivePathGridStep());
         LinkedHashMap<StructureConnection, List<net.minecraft.core.BlockPos>> paths = new LinkedHashMap<>();
         // 0.9.057：① 第一遍（本适配器本来就是逐条串行，保持原样）—— 只收路径，
         // 不再把前面的路的中心线累积成优惠走廊（0.9.056 那样做会引入顺序依赖）。

@@ -35,7 +35,7 @@ class AbObservingPathfinderTest {
 
         @Override
         public PathResult findPath(BlockPos start, BlockPos end, int width,
-                                   ServerLevel level, int maxSteps,
+                                   ServerLevel level,
                                    TerrainSamplingCache cache, PathTerrainField terrain,
                                    PathfindingCostConfig config) {
             calls++;
@@ -48,7 +48,7 @@ class AbObservingPathfinderTest {
         CountingPathfinder stub = new CountingPathfinder();
         AbObservingPathfinder observing = new AbObservingPathfinder(stub, stub);
 
-        observing.findPath(null, null, 1, null, 1000, null, null, null);
+        observing.findPath(null, null, 1, null, null, null, null);
 
         assertEquals(1, stub.calls,
                 "两臂同为 " + stub.getClass().getSimpleName() + " 时不该双跑；"
@@ -60,8 +60,8 @@ class AbObservingPathfinderTest {
         CountingPathfinder stub = new CountingPathfinder();
         AbObservingPathfinder observing = new AbObservingPathfinder(stub, stub);
 
-        observing.findPath(null, null, 1, null, 1000, null, null, null);
-        observing.findPath(null, null, 1, null, 1000, null, null, null);
+        observing.findPath(null, null, 1, null, null, null, null);
+        observing.findPath(null, null, 1, null, null, null, null);
 
         assertEquals(2, stub.calls, "每次 findPath 各跑一次，不应翻倍");
     }

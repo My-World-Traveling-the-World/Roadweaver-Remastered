@@ -77,10 +77,10 @@ public final class AbObservingPathfinder implements Pathfinder {
 
     @Override
     public PathResult findPath(BlockPos start, BlockPos end, int width,
-                               ServerLevel level, int maxSteps,
+                               ServerLevel level,
                                TerrainSamplingCache cache, PathTerrainField terrain,
                                PathfindingCostConfig config) {
-        PathResult authoritative = classic.findPath(start, end, width, level, maxSteps,
+        PathResult authoritative = classic.findPath(start, end, width, level,
                 cache, terrain, config);
         if (band == null) return authoritative;
 
@@ -97,7 +97,7 @@ public final class AbObservingPathfinder implements Pathfinder {
         long n = calls.incrementAndGet();
         boolean log = (n % LOG_EVERY) == 1L;
         try {
-            PathResult observed = band.findPath(start, end, width, level, maxSteps,
+            PathResult observed = band.findPath(start, end, width, level,
                     cache, terrain, config);
             if (log) {
                 // 2026-11-13：这里原来只打「点数 + 是否成功」，信息量太低 ——

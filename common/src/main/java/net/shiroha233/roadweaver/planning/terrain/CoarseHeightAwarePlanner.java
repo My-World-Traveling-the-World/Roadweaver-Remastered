@@ -46,7 +46,7 @@ final class CoarseHeightAwarePlanner {
                 || !terrain.contains(goal.getX(), goal.getZ())) {
             return null;
         }
-        int step = Math.max(1, config.effectiveAStarStep());
+        int step = Math.max(1, config.effectivePathGridStep());
         int startX = PathfindingHelper.snapToGrid(start.getX(), step);
         int startZ = PathfindingHelper.snapToGrid(start.getZ(), step);
         int goalX = PathfindingHelper.snapToGrid(goal.getX(), step);

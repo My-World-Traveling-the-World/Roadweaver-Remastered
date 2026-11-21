@@ -548,6 +548,8 @@ public final class RoadJUnitRegressionSuite {
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.WallPavementProtectionTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.TreeReservationOutcomeTest"))
                 // 公开河流契约必须实际进入套件，不能靠测试类存在推断覆盖。
+                // 配置清理必须走实际序列化与界面绑定，防止旧键重新混入。
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.config.CurrentConfigContractTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.compat.StreamsPlanContractAccessTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.compat.StreamsPrewarmCompletionTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.construction.ConstructionTransactionCursorTest"))

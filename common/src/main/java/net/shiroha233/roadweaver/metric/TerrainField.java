@@ -68,7 +68,7 @@ public interface TerrainField {
      *
      * <h2>为什么需要步长</h2>
      * <p>真实路线的包围盒动辄 1500×1500，逐格采样是 225 万列 —— 既采不完也存不下。
-     * 而旧实现的 A\* 本来就是 {@code aStarStep=8} 的粗网格。
+     * 而旧实现的 A\* 本来就是 {@code pathGridStep=8} 的粗网格。
      * 步长让新内核既能粗搜（拓扑决策）也能细算（单条路线几何）。</p>
      *
      * <p><b>关键约定</b>：{@link #height} 与 {@link #gradient} 收的是<b>方块坐标</b>，

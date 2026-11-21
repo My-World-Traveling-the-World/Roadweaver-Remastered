@@ -33,7 +33,7 @@ import java.util.Arrays;
  *   <li><b>推</b>（从既有常量/几何关系推出来）：{@link #TARGET_BURIAL_BLOCKS}（= roofOffset+1）、
  *       {@link #MIN_PROMINENCE_BLOCKS}（= MAX_SURFACE_CUT−1）、{@link #ENVELOPE_HALF_WINDOW_STATIONS}
  *       的下界（要判出宽 30 站的山，半窗必须 &gt; 15）、{@link #STATION_SPACING_BLOCKS}
- *       （= DEFAULT_ASTAR_STEP）、{@link #PORTAL_MAX_GRADE}（= DEFAULT_SOFT_GRADE_LIMIT）。</li>
+ *       （= DEFAULT_PATH_GRID_STEP）、{@link #PORTAL_MAX_GRADE}（= DEFAULT_SOFT_GRADE_LIMIT）。</li>
  *   <li><b>拍</b>（本版定的经验值）：{@link #ENVELOPE_HALF_WINDOW_STATIONS}=24（在 15 下界上留余量）、
  *       {@link #ENVELOPE_QUANTILE}=0.10、{@link #MIN_OVERBURDEN_MARGIN_BLOCKS}=1、
  *       {@link #TUNNEL_BLOCK_COST_FACTOR}=5、{@link #PORTAL_BLOCK_COST_FACTOR}=2。</li>
@@ -117,7 +117,7 @@ public final class TunnelEnvelopeCriterion {
      */
     public static final int TUNNEL_WINDOW_STATIONS = 8;
 
-    /** 名义站距（格）。**推**：{@code RoadConstants.DEFAULT_ASTAR_STEP} = 8（粗规划每一步的距离）。 */
+    /** 名义站距（格）。**推**：{@code RoadConstants.DEFAULT_PATH_GRID_STEP} = 8（粗规划每一步的距离）。 */
     public static final double STATION_SPACING_BLOCKS = 8.0D;
 
     /**
@@ -211,7 +211,7 @@ public final class TunnelEnvelopeCriterion {
 
         /** 出厂权重：单价取 {@link RoadConstants} 的新标定默认值，倍数取本类的「拍」值。 */
         public static Costs defaults() {
-            double step = RoadConstants.DEFAULT_ASTAR_STEP;
+            double step = RoadConstants.DEFAULT_PATH_GRID_STEP;
             return new Costs(RoadConstants.DEFAULT_ORTHO_STEP_COST / step,
                     RoadConstants.DEFAULT_SOFT_GRADE_PENALTY,
                     RoadConstants.DEFAULT_HARD_GRADE_PENALTY,

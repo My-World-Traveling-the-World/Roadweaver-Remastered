@@ -71,7 +71,7 @@ final class LocalRouteSearch {
                                                   AccurateHeightSampler sampler,
                                                   PathfindingCostConfig config) {
         return findLocalRoute(original, sampler, config, SEARCH_MARGIN_BLOCKS, EdgeObstacle.NONE,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
+                Math.max(1, config.effectivePathGridStep()), false, 0, null, Integer.MIN_VALUE);
     }
 
     static List<BlockPos> findLocalRoute(List<BlockPos> original,
@@ -79,7 +79,7 @@ final class LocalRouteSearch {
                                                   PathfindingCostConfig config,
                                                   int searchMarginBlocks) {
         return findLocalRoute(original, sampler, config, searchMarginBlocks, EdgeObstacle.NONE,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
+                Math.max(1, config.effectivePathGridStep()), false, 0, null, Integer.MIN_VALUE);
     }
 
     static List<BlockPos> findLocalRoute(List<BlockPos> original,
@@ -88,7 +88,7 @@ final class LocalRouteSearch {
                                                   int searchMarginBlocks,
                                                   EdgeObstacle obstacle) {
         return findLocalRoute(original, sampler, config, searchMarginBlocks, obstacle,
-                Math.max(1, config.effectiveAStarStep()), false, 0, null, Integer.MIN_VALUE);
+                Math.max(1, config.effectivePathGridStep()), false, 0, null, Integer.MIN_VALUE);
     }
 
     static List<BlockPos> findLocalRoute(List<BlockPos> original,

@@ -237,7 +237,7 @@ public final class ModConfig {
         return structurePrediction.otherStructureRoadOffset();
     }
 
-    public int aStarStep() {
-        return pathfindingCost.aStarStep();
+    public int pathGridStep() {
+        return pathfindingCost.pathGridStep();
     }
 }

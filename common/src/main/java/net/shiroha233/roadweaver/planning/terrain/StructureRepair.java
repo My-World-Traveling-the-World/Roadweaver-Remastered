@@ -133,7 +133,7 @@ public final class StructureRepair {
             PathfindingCostConfig config,
             StructureConnection connection,
             int localDetourBlocks) {
-        PathfindingCostConfig exact = config == null ? null : config.withAStarStep(1);
+        PathfindingCostConfig exact = config == null ? null : config.withPathGridStep(1);
         List<BlockPos> rejectedCenters = new ArrayList<>(1);
         List<Integer> rejectedIndices = new ArrayList<>(1);
         List<BlockPos> path = repairStructureIntersections(accuratePath, level, sampler, exact,
@@ -249,7 +249,7 @@ public final class StructureRepair {
                 for (RepairSlice slice : repairSlices) {
                     List<BlockPos> slicePath = slice.path();
                     candidate = findLocalRoute(slicePath, sampler, config,
-                            Math.max(config.effectiveAStarStep(), localDetourBlocks),
+                            Math.max(config.effectivePathGridStep(), localDetourBlocks),
                             EdgeObstacle.NONE, 2, false, collisionClearance, conflictBox,
                             Integer.MIN_VALUE, searchCenter);
                     candidate = smoothCandidateGrade(candidate);
@@ -289,7 +289,7 @@ public final class StructureRepair {
 
                     tunnelSearchUsed = true;
                     candidate = findLocalRoute(slicePath, sampler, config,
-                            Math.max(config.effectiveAStarStep(), localDetourBlocks),
+                            Math.max(config.effectivePathGridStep(), localDetourBlocks),
                             EdgeObstacle.NONE, rerouteStep, true, collisionClearance, conflictBox,
                             localDetourTunnelFloor(level, searchCenter), searchCenter, true);
                     candidate = smoothCandidateGrade(candidate);
@@ -319,7 +319,7 @@ public final class StructureRepair {
                     // 比"四方向盲试"更对症：禁止进入后，A* 会自己从各个方向找出口。
                     EdgeObstacle blockEnteringBox = (from, to) -> pointInsideBox(conflictBox, to);
                     candidate = findLocalRoute(slicePath, sampler, config,
-                            Math.max(config.effectiveAStarStep(), localDetourBlocks),
+                            Math.max(config.effectivePathGridStep(), localDetourBlocks),
                             blockEnteringBox, 2, false, collisionClearance, conflictBox,
                             Integer.MIN_VALUE, searchCenter);
                     candidate = smoothCandidateGrade(candidate);

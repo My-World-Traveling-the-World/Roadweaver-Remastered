@@ -119,7 +119,7 @@ public final class ArrivalTimeField {
      * 原审计条目这一半不成立（Claude 复核时已推翻）。</p>
      *
      * <p>步数上限用 {@code width·depth} 兜底（每步 T 严格下降，正常远小于此值），
-     * 与 {@code BandPathfinder} 的 {@code maxSteps} 参数无关。</p>
+     * 该限制属于反向追踪，不是已删除的旧A*扩展步数预算。</p>
      *
      * @return 从源格到目标格的方块坐标（含两格）；不可达或无法回到源格时返回空列表
      */

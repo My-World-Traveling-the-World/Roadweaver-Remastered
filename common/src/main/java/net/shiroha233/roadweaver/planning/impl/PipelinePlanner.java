@@ -63,7 +63,7 @@ import net.shiroha233.roadweaver.topology.TopologyPlan;
  *
  * <h2>采样步长与规模</h2>
  * <p>规划区域动辄 1500×1500。逐格采样是 225 万列，采不完也存不下 ——
- * 所以用 {@link #DEFAULT_STEP} = 8（与旧 A* 的 {@code aStarStep} 同量级）。
+ * 所以用 {@link #DEFAULT_STEP} = 8（与旧 A* 的 {@code pathGridStep} 同量级）。
  * 625×625 ≈ 39 万列，拓扑决策不需要方格精度；方格精度由单条路线自己的
  * 包围盒负责。</p>
  *
@@ -72,7 +72,7 @@ import net.shiroha233.roadweaver.topology.TopologyPlan;
  */
 public final class PipelinePlanner implements NetworkPlanner {
 
-    /** 拓扑决策的采样步长（格）。8 与旧 A* 的 {@code effectiveAStarStep()} 同量级。 */
+    /** 拓扑决策的采样步长（格）。8 与旧 A* 的 {@code effectivePathGridStep()} 同量级。 */
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver");
     private static final boolean BUILDABILITY_SHADOW =
             "on".equalsIgnoreCase(System.getProperty("roadweaver.buildabilityShadow"));

@@ -102,12 +102,6 @@ public final class BridgeSection {
                 .setSaveConsumer(cfg::setPierMaxHeight)
                 .build());
 
-        category.addEntry(eb
-                .startBooleanToggle(Component.translatable("config.roadweaver.bridge_keep_lamps"), cfg.keepLamps())
-                .setDefaultValue(def.keepLamps())
-                .setTooltip(Component.translatable("config.roadweaver.bridge_keep_lamps.tooltip"))
-                .setSaveConsumer(cfg::setKeepLamps)
-                .build());
 
         category.addEntry(eb
                 .startIntField(Component.translatable("config.roadweaver.bridge_ramp_segments"), cfg.rampSegments())
@@ -136,13 +130,6 @@ public final class BridgeSection {
                 .setSaveConsumer(cfg::setShareRadius)
                 .build());
 
-        category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.bridge_min_length"), cfg.minLength())
-                .setDefaultValue(def.minLength())
-                .setTooltip(Component.translatable("config.roadweaver.bridge_min_length.tooltip"))
-                .setMin(1).setMax(32)
-                .setSaveConsumer(cfg::setMinLength)
-                .build());
 
         category.addEntry(eb
                 .startIntField(Component.translatable("config.roadweaver.bridge_merge_gap"), cfg.mergeGap())

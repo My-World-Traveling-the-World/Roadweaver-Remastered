@@ -14,7 +14,6 @@ public final class TerrainProfileConfig implements SubConfig {
     private double riverDetourMultiplier = 1.15D;
     private double lakeDetourMultiplier = 1.30D;
     private double oceanDetourMultiplier = 1.10D;
-    private int oceanBridgeMinDepth = 1;
     private double oceanUnderseaChance = 0.50D;
 
     @Override
@@ -28,7 +27,6 @@ public final class TerrainProfileConfig implements SubConfig {
         riverDetourMultiplier = clampMultiplier(riverDetourMultiplier, 1.15D);
         lakeDetourMultiplier = clampMultiplier(lakeDetourMultiplier, 1.30D);
         oceanDetourMultiplier = clampMultiplier(oceanDetourMultiplier, 1.10D);
-        oceanBridgeMinDepth = Math.max(1, Math.min(10, oceanBridgeMinDepth));
         oceanUnderseaChance = Math.max(0.0D, Math.min(1.0D, oceanUnderseaChance));
     }
 
@@ -44,7 +42,6 @@ public final class TerrainProfileConfig implements SubConfig {
         copy.riverDetourMultiplier = riverDetourMultiplier;
         copy.lakeDetourMultiplier = lakeDetourMultiplier;
         copy.oceanDetourMultiplier = oceanDetourMultiplier;
-        copy.oceanBridgeMinDepth = oceanBridgeMinDepth;
         copy.oceanUnderseaChance = oceanUnderseaChance;
         return copy;
     }
@@ -67,8 +64,6 @@ public final class TerrainProfileConfig implements SubConfig {
     public void setLakeDetourMultiplier(double v) { lakeDetourMultiplier = clampMultiplier(v, 1.30D); }
     public double oceanDetourMultiplier() { return oceanDetourMultiplier; }
     public void setOceanDetourMultiplier(double v) { oceanDetourMultiplier = clampMultiplier(v, 1.10D); }
-    public int oceanBridgeMinDepth() { return oceanBridgeMinDepth; }
-    public void setOceanBridgeMinDepth(int v) { oceanBridgeMinDepth = Math.max(1, Math.min(10, v)); }
     public double oceanUnderseaChance() { return oceanUnderseaChance; }
     public void setOceanUnderseaChance(double v) {
         oceanUnderseaChance = Math.max(0.0D, Math.min(1.0D, v));

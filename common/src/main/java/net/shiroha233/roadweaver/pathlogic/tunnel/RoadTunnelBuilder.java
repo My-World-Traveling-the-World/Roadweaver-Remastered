@@ -661,7 +661,7 @@ public final class RoadTunnelBuilder {
      *
      * @param terrain           地形读取；{@code null} ⇒ 退回 14 站并记 {@code no-sampler}
      * @param mouthRoad         洞口站的路面列（含路面高度）；空 ⇒ 退回 14 站并记 {@code no-terrain}
-     * @param stationStepBlocks 实测站距（格），非正数时用 {@link RoadConstants#DEFAULT_ASTAR_STEP}
+     * @param stationStepBlocks 实测站距（格），非正数时用 {@link RoadConstants#DEFAULT_PATH_GRID_STEP}
      */
     static PortalAdvance portalAdvance(PortalTerrain terrain, List<BlockPos> mouthRoad,
                                        double stationStepBlocks) {
@@ -673,7 +673,7 @@ public final class RoadTunnelBuilder {
         }
         double step = stationStepBlocks > 1.0E-6D
                 ? stationStepBlocks
-                : Math.max(1, RoadConstants.DEFAULT_ASTAR_STEP);
+                : Math.max(1, RoadConstants.DEFAULT_PATH_GRID_STEP);
         int depth;
         try {
             depth = 0;
@@ -760,16 +760,16 @@ public final class RoadTunnelBuilder {
 
     /** 实测站距（格）：洞口站与相邻内侧站的水平距离；取不到就用名义步长。 */
     static double stationStep(List<BlockPos> centers, int station, int inward) {
-        if (centers == null) return RoadConstants.DEFAULT_ASTAR_STEP;
+        if (centers == null) return RoadConstants.DEFAULT_PATH_GRID_STEP;
         int other = station + inward;
         if (station < 0 || station >= centers.size() || other < 0 || other >= centers.size()) {
-            return RoadConstants.DEFAULT_ASTAR_STEP;
+            return RoadConstants.DEFAULT_PATH_GRID_STEP;
         }
         BlockPos here = centers.get(station);
         BlockPos next = centers.get(other);
-        if (here == null || next == null) return RoadConstants.DEFAULT_ASTAR_STEP;
+        if (here == null || next == null) return RoadConstants.DEFAULT_PATH_GRID_STEP;
         double step = Math.hypot(here.getX() - next.getX(), here.getZ() - next.getZ());
-        return step > 1.0E-6D ? step : RoadConstants.DEFAULT_ASTAR_STEP;
+        return step > 1.0E-6D ? step : RoadConstants.DEFAULT_PATH_GRID_STEP;
     }
 
     /**

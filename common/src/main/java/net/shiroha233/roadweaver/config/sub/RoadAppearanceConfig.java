@@ -11,7 +11,6 @@ public final class RoadAppearanceConfig implements SubConfig {
     private Boolean roadsEnabled = true;
     private boolean allowArtificial = true;
     private boolean allowNatural = true;
-    private boolean placeWaypoints = false;
     private boolean spawnCabinEnabled = true;
     private int averagingRadius = RoadConstants.DEFAULT_AVERAGING_RADIUS;
     private int roadWidth = RoadConstants.DEFAULT_ROAD_WIDTH;
@@ -79,7 +78,6 @@ public final class RoadAppearanceConfig implements SubConfig {
         copy.roadsEnabled = this.roadsEnabled;
         copy.allowArtificial = this.allowArtificial;
         copy.allowNatural = this.allowNatural;
-        copy.placeWaypoints = this.placeWaypoints;
         copy.spawnCabinEnabled = this.spawnCabinEnabled;
         copy.averagingRadius = this.averagingRadius;
         copy.roadWidth = this.roadWidth;
@@ -110,8 +108,6 @@ public final class RoadAppearanceConfig implements SubConfig {
     public void setAllowArtificial(boolean v) { this.allowArtificial = v; }
     public boolean allowNatural() { return allowNatural; }
     public void setAllowNatural(boolean v) { this.allowNatural = v; }
-    public boolean placeWaypoints() { return placeWaypoints; }
-    public void setPlaceWaypoints(boolean v) { this.placeWaypoints = v; }
     public boolean spawnCabinEnabled() { return spawnCabinEnabled; }
     public void setSpawnCabinEnabled(boolean v) { this.spawnCabinEnabled = v; }
     public int averagingRadius() { return averagingRadius; }

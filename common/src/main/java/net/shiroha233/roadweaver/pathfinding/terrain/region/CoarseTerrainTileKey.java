@@ -18,7 +18,7 @@ public record CoarseTerrainTileKey(ResourceLocation dimensionId,
             throw new IllegalArgumentException("dimensionId must not be null");
         }
         tileSizeChunks = Math.max(1, tileSizeChunks);
-        step = Math.max(RoadConstants.ASTAR_STEP_MIN, step);
+        step = Math.max(RoadConstants.PATH_GRID_STEP_MIN, step);
         schemaVersion = Math.max(1, schemaVersion);
     }
 

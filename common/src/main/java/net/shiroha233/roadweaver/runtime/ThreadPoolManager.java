@@ -116,12 +116,12 @@ public final class ThreadPoolManager {
                 var performance = ConfigService.get().performance();
                 LOGGER.info("【按硬件资源生成的启动和游玩预算】 " + "RoadWeaver adaptive startup profile: processors={}, maxHeapMiB={}, roads={}, coarse={}, "
                                 + "structures={}, nativeStructures={}, startupCap={}, runtimeCap={}, runtimeConcurrency={}, "
-                                + "idleConcurrency={}, chunkyRoadCap={}.",
+                                + "idleConcurrency={}.",
                         startupProfile.processors(), startupProfile.maxHeapMiB(), startupProfile.roadWorkers(),
                         startupProfile.coarseWorkers(), startupProfile.structureWorkers(),
                         startupProfile.nativeStructureWorkers(), configuredInitialGenerationLimit(),
                         performance.sharedWorkerThreads(), performance.maxConcurrentGenerations(),
-                        performance.idleConcurrentGenerations(), performance.chunkyRoadThreadCap());
+                        performance.idleConcurrentGenerations());
             }
         } finally { PoolRetirements.drain(); }
     }

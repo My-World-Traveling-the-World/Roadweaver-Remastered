@@ -50,7 +50,7 @@ final class RawPathSearch {
                                TerrainSamplingCache cache,
                                PathTerrainField terrain,
                                int additionalRoadRadius) {
-        int step = config.effectiveAStarStep();
+        int step = config.effectivePathGridStep();
         int startX = snapToGrid(connection.from().getX(), step);
         int startZ = snapToGrid(connection.from().getZ(), step);
         int endX = snapToGrid(connection.to().getX(), step);
@@ -168,7 +168,7 @@ final class RawPathSearch {
                              withBuildingObstacleMode(
                                      StructureAvoidanceService.BuildingObstacleMode.HARD_BUILDINGS_AND_CLUSTERS)) {
                     hintedResult = pathfinder.findRawPath(
-                            start, end, level, config.aStarMaxSteps(), cache, hintedTerrain, config);
+                            start, end, level, cache, hintedTerrain, config);
                 }
                 if (hintedResult.success() && hintedResult.hasRawPath()) {
                     List<BlockPos> rerouted = keepAllowedReplacement(config, hintedResult.rawPath(),
@@ -329,12 +329,12 @@ final class RawPathSearch {
         try (StructureAvoidanceService.BuildingObstacleScope ignored =
                      withBuildingObstacleMode(
                              StructureAvoidanceService.BuildingObstacleMode.HARD_BUILDINGS_AND_CLUSTERS)) {
-            hard = pathfinder.findRawPath(start, end, level, config.aStarMaxSteps(), cache, terrain, config);
+            hard = pathfinder.findRawPath(start, end, level, cache, terrain, config);
         }
         if (hard != null && hard.success() && hard.hasRawPath()) return hard;
         LOGGER.info("【无可用路径，按既有规则放松建筑硬障碍并继续求解】 " + "RoadWeaver relaxed building hard obstacles after no-route step={} start={} end={}",
-                config.effectiveAStarStep(), start, end);
-        return pathfinder.findRawPath(start, end, level, config.aStarMaxSteps(), cache, terrain, config);
+                config.effectivePathGridStep(), start, end);
+        return pathfinder.findRawPath(start, end, level, cache, terrain, config);
     }
 
     private static boolean hasUnbuildableCoarseTransition(List<BlockPos> path, PathTerrainField terrain) {
@@ -450,7 +450,7 @@ final class RawPathSearch {
             }
             if (changed > 0) {
                 LOGGER.info("【粗规划桥隧模式预检统计】 " + "RoadWeaver coarse terrain mode precheck: tunnelCandidateStations={} totalStations={} step={}",
-                        changed, size, config.effectiveAStarStep());
+                        changed, size, config.effectivePathGridStep());
             }
             return List.copyOf(result);
         } catch (RuntimeException failure) {

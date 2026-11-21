@@ -219,7 +219,7 @@ public final class AccurateGradeRepairPlanner {
                 break;
             }
 
-            PathfindingCostConfig fine = config.withAStarStep(2);
+            PathfindingCostConfig fine = config.withPathGridStep(2);
             List<Future<GradePlan>> futures = new ArrayList<>();
             for (Violation violation : batch) {
                 logGradeDiagnostics(working, violation, sampler);
@@ -452,7 +452,7 @@ public final class AccurateGradeRepairPlanner {
 
             List<BlockPos> original = new ArrayList<>(path.subList(startIndex, endIndex + 1));
             BlockPos conflictCenter = path.get(conflictSegment);
-            PathfindingCostConfig fine = config.withAStarStep(2);
+            PathfindingCostConfig fine = config.withPathGridStep(2);
             List<BlockPos> candidate;
 
             // A deep fill conflict must try a 3D tunnel-capable detour first. The

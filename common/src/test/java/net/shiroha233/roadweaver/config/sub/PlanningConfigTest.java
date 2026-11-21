@@ -133,46 +133,33 @@ final class PlanningConfigTest {
                 "bridgeJoinLenBlocks must be serialized into the planning fingerprint payload");
     }
 
-    // ---------- 0.8.420：KNN 路网拓扑六项 ----------
+    // ---------- 连通分支合并仍有真实调用，保留其约束回归 ----------
 
     @Test
-    void knnTopologyDefaultsMatchTheFormerConstants() {
+    void componentTopologyDefaultsMatchTheFormerConstants() {
         PlanningConfig config = new PlanningConfig();
 
-        assertEquals(RoadConstants.DEFAULT_KNN_K, config.knnK());
-        assertEquals(RoadConstants.DEFAULT_KNN_ALPHA, config.knnAlpha());
-        assertEquals(RoadConstants.DEFAULT_KNN_MIN_ANGLE_DEG, config.knnMinAngleDeg());
-        assertEquals(RoadConstants.DEFAULT_KNN_DEGREE_CAP, config.knnDegreeCap());
         assertEquals(RoadConstants.DEFAULT_COMPONENT_MIN_ANGLE_DEG, config.componentMinAngleDeg());
         assertEquals(RoadConstants.DEFAULT_COMPONENT_DEGREE_CAP, config.componentDegreeCap());
     }
 
     @Test
-    void knnTopologyKnobsClampIntoTheirValidRange() {
+    void componentTopologyKnobsClampIntoTheirValidRange() {
         PlanningConfig config = new PlanningConfig();
 
-        config.setKnnK(0);
-        config.setKnnAlpha(99.0D);
-        config.setKnnMinAngleDeg(-10.0D);
-        config.setKnnDegreeCap(99);
         config.setComponentMinAngleDeg(120.0D);
         config.setComponentDegreeCap(0);
         config.sanitize();
 
-        assertEquals(1, config.knnK());
-        assertEquals(5.0D, config.knnAlpha());
-        assertEquals(0.0D, config.knnMinAngleDeg());
-        assertEquals(8, config.knnDegreeCap());
         assertEquals(89.0D, config.componentMinAngleDeg());
         assertEquals(1, config.componentDegreeCap());
     }
 
     @Test
-    void knnTopologyKnobsArePartOfThePlanningFingerprintPayload() {
+    void componentTopologyKnobsArePartOfThePlanningFingerprintPayload() {
         JsonObject json = serialize(new PlanningConfig());
 
         for (String key : new String[]{
-                "knnK", "knnAlpha", "knnMinAngleDeg", "knnDegreeCap",
                 "componentMinAngleDeg", "componentDegreeCap"}) {
             assertTrue(json.has(key), key + " must be serialized into the planning fingerprint payload");
         }

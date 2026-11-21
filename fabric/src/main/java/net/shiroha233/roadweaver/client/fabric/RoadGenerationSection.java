@@ -56,12 +56,6 @@ public final class RoadGenerationSection {
                 .setSaveConsumer(cfg::setAllowNatural)
                 .build());
 
-        category.addEntry(eb
-                .startBooleanToggle(Component.translatable("config.roadweaver.place_waypoints"), cfg.placeWaypoints())
-                .setDefaultValue(def.placeWaypoints())
-                .setTooltip(Component.translatable("config.roadweaver.place_waypoints.tooltip"))
-                .setSaveConsumer(cfg::setPlaceWaypoints)
-                .build());
 
         category.addEntry(eb
                 .startBooleanToggle(Component.translatable("config.roadweaver.spawn_cabin_enabled"), cfg.spawnCabinEnabled())

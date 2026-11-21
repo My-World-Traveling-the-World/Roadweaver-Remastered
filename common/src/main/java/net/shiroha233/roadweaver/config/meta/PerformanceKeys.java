@@ -1,48 +1,22 @@
-/* 文件职责：PerformanceConfig 30 个键的元数据 —— 线程、占空比、GPU 采样预算。 */
+/* 文件职责：PerformanceKeys当前配置的元数据。 */
 package net.shiroha233.roadweaver.config.meta;
 
 import java.util.List;
 
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
-/**
- * {@code PerformanceConfig} 的键元数据表。
- *
- * <h2>这一类最容易「改了没用」</h2>
- * <p>性能旋钮的通病是：看起来在调，实际不生效，而且没有任何提示。
- * 本表里两个键是逐键取证确认的死键：</p>
- * <ul>
- *   <li>{@code openclAccurateSamplingEnabled} —— 全仓 0 处外部引用；
- *       {@code AccurateHeightBackends} 无条件返回 CPU 后端。</li>
- *   <li>{@code chunkyRoadThreadCap} —— 全仓仅 {@code ThreadPoolManager} 一处读取。
- *       历史审计判其为死键，本轮只确认存在读取点、未确认真实生效，
- *       所以标 ACTIVE 并在说明里点明这个疑点，而不是替玩家下结论。</li>
- * </ul>
- *
- * <h2>{@code coarseHeightBandCount} 是个有前科的键</h2>
- * <p>河流侧实测过：分带数固定切成 14 段、而预热结束后池宽掉到 1，
- * 于是 14 份工作串行挤一个线程，出现 6~13 秒与 89~186 秒并存的怪现象。
- * 分带数与池宽必须匹配。</p>
- *
- * @see ConfigKeyTable
- */
+/** 当前生产读取项的元数据；删除未接线控件，避免把显示或日志读取误判为生效。 */
 public final class PerformanceKeys {
 
     private PerformanceKeys() {}
 
-    /** 30 个键，顺序与 {@code PerformanceConfig} 字段声明顺序一致。 */
+    /** 字段与元数据的双向一致性由回归强制检查。 */
     public static final List<ConfigKey> ALL = List.of(
             ConfigKey.integer("sharedWorkerThreads", 0, 0, 256,
                     ConfigCategory.PERFORMANCE, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
                     "共享工作线程数", "Shared worker threads",
                     "0 表示按硬件自动决定。多条路并行生成时共用这个池",
                     "线程", ""),
-
-            ConfigKey.integer("chunkyRoadThreadCap", 1, 0, 256,
-                    ConfigCategory.PERFORMANCE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,
-                    "预生成期道路线程上限", "Thread cap while chunk pregeneration runs",
-                    "预生成进行时给道路让出的线程上限",
-                    "线程", "全仓仅 ThreadPoolManager 一处读取。历史审计判其为死键，本轮只确认存在读取点、未确认真实生效；可用 F3 或日志里的实际池宽验证"),
 
             ConfigKey.integer("initialGenerationThreads", 0, 0, 256,
                     ConfigCategory.PERFORMANCE, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

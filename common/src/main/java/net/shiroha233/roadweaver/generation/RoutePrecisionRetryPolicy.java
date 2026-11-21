@@ -14,8 +14,8 @@ public final class RoutePrecisionRetryPolicy {
     }
 
     public static List<Integer> fullRouteSteps(int configuredStep) {
-        int safeConfigured = Math.max(RoadConstants.ASTAR_STEP_MIN,
-                Math.min(RoadConstants.ASTAR_STEP_MAX, configuredStep));
+        int safeConfigured = Math.max(RoadConstants.PATH_GRID_STEP_MIN,
+                Math.min(RoadConstants.PATH_GRID_STEP_MAX, configuredStep));
         return List.of(safeConfigured);
     }
 
@@ -29,22 +29,22 @@ public final class RoutePrecisionRetryPolicy {
         // Local conflict repair uses a 2-block level. It is only patching the
         // recorded conflict windows, so the finest 1-block pass is unnecessary
         // and made the local repair the dominant startup cost.
-        return List.of(Math.max(2, RoadConstants.ASTAR_STEP_MIN));
+        return List.of(Math.max(2, RoadConstants.PATH_GRID_STEP_MIN));
     }
 
     /** 拓扑候选沿用玩家精度，避免换点同时偷偷换精度。 */
     public static List<Integer> candidateBatchSteps(int configuredStep) {
-        return List.of(Math.max(RoadConstants.ASTAR_STEP_MIN,
-                Math.min(RoadConstants.ASTAR_STEP_MAX, configuredStep)));
+        return List.of(Math.max(RoadConstants.PATH_GRID_STEP_MIN,
+                Math.min(RoadConstants.PATH_GRID_STEP_MAX, configuredStep)));
     }
 
     public static int finestStep(int configuredStep) {
-        return Math.max(RoadConstants.ASTAR_STEP_MIN,
-                Math.min(RoadConstants.ASTAR_STEP_MAX, configuredStep));
+        return Math.max(RoadConstants.PATH_GRID_STEP_MIN,
+                Math.min(RoadConstants.PATH_GRID_STEP_MAX, configuredStep));
     }
 
     public static boolean allowsLocalDetour(int step) {
-        return step >= RoadConstants.ASTAR_STEP_MIN;
+        return step >= RoadConstants.PATH_GRID_STEP_MIN;
     }
 
     /**

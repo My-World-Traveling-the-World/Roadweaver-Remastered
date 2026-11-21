@@ -71,13 +71,6 @@ public final class PerformanceSection {
         // 没有任何分支拿它去限制 Chunky 期间的线程（chunkySupplyThreads 的增减也不读它）。
         // 全仓读取点只有：PerformanceConfig 的字段/sanitize/copy/存取器、本界面、
         // PerformanceSchedulingConfigTest。tooltip 已注明不生效。
-        category.addEntry(eb
-                .startIntField(Component.translatable("config.roadweaver.chunky_road_thread_cap"), cfg.chunkyRoadThreadCap())
-                .setDefaultValue(def.chunkyRoadThreadCap())
-                .setTooltip(Component.translatable("config.roadweaver.chunky_road_thread_cap.tooltip"))
-                .setMin(0).setMax(RoadConstants.COMPUTE_THREADS_MAX)
-                .setSaveConsumer(cfg::setChunkyRoadThreadCap)
-                .build());
 
         category.addEntry(eb
                 .startBooleanToggle(Component.translatable("config.roadweaver.idle_generation_enabled"), cfg.idleGenerationEnabled())

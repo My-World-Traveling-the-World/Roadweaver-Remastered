@@ -1,4 +1,4 @@
-/* 文件职责：配置界面「规划（含 KNN 度数）」分区 —— 只构造控件与绑定，不做业务判断。 */
+/* 文件职责：配置界面「路网规划」分区 —— 只构造控件与绑定，不做业务判断。 */
 package net.shiroha233.roadweaver.client.fabric;
 
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
@@ -15,9 +15,9 @@ import net.shiroha233.roadweaver.pathfinding.sampling.opencl.OpenCLDevicePrefere
 import java.util.Locale;
 
 /**
- * 规划（含 KNN 度数）配置分区。
+ * 路网规划配置分区。
  *
- * <p>网络规划器选择与 KNN 参数；knnOnlyTitle 只在 KNN 生效时高亮，所以它跟着本分区走。</p>
+ * <p>只显示当前PIPELINE实际使用的规划参数，算法身份是固定说明。</p>
  *
  * <p>从 {@code ConfigScreenFactoryImpl} 抽出的一个分区：原文件 1791 行、12 个分区挤在一起，
  * 改一个分区要翻过另外 11 个。抽取是<b>纯搬运，零逻辑改动</b>。</p>
@@ -72,47 +72,7 @@ public final class PlanningSection {
                 .setColor(0xFF88FF88)
                 .build());
 
-        // 0.8.420：KNN 路网拓扑参数已随旧规划器一并删除，不再出现在界面上。
-        // （k / alpha / minAngleDeg / degreeCap 这四个字段仍在 PlanningConfig 里，
-        //  但只被 ComponentConnector.connectComponents 读取，与「KNN 拓扑」无关。）
-        boolean knnActive = false;
-        if (!knnActive) {
-            category.addEntry(eb
-                    .startTextDescription(Component.translatable(
-                            "config.roadweaver.knn_inactive_notice",
-                            Component.translatable("config.roadweaver.planning_algorithm.option."
-                                    + cfg.planningAlgorithm().name().toLowerCase(Locale.ROOT))))
-                    .setColor(0xFFFFAA00)
-                    .build());
-        }
-        category.addEntry(eb
-                .startIntField(knnOnlyTitle("config.roadweaver.knn_k", knnActive), cfg.knnK())
-                .setDefaultValue(def.knnK())
-                .setTooltip(Component.translatable("config.roadweaver.knn_k.tooltip"))
-                .setMin(1).setMax(8)
-                .setSaveConsumer(cfg::setKnnK)
-                .build());
-        category.addEntry(eb
-                .startDoubleField(knnOnlyTitle("config.roadweaver.knn_alpha", knnActive), cfg.knnAlpha())
-                .setDefaultValue(def.knnAlpha())
-                .setTooltip(Component.translatable("config.roadweaver.knn_alpha.tooltip"))
-                .setMin(0.0).setMax(5.0)
-                .setSaveConsumer(cfg::setKnnAlpha)
-                .build());
-        category.addEntry(eb
-                .startDoubleField(knnOnlyTitle("config.roadweaver.knn_min_angle_deg", knnActive), cfg.knnMinAngleDeg())
-                .setDefaultValue(def.knnMinAngleDeg())
-                .setTooltip(Component.translatable("config.roadweaver.knn_min_angle_deg.tooltip"))
-                .setMin(0.0).setMax(89.0)
-                .setSaveConsumer(cfg::setKnnMinAngleDeg)
-                .build());
-        category.addEntry(eb
-                .startIntField(knnOnlyTitle("config.roadweaver.knn_degree_cap", knnActive), cfg.knnDegreeCap())
-                .setDefaultValue(def.knnDegreeCap())
-                .setTooltip(Component.translatable("config.roadweaver.knn_degree_cap.tooltip"))
-                .setMin(1).setMax(8)
-                .setSaveConsumer(cfg::setKnnDegreeCap)
-                .build());
+        // 新版只展示补连边实际读取的角度和度数约束。
         category.addEntry(eb
                 .startDoubleField(Component.translatable("config.roadweaver.component_min_angle_deg"), cfg.componentMinAngleDeg())
                 .setDefaultValue(def.componentMinAngleDeg())
@@ -446,7 +406,4 @@ public final class PlanningSection {
 
     }
 
-    private static Component knnOnlyTitle(String key, boolean knnActive) {
-        Component title = Component.translatable(key);
-        return knnActive ? title : Component.translatable("config.roadweaver.knn_inactive_marker", title);
-    }}
+}

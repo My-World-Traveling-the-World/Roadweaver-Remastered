@@ -97,7 +97,7 @@ public final class LakeRiverRepair {
             try (StructureAvoidanceService.PlanningScope ignored =
                          StructureAvoidanceService.activatePlanningSnapshot(level, connection)) {
                 candidate = findLocalRoute(original, sampler, config,
-                        Math.max(config.effectiveAStarStep(), localDetourBlocks),
+                        Math.max(config.effectivePathGridStep(), localDetourBlocks),
                         (from, to) -> edgeIntersectsMask(from, to, lakeClearance));
                 accepted = isLakeRepairAccepted(
                         original, candidate, width, lakes, terrain, lakeClearance);
@@ -188,7 +188,7 @@ public final class LakeRiverRepair {
                 }
             }
             List<BlockPos> original = new ArrayList<>(working.subList(startIndex, endIndex + 1));
-            PathfindingCostConfig fine = config.withAStarStep(1);
+            PathfindingCostConfig fine = config.withPathGridStep(1);
             List<BlockPos> candidate;
             try (StructureAvoidanceService.PlanningScope ignored =
                          StructureAvoidanceService.activatePlanningSnapshot(level, connection)) {

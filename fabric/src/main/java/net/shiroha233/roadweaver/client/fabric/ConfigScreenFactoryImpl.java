@@ -64,8 +64,6 @@ public class ConfigScreenFactoryImpl {
         
         PathfindingCostsSection.build(builder, eb, conf, defaultConf);
 
-        // 2026-11-13：旧 A* 专属参数整体移到「遗留寻路参数」分区（仅作历史保留）。
-        LegacyPathfindingSection.build(builder, eb, conf, defaultConf);
 
         ClientSection.build(builder, eb, conf, defaultConf);
 

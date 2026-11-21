@@ -122,7 +122,7 @@ public final class RoadGenerationService {
                     ? rfc : new PathFeatureConfig();
             RoadGenerationConfig genConfig = RoadGenerationConfig.from(ConfigService.get());
             return new Road(level, conn, featureConfig, genConfig)
-                    .generateRoad(genConfig.pathfinding().aStarMaxSteps(), false);
+                    .generateRoad(false);
         } catch (RuntimeException failure) {
             LOGGER.warn("【并行道路改线无法重建，保留原路线】 " + "RoadWeaver braid reroute could not regenerate {}->{}; keeping the original route",
                     conn.from(), conn.to(), failure);
@@ -402,10 +402,10 @@ public final class RoadGenerationService {
         if (level == null || conn == null) return false;
         try {
             ModConfig cfg = ConfigService.get();
-            int safeStep = Math.max(RoadConstants.ASTAR_STEP_MIN, step);
+            int safeStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN, step);
             return PlannedPathCache.find(level, conn,
                     TerrainSamplingSessions.forLevel(level).effectiveMode(),
-                    cfg.pathfindingCost().withAStarStep(safeStep)).isPresent();
+                    cfg.pathfindingCost().withPathGridStep(safeStep)).isPresent();
         } catch (Throwable ignored) {
             return false;
         }
@@ -416,7 +416,7 @@ public final class RoadGenerationService {
         if (level == null || conn == null || !Level.OVERWORLD.equals(level.dimension())) {
             return new InitialGenerationResult(InitialTaskResult.FAILED, null, conn);
         }
-        int safeStep = Math.max(RoadConstants.ASTAR_STEP_MIN, step);
+        int safeStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN, step);
         try (ConnectionDeletionService.TaskScope ignored =
                      ConnectionDeletionService.beginTask(level, conn)) {
             if (ConnectionDeletionService.shouldAbort(level, conn)) {

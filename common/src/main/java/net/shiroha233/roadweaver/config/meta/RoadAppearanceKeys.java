@@ -1,38 +1,16 @@
-/* 文件职责：RoadAppearanceConfig 25 个键的元数据 —— 路面观感、桥隧开关与施工行为。 */
+/* 文件职责：RoadAppearanceKeys当前配置的元数据。 */
 package net.shiroha233.roadweaver.config.meta;
 
 import java.util.List;
 
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
-/**
- * {@code RoadAppearanceConfig} 的键元数据表。
- *
- * <h2>为什么这一类的错误最难发现</h2>
- * <p>观感类旋钮的失败模式是「路还在，只是不好看」—— 不会崩、不会报错，
- * 玩家只会觉得「这个选项好像没用」。本表里两个键已实证就是这个状态：</p>
- * <ul>
- *   <li>{@code placeWaypoints} —— 全仓 0 处外部引用。</li>
- *   <li>{@code landTunnelEnabled} —— <b>已接线</b>，标 {@link ConfigStatus#ACTIVE}。
- *       <b>2026-11-13 更正</b>：旧注释说它是「假开关（{@code buried = oldBuried}，
- *       {@code newBuried} 只进日志）」，那是 0.9.005-B 时期的状态。
- *       现在 {@code PathSpanExtractor} 里是
- *       {@code boolean buried = landTunnelSwitch && newBuried;} ——
- *       <b>真的参与判定</b>，并且还传进后续调用。关掉它就不会挖陆上隧道。</li>
- * </ul>
- *
- * <h2>单位口径要说清</h2>
- * <p>{@code maxSlopeStepPerTwoSegments} 的「站」约等于 1.0 格/站，
- * 所以本值 1 的实际含义接近 100% 坡度 —— 真正绑定的是「每两站 1 格 = 50%」。
- * 这个口径在多次分析里都被搞错过，直接写在说明里。</p>
- *
- * @see ConfigKeyTable
- */
+/** 当前生产读取项的元数据；删除未接线控件，避免把显示或日志读取误判为生效。 */
 public final class RoadAppearanceKeys {
 
     private RoadAppearanceKeys() {}
 
-    /** 25 个键，顺序与 {@code RoadAppearanceConfig} 字段声明顺序一致。 */
+    /** 字段与元数据的双向一致性由回归强制检查。 */
     public static final List<ConfigKey> ALL = List.of(
             ConfigKey.bool("roadsEnabled", true,
                     ConfigCategory.BUILD, ConfigTier.BASIC, ConfigStatus.ACTIVE,
@@ -51,12 +29,6 @@ public final class RoadAppearanceKeys {
                     "允许自然道路", "Allow natural roads",
                     "允许生成更贴近地形的自然土路",
                     ""),
-
-            ConfigKey.bool("placeWaypoints", false,
-                    ConfigCategory.BUILD, ConfigTier.ADVANCED, ConfigStatus.UNWIRED,
-                    "放置路径点", "Place waypoints",
-                    "沿途放置传送/导航用的路径点",
-                    "★ 已实证未接线：全仓 0 处外部引用，改了不会有任何效果"),
 
             ConfigKey.bool("spawnCabinEnabled", true,
                     ConfigCategory.BUILD, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

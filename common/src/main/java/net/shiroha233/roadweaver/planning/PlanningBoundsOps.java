@@ -290,7 +290,7 @@ public final class PlanningBoundsOps {
         result = filterSuppressedPaths(level, result);
         if (result != null && !result.paths().isEmpty()) {
             result = SharedEndpointPathReuse.reuseSharedEndpointTails(
-                    level, result, config.pathfindingCost().effectiveAStarStep());
+                    level, result, config.pathfindingCost().effectivePathGridStep());
             PlannedPathCache.register(level, result.mode(), config.pathfindingCost(), result.paths());
         }
         if (partsOut != null && partsOut.length > 1) {

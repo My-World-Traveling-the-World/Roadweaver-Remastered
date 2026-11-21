@@ -42,12 +42,12 @@ final class FullRegionPlanningAdapter implements RoadTerrainPlanningPort {
             region = request.hasCircularSamplingMask()
                     ? AccurateTerrainRegionSampler.sampleAcceleratedMasked(
                     request.level(), cache, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ(),
-                    request.pathfinding().effectiveAStarStep(), request.samplingCenter(), request.samplingRadius(),
+                    request.pathfinding().effectivePathGridStep(), request.samplingCenter(), request.samplingRadius(),
                     firstConnection == null ? null : firstConnection.from(),
                     firstConnection == null ? null : firstConnection.to())
                     : AccurateTerrainRegionSampler.sampleAccelerated(
                     request.level(), cache, bounds.minX(), bounds.minZ(), bounds.maxX(), bounds.maxZ(),
-                    request.pathfinding().effectiveAStarStep());
+                    request.pathfinding().effectivePathGridStep());
 
             InitialGenerationProgressTracker.enterStage(
                     InitialGenerationStage.EXACT_PATHING, "computing_accurate_paths");

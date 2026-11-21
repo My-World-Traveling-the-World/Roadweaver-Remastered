@@ -48,7 +48,6 @@ command -> map                                3
 compat -> api                                1
 compat -> worldgen                           1
 config -> core                               20
-config -> pathfinding                        1
 config -> pathlogic                          2
 config -> persistence                        3
 decoration -> config                             4

@@ -123,7 +123,7 @@ final class MountainSwitchbackPlanner {
                                                               PathTerrainField terrain,
                                                               PathfindingCostConfig config) {
         List<BlockPos> working = new ArrayList<>(primaryPath);
-        int step = Math.max(1, config.effectiveAStarStep());
+        int step = Math.max(1, config.effectivePathGridStep());
         int contextSteps = Math.max(4, (int) Math.ceil(LOCAL_CONTEXT_BLOCKS / (double) step));
         int repaired = 0;
         while (repaired < MAX_LOCAL_REPAIRS) {
@@ -192,7 +192,7 @@ final class MountainSwitchbackPlanner {
                                                   PathfindingCostConfig config,
                                                   int maxExpandedStates,
                                                   long maxSearchNanos) {
-        int step = Math.max(1, config.effectiveAStarStep());
+        int step = Math.max(1, config.effectivePathGridStep());
         double direct = horizontalDistance(start.getX(), start.getZ(), goal.getX(), goal.getZ());
         if (direct < step * 8.0D || !terrain.contains(start.getX(), start.getZ())
                 || !terrain.contains(goal.getX(), goal.getZ())) {

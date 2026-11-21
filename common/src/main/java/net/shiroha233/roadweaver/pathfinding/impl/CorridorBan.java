@@ -22,7 +22,7 @@ import net.shiroha233.roadweaver.core.constants.PathfindingConstants;
  * <b>后一条路整体重算</b>，重算时把前一条路的那段走廊设成硬禁区——即本类。</p>
  *
  * <h2>为什么按 4 格量化而不是精确格</h2>
- * <p>A* 的邻接偏移恒为 {@code d = effectiveAStarStep()}（当前配置 8）的整数倍，
+ * <p>A* 的邻接偏移恒为 {@code d = effectivePathGridStep()}（当前配置 8）的整数倍，
  * 所以被访问的 (x,z) 只会落在起点的 8 格格点上。既然真正的判据粒度是 8 格，
  * 这里按 {@value #PathfindingConstants.CORRIDOR_QUANT} 格量化就不会漏判，而存储量降为精确栅格的 1/16：
  * 一条 5000 格长的禁行走廊从约 24 万格降到约 1.7 万个 key。查询走排序数组的

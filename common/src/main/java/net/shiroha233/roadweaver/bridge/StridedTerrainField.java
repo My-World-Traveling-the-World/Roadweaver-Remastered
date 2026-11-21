@@ -10,9 +10,9 @@ import net.shiroha233.roadweaver.metric.TerrainField;
  * <p>真实路线的包围盒动辄 1500×1500 = 225 万列。逐格采一列要过一次高度图查询 +
  * 缓存查找，225 万次既不现实也存不下（{@code int[]} 就是 9 MB，每条路线一份）。</p>
  *
- * <p>而旧实现的 A* 本来就是 {@code aStarStep = 8} 的粗网格 —— 步长不是我引入的
+ * <p>而旧实现的 A* 本来就是 {@code pathGridStep = 8} 的粗网格 —— 步长不是我引入的
  * 额外妥协，而是<b>旧实现一直就有的现实约束</b>，只是以前散在
- * {@code aStarStep} 里、没人说清它到底是什么。</p>
+ * {@code pathGridStep} 里、没人说清它到底是什么。</p>
  *
  * <h2>三件必须做对的事</h2>
  * <ol>

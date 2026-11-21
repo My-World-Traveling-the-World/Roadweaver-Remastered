@@ -242,7 +242,7 @@ public final class AccurateTerrainRegionSampler {
                                                       int step) {
         AccurateRegionBounds bounds = AccurateRegionBounds.aligned(
                 minBlockX, minBlockZ, maxBlockX, maxBlockZ,
-                Math.max(RoadConstants.ASTAR_STEP_MIN, step));
+                Math.max(RoadConstants.PATH_GRID_STEP_MIN, step));
         long sampleCount = bounds.sampleCount();
         if (sampleCount > RoadConstants.ACCURATE_REGION_MAX_SAMPLES) {
             throw new AccurateRegionLimitExceededException(

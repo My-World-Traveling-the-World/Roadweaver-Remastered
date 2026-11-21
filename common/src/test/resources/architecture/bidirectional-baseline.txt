@@ -18,7 +18,6 @@ bridge           <-> pathfinding        11 / 2
 client           <-> map                25 / 1
 client           <-> network            2 / 9
 client           <-> route              3 / 2
-config           <-> pathfinding        1 / 26
 config           <-> pathlogic          2 / 87
 config           <-> persistence        3 / 2
 decoration       <-> pathlogic          3 / 23

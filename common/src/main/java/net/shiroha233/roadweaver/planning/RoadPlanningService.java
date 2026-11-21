@@ -235,7 +235,7 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
         ModConfig config = ConfigService.get();
         List<BlockPos> path = PlannedPathCache.find(
                 level, connection, TerrainSamplingSessions.forLevel(level).effectiveMode(),
-                config.pathfindingCost().withAStarStep(Math.max(1, step))).orElse(List.of());
+                config.pathfindingCost().withPathGridStep(Math.max(1, step))).orElse(List.of());
         if (path.isEmpty()) return false;
         try (StructureAvoidanceService.PlanningScope ignored =
                      StructureAvoidanceService.activatePlanningSnapshot(level, connection)) {
@@ -267,13 +267,13 @@ public static void rememberProtectedGapHints(StructureConnection connection, Roa
             centers.add(segment.middlePos());
         }
         PathfindingCostConfig retryConfig = ConfigService.get().pathfindingCost()
-                .withAStarStep(Math.max(1, step));
+                .withPathGridStep(Math.max(1, step));
         PlannedPathCache.register(level,
                 TerrainSamplingSessions.forLevel(level).effectiveMode(),
                 retryConfig,
                 Map.of(connection, List.copyOf(centers)));
         LOGGER.info("【已将生成路线重新绑定供局部重试】 " + "RoadWeaver rebound generated route for local retry: step={} nodes={} connection={}->{}",
-                retryConfig.effectiveAStarStep(), centers.size(), connection.from(), connection.to());
+                retryConfig.effectivePathGridStep(), centers.size(), connection.from(), connection.to());
     }
     static final RoadTerrainPlanningPipeline TERRAIN_PLANNING = new RoadTerrainPlanningPipeline();
 

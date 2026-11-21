@@ -470,10 +470,9 @@ public final class PathMetricsOps {
                                                                     BlockPos endIn,
                                                                     int width,
                                                                     ServerLevel level,
-                                                                    int maxSteps,
                                                                     TerrainSamplingCache cache,
                                                                     RoadGenerationConfig cfg) {
-        PathCalculationResult result = calculateAStarRoadPathDetailed(startIn, endIn, width, level, maxSteps, cache, cfg);
+        PathCalculationResult result = calculateAStarRoadPathDetailed(startIn, endIn, width, level, cache, cfg);
         try {
             return result.segments();
         } finally {
@@ -487,10 +486,9 @@ public final class PathMetricsOps {
                                                                        BlockPos endIn,
                                                                        int width,
                                                                        ServerLevel level,
-                                                                       int maxSteps,
                                                                        TerrainSamplingCache cache,
                                                                        RoadGenerationConfig cfg) {
-        return calculateAStarRoadPathDetailed(startIn, endIn, width, level, maxSteps, cache, cfg, null);
+        return calculateAStarRoadPathDetailed(startIn, endIn, width, level, cache, cfg, null);
     }
 
     /**
@@ -509,7 +507,6 @@ public final class PathMetricsOps {
                                                                        BlockPos endIn,
                                                                        int width,
                                                                        ServerLevel level,
-                                                                       int maxSteps,
                                                                        TerrainSamplingCache cache,
                                                                        RoadGenerationConfig cfg,
                                                                        net.shiroha233.roadweaver.pathfinding.impl.CorridorBan corridorBan) {
@@ -517,11 +514,10 @@ public final class PathMetricsOps {
             return PathCalculationResult.failure();
         }
         PathfindingCostConfig pathCfg = cfg.pathfinding().snapshot();
-        pathCfg.setAStarMaxSteps(maxSteps);
         pathCfg.sanitize();
         // 仅用显式禁令覆盖快照；普通重载传 null，不能清掉作用域已捕获的改道禁令。
         if (corridorBan != null) pathCfg.setCorridorBan(corridorBan);
-        int dGrid = pathCfg.effectiveAStarStep();
+        int dGrid = pathCfg.effectivePathGridStep();
         DirectRouteConnections routeConnections = directRouteConnections(startIn, endIn, dGrid);
         StructureConnection planningConnection = routeConnections.planningConnection();
         StructureConnection ownerConnection = routeConnections.ownerConnection();

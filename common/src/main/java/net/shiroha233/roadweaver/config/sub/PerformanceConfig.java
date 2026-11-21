@@ -10,8 +10,6 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
 public final class PerformanceConfig implements SubConfig {
     /** 零值交给硬件策略选择普通工作线程上限，避免把自动预算误作禁用。 */
     private int sharedWorkerThreads = 0;
-    /** 零值跟随外部Chunky/QoS建议；非零值限制道路供给，不代表全模组线程总数。 */
-    private int chunkyRoadThreadCap = 1;
     /** 零值使用硬件自适应开局预算，避免写死某台机器的并行度。 */
     private int initialGenerationThreads = 0;
     /** 限制开局结束后的普通道路在途任务数，控制后台工作积压。 */
@@ -203,7 +201,6 @@ public final class PerformanceConfig implements SubConfig {
     @Override
     public void sanitize() {
         sharedWorkerThreads = sanitizeOptionalThreadCap(sharedWorkerThreads);
-        chunkyRoadThreadCap = sanitizeOptionalThreadCap(chunkyRoadThreadCap);
         initialGenerationThreads = sanitizeInitialGenerationThreads(initialGenerationThreads);
         maxConcurrentGenerations = Math.max(1, Math.min(128, maxConcurrentGenerations));
         idleConcurrentGenerations = Math.max(1, Math.min(128, idleConcurrentGenerations));
@@ -240,7 +237,6 @@ public final class PerformanceConfig implements SubConfig {
     public PerformanceConfig snapshot() {
         PerformanceConfig copy = new PerformanceConfig();
         copy.sharedWorkerThreads = this.sharedWorkerThreads;
-        copy.chunkyRoadThreadCap = this.chunkyRoadThreadCap;
         copy.initialGenerationThreads = this.initialGenerationThreads;
         copy.maxConcurrentGenerations = this.maxConcurrentGenerations;
         copy.idleConcurrentGenerations = this.idleConcurrentGenerations;
@@ -275,8 +271,6 @@ public final class PerformanceConfig implements SubConfig {
 
     public int sharedWorkerThreads() { return sharedWorkerThreads; }
     public void setSharedWorkerThreads(int v) { this.sharedWorkerThreads = sanitizeOptionalThreadCap(v); }
-    public int chunkyRoadThreadCap() { return chunkyRoadThreadCap; }
-    public void setChunkyRoadThreadCap(int v) { this.chunkyRoadThreadCap = sanitizeOptionalThreadCap(v); }
     public int initialGenerationThreads() { return initialGenerationThreads; }
     public void setInitialGenerationThreads(int v) { this.initialGenerationThreads = sanitizeInitialGenerationThreads(v); }
     public int maxConcurrentGenerations() { return maxConcurrentGenerations; }

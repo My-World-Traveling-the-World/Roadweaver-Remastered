@@ -1,40 +1,16 @@
-/* 文件职责：桥梁配置的元数据表（17 键，样板）。 */
+/* 文件职责：BridgeKeys当前配置的元数据。 */
 package net.shiroha233.roadweaver.config.meta;
 
 import java.util.List;
 
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
-/**
- * 桥梁配置元数据 —— 全仓 243 个键里最先落地的一张。
- *
- * <h2>为什么先做桥梁</h2>
- * <p>它只有 17 个键，但<b>三种接线状态全都有</b>，正好当样板：</p>
- * <ul>
- *   <li>{@code enabled} / {@code deckClearance} / … —— 正常已接线</li>
- *   <li>{@code keepLamps} / {@code minLength} —— <b>死键</b>（代码里不再读取，
- *       改了完全无效），标 {@link ConfigStatus#DEPRECATED}</li>
- *   <li>{@code minWaterDepth} —— <b>已接线</b>，标 {@link ConfigStatus#ACTIVE}。
- *       <b>2026-11-13 更正</b>：旧注释说「真实水深在 7 处硬编码为 1」，
- *       那条来自 O-11 的早期分析，后来已经改掉了 —— 现在
- *       {@code CrossingNegotiation.bridgeMinWaterDepth()}、{@code RawPathSearch}（2 处）、
- *       {@code PathPostProcessor} 都<b>真的读本配置</b>。唯一的例外是
- *       {@code terrainProfileMode=BRIDGE_FIRST} 时固定取 1（那条分支是有意的）。</li>
- * </ul>
- *
- * <p>这三种状态以前在 UI 上长得<b>一模一样</b>，玩家没法知道自己调的是不是真的。
- * 这张表就是为了让它们可见。</p>
- *
- * <p><b>范围来源</b>：{@code min}/{@code max} 与 {@code BridgeConfig.sanitize()}
- * 用的是<b>同一批</b> {@code RoadConstants} 常量，不重复定义，所以不会漂移。</p>
- *
- * @see net.shiroha233.roadweaver.config.sub.BridgeConfig
- */
+/** 当前生产读取项的元数据；删除未接线控件，避免把显示或日志读取误判为生效。 */
 public final class BridgeKeys {
 
     private BridgeKeys() {}
 
-    /** 17 个键，顺序与 {@code BridgeConfig} 字段声明顺序一致。 */
+    /** 字段与元数据的双向一致性由回归强制检查。 */
     public static final List<ConfigKey> ALL = List.of(
             ConfigKey.bool("enabled", true,
                     ConfigCategory.CROSSING, ConfigTier.BASIC, ConfigStatus.ACTIVE,
@@ -96,13 +72,6 @@ public final class BridgeKeys {
                     "0 表示不限制。超过此高度改用浮标",
                     "格", ""),
 
-            ConfigKey.bool("keepLamps", true,
-                    ConfigCategory.CROSSING, ConfigTier.DEPRECATED, ConfigStatus.DEPRECATED,
-                    "保留桥上路灯", "Keep bridge lamps",
-                    "【已废弃】代码里不再读取此键，改了没有任何效果",
-                    "曾用于在桥面按固定间隔放路灯；现在路灯由 RoadAppearanceConfig 统一控制，"
-                            + "这个键已无消费方。保留仅为兼容旧配置文件的 JSON 形状"),
-
             ConfigKey.integer("rampSegments", RoadConstants.DEFAULT_BRIDGE_RAMP_SEGMENTS,
                     0, RoadConstants.BRIDGE_RAMP_SEGMENTS_MAX,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
@@ -116,14 +85,6 @@ public final class BridgeKeys {
                     "最小水深", "Min water depth",
                     "水浅于这个值就不架桥（改成浅滩/涵洞）。桥优先地形档下固定按 1 处理",
                     "格", ""),
-
-            ConfigKey.integer("minLength", RoadConstants.DEFAULT_BRIDGE_MIN_LENGTH,
-                    RoadConstants.BRIDGE_MIN_LENGTH_MIN, RoadConstants.BRIDGE_MIN_LENGTH_MAX,
-                    ConfigCategory.CROSSING, ConfigTier.DEPRECATED, ConfigStatus.DEPRECATED,
-                    "最短桥长", "Min bridge length",
-                    "【已废弃】代码里不再读取此键，改了没有任何效果",
-                    "格", "现在是否架桥由 span 宽度与过水价目档决定，不再看最小长度。"
-                            + "保留仅为兼容旧配置文件的 JSON 形状"),
 
             ConfigKey.integer("mergeGap", RoadConstants.DEFAULT_BRIDGE_MERGE_GAP,
                     RoadConstants.BRIDGE_MERGE_GAP_MIN, RoadConstants.BRIDGE_MERGE_GAP_MAX,

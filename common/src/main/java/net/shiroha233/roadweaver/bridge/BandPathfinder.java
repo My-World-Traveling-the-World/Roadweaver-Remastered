@@ -39,7 +39,7 @@ import net.shiroha233.roadweaver.topology.RoadNode;
  *   <li><b>用 {@link PathTerrainField} 而不是 {@code AccurateHeightSampler}。</b>
  *       旧链已经把地形预热成量化场了（带缓存、带水体标记），重建一套采样会
  *       把预热成本再付一次，而且两边看到的地形可能不一致。</li>
- *   <li><b>步长取 {@code effectiveAStarStep()}。</b>这不是新引入的妥协 ——
+ *   <li><b>步长取 {@code effectivePathGridStep()}。</b>这不是新引入的妥协 ——
  *       旧 A* 本来就是 8 格粗网格。区别只在于：以前步长既是搜索粒度又是几何粒度，
  *       现在它<b>只是搜索粒度</b>，几何由弹性带在方块坐标系里做。</li>
  *   <li><b>建筑避让判据照旧走 {@code StructureAvoidanceService}。</b>
@@ -140,22 +140,18 @@ public final class BandPathfinder implements Pathfinder {
     /**
      * {@inheritDoc}
      *
-     * <p><b>关于 {@code maxSteps}（2026-11-14，审计 E）</b>：本实现<b>有意不使用</b>它。
-     * 旧 A* 拿它限制「扩展节点数」—— 那是防止启发式失效时爆内存的手段。
-     * FMM 的开销由<b>网格点数</b>决定（本身就受包围盒约束），不存在「扩展数爆炸」
-     * 这个失败模式；硬要按步数截断反而会把一条合法但较长的路判成失败。
-     * 参数保留只为满足 {@link Pathfinder} 接口约定（旧链仍在调用方签名里传它）。</p>
+     * <p>FMM按受限网格求解，不再接收旧A*的扩展步数预算，避免提供无效控制。</p>
      */
     @Override
     public PathResult findPath(BlockPos start, BlockPos end, int width,
-                               ServerLevel level, int maxSteps,
+                               ServerLevel level,
                                TerrainSamplingCache cache, PathTerrainField terrain,
                                PathfindingCostConfig config) {
         if (start == null || end == null || terrain == null || config == null) {
             return PathResult.failure();
         }
 
-        int step = Math.max(1, config.effectiveAStarStep());
+        int step = Math.max(1, config.effectivePathGridStep());
         int padding = BOUNDS_PADDING;
         // 改道的 ThreadLocal 与快照显式字段都要兼容；空令不启动边检查或优惠查询。
         var ban = config.corridorBan();

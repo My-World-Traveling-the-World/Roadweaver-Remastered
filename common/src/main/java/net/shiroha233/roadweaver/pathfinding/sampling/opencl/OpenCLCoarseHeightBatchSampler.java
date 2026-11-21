@@ -392,7 +392,7 @@ public final class OpenCLCoarseHeightBatchSampler implements CoarseHeightBatchSa
             //     expandedSamplesPerTile = 18769（真机日志实测），对应 scratch ≈ 96.9 MiB；
             //   - 而闸门额度 ≈ 4096 MiB（第 2 层 min(8188×0.70, 4096)），是单批需求的 **42 倍**；
             //   - 反解触发条件：需 free < 96.9/0.70 ≈ 138 MiB，即 8GB 卡上显存占用 **>98.3%**。
-            // 真正有用的条件只有把 aStarStep 从 4 降到 1（需求 → 约 1533 MiB，占用 >73% 即触发），
+            // 真正有用的条件只有把 pathGridStep 从 4 降到 1（需求 → 约 1533 MiB，占用 >73% 即触发），
             // 或把 gpuBudgetHardCapMiB 压到 ~128。
             //
             // 保留理由：①对本包「step 调小」以及 nodes 更大的整合包是真实保险；

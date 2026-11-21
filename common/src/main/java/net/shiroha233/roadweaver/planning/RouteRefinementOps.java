@@ -210,7 +210,7 @@ public final class RouteRefinementOps {
 
             TerrainSamplingMode mode = TerrainSamplingSessions.forLevel(level).effectiveMode();
 
-            PathfindingCostConfig retryPathConfig = config.pathfindingCost().withAStarStep(step);
+            PathfindingCostConfig retryPathConfig = config.pathfindingCost().withPathGridStep(step);
 
             List<BlockPos> originalPath = PlannedPathCache.find(
 
@@ -394,7 +394,7 @@ public final class RouteRefinementOps {
 
         ModConfig config = ConfigService.get();
 
-        PathfindingCostConfig pathfinding = config.pathfindingCost().withAStarStep(localStep);
+        PathfindingCostConfig pathfinding = config.pathfindingCost().withPathGridStep(localStep);
 
 
 
@@ -669,12 +669,12 @@ public final class RouteRefinementOps {
                 samplingBounds == null ? 0 : samplingBounds[1],
                 samplingBounds == null ? 0 : samplingBounds[2],
                 samplingBounds == null ? 0 : samplingBounds[3]);
-        PathfindingCostConfig pathfinding = config.pathfindingCost().withAStarStep(step);
+        PathfindingCostConfig pathfinding = config.pathfindingCost().withPathGridStep(step);
         long epoch = ThreadPoolManager.currentEpoch();
         List<StructureConnection> tasks = List.copyOf(connectionsToPlan);
         LOGGER.info("【初始精修批次已调度】 " + "RoadWeaver initial refinement batch scheduled: step={} bounds=[{},{} -> {},{}] "
                         + "samplingMask={} center={} radius={} connections={}",
-                pathfinding.effectiveAStarStep(), bounds[0], bounds[1], bounds[2], bounds[3],
+                pathfinding.effectivePathGridStep(), bounds[0], bounds[1], bounds[2], bounds[3],
                 samplingCenter != null, samplingCenter, Math.max(0, samplingRadius), tasks.size());
         return ComputeService.supplyAsync(ThreadPoolManager.TaskRole.INITIAL, () -> {
             if (!ThreadPoolManager.isEpoch(epoch)) return null;
@@ -690,10 +690,10 @@ public final class RouteRefinementOps {
             result = filterSuppressedPaths(level, result);
             if (result == null || result.paths().isEmpty()) return result;
             result = SharedEndpointPathReuse.reuseSharedEndpointTails(
-                    level, result, pathfinding.effectiveAStarStep());
+                    level, result, pathfinding.effectivePathGridStep());
             PlannedPathCache.register(level, result.mode(), pathfinding, result.paths());
             LOGGER.info("【初始精修批次规划结束】 " + "RoadWeaver initial refinement batch planned: step={} requested={} resolvedPaths={}",
-                    pathfinding.effectiveAStarStep(), tasks.size(), result.paths().size());
+                    pathfinding.effectivePathGridStep(), tasks.size(), result.paths().size());
             return result;
         }).thenCompose(result -> result == null || result.paths().isEmpty()
                         || !ThreadPoolManager.isEpoch(epoch)

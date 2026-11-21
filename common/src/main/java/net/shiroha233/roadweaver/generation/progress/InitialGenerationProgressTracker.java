@@ -797,7 +797,7 @@ public final class InitialGenerationProgressTracker {
 
     private static int resolveConfiguredSamplingStep() {
         try {
-            return ConfigService.get().pathfindingCost().effectiveAStarStep();
+            return ConfigService.get().pathfindingCost().effectivePathGridStep();
         } catch (Throwable ignored) {
             return -1;
         }

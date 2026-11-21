@@ -10,11 +10,11 @@ final class PerformanceSchedulingConfigTest {
         PerformanceConfig config = new PerformanceConfig();
 
         config.setSharedWorkerThreads(0);
-        config.setChunkyRoadThreadCap(0);
         config.sanitize();
 
         assertEquals(0, config.sharedWorkerThreads());
-        assertEquals(0, config.chunkyRoadThreadCap());
+        // 自适应模式必须跨线程快照保留，不能只测被删除的空限流旋钮。
+        assertEquals(0, config.snapshot().sharedWorkerThreads());
     }
 
     @Test
@@ -34,12 +34,10 @@ final class PerformanceSchedulingConfigTest {
         PerformanceConfig config = new PerformanceConfig();
 
         config.setSharedWorkerThreads(-1);
-        config.setChunkyRoadThreadCap(999);
         config.setIdleConcurrentGenerations(999);
         config.sanitize();
 
         assertEquals(0, config.sharedWorkerThreads());
-        assertEquals(128, config.chunkyRoadThreadCap());
         assertEquals(128, config.idleConcurrentGenerations());
     }
 

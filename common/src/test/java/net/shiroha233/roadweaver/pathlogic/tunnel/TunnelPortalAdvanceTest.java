@@ -38,7 +38,7 @@ class TunnelPortalAdvanceTest {
     private static final int STATIONS = 71;
     private static final int BASE = 64;
     private static final int STATION_BLOCKS = 8;
-    /** 名义站距，与 {@code RoadConstants.DEFAULT_ASTAR_STEP} 一致；管线用例的站也是每站 8 格。 */
+    /** 名义站距，与 {@code RoadConstants.DEFAULT_PATH_GRID_STEP} 一致；管线用例的站也是每站 8 格。 */
     private static final double STEP = 8.0D;
 
     // ── 纯函数：坡度 → 洞口段长 ─────────────────────────────────────────────

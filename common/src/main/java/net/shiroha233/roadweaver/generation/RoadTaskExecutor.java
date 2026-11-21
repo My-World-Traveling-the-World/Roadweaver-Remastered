@@ -329,7 +329,7 @@ public final class RoadTaskExecutor {
             if (ConnectionDeletionService.shouldAbort(level, connection)) {
                 return new GenerationAttempt(connection, GenerationOutcome.failed());
             }
-            int configuredStep = ConfigService.get().pathfindingCost().effectiveAStarStep();
+            int configuredStep = ConfigService.get().pathfindingCost().effectivePathGridStep();
             StructureConnection endpointReuse = ExistingRoadEndpointReuse.findCandidate(level, connection);
 
             // ★ 审计 P1-4：手绘路线必须跳过 endpoint reuse 分支。
@@ -536,7 +536,7 @@ public final class RoadTaskExecutor {
     public static GenerationOutcome generateTaskInternal(
             ServerLevel level, StructureConnection conn, boolean persistImmediately, Integer precisionStep) {
         int effectiveSamplingStep = precisionStep == null
-                ? ConfigService.get().pathfindingCost().effectiveAStarStep()
+                ? ConfigService.get().pathfindingCost().effectivePathGridStep()
                 : precisionStep;
         InitialGenerationProgressTracker.setCurrentSamplingStep(effectiveSamplingStep);
         if (level == null || conn == null || !Level.OVERWORLD.equals(level.dimension())) {
@@ -559,11 +559,11 @@ public final class RoadTaskExecutor {
 
             RoadGenerationConfig genCfg = RoadGenerationConfig.from(modCfg);
             if (precisionStep != null) {
-                genCfg.pathfinding().setAStarStep(precisionStep);
+                genCfg.pathfinding().setPathGridStep(precisionStep);
                 genCfg.pathfinding().sanitize();
             }
             RoadData generated = new Road(level, conn, cfg, genCfg)
-                    .generateRoad(genCfg.pathfinding().aStarMaxSteps(), persistImmediately);
+                    .generateRoad(persistImmediately);
 
             // ── 玩家手绘路线：用玩家意图覆盖管线产出 ──
             //

@@ -381,7 +381,7 @@ public final class PathFinalizeOps {
                 path, width, accurate, streams)) return path;
 
         List<BlockPos> working = List.copyOf(path);
-        PathfindingCostConfig finePathCfg = pathCfg.withAStarStep(2);
+        PathfindingCostConfig finePathCfg = pathCfg.withPathGridStep(2);
         Set<Long> routeSignatures = new HashSet<>();
         routeSignatures.add(routeSignature(working));
         for (int detour : LOCAL_LAKE_DETOUR_BLOCKS) {
@@ -431,7 +431,7 @@ public final class PathFinalizeOps {
         LOGGER.info("【开始河流局部修复】 " + "RoadWeaver starting river local repair window={} connection={}->{}",
                 RIVER_LOCAL_DETOUR_BLOCKS, connection.from(), connection.to());
         List<BlockPos> repaired = LakeRiverRepair.repairRiverIntersections(
-                path, level, accurate, pathCfg.withAStarStep(1), connection, streams,
+                path, level, accurate, pathCfg.withPathGridStep(1), connection, streams,
                 width, RIVER_LOCAL_DETOUR_BLOCKS);
         if (repaired != null && !repaired.equals(path)
                 && !AccurateGradeRepairPlanner.intersectsRiver(repaired, width, streams)) {
@@ -472,7 +472,7 @@ public final class PathFinalizeOps {
         if (!streams.isAvailable()
                 || !AccurateGradeRepairPlanner.intersectsRiver(path, width, streams)) return existing;
         PathfindingCostConfig pathCfg = cfg.pathfinding().snapshot();
-        pathCfg.setAStarStep(1);
+        pathCfg.setPathGridStep(1);
         pathCfg.sanitize();
         List<BlockPos> repaired = LakeRiverRepair.repairRiverIntersections(
                 path, level, cache.getAccurateSampler(level), pathCfg, connection, streams,

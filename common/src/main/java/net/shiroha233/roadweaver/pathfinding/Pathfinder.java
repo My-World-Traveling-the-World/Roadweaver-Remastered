@@ -8,16 +8,16 @@ import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 
 /**
- * 普通道路寻路器接口，支持策略模式切换算法
+ * BAND生产寻路调用边界；不暴露求解器不会读取的旧扩展步数预算。
  */
 public interface Pathfinder {
     PathResult findPath(BlockPos start, BlockPos end, int width,
-                        ServerLevel level, int maxSteps,
+                        ServerLevel level,
                         TerrainSamplingCache cache, PathTerrainField terrain, PathfindingCostConfig config);
 
     default PathResult findRawPath(BlockPos start, BlockPos end,
-                                   ServerLevel level, int maxSteps,
+                                   ServerLevel level,
                                    TerrainSamplingCache cache, PathTerrainField terrain, PathfindingCostConfig config) {
-        return findPath(start, end, 1, level, maxSteps, cache, terrain, config);
+        return findPath(start, end, 1, level, cache, terrain, config);
     }
 }

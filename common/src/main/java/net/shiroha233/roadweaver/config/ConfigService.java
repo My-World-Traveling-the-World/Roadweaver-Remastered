@@ -132,36 +132,18 @@ public final class ConfigService {
         root.addProperty("terrainSamplingMode", INSTANCE.planning().terrainSamplingMode().name());
         root.addProperty("terrainProfileMode", INSTANCE.planning().terrainProfileMode().name());
         root.addProperty("pathfindingAlgorithm", INSTANCE.pathfindingCost().pathfindingAlgorithm().name());
-        root.addProperty("aStarStep", INSTANCE.pathfindingCost().aStarStep());
-        root.addProperty("aStarMaxSteps", INSTANCE.pathfindingCost().aStarMaxSteps());
+        root.addProperty("pathGridStep", INSTANCE.pathfindingCost().pathGridStep());
         root.addProperty("orthoStepCost", INSTANCE.pathfindingCost().orthoStepCost());
         root.addProperty("diagStepCost", INSTANCE.pathfindingCost().diagStepCost());
         root.addProperty("heuristicWeight", INSTANCE.pathfindingCost().heuristicWeight());
-        root.addProperty("contourDiscount", INSTANCE.pathfindingCost().contourDiscount());
         root.addProperty("softGradeLimit", INSTANCE.pathfindingCost().softGradeLimit());
         root.addProperty("hardGradeLimit", INSTANCE.pathfindingCost().hardGradeLimit());
         root.addProperty("softGradePenalty", INSTANCE.pathfindingCost().softGradePenalty());
         root.addProperty("hardGradePenalty", INSTANCE.pathfindingCost().hardGradePenalty());
-        root.addProperty("gradientAlignPenalty", INSTANCE.pathfindingCost().gradientAlignPenalty());
-        root.addProperty("pfWaterBasePenalty", INSTANCE.pathfindingCost().pfWaterBasePenalty());
         root.addProperty("biomeCostWater", INSTANCE.pathfindingCost().biomeCostWater());
-        root.addProperty("biomeCostPlains", INSTANCE.pathfindingCost().biomeCostPlains());
-        root.addProperty("biomeCostForest", INSTANCE.pathfindingCost().biomeCostForest());
-        root.addProperty("biomeCostMountain", INSTANCE.pathfindingCost().biomeCostMountain());
-        root.addProperty("biomeCostSwamp", INSTANCE.pathfindingCost().biomeCostSwamp());
-        root.addProperty("biomeCostDesert", INSTANCE.pathfindingCost().biomeCostDesert());
         root.addProperty("biomeCostOther", INSTANCE.pathfindingCost().biomeCostOther());
-        root.addProperty("contourFollowWeight", INSTANCE.pathfindingCost().contourFollowWeight());
-        // 0.8.418：把「会改变道路形态」但此前漏掉的势场法参数补进算法标识。
-        // 分段竖向代价（elevation*）与偏差家族（deviation*）在势场法里真实参与决策，
-        // 改动它们会改变走向 ⇒ 旧预热结果不再适用，必须让标识随之变化。
+        // 局部修复仍读取高度与偏离权重；变化后必须使预热复用标识失效。
         root.addProperty("elevationWeight", INSTANCE.pathfindingCost().elevationWeight());
-        root.addProperty("elevationSegmentedCost", INSTANCE.pathfindingCost().elevationSegmentedCost());
-        root.addProperty("elevationGentleMax", INSTANCE.pathfindingCost().elevationGentleMax());
-        root.addProperty("elevationGentleWeight", INSTANCE.pathfindingCost().elevationGentleWeight());
-        root.addProperty("elevationSteepWeight", INSTANCE.pathfindingCost().elevationSteepWeight());
-        root.addProperty("elevationCliffThreshold", INSTANCE.pathfindingCost().elevationCliffThreshold());
-        root.addProperty("elevationCliffWeight", INSTANCE.pathfindingCost().elevationCliffWeight());
         root.addProperty("deviationWeight", INSTANCE.pathfindingCost().deviationWeight());
         return GSON.toJson(root);
     }

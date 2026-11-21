@@ -124,7 +124,7 @@ public final class SampledTerrainField {
      * <p>规划要到「哪两个结构连一条路」的粒度，1500×1500 的区域在 step=8 时是
      * 187×187 ≈ 3.5 万列 —— 比逐格的 225 万列小 64 倍，而拓扑决策根本不需要方格精度。
      * 真正要方格精度的是单条路线的几何，那由 {@code BandRouteSolver} 在
-     * 自己的包围盒里做（它的搜索步长本来就等于 A* 的 {@code effectiveAStarStep}）。</p>
+     * 自己的包围盒里做（它的搜索步长本来就等于 A* 的 {@code effectivePathGridStep}）。</p>
      *
      * <p>{@link AccurateHeightGridRequest} 的 {@code width}/{@code height} 是
      * <b>采样点数</b>（不是方块宽），{@code blockX(i) = minX + (i % width) * step}，

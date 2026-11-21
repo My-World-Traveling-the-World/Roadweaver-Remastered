@@ -1,4 +1,4 @@
-/* 文件职责：PlanningConfig 60 个键的元数据 —— 中文名、单位、范围、默认值与是否接线。 */
+/* 文件职责：PlanningKeys当前有效配置的元数据。 */
 package net.shiroha233.roadweaver.config.meta;
 
 import java.util.List;
@@ -6,39 +6,14 @@ import java.util.List;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
 /**
- * {@code PlanningConfig} 的键元数据表。
- *
- * <h2>它回答三个问题</h2>
- * <ol>
- *   <li><b>这个键是什么</b> —— 中文名 + 一句话说明，供 UI 直接显示</li>
- *   <li><b>它能取什么值</b> —— 类型与范围，供 UI 的滑块与校验</li>
- *   <li><b>它真的起作用吗</b> —— {@link ConfigStatus}，把已接线 / 未接线 / 实验性 / 已废弃分开</li>
- * </ol>
- *
- * <h2>第三条是这个表存在的主要理由</h2>
- * <p>旧实现有一批键<b>写进配置、进了 UI、玩家改了却什么也不发生</b>。已实证的六个：
- * {@code chunkyRoadThreadCap}、{@code openclAccurateSamplingEnabled}、{@code keepLamps}、
- * {@code minLength}、{@code oceanBridgeMinDepth}、{@code placeWaypoints}，
- * 外加 6 个 {@code biomeCost*} 永久死键（{@code PathTerrainField.biomeCategory()}
- * 全仓 0 处覆写）。把它们标成 {@link ConfigStatus#UNWIRED} 并写清原因，
- * 比让玩家反复试错要好得多 —— {@code ConfigKeyTableConsistencyTest} 强制
- * 每个非 ACTIVE 的键必须给出原因。</p>
- *
- * <h2>范围的两重口径</h2>
- * <p>这里的 {@code min/max} 是<b>给 UI 用的</b>；真正生效的夹取在
- * {@code PlanningConfig.sanitize()} 里，两者可能不同（例如
- * {@code dynamicPlanStrideChunks} 会被按半径重算）。
- * 凡是「UI 范围不等于实际生效范围」的键，{@code noteZh} 里都写明了。</p>
- *
- * @see ConfigKey
- * @see ConfigKeyTable
- * @see net.shiroha233.roadweaver.config.sub.PlanningConfig
+ * 当前PIPELINE路网规划的配置元数据。
+ * 范围与PlanningConfig的夹取保持一致，动态步长还受半径约束。
  */
 public final class PlanningKeys {
 
     private PlanningKeys() {}
 
-    /** 60 个键，顺序与 {@code PlanningConfig} 字段声明顺序一致。 */
+    /** 与配置实例字段逐项对应，删除无效字段时同步删除元数据。 */
     public static final List<ConfigKey> ALL = List.of(
             ConfigKey.bool("dynamicPlanEnabled", true,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
@@ -64,12 +39,6 @@ public final class PlanningKeys {
                     "动态规划步长", "Dynamic plan stride",
                     "波次之间的推进距离",
                     "区块", "sanitize 会重算：max(PLAN_TILE_MIN, min(PLAN_TILE_MAX, max(1,半径)/2)) —— 写大了不生效"),
-
-            ConfigKey.enumeration("planningAlgorithm", "PIPELINE",
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "路网拓扑算法", "Planning algorithm",
-                    "决定结构节点之间怎么连边",
-                    "只剩 PIPELINE（测地距离 MST）。旧规划器已全部删除，此项不可切换"),
 
             ConfigKey.enumeration("terrainSamplingMode", "COARSE_CORRIDOR",
                     ConfigCategory.TERRAIN, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
@@ -348,30 +317,6 @@ public final class PlanningKeys {
                     "高度异常绕行上限", "Height anomaly detour max",
                     "为躲开高度异常区最多绕多远。超过就接受异常",
                     "格", ""),
-
-            ConfigKey.integer("knnK", RoadConstants.DEFAULT_KNN_K, 1, 64,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "KNN 邻居数", "KNN neighbor count",
-                    "每个节点考虑多少个最近邻来生成候选边。太小路网稀疏，太大会生成大量无用的边",
-                    "个", ""),
-
-            ConfigKey.decimal("knnAlpha", RoadConstants.DEFAULT_KNN_ALPHA, 0.0, 10.0D,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "KNN 角度权重", "KNN angle weight",
-                    "选边时对方向一致性的权重。越大越偏好不转弯的连线",
-                    "权重", ""),
-
-            ConfigKey.decimal("knnMinAngleDeg", RoadConstants.DEFAULT_KNN_MIN_ANGLE_DEG, 0.0, 180.0D,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "KNN 最小夹角", "KNN min angle",
-                    "两条边夹角小于这个值就视为重复，只保留一条",
-                    "度", ""),
-
-            ConfigKey.integer("knnDegreeCap", RoadConstants.DEFAULT_KNN_DEGREE_CAP, 1, 32,
-                    ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "KNN 度数上限", "KNN degree cap",
-                    "每个节点最多连出多少条边。防止枢纽节点连成一片",
-                    "条", ""),
 
             ConfigKey.decimal("componentMinAngleDeg", RoadConstants.DEFAULT_COMPONENT_MIN_ANGLE_DEG, 0.0, 180.0D,
                     ConfigCategory.PATHFIND, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,

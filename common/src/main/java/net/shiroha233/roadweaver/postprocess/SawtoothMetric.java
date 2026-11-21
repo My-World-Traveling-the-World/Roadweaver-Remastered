@@ -108,7 +108,7 @@ public final class SawtoothMetric {
         }
     }
 
-    /** 对站点列测一次；{@code gridStep} 传 A* 的有效步距（{@code PathfindingCostConfig.effectiveAStarStep()}）。 */
+    /** 对站点列测一次；{@code gridStep} 传 A* 的有效步距（{@code PathfindingCostConfig.effectivePathGridStep()}）。 */
     public static Result measureStations(List<RoadSegmentPlacement> stations, double gridStep) {
         if (stations == null) return Result.none("null", 0, 0.0D, 0.0D);
         List<BlockPos> points = new ArrayList<>(stations.size());
