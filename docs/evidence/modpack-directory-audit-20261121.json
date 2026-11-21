@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-21",
+  "instance": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING",
+  "before_top_level_jars": 536,
+  "after_top_level_jars": 533,
+  "raw_candidate_records": 986,
+  "resolved_mods": 786,
+  "loader_version": "0.19.3",
+  "loader_sha256": "73eed8c34bbad0320a2a3cba5346351e822f74f82b3f3c060574068474132958",
+  "runtime_loader_hash_matches_audit_jar": true,
+  "minecraft_version": "1.21.1",
+  "java_version_model": "25, confirmed by latest.log and PCL version range; resolver helper runs on JDK21 without game classes",
+  "dependency_overrides": [
+    "fastmove"
+  ],
+  "dependency_resolution_passed": true,
+  "mixin_configs_parsed": 802,
+  "mixin_config_collisions": {},
+  "missing_declared_mixin_or_accesswidener_resources": [],
+  "missing_mixin_plugins": [],
+  "gson_parse_errors": [],
+  "jar_crc": {
+    "top_level_before": 536,
+    "top_level_bad": 0,
+    "nested_unique": 449,
+    "nested_bad": [],
+    "remaining_533_sha_unchanged": true
+  },
+  "inactive_duplicates_cleanup": {
+    "state": "inactive-old-jars-backed-up-and-removed",
+    "mods_dir": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods",
+    "backup_dir": "D:\\云游四海-Mod源码\\build\\mods-audit-20261121\\duplicate-backup",
+    "selected_exactly_unchanged": true,
+    "entries": [
+      {
+        "id": "polytone",
+        "old_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\20260927polytone-1.21-4.5.3-fabric.jar",
+        "old_sha256": "ccbf712a4c55e60a7e4feafdb1e38869dc2771b9006d6a9f8945443929daaf16",
+        "keep_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\20260927polytone-1.21-5.3.8-fabric.jar",
+        "keep_sha256": "4ea58d550d34359a328a5e2d0547e70eddc17862e9ed0dec7cbf528a9c9470d4",
+        "backup_name": "20260927polytone-1.21-4.5.3-fabric.jar"
+      },
+      {
+        "id": "chestfill",
+        "old_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\chest-fill-level-1.0.0.jar",
+        "old_sha256": "eede50c8bd6120f0c01e98b57ff7d8f48875c7d8a6911225d0cc3b3fcf3616e9",
+        "keep_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\chestfill-plus-1.1.0+mc1.21.1.jar",
+        "keep_sha256": "e43fcb1768fd890f905db0f100f4913353a848a314ab8535cda0995c064d5265",
+        "backup_name": "chest-fill-level-1.0.0.jar"
+      },
+      {
+        "id": "punchy",
+        "old_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\punchy-2.8g-fabric-1.21.1.jar",
+        "old_sha256": "1c3e101ae61f521256157eb4e0bfdfe4dd08062a89fa029d3b4a2498d0f1605e",
+        "keep_path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\punchy-3.2b-fabric-1.21.1.jar",
+        "keep_sha256": "5e0a110e3862726a44159614b6bd1967c98aab717aed59c746206d0d3c610af4",
+        "backup_name": "punchy-2.8g-fabric-1.21.1.jar"
+      }
+    ],
+    "cleaned_at": "2026-11-21T10:10:54.5683899+08:00"
+  },
+  "negative_controls": [
+    {
+      "case": "negative-missing-api",
+      "expected": "ModResolutionException",
+      "actual_rejected": true,
+      "log_sha256": "1165986763a50a363bfdf4f19b5cba55a9abb0f4c3596eacbdcd73942a1190fa"
+    },
+    {
+      "case": "negative-old-minemenu",
+      "expected": "ModResolutionException",
+      "actual_rejected": true,
+      "log_sha256": "93a2b764c19d5524052aaddf64191e65b245d18389f75203dbd62afb9ba8126f"
+    }
+  ],
+  "optional_warnings": [
+    {
+      "mod": "nomeltsnowybuilds",
+      "kind": "recommends",
+      "target": "mcqoy",
+      "requested": "0.3.3+1.3.2",
+      "present": "0.4.1+fabric-1.20"
+    },
+    {
+      "mod": "sounds",
+      "kind": "recommends",
+      "target": "rsls",
+      "requested": "*",
+      "present": null
+    }
+  ],
+  "optional_entrypoint_missing": [
+    {
+      "mod": "respackopts",
+      "tag": "frex",
+      "value": "io.gitlab.jfronny.respackopts.platform.fabric.integration.FrexCompat"
+    }
+  ],
+  "frex_or_canvas_selected": false,
+  "missing_refmap_declarations": 72,
+  "missing_refmaps_not_treated_as_fatal": true,
+  "new_game_launched": false,
+  "configs_or_saves_changed": false,
+  "full_raw_evidence_dir": "D:\\云游四海-Mod源码\\build\\mods-audit-20261121",
+  "remaining_limits": [
+    "No Minecraft or Mixin target application executed",
+    "No shader/resource-pack or actual play compatibility validation",
+    "Custom FREX entrypoint invocation not proven; FREX/Canvas absent",
+    "Builtin Java25 is the logged runtime model, not the helper JVM"
+  ],
+  "comparison_with_last_real_startup": {
+    "logged_client_mods": 787,
+    "displayed_server_only_nested_references_excluded": {
+      "polymer-autohost": "0.9.19+1.21.1"
+    },
+    "current_selected": 786,
+    "removed_only": {
+      "sodiumleafculling-unofficial": "2.0.0"
+    },
+    "added": {},
+    "changed_versions": {}
+  },
+  "mixin_null_items_skipped": {
+    "verified_in_runtime_mixin_config_bytecode": true,
+    "javap_sha256": "a789161aaa82b97e6dcb5c00917e110e4e55d8e5cc4dec10f59dff7a2f1e40e0"
+  },
+  "audit_source_sha256": {
+    "ResolveInstalledMods.java": "1eda4016bd06053b31ca6447fa845c9e3c182b48c40d7a8c91addbc99b2efa13",
+    "ReadMixinJson.java": "5315f78efcf4b37f3eaa852d04d1f639b1df521374590b5a797c7091a55a5ef1",
+    "Clean-InactiveDuplicates.ps1": "25b8b2d30a1435d838eab22d07e13eae27b3bdad99effe83cf0cb08beacef306"
+  }
+}

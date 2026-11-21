@@ -9,6 +9,7 @@
 | 默认在跑什么、哪部分待真机 | [开发现状](STATUS.md) |
 | 下一步做什么、按什么顺序验收 | [技术路线](ROADMAP.md) |
 | 三模组局部算法、全量架构盘点和测量边界 | [2026-11-21联合深审](THREE-MOD-OPTIMIZATION-20261121.md) |
+| WAYFARING安装目录、依赖与Mixin冲突、重复包备份 | [2026-11-21目录审计](MODPACK-AUDIT-20261121.md) |
 | 架构与开发规则 | [架构](../ARCHITECTURE.md) · [开发约定](../CONVENTIONS.md) |
 | 怎么编译、回归、真机对照、打包 | [验证手册](VALIDATION.md) |
 | 中文日志、诊断标记与注释契约 | [日志与源码说明](LOGGING.md) |

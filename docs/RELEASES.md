@@ -19,7 +19,8 @@
 | 回退 | 退出游戏后该目录Rollback.ps1检查，显式-Apply才恢复；未实际回退，备份SHA已验 |
 
 三个安装件安装后完整验hash，目标ID唯一；未启动游戏，配置/存档/第三方包未改。
-既有polytone/chestfill/punchy重复ID须确认版本，详见[验收清单](PLAYTEST-20261121.md)和[机器回执](evidence/three-mod-playtest-deployment-20261121.json)。
+部署时发现的polytone/chestfill/punchy重复ID，随后已由第87轮按Loader原选中版本备份清理；
+详见[目录审计](MODPACK-AUDIT-20261121.md)。原始[部署回执](evidence/three-mod-playtest-deployment-20261121.json)保留当时状态。
 
 ## 0.9.102 开发复打（2026-11-20，第78轮，未部署）
 
