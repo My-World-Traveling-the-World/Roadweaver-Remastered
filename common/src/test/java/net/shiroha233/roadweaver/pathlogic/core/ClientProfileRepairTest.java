@@ -54,7 +54,7 @@ class ClientProfileRepairTest {
         appearance.setSlopeLimitEnabled(true);
         appearance.setMaxSlopeStepPerTwoSegments(1);
         var runtime = net.shiroha233.roadweaver.config.sub.RoadGenerationConfig.from(config);
-        var output = TargetProfileSolver.solve(null, centers, terrain, terrain, null, null, null,
+        var output = assertDoesNotThrow(() -> TargetProfileSolver.solve(null, centers, terrain, terrain, null, null, null,
                 terrain[0], terrain[terrain.length - 1], runtime,
                 new SurfaceGradeLimits(5, 4, 3, 3, 8, 3), null,
                 (i, clearance) -> { throw new AssertionError("六条录制都没有桥，不应读水位"); },
@@ -62,7 +62,7 @@ class ClientProfileRepairTest {
                 (t, c, cut, fill, step, two, constraints) -> TargetProfileRepair.solve(
                         t, c, cut, fill, step, two, constraints,
                         preview -> RoadSpanProfileOps.excavationMask(centers,
-                                PathSpanExtractor.refineTunnelSpans(List.of(), segments, preview, null, null))));
+                                PathSpanExtractor.refineTunnelSpans(List.of(), segments, preview, null, null)))));
         var profile = output.orElseThrow();
         assertEquals(terrain.length, profile.length);
         assertEquals(0, ProfileFallback.violations(profile, 1, 1));
