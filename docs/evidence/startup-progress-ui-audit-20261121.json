@@ -1,0 +1,349 @@
+{
+  "date": "2026-11-21",
+  "scope": "local source, installed jars and layout arithmetic; no actual client rendering or full regression run",
+  "checks": [
+    "river line=12",
+    "river padding=10",
+    "river fixed layout anchors",
+    "wall line=12",
+    "wall padding=10",
+    "wall fixed layout anchors",
+    "road_planning line=12",
+    "road_planning padding=10",
+    "road_planning fixed layout anchors",
+    "road_generation line=12",
+    "road_generation padding=10",
+    "road_generation fixed layout anchors",
+    "road stepper derives completion from ordinal",
+    "coarse branch marks exact branch checked",
+    "river primes cache before activating card",
+    "river cache probe waits for completion",
+    "wall zh_cn literal and stage keys: []",
+    "wall en_us literal and stage keys: []",
+    "river zh_cn literal and stage keys: []",
+    "river en_us literal and stage keys: []",
+    "road zh_cn literal and stage keys: []",
+    "road en_us literal and stage keys: []",
+    "one enabled jar: roadweaver-fabric-*.jar",
+    "mixin class packaged: net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+    "mixin registered: net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+    "javap: net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+    "target LevelLoadingScreen: net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+    "render mapping: net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+    "one enabled jar: plaincraft-great-wall-*.jar",
+    "mixin class packaged: local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+    "mixin registered: local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+    "javap: local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+    "target LevelLoadingScreen: local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+    "render mapping: local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+    "one enabled jar: streamsreflowing-*.jar",
+    "mixin class packaged: dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin",
+    "mixin registered: dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin",
+    "javap: dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin",
+    "target LevelLoadingScreen: dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin",
+    "render mapping: dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin"
+  ],
+  "packages": [
+    {
+      "jar": "roadweaver-fabric-2.3.1-1.21.1-plaincraft-direct-core.0.9.102.jar",
+      "version": "2.3.1-1.21.1-plaincraft-direct-core.0.9.102",
+      "sha256": "e261b5eb52a1108c44a8e772eef3558fbc4e625f6e62abd27059dd31f4371882",
+      "mixin": "net.shiroha233.roadweaver.mixin.fabric.LevelLoadingScreenMixin",
+      "config": "roadweaver.mixins.json",
+      "refmapRender": "Lnet/minecraft/class_3928;method_25394(Lnet/minecraft/class_332;IIF)V"
+    },
+    {
+      "jar": "plaincraft-great-wall-0.7.126-api-standardization.jar",
+      "version": "0.7.126-api-standardization",
+      "sha256": "00f3bd2e9644edb2a396fc12bc521a33c1141c4ee02eb2766dd07215e2fbc11f",
+      "mixin": "local.plaincraft.greatwall.client.mixin.GreatWallLoadingProgressMixin",
+      "config": "plaincraft_great_wall.client.mixins.json",
+      "refmapRender": null
+    },
+    {
+      "jar": "streamsreflowing-2.12.8-fix9.jar",
+      "version": "2.12.8-fix9",
+      "sha256": "19aa6e6c492287cfd6981e813f2fcb8da028d8f37c984496393e6170eae1e6e5",
+      "mixin": "dev.streamsreflowing.fabric.mixin.StreamsLoadingProgressMixin",
+      "config": "streamsreflowing.mixins.json",
+      "refmapRender": null
+    }
+  ],
+  "layoutCases": [
+    {
+      "panel": "river",
+      "gui": [
+        320,
+        240
+      ],
+      "bounds": [
+        16,
+        20,
+        304,
+        234
+      ],
+      "fits": true
+    },
+    {
+      "panel": "river",
+      "gui": [
+        552,
+        365
+      ],
+      "bounds": [
+        28,
+        108,
+        524,
+        322
+      ],
+      "fits": true
+    },
+    {
+      "panel": "river",
+      "gui": [
+        640,
+        360
+      ],
+      "bounds": [
+        32,
+        103,
+        608,
+        317
+      ],
+      "fits": true
+    },
+    {
+      "panel": "river",
+      "gui": [
+        960,
+        540
+      ],
+      "bounds": [
+        48,
+        262,
+        912,
+        476
+      ],
+      "fits": true
+    },
+    {
+      "panel": "wall",
+      "gui": [
+        320,
+        240
+      ],
+      "bounds": [
+        16,
+        20,
+        304,
+        318
+      ],
+      "fits": false
+    },
+    {
+      "panel": "wall",
+      "gui": [
+        552,
+        365
+      ],
+      "bounds": [
+        28,
+        27,
+        524,
+        325
+      ],
+      "fits": true
+    },
+    {
+      "panel": "wall",
+      "gui": [
+        640,
+        360
+      ],
+      "bounds": [
+        32,
+        22,
+        608,
+        320
+      ],
+      "fits": true
+    },
+    {
+      "panel": "wall",
+      "gui": [
+        960,
+        540
+      ],
+      "bounds": [
+        48,
+        199,
+        912,
+        497
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_planning",
+      "gui": [
+        320,
+        240
+      ],
+      "bounds": [
+        -20,
+        20,
+        340,
+        306
+      ],
+      "fits": false
+    },
+    {
+      "panel": "road_planning",
+      "gui": [
+        552,
+        365
+      ],
+      "bounds": [
+        28,
+        36,
+        524,
+        322
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_planning",
+      "gui": [
+        640,
+        360
+      ],
+      "bounds": [
+        32,
+        31,
+        608,
+        317
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_planning",
+      "gui": [
+        960,
+        540
+      ],
+      "bounds": [
+        48,
+        190,
+        912,
+        476
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_generation",
+      "gui": [
+        320,
+        240
+      ],
+      "bounds": [
+        -20,
+        20,
+        340,
+        330
+      ],
+      "fits": false
+    },
+    {
+      "panel": "road_generation",
+      "gui": [
+        552,
+        365
+      ],
+      "bounds": [
+        28,
+        20,
+        524,
+        330
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_generation",
+      "gui": [
+        640,
+        360
+      ],
+      "bounds": [
+        32,
+        20,
+        608,
+        330
+      ],
+      "fits": true
+    },
+    {
+      "panel": "road_generation",
+      "gui": [
+        960,
+        540
+      ],
+      "bounds": [
+        48,
+        166,
+        912,
+        476
+      ],
+      "fits": true
+    }
+  ],
+  "translations": [
+    {
+      "mod": "wall",
+      "language": "zh_cn",
+      "checkedKeys": 30,
+      "missing": []
+    },
+    {
+      "mod": "wall",
+      "language": "en_us",
+      "checkedKeys": 30,
+      "missing": []
+    },
+    {
+      "mod": "river",
+      "language": "zh_cn",
+      "checkedKeys": 4,
+      "missing": []
+    },
+    {
+      "mod": "river",
+      "language": "en_us",
+      "checkedKeys": 4,
+      "missing": []
+    },
+    {
+      "mod": "road",
+      "language": "zh_cn",
+      "checkedKeys": 29,
+      "missing": []
+    },
+    {
+      "mod": "road",
+      "language": "en_us",
+      "checkedKeys": 29,
+      "missing": []
+    }
+  ],
+  "coarseStepperIncorrectlyChecked": [
+    "EXACT_SAMPLING",
+    "EXACT_PATHING"
+  ],
+  "wallRateCounterexample": {
+    "done": 100,
+    "total": 200,
+    "elapsedMillis": 100000,
+    "actualStageMillis": 1000,
+    "displayedRate": 1,
+    "stageRate": 100
+  },
+  "productionModified": false
+}
