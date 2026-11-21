@@ -20,6 +20,15 @@
 新MineMenu与合法UTF-8菜单文件字节未变。证据留plaincraft-minemenu-multiplayer-fix/docs/compatibility-20261121.json，
 其HANDOFF记录全过程；没有将该补丁测试放进道路套件。尚待用户再次启动。
 
+同日第二条实际启动阻断：seleafculling4.2.0与sodiumleafculling-unofficial2.0.0
+分别以不同mod ID声明同一个mixins.sodiumleafculling.json，FabricMixinBootstrap拒绝重名。
+已直接读取两包描述及Mixin配置；当前Sodium0.8.13满足4.2.0声明，且未发现顶层模组硬依赖旧ID。
+获准后将2.0.0旧包逐字备份至工作区build/startup-conflicts-20261121再移出；
+独立复核备份SHA、新版SHA未变且仅4.2.0启用。顺扫其余顶层客户端描述，
+未发现其他不同ID的同名Mixin配置；嵌套解析/完整Mixin运行尚未验证，
+原三个同ID重复包也未擅自处理。证据见evidence/leafculling-startup-conflict-20261121.json。
+无生产源码改动或回归重跑，仍需用户重启。
+
 ### 四、遗留半截的东西
 
 河流7大类、默认跨tick施工、道路父表压缩及长城BVH对拍仍按联合报告排序；crossing、双平滑和自动重铺政策不动。道路远程同步此前连接失败/push审批限制未解除，未重试或绕过；河流无remote。本轮本地安装独立获准，不代表远程push获准。
