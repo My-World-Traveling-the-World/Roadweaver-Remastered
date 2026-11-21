@@ -15,6 +15,38 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PipelinePlannerSamplingTest {
+    @org.junit.jupiter.api.Test
+    void realTopologyUsesConfiguredGradeWeightInsteadOfAnotherDefaultMetric() {
+        var config = net.shiroha233.roadweaver.config.ConfigService.get().pathfindingCost();
+        double saved = config.finslerGradeWeight();
+        try {
+            var planner = new PipelinePlanner(8, () -> request -> {
+                int[] height = new int[request.sampleCount()];
+                for (int i = 0; i < height.length; i++) {
+                    int x = request.blockX(i), z = request.blockZ(i);
+                    height[i] = 64 + (Math.abs(x) <= 8 && z < 24 ? 48 : 0);
+                }
+                return new AccurateHeightGrid(request, height, height, height);
+            });
+            var a = new BlockPos(-24, 64, 0);
+            var b = new BlockPos(24, 64, 0);
+            var c = new BlockPos(0, 64, 64);
+            config.setFinslerGradeWeight(0);
+            var flat = planner.plan(List.of(a, b, c), 128);
+            config.setFinslerGradeWeight(100);
+            var graded = planner.plan(List.of(a, b, c), 128);
+            assertEquals(2, flat.size());
+            assertEquals(2, graded.size());
+            var flatEdges = flat.stream().map(edge -> java.util.Set.of(edge.from(), edge.to()))
+                    .collect(java.util.stream.Collectors.toSet());
+            var gradedEdges = graded.stream().map(edge -> java.util.Set.of(edge.from(), edge.to()))
+                    .collect(java.util.stream.Collectors.toSet());
+            assertNotEquals(flatEdges, gradedEdges, "真实规划入口必须接到新版坡度参数");
+        } finally {
+            config.setFinslerGradeWeight(saved);
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {128, 131000})
     void planUsesInjectedSamplingBoundaryAndPreservesActualConnections(int span) {

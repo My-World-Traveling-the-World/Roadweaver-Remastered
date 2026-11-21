@@ -343,25 +343,30 @@ public final class PlanningConfig implements SubConfig {
         autoWaterThresholdFraction = finiteFraction(autoWaterThresholdFraction, 0.25D);
         gradeRepairWindowStateLimit = Math.max(20_000, Math.min(500_000, gradeRepairWindowStateLimit));
         gradeRepairWindowBudgetMillis = Math.max(1_000, Math.min(600_000, gradeRepairWindowBudgetMillis));
-        baseWaterPenalty = Math.max(0.0D, Math.min(100_000.0D, baseWaterPenalty));
-        perStationWaterPenalty = Math.max(0.0D, Math.min(100_000.0D, perStationWaterPenalty));
-        riverProximityPenalty = Math.max(0.0D, Math.min(100_000.0D, riverProximityPenalty));
+        baseWaterPenalty = finiteRange(baseWaterPenalty, 200D, 100000D);
+        perStationWaterPenalty = finiteRange(perStationWaterPenalty, 150D, 100000D);
+        riverProximityPenalty = finiteRange(riverProximityPenalty, 8D, 100000D);
         riverProximityRadius = Math.max(0, Math.min(32, riverProximityRadius));
-        culvertCostPerStation = Math.max(0.0D, Math.min(100.0D, culvertCostPerStation));
-        landDetourFactor = Math.max(0.0D, Math.min(10.0D, landDetourFactor));
+        culvertCostPerStation = finiteRange(culvertCostPerStation, 2D, 100D);
+        landDetourFactor = finiteRange(landDetourFactor, 1.6D, 10D);
         narrowWaterMaxWidth = Math.max(0, Math.min(256, narrowWaterMaxWidth));
-        narrowWaterPerStation = Math.max(0.0D, Math.min(100_000.0D, narrowWaterPerStation));
-        wideWaterBase = Math.max(0.0D, Math.min(100_000.0D, wideWaterBase));
-        wideWaterPerStation = Math.max(0.0D, Math.min(100_000.0D, wideWaterPerStation));
+        narrowWaterPerStation = finiteRange(narrowWaterPerStation, 20D, 100000D);
+        wideWaterBase = finiteRange(wideWaterBase, 600D, 100000D);
+        wideWaterPerStation = finiteRange(wideWaterPerStation, 80D, 100000D);
         maxGradeFraction = finiteFraction(maxGradeFraction, 0.5D);
         gradeRepairParallelism = Math.max(0, Math.min(Runtime.getRuntime().availableProcessors(),
                 gradeRepairParallelism));
         // 连通分支合并约束
-        componentMinAngleDeg = Math.max(0.0D, Math.min(89.0D, componentMinAngleDeg));
+        componentMinAngleDeg = finiteRange(componentMinAngleDeg, 35D, 89D);
         componentDegreeCap = Math.max(1, Math.min(8, componentDegreeCap));
         planMaxEdgeLenBlocks = Math.max(128, Math.min(16384, planMaxEdgeLenBlocks));
         attachToExistingRoadRadiusBlocks = Math.max(0, Math.min(1024, attachToExistingRoadRadiusBlocks));
         bridgeJoinLenBlocks = Math.max(64, Math.min(16384, bridgeJoinLenBlocks));
+    }
+
+    /** 配置文件也能直接输入NaN；必须在搜索前恢复有限值，不能让比较条件全部失效。 */
+    private static double finiteRange(double value, double fallback, double max) {
+        return Math.max(0.0D, Math.min(max, Double.isFinite(value) ? value : fallback));
     }
 
     private static double finiteFraction(double value, double fallback) {

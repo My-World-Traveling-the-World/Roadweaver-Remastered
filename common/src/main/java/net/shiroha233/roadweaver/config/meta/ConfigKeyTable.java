@@ -22,10 +22,9 @@ import java.util.stream.Collectors;
  * </ol>
  *
  * <h2>渐进接入</h2>
- * <p>本仓 <b>232 个键全部接入</b>（10 个配置类，顺序与 ModConfig 字段一致）。
+ * <p>本仓持久化键全部接入（10 个配置类，顺序与 ModConfig 字段一致）。
  * 注：{@code RoadGenerationConfig} 不是 {@code ModConfig} 的字段 —— 它是运行期
- * 构造的快照对象，不参与 JSON 持久化，所以不在表内（它有 11 个字段会让人误
- * 以为总数是 243）。
+ * 构造的快照对象，不参与 JSON 持久化，所以不在表内（运行期快照字段不计入菜单数量）。
  * {@code ConfigKeyTableConsistencyTest} 会在两边<b>双向</b>校验：
  * 已接入的配置类必须与表完全一致；未接入的暂时跳过。</p>
  *
@@ -39,7 +38,7 @@ public final class ConfigKeyTable {
 
     private ConfigKeyTable() {}
 
-    /** 已接入元数据的配置类 → 它对应的键集合。按这个顺序在 UI 上分组。 */
+    /** 已接入元数据的配置类 → 它对应的键集合。保留对象限定名，展示分类不改变JSON对象形状。 */
     private static final Map<String, List<ConfigKey>> BY_CONFIG = new LinkedHashMap<>();
 
     static {

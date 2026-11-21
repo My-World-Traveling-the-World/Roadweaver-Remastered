@@ -36,7 +36,7 @@ final class CurrentConfigContractTest {
             "bridge", List.of("keepLamps", "minLength"),
             "roadAppearance", List.of("placeWaypoints"),
             "terrainProfile", List.of("oceanBridgeMinDepth"),
-            "performance", List.of("chunkyRoadThreadCap"));
+            "performance", List.of("chunkyRoadThreadCap", "openclAccurateSamplingEnabled"));
 
     @Test
     void retiredKeysAreAbsentFromSerializationAndMetadata() {
@@ -66,6 +66,36 @@ final class CurrentConfigContractTest {
         defaults.sanitize();
         assertEquals(GSON.toJsonTree(defaults), GSON.toJsonTree(loaded));
         assertEquals(payloads(defaults), payloads(loaded));
+    }
+
+    @Test
+    void newShapeControlsParticipateInBothCacheIdentities() throws Exception {
+        for (String key : List.of("finslerGradeWeight", "finslerObstacleWeight", "elasticBandStiffness")) {
+            var original = new ModConfig();
+            var before = payloads(original);
+            var option = net.shiroha233.roadweaver.config.meta.ConfigOption.bind(original).stream()
+                    .filter(v -> v.id().equals("pathfindingCost." + key)).findFirst().orElseThrow();
+            option.save(10.0D);
+            original.sanitize();
+            assertBothChanged(before, payloads(original));
+        }
+    }
+
+    @Test
+    void currentDecoderIgnoresLegacyHintsWithoutRewritingExplicitNewBudgets() {
+        var root = GSON.toJsonTree(new ModConfig()).getAsJsonObject();
+        var performance = root.getAsJsonObject("performance");
+        performance.addProperty("generationThreads", 4);
+        performance.addProperty("sharedWorkerThreads", 16);
+        performance.addProperty("initialGenerationThreads", 24);
+        performance.addProperty("maxConcurrentGenerations", 12);
+        root.getAsJsonObject("pathfindingCost").addProperty("softGradePenalty", 600);
+        var loaded = ConfigService.decodeCurrent(root);
+        assertEquals(16, loaded.performance().sharedWorkerThreads());
+        assertEquals(24, loaded.performance().initialGenerationThreads());
+        assertEquals(12, loaded.performance().maxConcurrentGenerations());
+        assertEquals(600, loaded.pathfindingCost().softGradePenalty());
+        assertFalse(GSON.toJsonTree(loaded).getAsJsonObject().getAsJsonObject("performance").has("generationThreads"));
     }
 
     @Test
@@ -126,13 +156,12 @@ final class CurrentConfigContractTest {
         Path root = repoRoot();
         Path ui = root.resolve("fabric/src/main/java/net/shiroha233/roadweaver/client/fabric");
         assertFalse(Files.exists(ui.resolve("LegacyPathfindingSection.java")));
-        String planning = Files.readString(ui.resolve("PlanningSection.java"));
-        assertFalse(planning.toLowerCase(java.util.Locale.ROOT).contains("knn"));
-        String costs = Files.readString(ui.resolve("PathfindingCostsSection.java"));
-        assertTrue(costs.contains("cfg::setPathGridStep"));
-        assertFalse(costs.contains("a_star"));
+        assertFalse(Files.exists(ui.resolve("PlanningSection.java")), "不得保留第二套手写菜单");
+        String screen = Files.readString(ui.resolve("MetadataConfigScreen.java"));
+        assertTrue(screen.contains("ConfigOption.bind(draft)"));
+        var options = net.shiroha233.roadweaver.config.meta.ConfigOption.bind(new ModConfig());
         for (String key : ECONOMIC_AND_WATER) {
-            assertTrue(costs.contains("cfg::set" + Character.toUpperCase(key.charAt(0)) + key.substring(1)),
+            assertTrue(options.stream().anyMatch(v -> v.id().equals("pathfindingCost." + key)),
                     key + " 必须仍有真实保存绑定");
         }
     }

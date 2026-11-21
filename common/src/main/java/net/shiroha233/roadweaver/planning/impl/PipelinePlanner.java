@@ -16,6 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.shiroha233.roadweaver.bridge.SampledTerrainField;
+import net.shiroha233.roadweaver.bridge.ConfiguredRouteSolvers;
+import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.bridge.TiledTerrainField;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
@@ -118,6 +120,9 @@ public final class PipelinePlanner implements NetworkPlanner {
         }
         checkInterrupted();
 
+        // 长采样开始前捕获偏好，玩家在菜单保存时不能让同一次拓扑中途换度量。
+        var routeConfig = ConfigService.get().pathfindingCost().snapshot();
+        routeConfig.sanitize();
         // ① 去重并记录每点的代表坐标（节点只有 x/z，y 要从原 BlockPos 取回）
         List<RoadNode> nodes = new ArrayList<>(points.size());
         List<BlockPos> representatives = new ArrayList<>(points.size());
@@ -185,7 +190,10 @@ public final class PipelinePlanner implements NetworkPlanner {
             throw samplingFailure;
         }
         checkInterrupted();
-        FinslerMetric metric = FinslerMetric.of(terrain, ObstacleField.NONE);
+        // 建树和逐路寻路读取同一组主算法权重，避免配置只影响其中一半。
+        FinslerMetric metric = ConfiguredRouteSolvers.metric(
+                routeConfig,
+                terrain, ObstacleField.NONE, null, null);
 
         // ④ 跑拓扑层（测地矩阵 + MST）
         //

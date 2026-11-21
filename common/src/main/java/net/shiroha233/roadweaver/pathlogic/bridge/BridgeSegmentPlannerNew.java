@@ -317,7 +317,8 @@ public final class BridgeSegmentPlannerNew {
             Line line,
             int deckY,
             List<TemplatePlacement> placements) {
-        int interval = RoadConstants.DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS;
+        // 读取桥梁专用间隔，0只关闭额外桥灯，不删除模板本身保存的装饰。
+        int interval = ConfigService.get().bridge().lightIntervalBlocks();
         if (interval <= 0 || placements == null || placements.isEmpty()) return;
         double length = line.getTotalLength();
         if (!(length > 0.0D)) return;

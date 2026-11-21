@@ -286,23 +286,15 @@ public final class UiFeatureGuardTest {
         Path impl = dir.resolve("ConfigScreenFactoryImpl.java");
         assertTrue(Files.isRegularFile(impl), "fabric 侧缺 ConfigScreenFactoryImpl 实现：" + impl);
 
-        // 2026-11-13：配置界面已按分区拆成 ConfigScreenFactoryImpl + 12 个 *Section 类
-        // （原单文件 1791 行、12 个分区挤在一起）。所以口径从「单文件行数」改成
-        // 「配置界面实现的总行数」—— 拆开合法，缩水仍然被拦。
-        int total = Files.readAllLines(impl, StandardCharsets.UTF_8).size();
-        int sections = 0;
-        try (Stream<Path> s = Files.list(dir)) {
-            for (Path p : s.filter(x -> x.getFileName().toString().endsWith("Section.java")).toList()) {
-                int n = Files.readAllLines(p, StandardCharsets.UTF_8).size();
-                assertTrue(n >= 30, "分区 " + p.getFileName() + " 只有 " + n
-                        + " 行 —— 疑似被清空或退化成空壳");
-                total += n;
-                sections++;
-            }
-        }
-        assertTrue(sections >= 12,
-                "配置界面分区从 12 个缩到 " + sections + " 个 —— 有分区被合并或删除");
-        assertTrue(total >= 1500,
-                "配置界面实现总行数从 1791 缩到 " + total + " 行 —— 疑似丢功能");
+        // 按真实绑定与功能入口守卫，模板化渲染减少行数不应被误判为丢功能。
+        String factory = Files.readString(impl, StandardCharsets.UTF_8);
+        String renderer = Files.readString(dir.resolve("MetadataConfigScreen.java"), StandardCharsets.UTF_8);
+        assertTrue(factory.contains("MetadataConfigScreen.populate(builder, draft)"));
+        assertTrue(renderer.contains("ConfigOption.bind(draft)"));
+        assertTrue(renderer.contains("new OpenStructureSelectionEntry()"));
+        assertTrue(renderer.contains("new OpenPresetEditorEntry()"));
+        assertEquals(196, net.shiroha233.roadweaver.config.meta.ConfigOption.bind(
+                new net.shiroha233.roadweaver.config.ModConfig()).size());
+        assertEquals(8, net.shiroha233.roadweaver.config.meta.ConfigCategory.values().length);
     }
 }

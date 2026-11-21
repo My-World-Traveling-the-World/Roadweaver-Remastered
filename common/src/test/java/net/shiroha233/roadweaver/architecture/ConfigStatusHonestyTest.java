@@ -213,7 +213,8 @@ public final class ConfigStatusHonestyTest {
                 deprecated.add(e.getKey());
             }
         }
-        assertTrue(!unwired.isEmpty(), "一条 UNWIRED 都没解析到 —— 状态正则可能失效了");
+        // 新版不再保留无效旋钮；零项是删除后的契约，用明确断言守住，不能继续要求存在死键。
+        assertTrue(unwired.isEmpty() && deprecated.isEmpty(), "无效配置应从字段、元数据与菜单一起删除");
 
         List<String> problems = new ArrayList<>();
         for (int i = 0; i < unwired.size(); i++) {

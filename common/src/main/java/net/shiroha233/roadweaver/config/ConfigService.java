@@ -10,8 +10,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.architectury.platform.Platform;
-import net.shiroha233.roadweaver.config.sub.PerformanceConfig;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.persistence.files.FileStorageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,45 +39,30 @@ public final class ConfigService {
         Path file = baseDir.resolve(FILE_NAME);
         ensureDirectory(baseDir);
 
-        boolean migratedLegacyPerformance = false;
-        boolean migratedGradePenaltyScale = false;
-        if (Files.exists(file)) {
+        // 新版只按当前字段加载；旧键由GSON忽略，不再通过历史迁移重写玩家的新预算。
+        ModConfig loaded = new ModConfig();
+        boolean missing = !Files.exists(file);
+        if (!missing) {
             try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                JsonElement parsed = JsonParser.parseReader(reader);
-                if (parsed != null && parsed.isJsonObject()) {
-                    JsonObject root = parsed.getAsJsonObject();
-                    ModConfig loaded = GSON.fromJson(root, ModConfig.class);
-                    if (loaded != null) {
-                        INSTANCE = loaded;
-                        migratedLegacyPerformance = migrateLegacyPerformance(root, loaded);
-                        migratedGradePenaltyScale = migrateLegacyGradePenaltyScale(root, loaded);
-                    }
-                }
+                loaded = decodeCurrent(JsonParser.parseReader(reader).getAsJsonObject());
             } catch (Exception e) {
                 LOGGER.warn("配置文件读取失败，使用默认值: {}", file, e);
             }
-        } else {
-            save();
         }
-
-        try {
-            INSTANCE.sanitize();
-        } catch (Throwable t) {
-            LOGGER.warn("配置校验失败，继续使用原始值", t);
-        }
-        if (migratedLegacyPerformance) {
-            LOGGER.info("【旧性能配置迁移完成，采用受限启动预算】 " + "Migrated legacy RoadWeaver performance settings with safe initial limits; accurate sampling remains CPU-only.");
-        }
-        if (migratedGradePenaltyScale) {
-            LOGGER.info("[GRADE-PENALTY] 配置迁移：老配置里的坡罚刻度 {}/{} 是 0.9.061 的旧出厂值，"
-                            + "已升到 0.9.063 标定值 {}/{}（只认「正好等于旧出厂值」这一种情况，"
-                            + "玩家自己改过的单价一律不动）",
-                    RoadConstants.LEGACY_SOFT_GRADE_PENALTY, RoadConstants.LEGACY_HARD_GRADE_PENALTY,
-                    RoadConstants.DEFAULT_SOFT_GRADE_PENALTY, RoadConstants.DEFAULT_HARD_GRADE_PENALTY);
-        }
+        loaded.sanitize();
+        INSTANCE = loaded;
+        if (missing) save();
         LOGGER.info("配置已加载 (predictRadius={}, predictionEnabled={})",
                 INSTANCE.structurePrediction().predictRadiusChunks(),
                 INSTANCE.structurePrediction().enabled());
+    }
+
+    /** 加载与离线回归共用当前版本解码入口；成功校验之前不发布半成品。 */
+    static ModConfig decodeCurrent(JsonObject root) {
+        ModConfig loaded = GSON.fromJson(root, ModConfig.class);
+        if (loaded == null) loaded = new ModConfig();
+        loaded.sanitize();
+        return loaded;
     }
 
     public static synchronized void save() {
@@ -97,6 +80,13 @@ public final class ConfigService {
 
     public static ModConfig get() {
         return INSTANCE;
+    }
+
+    /** 菜单编辑独立快照，点击取消不能提前污染后台任务；保存时一次发布完整配置。 */
+    public static synchronized void applyAndSave(ModConfig edited) {
+        edited.sanitize();
+        INSTANCE = edited.snapshot();
+        save();
     }
 
     /** 生成持久规划覆盖的指纹载荷，使相关配置变化能使旧覆盖失效。 */
@@ -149,6 +139,10 @@ public final class ConfigService {
         // 局部修复仍读取高度与偏离权重；变化后必须使预热复用标识失效。
         root.addProperty("elevationWeight", INSTANCE.pathfindingCost().elevationWeight());
         root.addProperty("deviationWeight", INSTANCE.pathfindingCost().deviationWeight());
+        // 新度量和平滑参数参与真实几何，修改后不能沿用原配置的完成覆盖。
+        root.addProperty("finslerGradeWeight", INSTANCE.pathfindingCost().finslerGradeWeight());
+        root.addProperty("finslerObstacleWeight", INSTANCE.pathfindingCost().finslerObstacleWeight());
+        root.addProperty("elasticBandStiffness", INSTANCE.pathfindingCost().elasticBandStiffness());
         return GSON.toJson(root);
     }
 
@@ -167,86 +161,4 @@ public final class ConfigService {
         }
     }
 
-    /**
-     * 0.9.063（任务一）：坡罚刻度重标定（soft 600→780 / hard 30000→39000）的配置迁移。
-     *
-     * <p><b>为什么必须有这一步。</b>Gson 只在键存在时覆盖字段，而 {@code ConfigService.save()}
-     * 会把整份配置写盘 —— 所以任何一个装过 0.9.062 及更早版本的实例，配置里都<b>显式写着</b>
-     * {@code softGradePenalty=600 / hardGradePenalty=30000}。只改默认常量的话，升级后玩家手上
-     * 仍是旧刻度，标定在线上等于没做（坡罚还是便宜的那个数）。</p>
-     *
-     * <p><b>只认一种情况</b>：数值正好等于 0.9.061 的旧出厂值。玩家把它改成别的数（哪怕 601）
-     * 一律视为显式选择，不动。迁移动的是内存里的 {@link ModConfig}，下次
-     * {@code save()} / {@code markDirty()} 时会落盘；迁移本身幂等。</p>
-     */
-    private static boolean migrateLegacyGradePenaltyScale(JsonObject root, ModConfig loaded) {
-        JsonElement costElement = root.get("pathfindingCost");
-        if (costElement == null || !costElement.isJsonObject()) {
-            return false;
-        }
-        JsonObject cost = costElement.getAsJsonObject();
-        boolean migrated = false;
-        Double soft = readNumber(cost, "softGradePenalty");
-        if (soft != null && Math.abs(soft - RoadConstants.LEGACY_SOFT_GRADE_PENALTY) < 1.0E-9D) {
-            loaded.pathfindingCost().setSoftGradePenalty(RoadConstants.DEFAULT_SOFT_GRADE_PENALTY);
-            migrated = true;
-        }
-        Double hard = readNumber(cost, "hardGradePenalty");
-        if (hard != null && Math.abs(hard - RoadConstants.LEGACY_HARD_GRADE_PENALTY) < 1.0E-9D) {
-            loaded.pathfindingCost().setHardGradePenalty(RoadConstants.DEFAULT_HARD_GRADE_PENALTY);
-            migrated = true;
-        }
-        return migrated;
-    }
-
-    /** 迁移时容忍单个可选数值类型错误，避免整个旧配置被一并丢弃。 */
-    private static Double readNumber(JsonObject parent, String key) {
-        JsonElement element = parent.get(key);
-        if (element == null || !element.isJsonPrimitive()) {
-            return null;
-        }
-        try {
-            return element.getAsDouble();
-        } catch (RuntimeException ignored) {
-            return null;
-        }
-    }
-
-    /** 迁移旧性能字段以保留玩家预算；精确采样保持CPU-only，不因旧配置开启废弃GPU路径。 */
-    private static boolean migrateLegacyPerformance(JsonObject root, ModConfig loaded) {
-        JsonElement performanceElement = root.get("performance");
-        if (performanceElement == null || !performanceElement.isJsonObject()) {
-            return false;
-        }
-        JsonObject legacy = performanceElement.getAsJsonObject();
-        if (!legacy.has("generationThreads")) {
-            return false;
-        }
-
-        PerformanceConfig performance = loaded.performance();
-        int legacyWorkers = readInt(legacy, "generationThreads", 4);
-        int legacyInitialWorkers = readInt(legacy, "initialGenerationThreads", legacyWorkers);
-        int legacyConcurrent = readInt(legacy, "maxConcurrentGenerations", 1);
-        performance.setSharedWorkerThreads(Math.max(1, Math.min(4, legacyWorkers)));
-        performance.setInitialGenerationThreads(Math.max(1, Math.min(4, legacyInitialWorkers)));
-        performance.setMaxConcurrentGenerations(Math.max(1, Math.min(2, legacyConcurrent)));
-        performance.setThreadDutyCycle(readInt(legacy, "threadDutyCycle", 50));
-        performance.setIdleGenerationEnabled(false);
-        performance.setIdleThreadDutyCycle(readInt(legacy, "idleThreadDutyCycle", 20));
-        performance.setOpenclCoarseSamplingEnabled(true);
-        performance.setOpenclAccurateSamplingEnabled(true);
-        return true;
-    }
-
-    private static int readInt(JsonObject object, String key, int fallback) {
-        JsonElement element = object.get(key);
-        if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
-            return fallback;
-        }
-        try {
-            return element.getAsInt();
-        } catch (NumberFormatException ignored) {
-            return fallback;
-        }
-    }
 }

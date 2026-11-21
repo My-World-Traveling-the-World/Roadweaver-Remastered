@@ -15,21 +15,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** 只保留有意禁用的GPU精确采样说明；已删除的死键不得重新向玩家承诺能力。 */
 final class ConfigKnobHonestyTest {
 
-    // 精确采样固定CPU后端是已验证的设计，不随本轮旧配置清理更改。
-    private static final List<String> DEAD_KNOBS = List.of("opencl_accurate_sampling_enabled");
-
-    private static final String ZH_MARKER = "不生效";
-    private static final String EN_MARKER = "does NOTHING";
-
     @Test
     void everyInertSwitchAdmitsItIsInert() throws Exception {
-        String zh = read("zh_cn.json");
-        String en = read("en_us.json");
-        for (String knob : DEAD_KNOBS) {
-            assertTrue(tooltip(zh, knob).contains(ZH_MARKER),
-                    "zh_cn tooltip of " + knob + " must contain '" + ZH_MARKER + "'");
-            assertTrue(tooltip(en, knob).contains(EN_MARKER),
-                    "en_us tooltip of " + knob + " must contain '" + EN_MARKER + "'");
+        var json = new com.google.gson.Gson().toJsonTree(new ModConfig()).getAsJsonObject();
+        assertFalse(json.getAsJsonObject("performance").has("openclAccurateSamplingEnabled"));
+        assertTrue(net.shiroha233.roadweaver.config.meta.ConfigKeyTable.forConfig("performance")
+                .stream().noneMatch(key -> key.jsonKey().equals("openclAccurateSamplingEnabled")));
+        for (String lang : List.of("zh_cn.json", "en_us.json")) {
+            String text = read(lang);
+            assertFalse(text.contains("config.roadweaver.opencl_accurate_sampling_enabled"));
+            assertTrue(text.contains("config.roadweaver.accurate_cpu_fixed"));
         }
     }
 

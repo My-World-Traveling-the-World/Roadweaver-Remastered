@@ -27,7 +27,9 @@ public final class TerrainProfileConfig implements SubConfig {
         riverDetourMultiplier = clampMultiplier(riverDetourMultiplier, 1.15D);
         lakeDetourMultiplier = clampMultiplier(lakeDetourMultiplier, 1.30D);
         oceanDetourMultiplier = clampMultiplier(oceanDetourMultiplier, 1.10D);
-        oceanUnderseaChance = Math.max(0.0D, Math.min(1.0D, oceanUnderseaChance));
+        // 配置导入时也守住概率的有限区间，避免NaN令海底转换分支永远为假。
+        oceanUnderseaChance = Math.max(0.0D, Math.min(1.0D,
+                Double.isFinite(oceanUnderseaChance) ? oceanUnderseaChance : 0.5D));
     }
 
     @Override

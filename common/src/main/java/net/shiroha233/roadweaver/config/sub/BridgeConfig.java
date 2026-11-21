@@ -9,6 +9,8 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
  */
 public final class BridgeConfig implements SubConfig {
     private boolean enabled = true;
+    // 模板桥灯按跨度里程布置，与陆路按站计数的间隔分开；0显式关闭新增灯。
+    private int lightIntervalBlocks = RoadConstants.DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS;
     private int deckClearance = RoadConstants.DEFAULT_BRIDGE_DECK_CLEARANCE;
     private int maxLengthBlocks = RoadConstants.DEFAULT_BRIDGE_MAX_LENGTH_BLOCKS;
     private boolean useBuoysInstead = false;
@@ -35,6 +37,7 @@ public final class BridgeConfig implements SubConfig {
 
     @Override
     public void sanitize() {
+        lightIntervalBlocks = Math.max(0, Math.min(2048, lightIntervalBlocks));
         deckClearance = Math.max(RoadConstants.BRIDGE_DECK_CLEARANCE_MIN, Math.min(RoadConstants.BRIDGE_DECK_CLEARANCE_MAX, deckClearance));
         maxLengthBlocks = Math.max(0, Math.min(RoadConstants.BRIDGE_MAX_LENGTH_MAX, maxLengthBlocks));
         buoyIntervalBlocks = Math.max(RoadConstants.BUOY_INTERVAL_MIN, Math.min(RoadConstants.BUOY_INTERVAL_MAX, buoyIntervalBlocks));
@@ -55,6 +58,7 @@ public final class BridgeConfig implements SubConfig {
     public BridgeConfig snapshot() {
         BridgeConfig copy = new BridgeConfig();
         copy.enabled = this.enabled;
+        copy.lightIntervalBlocks = this.lightIntervalBlocks;
         copy.deckClearance = this.deckClearance;
         copy.maxLengthBlocks = this.maxLengthBlocks;
         copy.useBuoysInstead = this.useBuoysInstead;
@@ -72,6 +76,8 @@ public final class BridgeConfig implements SubConfig {
         return copy;
     }
 
+    public int lightIntervalBlocks() { return lightIntervalBlocks; }
+    public void setLightIntervalBlocks(int v) { lightIntervalBlocks = v; }
     public boolean enabled() { return enabled; }
     public void setEnabled(boolean v) { this.enabled = v; }
     public int deckClearance() { return deckClearance; }

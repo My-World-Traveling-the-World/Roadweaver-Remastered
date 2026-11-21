@@ -11,6 +11,13 @@ public final class PathfindingCostConfig implements SubConfig {
         BAND
     }
 
+    // 主选线与拓扑共用坡罚，防止建树与实际路线使用不同的道路偏好；默认保持原数学模型。
+    private double finslerGradeWeight = 1.0D;
+    // 软避障权重不改变结构、树木和跨边硬约束，设为0也不能穿过保护区。
+    private double finslerObstacleWeight = 4.0D;
+    // 严格正的保形权重避免弹性带线性系统退化；数值求解容差不向普通用户开放。
+    private double elasticBandStiffness = 1.0D;
+
     // 局部地形修复仍按网格搜索计价；这些权重不控制BAND的各向异性度量。
     private double orthoStepCost = RoadConstants.DEFAULT_ORTHO_STEP_COST;
     private double diagStepCost = RoadConstants.DEFAULT_DIAG_STEP_COST;
@@ -61,6 +68,14 @@ public final class PathfindingCostConfig implements SubConfig {
 
     @Override
     public void sanitize() {
+        finslerGradeWeight = bounded(finslerGradeWeight, 1.0D, 0.0D, 100.0D);
+        finslerObstacleWeight = bounded(finslerObstacleWeight, 4.0D, 0.0D, 100.0D);
+        elasticBandStiffness = bounded(elasticBandStiffness, 1.0D, 0.01D, 100.0D);
+        // JSON绕过setter，因此在发布快照之前也必须拒绝NaN和无穷，避免整个搜索被污染。
+        headingFlipCost = bounded(headingFlipCost, 16.0D, 0.0D, 100000.0D);
+        headingCurveCost = bounded(headingCurveCost, 0.0D, 0.0D, 100000.0D);
+        headingShortLegBlocks = bounded(headingShortLegBlocks, 48.0D, 1.0D, 512.0D);
+        headingShortLegMultiplier = bounded(headingShortLegMultiplier, 3.0D, 1.0D, 100.0D);
         orthoStepCost = finiteNonNegative(orthoStepCost, RoadConstants.DEFAULT_ORTHO_STEP_COST);
         diagStepCost = finiteNonNegative(diagStepCost, RoadConstants.DEFAULT_DIAG_STEP_COST);
         elevationWeight = Math.max(0, elevationWeight);
@@ -101,6 +116,10 @@ public final class PathfindingCostConfig implements SubConfig {
         if (corridorAttractFactor < 0.05D) corridorAttractFactor = 0.05D;
     }
 
+    private static double bounded(double value, double fallback, double min, double max) {
+        return Math.max(min, Math.min(max, Double.isFinite(value) ? value : fallback));
+    }
+
     private static double finiteFraction(double value, double fallback) {
         return Double.isFinite(value) ? Math.max(0.0D, Math.min(1.0D, value)) : fallback;
     }
@@ -116,6 +135,9 @@ public final class PathfindingCostConfig implements SubConfig {
     @Override
     public PathfindingCostConfig snapshot() {
         PathfindingCostConfig copy = new PathfindingCostConfig();
+        copy.finslerGradeWeight = this.finslerGradeWeight;
+        copy.finslerObstacleWeight = this.finslerObstacleWeight;
+        copy.elasticBandStiffness = this.elasticBandStiffness;
         copy.orthoStepCost = this.orthoStepCost;
         copy.diagStepCost = this.diagStepCost;
         copy.elevationWeight = this.elevationWeight;
@@ -151,6 +173,14 @@ public final class PathfindingCostConfig implements SubConfig {
         copy.corridorBan = corridorBan();
         return copy;
     }
+
+    /** 主算法参数随任务快照捕获，避免后台任务中途读到另一套曲线偏好。 */
+    public double finslerGradeWeight() { return finslerGradeWeight; }
+    public void setFinslerGradeWeight(double v) { finslerGradeWeight = v; }
+    public double finslerObstacleWeight() { return finslerObstacleWeight; }
+    public void setFinslerObstacleWeight(double v) { finslerObstacleWeight = v; }
+    public double elasticBandStiffness() { return elasticBandStiffness; }
+    public void setElasticBandStiffness(double v) { elasticBandStiffness = v; }
 
     public double orthoStepCost() { return orthoStepCost; }
     public void setOrthoStepCost(double v) { this.orthoStepCost = v; }

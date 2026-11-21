@@ -306,15 +306,6 @@ public final class RoadConstants {
     // 历史注记：40000 种子离线搜索的最优值（原 6000）。仍是可配置旋钮，配置里可覆盖。
     public static final double DEFAULT_HARD_GRADE_PENALTY = 300.0;
     /**
-     * 0.9.061 及以前的坡罚单价（「按步收」时代的出厂默认值）。
-     *
-     * <p>只用于两件事：①0.9.063 的配置迁移（老配置里正好写着这两个数就升到新出厂值）；
-     * ②启动期 {@code [GRADE-PENALTY]} 里重算 {@code oldOrthPenalty}/{@code oldDiagPenalty}
-     * 做对照。<b>不要再拿它们当默认值。</b></p>
-     */
-    public static final double LEGACY_SOFT_GRADE_PENALTY = 600.0;
-    public static final double LEGACY_HARD_GRADE_PENALTY = 30000.0;
-    /**
      * 0.9.061 在两个参照点上的实测总坡罚（默认 step=8 / softLimit=0.08 / hardLimit=0.10）。
      *
      * <p>这是 0.9.063「不得低于」的地板值，写死成常量供标定测试断言：</p>

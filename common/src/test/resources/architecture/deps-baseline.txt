@@ -1,3 +1,4 @@
+# 2026-11-21：新版配置接线增加一个bridge适配器，共用度量/平滑构造；规划入口显式依赖该适配器与配置快照。依赖方向不变。
 # 2026-11-17：只读施工跨度复用现有弱身份缓存，新增一处到util的单向引用。
 # 2026-11-17：施工纯掩码迁出独立协作类，新增一处模型引用；同层到core不新增反向边。
 # 2026-11-17：只读诊断摘要复用基础弱身份缓存，新增一条pathlogic到util单向引用，不增反向依赖。
@@ -25,10 +26,10 @@ apiimpl -> pathlogic                          1
 apiimpl -> persistence                        2
 apiimpl -> planning                           3
 apiimpl -> postprocess                        1
-bridge -> band                               1
-bridge -> config                             2
+bridge -> band                               2
+bridge -> config                             3
 bridge -> core                               1
-bridge -> metric                             15
+bridge -> metric                             18
 bridge -> pathfinding                        13
 bridge -> pathlogic                          5
 bridge -> pipeline                           5
@@ -47,7 +48,7 @@ client -> worldgen                           1
 command -> map                                3
 compat -> api                                1
 compat -> worldgen                           1
-config -> core                               20
+config -> core                               19
 config -> pathlogic                          2
 config -> persistence                        3
 decoration -> config                             4
@@ -136,9 +137,9 @@ persistence -> worldgen                           4
 pipeline -> band                               5
 pipeline -> metric                             6
 pipeline -> topology                           10
-planning -> bridge                             2
+planning -> bridge                             3
 planning -> compat                             11
-planning -> config                             74
+planning -> config                             75
 planning -> core                               94
 planning -> generation                         30
 planning -> map                                5

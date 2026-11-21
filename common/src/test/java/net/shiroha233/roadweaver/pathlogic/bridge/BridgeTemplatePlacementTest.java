@@ -30,6 +30,36 @@ class BridgeTemplatePlacementTest {
             List.of(), List.of(DECK), 1L, 2L);
 
     @Test
+    void configuredBridgeLightsRespectBlockSpacingAndZeroDisablesAddedLights() {
+        var bridge = net.shiroha233.roadweaver.config.ConfigService.get().bridge();
+        int saved = bridge.lightIntervalBlocks();
+        try {
+            var line = new Line(new Vec3(0, DECK, 8), new Vec3(24, DECK, 8));
+            var middle = new BlockPos(10, DECK, 8);
+            var previous = middle.west();
+            var segment = new RoadSegmentPlacement(middle, List.of(middle));
+            for (int interval : new int[]{0, 4, 16}) {
+                bridge.setLightIntervalBlocks(interval);
+                var site = new Site(null);
+                site.water = true;
+                site.fullBlocks = true;
+                assertTrue(BridgeSegmentPlannerNew.processSegment(site, CHUNK, ROAD, line,
+                        segment, middle, previous, DECK, false));
+                assertFalse(site.written.isEmpty(), "关灯也必须实际放出模板");
+                var lights = site.written.entrySet().stream().filter(e -> e.getValue().is(Blocks.SEA_LANTERN))
+                        .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+                // 原模板按当前区块收集整列；跨度16的灯可落在相邻的最后一列15，保留既有贴边规则。
+                var expected = interval == 4 ? Set.of(new BlockPos(0, DECK, 8), new BlockPos(4, DECK, 8),
+                        new BlockPos(8, DECK, 8), new BlockPos(12, DECK, 8), new BlockPos(15, DECK, 8))
+                        : interval == 16 ? Set.of(new BlockPos(0, DECK, 8), new BlockPos(15, DECK, 8)) : Set.<BlockPos>of();
+                assertEquals(expected, lights, "必须按跨度格距而不是陆路站号放灯");
+            }
+        } finally {
+            bridge.setLightIntervalBlocks(saved);
+        }
+    }
+
+    @Test
     void 陆侧桥头补出甲板且只写本区块() {
         Site site = new Site(MOUTH.below());
         var plan = BridgeSegmentPlannerNew.plannedBridgeWithAccess(site, LINE, SEGMENT, MOUTH, PREVIOUS, DECK, true);
@@ -145,6 +175,7 @@ class BridgeTemplatePlacementTest {
         private final Map<BlockPos, BlockState> written = new HashMap<>();
         private final BlockPos protectedBlock;
         private boolean water;
+        private boolean fullBlocks;
         // 横向坐标反号时不能靠同一材质把错误藏过去。
         private boolean asymmetric;
         private int protectedHits;
@@ -164,7 +195,7 @@ class BridgeTemplatePlacementTest {
         public BlockState getBlockState(BlockPos pos) {
             return written.getOrDefault(pos, Blocks.AIR.defaultBlockState());
         }
-        public boolean isFullBlock(BlockState state, BlockPos pos) { return false; }
+        public boolean isFullBlock(BlockState state, BlockPos pos) { return fullBlocks; }
         public BlockState updateFromNeighbourShapes(BlockState state, BlockPos pos) { return state; }
         public void setBlock(BlockPos pos, BlockState state) { written.put(pos, state); }
     }

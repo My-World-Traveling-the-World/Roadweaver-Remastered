@@ -12,6 +12,12 @@ public final class BridgeKeys {
 
     /** 字段与元数据的双向一致性由回归强制检查。 */
     public static final List<ConfigKey> ALL = List.of(
+            ConfigKey.integer("lightIntervalBlocks", RoadConstants.DEFAULT_BRIDGE_LIGHT_INTERVAL_BLOCKS, 0, 2048,
+                    ConfigCategory.CROSSING, ConfigTier.BASIC, ConfigStatus.ACTIVE,
+                    "模板桥灯间隔", "Template bridge light spacing",
+                    "沿桥自身跨度里程布置新增海晶灯；0关闭新增灯，不删除模板保存的灯",
+                    "格", "陆路路灯间隔按站计数，与本项独立"),
+
             ConfigKey.bool("enabled", true,
                     ConfigCategory.CROSSING, ConfigTier.BASIC, ConfigStatus.ACTIVE,
                     "启用桥梁", "Enable bridges",
@@ -61,9 +67,11 @@ public final class BridgeKeys {
             ConfigKey.integer("pierWidth", RoadConstants.DEFAULT_BRIDGE_PIER_WIDTH,
                     RoadConstants.BRIDGE_PIER_WIDTH_MIN, RoadConstants.BRIDGE_PIER_WIDTH_MAX,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "桥墩宽度", "Pier width",
-                    "单个桥墩的横向宽度",
-                    "格", ""),
+                    "程序桥桥墩宽度",
+                    "Procedural bridge pier width",
+                    "程序桥桥墩的横向宽度；模板桥的补充支撑仍使用模板已有列，不缩放体素。",
+                    "格",
+                    ""),
 
             ConfigKey.integer("pierMaxHeight", RoadConstants.DEFAULT_BRIDGE_PIER_MAX_HEIGHT,
                     RoadConstants.BRIDGE_PIER_MAX_HEIGHT_MIN, RoadConstants.BRIDGE_PIER_MAX_HEIGHT_MAX,
@@ -101,14 +109,18 @@ public final class BridgeKeys {
 
             ConfigKey.integer("clearHeight", 0, 0, 16,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "桥下净空", "Clearance below deck",
-                    "桥面到水面之间保留的空隙高度，0 表示按桥墩自动决定",
-                    "格", ""),
+                    "桥面上方净空",
+                    "Clearance above bridge deck",
+                    "桥面上方清理高度，0跟随隧道净空；不向下挖，不是桥下通航高度。",
+                    "格",
+                    ""),
 
             ConfigKey.integer("sideClear", 2, 0, 4,
                     ConfigCategory.CROSSING, ConfigTier.ADVANCED, ConfigStatus.ACTIVE,
-                    "桥两侧留空", "Side clearance",
-                    "桥面外侧额外清空的宽度，防止岸边树倒进桥里",
-                    "格", "")
+                    "程序桥侧向净空",
+                    "Procedural bridge side clearance",
+                    "程序桥上方净空带两侧各清几格；模板桥不以本项扩挖模板周围。",
+                    "格",
+                    "")
     );
 }

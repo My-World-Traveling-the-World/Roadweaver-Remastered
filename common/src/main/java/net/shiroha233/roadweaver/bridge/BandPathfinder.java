@@ -300,11 +300,8 @@ public final class BandPathfinder implements Pathfinder {
             costScale = (x, z) -> waterCost.scale(wet[terrainField.indexAt(x, z)])
                     * (hasAttract ? attract.factorAt(x, z) : 1.0);
         }
-        FinslerMetric metric = new FinslerMetric(
-                terrainField, obstacles,
-                FinslerMetric.DEFAULT_GRADE_WEIGHT,
-                FinslerMetric.DEFAULT_OBSTACLE_WEIGHT,
-                costScale, edgeBlock);
+        FinslerMetric metric = ConfiguredRouteSolvers.metric(
+                config, terrainField, obstacles, costScale, edgeBlock);
 
         // 委托给 BandRouteSolver —— 它是「单条路线」的唯一实现。
         //
@@ -315,7 +312,7 @@ public final class BandPathfinder implements Pathfinder {
         // 两份实现一旦漂移，AB 就会对着一个真实生产里并不存在的算法做评价 ——
         // 改了一边忘了另一边，报告仍然『绿』，但结论已经与真机无关。
         // 用同一个类，这个隐患从根上没有了。
-        BandRouteSolver routeSolver = new BandRouteSolver(metric, ElasticBandSolver.defaults());
+        BandRouteSolver routeSolver = new BandRouteSolver(metric, ConfiguredRouteSolvers.smoother(config));
         RouteSolver.RouteSolution solution = routeSolver.solve(
                 new RoadNode("start", start.getX(), start.getZ()),
                 new RoadNode("end", end.getX(), end.getZ()),
