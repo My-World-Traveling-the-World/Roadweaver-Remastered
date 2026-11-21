@@ -14,6 +14,12 @@
 
 没有启动游戏、实景/FPS/MSPT/4096预热或旧档现场验收。目标实例另有polytone/chestfill/punchy三组顶层重复ID，均声明client，保持原样，须先确认每组启用版本。只读核对不等于完整Fabric解析。回退脚本未实际回退安装。
 
+同日启动排障补记：用户实际启动被旧MineMenu多人补丁的1.14.2依赖拒绝。
+已在其对应工程直接核对1.14.3：原生客户端JOIN加载与UTF-8读写已接替旧能力，
+旧setupMenuLoader及Mixin构造目标已移除；因此备份移出旧补丁而非放宽版本号。
+新MineMenu与合法UTF-8菜单文件字节未变。证据留plaincraft-minemenu-multiplayer-fix/docs/compatibility-20261121.json，
+其HANDOFF记录全过程；没有将该补丁测试放进道路套件。尚待用户再次启动。
+
 ### 四、遗留半截的东西
 
 河流7大类、默认跨tick施工、道路父表压缩及长城BVH对拍仍按联合报告排序；crossing、双平滑和自动重铺政策不动。道路远程同步此前连接失败/push审批限制未解除，未重试或绕过；河流无remote。本轮本地安装独立获准，不代表远程push获准。
