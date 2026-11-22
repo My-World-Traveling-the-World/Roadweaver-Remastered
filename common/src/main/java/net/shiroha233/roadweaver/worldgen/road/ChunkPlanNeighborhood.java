@@ -16,6 +16,21 @@ final class ChunkPlanNeighborhood {
             return;
         }
         var centers = new LongOpenHashSet(keys);
+        int minX=Integer.MAX_VALUE, maxX=Integer.MIN_VALUE, minZ=Integer.MAX_VALUE, maxZ=Integer.MIN_VALUE;
+        for (var it = centers.iterator(); it.hasNext();) {
+            long key = it.nextLong();
+            int x=ChunkPos.getX(key), z=ChunkPos.getZ(key);
+            minX=Math.min(minX,x); maxX=Math.max(maxX,x);
+            minZ=Math.min(minZ,z); maxZ=Math.max(maxZ,z);
+        }
+        long width = (long)maxX-minX+1, height = (long)maxZ-minZ+1;
+        // 唯一键数等于包围盒面积才是实心矩形；整条直路也是宽或高为一的实心矩形。
+        if (width <= centers.size() && height <= centers.size() && width*height == centers.size()) {
+            for (long z=(long)minZ-radius; z<=(long)maxZ+radius; z++)
+                for (long x=(long)minX-radius; x<=(long)maxX+radius; x++)
+                    visit.accept(ChunkPos.asLong((int)x,(int)z));
+            return;
+        }
         for (long key : centers) {
             int x = ChunkPos.getX(key), z = ChunkPos.getZ(key);
             // 西邻已覆盖当前方框除东边外的所有列，北邻同理。只依赖邻居存在，与遍历次序无关。

@@ -34,6 +34,12 @@ class ChunkPlanVersionsTest {
         var calls = new AtomicInteger();
         ChunkPlanNeighborhood.visit(line,radius,k -> calls.incrementAndGet());
         assertEquals((100+2*radius)*(1+2*radius), calls.get());
+        // L 形不走实心矩形分支；西边相邻的 99 个中心也不应重复刷新。
+        var bent = new ArrayList<>(line);
+        bent.add(ChunkPos.asLong(99,-6));
+        calls.set(0);
+        ChunkPlanNeighborhood.visit(bent,radius,k -> calls.incrementAndGet());
+        assertEquals((101+2*radius)*(1+2*radius),calls.get());
     }
 
     @Test
