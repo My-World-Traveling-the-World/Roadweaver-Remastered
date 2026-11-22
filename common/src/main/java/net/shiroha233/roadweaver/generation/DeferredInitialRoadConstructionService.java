@@ -289,13 +289,9 @@ public final class DeferredInitialRoadConstructionService {
     private static boolean isComplete(ServerLevel level, long key) {
         if (!RoadConstructionLedger.isAvailable(level)) return false;
         ChunkPos chunk = new ChunkPos(key);
-        var roads = RoadShardStorage.queryChunk(level, chunk);
-        if (roads.isEmpty()) return true;
-        for (var road : roads) {
-            if (!RoadConstructionLedger.isComplete(level, chunk,
-                    RoadShardStorage.computeFingerprint(road))) return false;
-        }
-        return true;
+        // 落盘及读回时已计算同一个指纹；回填按区块查完工，无需反复遍历长路的站点。
+        return RoadShardStorage.allRoadFingerprintsMatch(level, chunk,
+                fingerprint -> RoadConstructionLedger.isComplete(level, chunk, fingerprint));
     }
 
     private static boolean isOverworld(ServerLevel level) {

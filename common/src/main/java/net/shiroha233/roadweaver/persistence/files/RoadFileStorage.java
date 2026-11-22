@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.LongPredicate;
 
 /**
  * 道路文件存储门面。
@@ -75,6 +76,11 @@ public final class RoadFileStorage {
 
     public static List<RoadData> queryChunk(ServerLevel level, int chunkX, int chunkZ) {
         return isOverworld(level) ? store(level).queryChunk(chunkX, chunkZ) : List.of();
+    }
+
+    /** 完工检查沿用同一存档的区块索引；没有道路时仍视为无须施工。 */
+    public static boolean allRoadFingerprintsMatch(ServerLevel level, ChunkPos chunkPos, LongPredicate matches) {
+        return !isOverworld(level) || store(level).allRoadFingerprintsMatch(chunkPos, matches);
     }
 
     public static boolean readyForRecovery(ServerLevel level) {

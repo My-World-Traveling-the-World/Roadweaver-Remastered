@@ -40,6 +40,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongPredicate;
 import java.util.stream.Stream;
 
 /**
@@ -99,6 +100,12 @@ public final class RoadChunkStore implements AutoCloseable {
     public List<RoadData> queryChunk(int chunkX, int chunkZ) {
         ensureLoaded();
         return snapshot.get().queryChunk(chunkX, chunkZ);
+    }
+
+    /** 与查道路使用同一份快照，换线发布后便能看到本区块的新指纹。 */
+    public boolean allRoadFingerprintsMatch(ChunkPos chunkPos, LongPredicate matches) {
+        ensureLoaded();
+        return snapshot.get().allRoadFingerprintsMatch(chunkPos.x, chunkPos.z, matches);
     }
 
     /** 恢复队列需要完整视图。普通查询仍能读已加载的部分；只有恢复入口允许限频重读。 */

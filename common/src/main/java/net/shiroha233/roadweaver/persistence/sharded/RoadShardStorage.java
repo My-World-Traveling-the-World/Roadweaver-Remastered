@@ -16,6 +16,7 @@ import java.util.List;
 import net.shiroha233.roadweaver.persistence.chunk.RoadSnapshot;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.LongPredicate;
 
 /** 道路数据存储门面。 */
 public final class RoadShardStorage {
@@ -62,6 +63,11 @@ public final class RoadShardStorage {
 
     public static List<RoadData> queryChunk(ServerLevel level, int chunkX, int chunkZ) {
         return isOverworld(level) ? RoadFileStorage.queryChunk(level, chunkX, chunkZ) : List.of();
+    }
+
+    /** 施工队列只读当前区块的指纹，仍通过存储门面确定世界边界。 */
+    public static boolean allRoadFingerprintsMatch(ServerLevel level, ChunkPos chunkPos, LongPredicate matches) {
+        return RoadFileStorage.allRoadFingerprintsMatch(level, chunkPos, matches);
     }
 
     public static CompletableFuture<List<RoadData>> queryRectAsync(ServerLevel level,

@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.LongPredicate;
 
 /** 查询线程只读此对象；写入时构造全新实例并通过 AtomicReference 发布。 */
 public final class RoadSnapshot {
@@ -104,6 +105,16 @@ public final class RoadSnapshot {
             if (entry != null) roads.add(entry.road());
         }
         return roads.isEmpty() ? List.of() : Collections.unmodifiableList(roads);
+    }
+
+    /** 台账只需要道路指纹；直接沿不可变索引遍历，避免为每个区块重新读整条路。 */
+    public boolean allRoadFingerprintsMatch(int chunkX, int chunkZ, LongPredicate matches) {
+        long[] references = chunkReferences.get(RoadChunkKey.pack(chunkX, chunkZ));
+        if (references == null) return true;
+        for (long fingerprint : references) {
+            if (!matches.test(fingerprint)) return false;
+        }
+        return true;
     }
 
     public List<RoadData> queryRect(int minBlockX, int minBlockZ, int maxBlockX, int maxBlockZ) {
