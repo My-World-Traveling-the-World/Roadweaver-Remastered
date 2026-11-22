@@ -1,6 +1,8 @@
 /* 文件职责：初始规划阻塞等待循环 —— 只等结果、更新状态、处理超时。 */
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
+
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
@@ -20,8 +22,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
@@ -172,6 +172,9 @@ public final class InitialPlanWaiter {
                 // A protected-gap route is a valid last resort, but it must
                 // still get one chance to use a replacement structure first.
                 Map<PlannedPathKey, GenResult> protectedGapFallbacks = new HashMap<>();
+                // 后续没有可用局部路径时不以空失败覆盖先前的可重放证据。
+                Map<PlannedPathKey, ProfileConflict> profileFailures =
+                        new HashMap<>();
                 List<RoadData> generatedRoads = new ArrayList<>();
                 List<StructureConnection> remaining = new ArrayList<>(roadTasks);
                 int configuredStep = ConfigService.get().pathfindingCost().effectivePathGridStep();
@@ -232,6 +235,7 @@ public final class InitialPlanWaiter {
                     int processedInRound = 0;
                     for (StructureConnection task : remaining) {
                         GenResult result = batch.results().get(PlannedPathKey.of(task));
+                        rememberProfileConflict(profileFailures, result);
                         processedInRound++;
                         String outcome;
                         if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
@@ -411,6 +415,7 @@ public final class InitialPlanWaiter {
                         for (StructureConnection task : remaining) {
                             PlannedPathKey taskKey = PlannedPathKey.of(task);
                             GenResult result = batch.results().get(PlannedPathKey.of(task));
+                            rememberProfileConflict(profileFailures, result);
                             localProcessed++;
                             String localOutcome;
                             if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
@@ -673,7 +678,7 @@ public final class InitialPlanWaiter {
                     } else {
                         resolved.putIfAbsent(key,
                                 new GenResult(key, unresolved,
-                                        RoadGenerationService.InitialTaskResult.FAILED, null));
+                                        RoadGenerationService.InitialTaskResult.FAILED, null, profileFailures.get(key)));
                     }
                 }
                 InitialGenerationProgressTracker.updateRetryStates(0, 0);
@@ -714,6 +719,15 @@ public final class InitialPlanWaiter {
         } finally {
             // 无任务或提前终止也结束这次交接，避免下一次开局拿到上一批路径。
             TerrainSamplingSessions.forLevel(level).clearInitialBand();
+        }
+    }
+
+    /** 同一原路线有多次尝试，保留最早的实测拒绝；候补边不能覆盖它。 */
+    private static void rememberProfileConflict(
+            Map<PlannedPathKey, ProfileConflict> failures,
+            GenResult result) {
+        if (result != null && result.profileConflict() != null) {
+            failures.putIfAbsent(result.originalKey(), result.profileConflict());
         }
     }
 }

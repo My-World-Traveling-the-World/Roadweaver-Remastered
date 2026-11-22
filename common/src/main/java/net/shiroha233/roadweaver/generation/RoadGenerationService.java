@@ -1,6 +1,8 @@
 /* 文件职责：调度道路生成任务并维护规划路径缓存生命周期。 */
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
+
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
@@ -290,17 +292,23 @@ public final class RoadGenerationService {
      * 但至少路能建出来 —— 比静默消失好。</p>
      */
     /** 一次生成结果区分失败、无需新路的成功和产生道路的成功，避免空道路被统一解释为失败。 */
-    record GenerationOutcome(boolean success, RoadData road) {
+    // 高程拒绝见证只在本次开局传递，不改变存档连接状态或公共接口。
+    record GenerationOutcome(boolean success, RoadData road,
+            ProfileConflict profileConflict) {
         static GenerationOutcome failed() {
-            return new GenerationOutcome(false, null);
+            return failed(null);
+        }
+
+        static GenerationOutcome failed(ProfileConflict conflict) {
+            return new GenerationOutcome(false, null, conflict);
         }
 
         static GenerationOutcome completedWithoutRoad() {
-            return new GenerationOutcome(true, null);
+            return new GenerationOutcome(true, null, null);
         }
 
         static GenerationOutcome completed(RoadData road) {
-            return new GenerationOutcome(true, road);
+            return new GenerationOutcome(true, road, null);
         }
     }
 
@@ -327,7 +335,13 @@ public final class RoadGenerationService {
         FAILED
     }
 
-    public record InitialGenerationResult(InitialTaskResult result, RoadData road, StructureConnection connection) {
+    public record InitialGenerationResult(InitialTaskResult result, RoadData road, StructureConnection connection,
+            ProfileConflict profileConflict) {
+        /** 普通失败仍保留空证据；不要求每一种失败都有纵断面见证。 */
+        public InitialGenerationResult(InitialTaskResult result, RoadData road, StructureConnection connection) {
+            this(result, road, connection, null);
+        }
+
         public InitialGenerationResult(InitialTaskResult result, RoadData road) {
             this(result, road, null);
         }
@@ -450,7 +464,7 @@ public final class RoadGenerationService {
         }
             return new InitialGenerationResult(
                     outcome.success() ? InitialTaskResult.COMPLETED : InitialTaskResult.FAILED,
-                    outcome.road(), conn);
+                    outcome.road(), conn, outcome.profileConflict());
         } catch (Throwable failure) {
             LOGGER.error("【初始道路单步生成失败】 " + "Initial road single-step generation failed for connection {} -> {} step={} localOnly={}",
                     conn.from(), conn.to(), safeStep, localOnly, failure);

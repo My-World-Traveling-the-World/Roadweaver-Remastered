@@ -140,7 +140,9 @@ public final class InitialRouteSubmitOps {
                                 total.get(), generating.get(), done.get(), failed.get());
                         StructureConnection effective = generated.connection() != null
                                 ? generated.connection() : task;
-                        return new GenResult(PlannedPathKey.of(task), effective, result, generated.road());
+                        // 主线程收集的结果必须带回工作线程算出的冲突证据。
+                        return new GenResult(PlannedPathKey.of(task), effective, result, generated.road(),
+                                generated.profileConflict());
                     } finally {
                         InitialGenerationProgressTracker.finishRoadTask();
                         InitialGenerationProgressTracker.routePhaseWorkerFinished();

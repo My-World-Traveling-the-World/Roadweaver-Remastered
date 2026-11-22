@@ -1,6 +1,8 @@
 /* 文件职责：道路生成任务的执行骨架 —— 每 tick 推进、单任务生成、失败回退。 */
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
+
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
@@ -17,7 +19,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.config.PathFeatureConfig;
@@ -582,7 +583,10 @@ public final class RoadTaskExecutor {
                 return GenerationOutcome.failed();
             }
             LOGGER.error("【道路连接生成失败】 " + "Road generation failed for connection {} -> {}", conn.from(), conn.to(), t);
-            return GenerationOutcome.failed();
+            // 只向上带可重放的高程冲突，不在批次中保留异常堆栈或世界引用。
+            return GenerationOutcome.failed(
+                    t instanceof ProfileConflict.Rejected rejected
+                            ? rejected.conflict() : null);
         }
     }
 }

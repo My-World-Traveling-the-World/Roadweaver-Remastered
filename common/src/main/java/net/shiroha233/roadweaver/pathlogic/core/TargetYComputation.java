@@ -209,7 +209,8 @@ public final class TargetYComputation {
         java.util.Optional<int[]> dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
                 terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary, endBoundary,
                 cfg, gradeLimits, connection,
-                (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solve(
+                // 留下实机重放需要的失败站与限制站，外层生成负责按连接汇总。
+                (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solveForRoad(
                         heights, crossing, cut, fill, step, two, constraints, tunnelSelector));
         final int[] legacySnapshot;
         if (dpProfile.isPresent()) {

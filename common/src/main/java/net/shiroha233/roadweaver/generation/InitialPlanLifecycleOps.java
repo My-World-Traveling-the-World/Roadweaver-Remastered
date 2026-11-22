@@ -147,8 +147,9 @@ public final class InitialPlanLifecycleOps {
             if (newStatus == ConnectionStatus.FAILED) {
                 if (result.road() == null) {
                     LOGGER.warn("【初始连接失败，精度层级和局部修复均未得到可用路线】 " + "RoadWeaver initial connection FAILED (no usable route): {} -> {} "
-                                    + "[all precision tiers, local repair and fallbacks were exhausted]",
-                            original.from(), original.to());
+                                    + "[all precision tiers, local repair and fallbacks were exhausted] profileConflict={}",
+                            original.from(), original.to(),
+                            result.profileConflict() == null ? "-" : result.profileConflict());
                 } else {
                     LOGGER.warn("【已算出路线但未持久化，连接标记失败】 " + "RoadWeaver initial connection FAILED (route computed but not persisted, "
                                     + "likely failed a final validator): {} -> {}",

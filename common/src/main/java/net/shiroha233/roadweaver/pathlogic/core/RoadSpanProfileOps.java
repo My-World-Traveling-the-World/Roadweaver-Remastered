@@ -15,7 +15,6 @@ import net.shiroha233.roadweaver.config.PresetService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
-import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;

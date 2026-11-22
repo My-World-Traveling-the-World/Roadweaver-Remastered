@@ -25,7 +25,8 @@ class RouteEvidenceWiringTest {
         var solve = (MethodInvocationTree)only(calls(target, "TargetProfileSolver.applyProfileSolver")).getLeaf();
         var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().getLast());
         var call = assertInstanceOf(MethodInvocationTree.class, repair.getBody());
-        assertEquals("TargetProfileRepair.solve", call.getMethodSelect().toString());
+        // 正式入口除了物理隧道选择还必须保留拒绝见证。
+        assertEquals("TargetProfileRepair.solveForRoad", call.getMethodSelect().toString());
         assertEquals("tunnelSelector", call.getArguments().getLast().toString());
     }
 

@@ -16,6 +16,7 @@ import net.shiroha233.roadweaver.pathfinding.TunnelFootprintSampler;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -107,6 +108,31 @@ class ClientProfileRepairTest {
         assertEquals(-11, fixed[4]);
         assertTrue(fixed[2] < terrain[2] - 1);
         assertEquals(0, ProfileFallback.violations(fixed, 1, 2));
+    }
+
+    @Test void productionRepairReportsTheStationThatLimitsANegativePin() {
+        int[] terrain = {-9, -9, -1};
+        var locks = new ProfileDpSource.Constraints(new int[]{-9, 0, -1}, null, 3,
+                null, new boolean[]{true, false, true});
+        var rejected = assertThrows(ProfileConflict.Rejected.class, () -> TargetProfileRepair.solveForRoad(
+                terrain, null, 1, 1, 1, 1, locks,
+                preview -> { throw new AssertionError("端点已不能连通，不应开始选择隧道"); }));
+        // 两站合计只允许升一格；确定冲突端、限制端和实际不等式。
+        assertEquals(new ProfileConflict(ProfileConflict.Reason.LOCKED_HEIGHT, 2, 0, -1, -8),
+                rejected.conflict());
+    }
+
+    @Test void productionRepairDistinguishesCoverAndCutConflicts() {
+        var cover = new ProfileDpSource.Constraints(new int[]{-1, 0, 0}, new boolean[]{true, false, false},
+                4, null, new boolean[]{true, false, false});
+        assertEquals(new ProfileConflict(ProfileConflict.Reason.COVER, 0, 0, -1, -4),
+                assertThrows(ProfileConflict.Rejected.class, () -> TargetProfileRepair.solveForRoad(
+                        new int[]{0, 0, 0}, null, 5, 4, 1, 1, cover,
+                        preview -> { throw new AssertionError("覆土冲突应先于洞身重分类"); })).conflict());
+        var cut = assertThrows(ProfileConflict.Rejected.class, () -> TargetProfileRepair.solveForRoad(
+                new int[]{64, 200, 64}, null, 5, 4, 1, 1, ProfileDpSource.Constraints.none(),
+                preview -> new boolean[3])).conflict();
+        assertEquals(new ProfileConflict(ProfileConflict.Reason.CUT_BUDGET, 1, 0, 168, 69), cut);
     }
 
     @Test void disablingCutCannotBeOverriddenByTheLocalConstructionBudget() {

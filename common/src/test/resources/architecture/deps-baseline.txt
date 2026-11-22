@@ -58,7 +58,8 @@ decoration -> pathlogic                          3
 decoration -> persistence                        2
 generation -> compat                             10
 generation -> config                             28
-generation -> core                               48
+# 2026-11-22：跨阶段传递中立的剖面拒绝见证，同时清理拆分遗留的核心模型导入。
+generation -> core                               47
 generation -> map                                10
 generation -> pathfinding                        17
 generation -> pathlogic                          73

@@ -1,6 +1,8 @@
 /* 文件职责：协调首次世界加载时的道路规划、生成、进度与持久化。 */
 package net.shiroha233.roadweaver.generation;
 
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
+
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import net.shiroha233.roadweaver.pathlogic.structures.EndpointFilterOutcome;
@@ -20,8 +22,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
@@ -534,7 +534,14 @@ public final class InitialGenManager {
             PlannedPathKey originalKey,
             StructureConnection effectiveConnection,
             RoadGenerationService.InitialTaskResult result,
-            RoadData road) {}
+            RoadData road,
+            ProfileConflict profileConflict) {
+        /** 成功、取消和非高程失败都不伪造剖面冲突。 */
+        GenResult(PlannedPathKey originalKey, StructureConnection effectiveConnection,
+                  RoadGenerationService.InitialTaskResult result, RoadData road) {
+            this(originalKey, effectiveConnection, result, road, null);
+        }
+    }
 
     record BatchGenerationResult(
             Map<PlannedPathKey, GenResult> results,
