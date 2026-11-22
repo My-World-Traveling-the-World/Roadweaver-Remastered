@@ -80,17 +80,9 @@ public final class ConnectionFallbackService {
                         ? ConnectionStatus.PROTECTED_GAP : ConnectionStatus.COMPLETED));
             }
         }
-        List<StructureConnection> ranked = rankCandidates(
-                failed, snapshotPositions, manualKeys, existing, persisted, startup, radius);
-        if (ranked.isEmpty()) return ranked;
-        List<StructureConnection> pending = new ArrayList<>(ranked.size());
-        for (StructureConnection candidate : ranked) {
-            if (!StructureFileStorage.hasFailedFallbackAttempt(level, failed, candidate)
-                    && !StructureFileStorage.isConnectionSuppressed(level, candidate.from(), candidate.to())) {
-                pending.add(candidate);
-            }
-        }
-        return List.copyOf(pending);
+        return rankCandidates(failed, snapshotPositions, manualKeys, existing, persisted, startup, radius,
+                c -> !StructureFileStorage.hasFailedFallbackAttempt(level, failed, c)
+                        && !StructureFileStorage.isConnectionSuppressed(level, c.from(), c.to()));
     }
 
     /** 先移除失败边再计算分量，避免替代边被原失败边制造的虚假连通性排除。
@@ -112,6 +104,12 @@ public final class ConnectionFallbackService {
     static List<StructureConnection> rankCandidates(StructureConnection failed, Collection<BlockPos> snapshotPositions,
             Set<Long> manualKeys, List<StructureConnection> existing, List<StructureConnection> persisted,
             boolean requireAnchorComponent, int radius) {
+        return rankCandidates(failed, snapshotPositions, manualKeys, existing, persisted, requireAnchorComponent, radius, c -> true);
+    }
+
+    static List<StructureConnection> rankCandidates(StructureConnection failed, Collection<BlockPos> snapshotPositions,
+            Set<Long> manualKeys, List<StructureConnection> existing, List<StructureConnection> persisted,
+            boolean requireAnchorComponent, int radius, java.util.function.Predicate<StructureConnection> allowed) {
         if (failed == null || failed.from() == null || failed.to() == null) return List.of();
         Set<Long> manual = manualKeys == null ? Set.of() : manualKeys;
         List<StructureConnection> current = existing == null ? List.of() : existing;
@@ -156,7 +154,7 @@ public final class ConnectionFallbackService {
         }
         graph.positions().forEach(candidatePositions::putIfAbsent);
 
-        ArrayList<Candidate> ranked = new ArrayList<>();
+        Candidate best = null;
         for (BlockPos position : candidatePositions.values()) {
             if (position == null) continue;
             BlockPos candidate = flat(position);
@@ -171,22 +169,19 @@ public final class ConnectionFallbackService {
             // Never cross to the opposite side of the failed edge. That is
             // where another active route most often creates a dependency cycle.
             if (sidePriority >= 2) continue;
-            addCandidate(ranked, occupied, looseEndpoint, candidate, priority, sidePriority, radius);
+            var replacement = new StructureConnection(looseEndpoint, candidate);
+            long distance = horizontalDistanceSquared(looseEndpoint, candidate);
+            if (distance > (long) radius * radius || occupied.contains(PlannedPathKey.of(replacement))) continue;
+            var next = new Candidate(replacement, priority, distance, sidePriority);
+            // 只有有望胜出的候选才查询禁用和失败历史；被排除不消耗名额。
+            if ((best == null || ORDER.compare(next, best) < 0) && allowed.test(replacement)) best = next;
         }
-
-        ranked.sort(Comparator.comparingInt(Candidate::sidePriority)
-                .thenComparingInt(Candidate::priority)
-                .thenComparingLong(Candidate::score)
-                .thenComparingLong(candidate -> PlanningUtils.edgeKey(candidate.connection().from(), candidate.connection().to())));
-        ArrayList<StructureConnection> out = new ArrayList<>(MAX_CANDIDATES);
-        Set<PlannedPathKey> seen = new HashSet<>();
-        for (Candidate candidate : ranked) {
-            PlannedPathKey key = PlannedPathKey.of(candidate.connection());
-            if (seen.add(key)) out.add(candidate.connection());
-            if (out.size() == MAX_CANDIDATES) break;
-        }
-        return List.copyOf(out);
+        return best == null ? List.of() : List.of(best.connection());
     }
+
+    private static final Comparator<Candidate> ORDER = Comparator.comparingInt(Candidate::sidePriority)
+            .thenComparingInt(Candidate::priority).thenComparingLong(Candidate::score)
+            .thenComparingLong(c -> PlanningUtils.edgeKey(c.connection().from(), c.connection().to()));
 
     private static void addConnections(NetworkGraph graph,
                                        Set<PlannedPathKey> occupied,
@@ -221,21 +216,6 @@ public final class ConnectionFallbackService {
         if (graph.confirmedNodes().contains(candidateKey)) return 1;
         if (graph.activeNodes().contains(candidateKey)) return 2;
         return 3;
-    }
-
-    private static void addCandidate(List<Candidate> ranked,
-                                     Set<PlannedPathKey> occupied,
-                                     BlockPos looseEndpoint,
-                                     BlockPos candidate,
-                                     int priority,
-                                     int sidePriority, int radius) {
-        StructureConnection replacement = new StructureConnection(flat(looseEndpoint), candidate);
-        PlannedPathKey key = PlannedPathKey.of(replacement);
-        if (occupied.contains(key)) return;
-
-        long displacement = horizontalDistanceSquared(looseEndpoint, candidate);
-        if (displacement > (long) radius * radius) return;
-        ranked.add(new Candidate(replacement, priority, displacement, sidePriority));
     }
 
     /** 候选方向分级区分同侧延续、同侧横向与对侧，保持确定排序。 */

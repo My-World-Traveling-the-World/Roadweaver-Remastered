@@ -76,7 +76,7 @@ final class InitialConnectivityRepair {
                 if (suppressed || !usable(candidate, result)) {
                     rejected++;
                     // 用户删除、取消或关服不是高程不合格，不能记成下次永不重试的负样本。
-                    if (result != null && !suppressed) {
+                    if (!suppressed && provenRejection(candidate, result)) {
                         StructureFileStorage.recordFailedFallbackAttempt(level, owners.get(key), candidate);
                     }
                     continue;
@@ -97,6 +97,13 @@ final class InitialConnectivityRepair {
             InitialGenerationProgressTracker.settleRoutePhase(phase, retained.size(), rejected, 0, 0, "finished");
         }
         return List.copyOf(retained);
+    }
+
+    /** 只有求解器给出冲突或本候选成品确有保护缺口，才影响以后选边。 */
+    static boolean provenRejection(StructureConnection candidate, GenResult result) {
+        return result != null && (result.profileConflict() != null || (result.road() != null
+                && result.road().hasOwnerPair() && result.road().hasProtectedGap()
+                && PlannedPathKey.of(candidate).equals(InitialPlanLifecycleOps.ownerKey(result.road()))));
     }
 
     /** 候选几何必须与实际提交端点相符，带缺口的候选不能用来证明接通。 */

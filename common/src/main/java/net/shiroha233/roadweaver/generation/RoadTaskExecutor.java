@@ -455,6 +455,8 @@ public final class RoadTaskExecutor {
                             connection.from(), connection.to(), replacement.from(), replacement.to(), connected);
                     return new GenerationAttempt(replacement, outcome);
                 }
+                // 执行异常没有道路不可施工的证据，下次规划仍可重试。
+                if (outcome.profileConflict() == null || ConnectionDeletionService.shouldAbort(level, replacement)) continue;
                 StructureFileStorage.recordFailedFallbackAttempt(level, connection, replacement);
                 LOGGER.warn("【本次拓扑候补替换失败，已记录结果】 " + "RoadWeaver recorded failed topology fallback {}/{}: {} -> {} replacement={} -> {}",
                         attempt + 1, candidates.size(), connection.from(), connection.to(),

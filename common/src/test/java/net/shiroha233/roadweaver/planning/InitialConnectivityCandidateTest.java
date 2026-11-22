@@ -10,6 +10,20 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 final class InitialConnectivityCandidateTest {
+    @Test void excludedFirstCandidateLeavesOneEligibleReplacement() {
+        var anchor = BlockPos.ZERO;
+        var loose = anchor.east(300);
+        var failed = new StructureConnection(anchor, loose, ConnectionStatus.FAILED);
+        var candidates = List.of(anchor.east(200), anchor.east(160));
+        var edges = candidates.stream().map(p -> new StructureConnection(anchor, p, ConnectionStatus.COMPLETED)).toList();
+        // 两条路本来都能接通；排掉更近的一条，仍应接上另一条。
+        for (var order : List.of(candidates, candidates.reversed())) {
+            assertEquals(List.of(candidates.getLast()), ConnectionFallbackService.rankCandidates(failed, order,
+                    Set.of(), edges, List.of(), true, 200, c -> !c.to().equals(candidates.getFirst()))
+                    .stream().map(StructureConnection::to).toList());
+        }
+    }
+
     @Test
     void onlyTheOppositeConfirmedComponentCanReceiveABoundedStartupRepair() {
         BlockPos anchor = BlockPos.ZERO, loose = anchor.east(300), useful = new BlockPos(160, 0, 32);

@@ -52,6 +52,17 @@ final class InitialNetworkConnectivityTest {
         assertEquals(ConnectionStatus.FAILED, InitialPlanLifecycleOps.terminalStatus(false, full, persisted));
     }
 
+    @Test void interruptedOrUnknownFailureCannotBlacklistACandidate() {
+        var edge = new StructureConnection(BlockPos.ZERO, BlockPos.ZERO.east());
+        var key = PlannedPathKey.of(edge);
+        var failed = RoadGenerationService.InitialTaskResult.FAILED;
+        // 取消和工作线程异常都没有拒绝见证；不能因此封禁该端点。
+        assertFalse(InitialConnectivityRepair.provenRejection(edge, new InitialGenManager.GenResult(key, edge, failed, null)));
+        var witness = new net.shiroha233.roadweaver.core.model.ProfileConflict(
+                net.shiroha233.roadweaver.core.model.ProfileConflict.Reason.COVER, 4, 3, 70, 62);
+        assertTrue(InitialConnectivityRepair.provenRejection(edge, new InitialGenManager.GenResult(key, edge, failed, null, witness)));
+    }
+
     @Test
     void repairWillOnlySubmitTheCandidateItActuallyGeneratedWithoutAGap() {
         var edge = new StructureConnection(new BlockPos(-4, 0, 0), new BlockPos(5, 0, 0));
