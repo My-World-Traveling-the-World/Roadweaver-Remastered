@@ -45,9 +45,16 @@ public final class MapScreenDialogs {
         menu.open(x, y);
     }
 
+    private static boolean notesAvailable(Minecraft mc) {
+        if (mc == null || mc.player == null) return false;
+        if (ClientMapNotes.available()) return true;
+        mc.player.displayClientMessage(Component.translatable("gui.roadweaver.map.note.no_world"), true);
+        return false;
+    }
+
     /** 打开别名设置对话框（预填当前别名）。 */
     public static void openAliasEditor(Minecraft mc, Screen parent, BlockPos target, Component title) {
-        if (mc == null) return;
+        if (!notesAvailable(mc)) return;
         String currentAlias = ClientMapNotes.getAlias(target);
         mc.setScreen(new SimpleTextInputScreen(
                 title,
@@ -58,7 +65,7 @@ public final class MapScreenDialogs {
 
     /** 打开笔记编辑器（书与笔风格）。 */
     public static void openNoteEditor(Minecraft mc, Screen parent, BlockPos target) {
-        if (mc == null) return;
+        if (!notesAvailable(mc)) return;
         mc.setScreen(new NoteEditScreen(target, parent));
     }
 }

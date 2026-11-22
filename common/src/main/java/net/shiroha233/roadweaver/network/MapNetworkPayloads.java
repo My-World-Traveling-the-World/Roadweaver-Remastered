@@ -176,6 +176,16 @@ public class MapNetworkPayloads {
         @Override public Type<MapDeleteConnectionPayload> type() { return DELETE_REQ; }
     }
 
+    // 独立通道只下发周目标识；笔记正文和玩家别名不经过网络。
+    public static final CustomPacketPayload.Type<MapWorldIdPayload> MAP_WORLD_ID =
+            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("roadweaver", "map_world_id"));
+
+    public record MapWorldIdPayload(java.util.UUID id) implements CustomPacketPayload {
+        public static final StreamCodec<FriendlyByteBuf, MapWorldIdPayload> CODEC = StreamCodec.of(
+                (buf, value) -> buf.writeUUID(value.id()), buf -> new MapWorldIdPayload(buf.readUUID()));
+        @Override public Type<MapWorldIdPayload> type() { return MAP_WORLD_ID; }
+    }
+
     public record MapAccessSyncPayload(boolean allowed) implements CustomPacketPayload {
         public static final StreamCodec<FriendlyByteBuf, MapAccessSyncPayload> CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, MapAccessSyncPayload::allowed,

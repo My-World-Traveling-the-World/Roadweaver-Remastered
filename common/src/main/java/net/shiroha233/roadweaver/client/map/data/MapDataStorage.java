@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import net.minecraft.world.level.storage.LevelResource;
+import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +25,6 @@ import net.minecraft.client.Minecraft;
 public final class MapDataStorage {
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String DATA_DIR = "config/roadweaver/mapdata";
     private static final String NOTES_FILE = "notes.json";
 
     private MapDataStorage() {}
@@ -35,16 +36,21 @@ public final class MapDataStorage {
 
     public record DimensionPos(ResourceLocation dimension, BlockPos pos) {}
 
-    private static Path getDataRoot() {
-        return Minecraft.getInstance().gameDirectory.toPath().resolve(DATA_DIR);
+    public static Path local(Path save, UUID player) {
+        return save.toAbsolutePath().normalize().resolve("data/roadweaver/client-notes").resolve(player.toString());
     }
 
-    public static Path getWorldDataDir() {
-        String worldId = getWorldId();
-        if (worldId == null) return null;
-        
-        String safeName = worldId.replaceAll("[<>:\"/\\\\|?*]", "_");
-        return getDataRoot().resolve(safeName);
+    public static Path remote(Path game, String address, UUID world, UUID player) {
+        // 地址只划分服务器；同地址开新周目、同电脑换账号都必须落到另一份笔记。
+        UUID host = UUID.nameUUIDFromBytes(address.getBytes(StandardCharsets.UTF_8));
+        return game.resolve("config/roadweaver/mapdata/servers").resolve(host.toString())
+                .resolve(world.toString()).resolve(player.toString());
+    }
+
+    public static Path localNotesDirectory(Minecraft mc) {
+        var server = mc.getSingleplayerServer();
+        return server == null || mc.player == null ? null : local(
+                server.getWorldPath(LevelResource.ROOT), mc.player.getUUID());
     }
 
     public static String getWorldId() {
@@ -52,15 +58,14 @@ public final class MapDataStorage {
         if (mc == null || mc.level == null) return null;
 
         if (mc.isLocalServer() && mc.getSingleplayerServer() != null) {
-            return mc.getSingleplayerServer().getWorldData().getLevelName();
+            return mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize().toString();
         } else if (mc.getCurrentServer() != null) {
             return mc.getCurrentServer().ip;
         }
         return null;
     }
 
-    public static NotesData loadNotes() {
-        Path dir = getWorldDataDir();
+    public static NotesData loadNotes(Path dir) {
         if (dir == null) return new NotesData();
 
         Path file = dir.resolve(NOTES_FILE);
@@ -77,8 +82,7 @@ public final class MapDataStorage {
         }
     }
 
-    public static void saveNotes(NotesData data) {
-        Path dir = getWorldDataDir();
+    public static void saveNotes(Path dir, NotesData data) {
         if (dir == null) return;
 
         try {

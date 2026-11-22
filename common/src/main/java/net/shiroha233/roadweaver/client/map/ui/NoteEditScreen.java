@@ -253,13 +253,8 @@ public class NoteEditScreen extends RoadWeaverScreen {
     }
 
     private void save() {
-        // 清除旧笔记，保存新笔记。
-        ClientMapNotes.clearNotes(targetPos);
-        for (String line : lines) {
-            if (!line.isEmpty()) {
-                ClientMapNotes.addNote(targetPos, line);
-            }
-        }
+        // 用户确认一次只保存一次，避免多行笔记在磁盘上短暂变成半份。
+        ClientMapNotes.setNotes(targetPos, lines.stream().filter(line -> !line.isBlank()).toList());
         this.minecraft.setScreen(parent);
     }
 

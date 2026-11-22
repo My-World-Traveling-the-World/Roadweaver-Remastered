@@ -446,6 +446,7 @@
   "gui.roadweaver.map.menu.edit_note": "编辑笔记",
   "gui.roadweaver.map.menu.set_alias": "设置别名",
   "gui.roadweaver.map.menu.teleport": "传送到此处",
+  "gui.roadweaver.map.note.no_world": "尚未收到此存档的地图标识，暂不能编辑私人笔记或别名。",
   "gui.roadweaver.map.note.title": "地图笔记",
   "gui.roadweaver.map.open.denied": "没有权限打开地图",
   "gui.roadweaver.map.panel.details.alias": "别名",

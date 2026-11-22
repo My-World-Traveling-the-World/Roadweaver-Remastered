@@ -58,8 +58,10 @@ public class RoadWeaver implements ModInitializer {
         
         MapNetworkFabric.registerServerReceivers();
 
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                MapNetworkFabric.syncMapAccess(handler.player));
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            MapNetworkFabric.syncMapAccess(handler.player);
+            MapNetworkFabric.syncMapWorld(handler.player);
+        });
         
         ServerPlanningHooks.register();
     }

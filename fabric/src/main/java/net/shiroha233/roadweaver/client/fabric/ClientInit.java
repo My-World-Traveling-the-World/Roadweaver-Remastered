@@ -65,7 +65,7 @@ public class ClientInit implements ClientModInitializer {
             MapSnapshotCache.setCurrentWorldId(MapDataStorage.getWorldId());
             MapSnapshotCache.clearNow();
             ClientMapTileTextureCache.clear(client);
-            ClientMapNotes.onWorldJoin();
+            ClientMapNotes.open(MapDataStorage.localNotesDirectory(client));
             // ★ 审计 R3-P3-8：跨世界必须清掉世界内编辑器的撤销栈与选中项。
             // 原来只在「进出编辑模式」时 reset()，所以「编辑模式中退出世界 →
             // 进另一世界」（中间没切过编辑模式）时旧快照仍在，按一下 Z 就会

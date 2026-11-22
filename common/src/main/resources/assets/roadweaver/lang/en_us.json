@@ -444,6 +444,7 @@
   "gui.roadweaver.map.menu.edit_note": "Edit Note",
   "gui.roadweaver.map.menu.set_alias": "Set Alias",
   "gui.roadweaver.map.menu.teleport": "Teleport here",
+  "gui.roadweaver.map.note.no_world": "The map identity for this world is unavailable. Private notes and aliases cannot be edited yet.",
   "gui.roadweaver.map.note.title": "Map Note",
   "gui.roadweaver.map.open.denied": "No permission to open the map",
   "gui.roadweaver.map.panel.details.alias": "Alias",

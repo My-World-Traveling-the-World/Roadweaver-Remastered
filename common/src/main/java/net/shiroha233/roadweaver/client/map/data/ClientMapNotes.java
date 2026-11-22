@@ -9,6 +9,7 @@ import net.shiroha233.roadweaver.map.search.MapStructureSource;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.nio.file.Path;
 
 /**
  * 客户端地图笔记存储 - 按存档隔离并持久化
@@ -16,29 +17,25 @@ import java.util.*;
 public final class ClientMapNotes {
     private ClientMapNotes() {}
 
-    private static String currentWorldId = null;
+    private static Path directory;
 
     private static final Map<MapDataStorage.DimensionPos, String> aliases = new HashMap<>();
     private static final Map<MapDataStorage.DimensionPos, List<String>> notes = new HashMap<>();
 
     private static boolean dirty = false;
 
-    public static void onWorldJoin() {
-        String worldId = MapDataStorage.getWorldId();
-        if (worldId == null) return;
+    public static boolean available() { return directory != null; }
 
-        if (worldId.equals(currentWorldId)) return;
-
-        if (currentWorldId != null && dirty) {
-            saveToFile();
-        }
-
-        currentWorldId = worldId;
+    public static void open(Path nextDirectory) {
+        if (Objects.equals(nextDirectory, directory)) return;
+        // 先写回所属的原目录，再接管新目录；断开时不依赖 Minecraft 当前指向哪个世界。
+        if (dirty) saveToFile();
+        directory = nextDirectory;
         aliases.clear();
         notes.clear();
         dirty = false;
 
-        MapDataStorage.NotesData data = MapDataStorage.loadNotes();
+        MapDataStorage.NotesData data = MapDataStorage.loadNotes(directory);
         for (Map.Entry<String, String> e : data.aliases.entrySet()) {
             MapDataStorage.DimensionPos key = MapDataStorage.keyToDimensionPos(e.getKey());
             if (key != null) aliases.put(key, e.getValue());
@@ -53,7 +50,7 @@ public final class ClientMapNotes {
         if (dirty) {
             saveToFile();
         }
-        currentWorldId = null;
+        directory = null;
         aliases.clear();
         notes.clear();
         dirty = false;
@@ -67,7 +64,7 @@ public final class ClientMapNotes {
         for (Map.Entry<MapDataStorage.DimensionPos, List<String>> e : notes.entrySet()) {
             data.notes.put(MapDataStorage.dimensionPosToKey(e.getKey().dimension(), e.getKey().pos()), e.getValue());
         }
-        MapDataStorage.saveNotes(data);
+        MapDataStorage.saveNotes(directory, data);
         dirty = false;
     }
 
@@ -117,23 +114,6 @@ public final class ClientMapNotes {
         return key == null ? List.of() : notes.getOrDefault(key, List.of());
     }
 
-    public static void addNote(BlockPos pos, String note) {
-        if (note == null || note.isBlank()) return;
-        MapDataStorage.DimensionPos key = currentKey(pos);
-        if (key == null) return;
-        notes.computeIfAbsent(key, k -> new ArrayList<>()).add(note);
-        dirty = true;
-        saveToFile();
-    }
-
-    public static void clearNotes(BlockPos pos) {
-        MapDataStorage.DimensionPos key = currentKey(pos);
-        if (key != null && notes.remove(key) != null) {
-            dirty = true;
-            saveToFile();
-        }
-    }
-
     public static void setNotes(BlockPos pos, List<String> noteList) {
         MapDataStorage.DimensionPos key = currentKey(pos);
         if (key == null) return;
@@ -157,7 +137,7 @@ public final class ClientMapNotes {
 
     private static MapDataStorage.DimensionPos currentKey(BlockPos pos) {
         ResourceLocation dimension = currentDimension();
-        return dimension == null || pos == null ? null : new MapDataStorage.DimensionPos(dimension, pos);
+        return directory == null || dimension == null || pos == null ? null : new MapDataStorage.DimensionPos(dimension, pos);
     }
 
     private static ResourceLocation currentDimension() {

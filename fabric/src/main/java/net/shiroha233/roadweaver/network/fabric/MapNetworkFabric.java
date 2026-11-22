@@ -72,6 +72,7 @@ public final class MapNetworkFabric {
         PayloadTypeRegistry.playS2C().register(MapNetworkPayloads.ACCESS_SYNC, MapNetworkPayloads.MapAccessSyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(MapNetworkPayloads.SEARCH_RESP, MapNetworkPayloads.MapSearchResponsePayload.CODEC);
 
+        PayloadTypeRegistry.playS2C().register(MapNetworkPayloads.MAP_WORLD_ID, MapNetworkPayloads.MapWorldIdPayload.CODEC);
         payloadTypesRegistered = true;
     }
 
@@ -248,6 +249,17 @@ public final class MapNetworkFabric {
                 })
         );
 
+        ClientPlayNetworking.registerGlobalReceiver(MapNetworkPayloads.MAP_WORLD_ID, (payload, context) -> {
+            var player = context.player();
+            var mc = context.client();
+            mc.execute(() -> {
+                // 离开的服务器可能还有回调排队；只有原玩家会话能选定自己的笔记目录。
+                if (mc.player != player || mc.getSingleplayerServer() != null || mc.getCurrentServer() == null) return;
+                net.shiroha233.roadweaver.client.map.data.ClientMapNotes.open(
+                        net.shiroha233.roadweaver.client.map.data.MapDataStorage.remote(mc.gameDirectory.toPath(),
+                                mc.getCurrentServer().ip, payload.id(), player.getUUID()));
+            });
+        });
         ClientPlayNetworking.registerGlobalReceiver(MapNetworkPayloads.ACCESS_SYNC, (payload, context) ->
                 context.client().execute(() -> ClientMapAccessGuard.applyServerState(context.client(), payload.allowed()))
         );
@@ -396,6 +408,19 @@ public final class MapNetworkFabric {
         if (player == null || dimensionId == null) return;
         ServerPlayNetworking.send(player,
                 new MapNetworkPayloads.MapAutomaticPlanningSamplingPayload(dimensionId, bounds));
+    }
+
+    public static void syncMapWorld(ServerPlayer player) {
+        // 单人房主直接使用本地存档；对局域网来客和独立服务端玩家只同步周目标识。
+        if (player.server.isSingleplayerOwner(player.getGameProfile())
+                || !ServerPlayNetworking.canSend(player, MapNetworkPayloads.MAP_WORLD_ID)) return;
+        try {
+            var root = player.server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
+            var id = net.shiroha233.roadweaver.map.MapNotesScope.worldId(root);
+            ServerPlayNetworking.send(player, new MapNetworkPayloads.MapWorldIdPayload(id));
+        } catch (java.io.IOException | IllegalArgumentException failure) {
+            LOGGER.error("读取存档的地图周目标识失败，本次联机无法保存私人笔记", failure);
+        }
     }
 
     public static void syncMapAccess(ServerPlayer player) {
