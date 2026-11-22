@@ -64,6 +64,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolver.*;
@@ -90,8 +91,7 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
  * <p>它<b>不判定</b>任何结构是否该避让 —— 只回答「这条路线经过哪些区块」。
  * 判定留给 {@code StructureAvoidanceService} 与 {@code PlanningSnapshot}。</p>
  *
- * <p>本类是从 2539 行的 {@code StructureAvoidanceService} 里<b>纯搬迁</b>出来的，
- * 逻辑未改（含缩进）。两侧调用点靠双向静态导入保持零改动。</p>
+ * <p>真实路径与初始弦线共用结构起点口径，避免定位偏移后解析到相邻的空区块。</p>
  */
 public final class PathCorridorBuilder {
     static Map<RouteKey, PathCorridorPlan> buildPathCorridors(
@@ -244,11 +244,8 @@ public final class PathCorridorBuilder {
                         StructureAvoidanceCache.OBSTACLE_TILE_CANDIDATES.get(tileKey);
                 if (tileCandidates == null) continue;
                 for (StructurePredictor.AvoidanceStructureCandidate candidate : tileCandidates) {
-                    if (candidate == null || candidate.pos() == null || candidate.structureSet() == null) continue;
-                    long chunkKey = ChunkPos.asLong(candidate.pos().getX() >> 4, candidate.pos().getZ() >> 4);
-                    if (!corridor.candidateChunks().contains(chunkKey)) continue;
-                    PredictedCandidateKey candidateKey = new PredictedCandidateKey(
-                            chunkKey, candidate.structureSet());
+                    if (!predictedStartInCorridor(candidate, corridor.candidateChunks())) continue;
+                    PredictedCandidateKey candidateKey = predictedIdentity(candidate);
                     if (seen.add(candidateKey)) candidates.add(candidate);
                 }
             }
@@ -302,25 +299,7 @@ public final class PathCorridorBuilder {
                 collectCandidateStartKey(level, info, storageSnapshot.sourceAt(info.pos()), starts);
             }
         }
-        if (obstacleCandidates != null) {
-            for (StructurePredictor.AvoidanceStructureCandidate candidate : obstacleCandidates) {
-                if (candidate == null || candidate.pos() == null || candidate.structureSet() == null) continue;
-                int candidateChunkX = candidate.pos().getX() >> 4;
-                int candidateChunkZ = candidate.pos().getZ() >> 4;
-                // E 阶段预筛：放置数学判定不可能的候选不进精确解析。
-                if (!isPotentialStructureChunk(level, candidate.structureSet(), candidateChunkX, candidateChunkZ)) {
-                    PREFILTERED_CANDIDATES.incrementAndGet();
-                    continue;
-                }
-                PREFILTER_KEPT_CANDIDATES.incrementAndGet();
-                starts.add(preparedStartKey(
-                        level,
-                        candidateChunkX,
-                        candidateChunkZ,
-                        StructureFileStorage.SOURCE_PREDICTED,
-                        candidate.structureSet()));
-            }
-        }
+        collectPredictedStarts(level, obstacleCandidates, starts);
         return Set.copyOf(starts);
     }
 
@@ -423,16 +402,8 @@ public final class PathCorridorBuilder {
                             StructureAvoidanceCache.OBSTACLE_TILE_CANDIDATES.get(tileKey);
                     if (tileCandidates == null) continue;
                     for (StructurePredictor.AvoidanceStructureCandidate candidate : tileCandidates) {
-                        if (candidate == null || candidate.pos() == null || candidate.structureSet() == null) continue;
-                        BlockPos pos = candidate.pos();
-                        int cx = pos.getX() >> 4;
-                        int cz = pos.getZ() >> 4;
-                        if (cx < bounds.minChunkX() || cx > bounds.maxChunkX()
-                                || cz < bounds.minChunkZ() || cz > bounds.maxChunkZ()) continue;
-                        if (distanceSquaredToSegment(pos.getX(), pos.getZ(),
-                                bounds.connection().from(), bounds.connection().to()) > bounds.reachSquared()) continue;
-                        PredictedCandidateKey candidateKey = new PredictedCandidateKey(
-                                ChunkPos.asLong(cx, cz), candidate.structureSet());
+                        if (!predictedStartInLineScope(candidate, bounds)) continue;
+                        PredictedCandidateKey candidateKey = predictedIdentity(candidate);
                         if (seenStarts.add(candidateKey)) routeCandidates.add(candidate);
                     }
                 }
@@ -463,22 +434,53 @@ public final class PathCorridorBuilder {
                 collectCandidateStartKey(level, info, storageSnapshot.sourceAt(pos), starts);
             }
         }
-        if (obstacleCandidates != null) {
-            for (StructurePredictor.AvoidanceStructureCandidate candidate : obstacleCandidates) {
-                if (candidate == null || candidate.pos() == null || candidate.structureSet() == null) continue;
-                int cx = candidate.pos().getX() >> 4;
-                int cz = candidate.pos().getZ() >> 4;
-                // E 阶段预筛：放置数学判定不可能的候选不进精确解析。
-                if (!isPotentialStructureChunk(level, candidate.structureSet(), cx, cz)) {
-                    PREFILTERED_CANDIDATES.incrementAndGet();
-                    continue;
-                }
-                PREFILTER_KEPT_CANDIDATES.incrementAndGet();
-                starts.add(preparedStartKey(level, cx, cz,
-                        StructureFileStorage.SOURCE_PREDICTED, candidate.structureSet()));
-            }
-        }
+        collectPredictedStarts(level, obstacleCandidates, starts);
         return Set.copyOf(starts);
+    }
+
+    static boolean predictedStartInCorridor(StructurePredictor.AvoidanceStructureCandidate candidate, LongSet chunks) {
+        return chunks.contains(candidate.startChunk().toLong());
+    }
+
+    static boolean predictedStartInLineScope(StructurePredictor.AvoidanceStructureCandidate candidate, RoutePredictionBounds bounds) {
+        ChunkPos start = candidate.startChunk();
+        if (start.x < bounds.minChunkX() || start.x > bounds.maxChunkX()
+                || start.z < bounds.minChunkZ() || start.z > bounds.maxChunkZ()) return false;
+        BlockPos from = bounds.connection().from();
+        BlockPos to = bounds.connection().to();
+        BlockPos locate = candidate.pos();
+        if (distanceSquaredToSegment(locate.getX(), locate.getZ(), from, to) <= bounds.reachSquared()) return true;
+        if (ChunkPos.asLong(locate) == start.toLong()) return false;
+        // 定位点跨到了邻块时，检查原区块的覆盖。加半个区块对角线做宽筛，具体占地由结构盒判定。
+        double reach = Math.sqrt(bounds.reachSquared()) + 12.0;
+        return distanceSquaredToSegment(start.getMiddleBlockX(), start.getMiddleBlockZ(), from, to) <= reach * reach;
+    }
+
+    static PredictedCandidateKey predictedIdentity(StructurePredictor.AvoidanceStructureCandidate candidate) {
+        return new PredictedCandidateKey(candidate.startChunk().toLong(), candidate.structureSet());
+    }
+
+    private static void collectPredictedStarts(ServerLevel level, List<StructurePredictor.AvoidanceStructureCandidate> candidates,
+                                               Set<PreparedStartKey> starts) {
+        if (candidates == null || candidates.isEmpty()) return;
+        collectPredictedStarts(level.dimension().location().toString(), level.getSeed(), candidates,
+                (set, start) -> isPotentialStructureChunk(level, set, start.x, start.z), starts);
+    }
+
+    static void collectPredictedStarts(String dimension, long seed, List<StructurePredictor.AvoidanceStructureCandidate> candidates,
+                                       BiPredicate<Holder<StructureSet>, ChunkPos> potential, Set<PreparedStartKey> starts) {
+        for (StructurePredictor.AvoidanceStructureCandidate candidate : candidates) {
+            ChunkPos start = candidate.startChunk();
+            // 预筛和精确解析必须用同一个原始区块；定位点即便在走廊中也不能拿来请求区块。
+            if (!potential.test(candidate.structureSet(), start)) {
+                PREFILTERED_CANDIDATES.incrementAndGet();
+                continue;
+            }
+            PREFILTER_KEPT_CANDIDATES.incrementAndGet();
+            var key = predictedIdentity(candidate);
+            starts.add(new PreparedStartKey(dimension, seed, key.chunkKey(),
+                    StructureFileStorage.SOURCE_PREDICTED, key.structureSet()));
+        }
     }
 
     static void collectCandidateStartKey(ServerLevel level,

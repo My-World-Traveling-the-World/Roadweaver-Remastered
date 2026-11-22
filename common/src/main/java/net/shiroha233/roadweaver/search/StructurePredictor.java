@@ -226,10 +226,14 @@ public final class StructurePredictor {
         if (candidate.x < minChunkX || candidate.x > maxChunkX
                 || candidate.z < minChunkZ || candidate.z > maxChunkZ) return;
         if (!placement.isStructureChunk(state, candidate.x, candidate.z)) return;
-        result.add(new AvoidanceStructureCandidate(placement.getLocatePos(candidate), structureSet));
+        result.add(new AvoidanceStructureCandidate(candidate, structureSet));
     }
 
-    public record AvoidanceStructureCandidate(BlockPos pos, Holder<StructureSet> structureSet) {
+    /** 定位偏移用于提示位置；跨区块时仍须到原来的起始区块解析 STRUCTURE_STARTS。 */
+    public record AvoidanceStructureCandidate(ChunkPos startChunk, BlockPos pos, Holder<StructureSet> structureSet) {
+        public AvoidanceStructureCandidate(ChunkPos startChunk, Holder<StructureSet> structureSet) {
+            this(startChunk, structureSet.value().placement().getLocatePos(startChunk), structureSet);
+        }
     }
 
     /**
