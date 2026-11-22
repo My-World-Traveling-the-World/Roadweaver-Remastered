@@ -68,6 +68,26 @@ class RoadChunkStoreReadFaultTest {
         return new RoadData(4, 1, List.of(), List.of(), segments, List.of(), heights, owner, owner + 1);
     }
 
+    @Test void unlockedStoreRecoversBothRoadsWithoutReopening(@TempDir Path root) throws Exception {
+        try (RoadChunkStore init = new RoadChunkStore(root)) { init.addRoads(List.of(road(0, 1), road(40, 3))); }
+        Path target;
+        try (var files = Files.list(root.resolve("roads"))) { target = files.findFirst().orElseThrow(); }
+        var before = Files.readAllBytes(root.resolve("index.json"));
+        try (var store = new RoadChunkStore(root)) {
+            long future;
+            try (var lock = FileChannel.open(target, StandardOpenOption.READ, com.sun.nio.file.ExtendedOpenOption.NOSHARE_READ)) {
+                assertEquals(1, store.loadAll().size());
+                future = System.nanoTime() + 6_000_000_000L;
+                assertFalse(store.readyForRecovery(future));
+            }
+            // 同一恢复窗口不重扫磁盘，过期后在原实例上重新取得两条道路。
+            assertFalse(store.readyForRecovery(future + 1));
+            assertTrue(store.readyForRecovery(future + 6_000_000_000L));
+            assertEquals(2, store.loadAll().size());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(before, Files.readAllBytes(root.resolve("index.json")));
+        }
+    }
+
     @Test
     void 单条道路读失败时索引必须原样不动_解锁后必须重新看到两条(@TempDir Path root) throws Exception {
         RoadData first = road(0, 1L);

@@ -62,28 +62,36 @@ public final class DeferredInitialRoadConstructionService {
         if (!isOverworld(level)) return;
         State state = STATES.computeIfAbsent(level, ignored -> new State());
         // 启动时文件占用不能被解释成所有道路未施工；tick 会在完整重读后补做恢复。
-        if (!RoadConstructionLedger.isAvailable(level)) {
+        if (!RoadConstructionLedger.isAvailable(level) || !RoadShardStorage.readyForRecovery(level)) {
             state.needsRecovery = true;
             return;
         }
+        // 启动时也可能已从部分视图编译过空计划；只在恢复队列前失效一次。
+        RoadShardStorage.refreshRecoveredPlans(level);
+        NO_CONSTRUCTION_REQUIRED.remove(level);
         int recovered = 0;
+        CompletedChunk completed = (chunk, fingerprint) -> RoadConstructionLedger.isComplete(level, chunk, fingerprint);
         for (var road : RoadShardStorage.loadAll(level)) {
-            if (road == null) continue;
-            // 同一条路跨多个区块，身份与检查的区块无关，不必重复计算。
-            long fingerprint = RoadShardStorage.computeFingerprint(road);
-            for (long key : RoadFootprint.from(road).chunkKeys()) {
-                ChunkPos chunk = new ChunkPos(key);
-                if (!RoadConstructionLedger.isComplete(level, chunk, fingerprint)
-                        && state.pending.add(key)) {
-                    recovered++;
-                }
-            }
+            recovered += recoverUnfinished(RoadFootprint.from(road), RoadShardStorage.computeFingerprint(road), state.pending, completed);
         }
         state.total = Math.max(state.total, state.completed + state.pending.size());
         state.needsRecovery = false;
         if (recovered > 0) {
             LOGGER.info("【已从存档恢复延迟施工队列】 " + "RoadWeaver recovered deferred construction queue after restart: chunks={}", recovered);
         }
+    }
+
+    /** 每次重读都使用真实施工台账：只把尚未完成、尚未排队的区块加回来。 */
+    static int recoverUnfinished(RoadFootprint footprint, long fingerprint, DeferredChunkQueue pending, CompletedChunk completed) {
+        int recovered = 0;
+        for (long key : footprint.worldChunkKeys()) {
+            if (!completed.test(new ChunkPos(key), fingerprint) && pending.add(key)) recovered++;
+        }
+        return recovered;
+    }
+
+    interface CompletedChunk {
+        boolean test(ChunkPos chunk, long fingerprint);
     }
 
     /** 加载事件只提示已待施工的键，避免在事件栈里读台账或落块。 */
@@ -97,7 +105,10 @@ public final class DeferredInitialRoadConstructionService {
         if (!isOverworld(level) || !level.getServer().isSameThread()) return 0;
         State state = STATES.get(level);
         if (state == null || !RoadConstructionLedger.isAvailable(level)) return 0;
-        if (state.needsRecovery) recover(level);
+        if (state.needsRecovery) {
+            recover(level);
+            if (state.needsRecovery) return 0;
+        }
         if (state.pending.isEmpty()) return 0;
         if (state.cooldownTicks > 0) {
             state.cooldownTicks--;

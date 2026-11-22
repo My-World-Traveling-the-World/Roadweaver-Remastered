@@ -231,7 +231,7 @@ public final class InitialRoutePersistOps {
                 if (work.road() != null) {
                     synchronized (constructionLock) {
                         roadsToPersist.add(work.road());
-                        constructionChunks.addAll(RoadFootprint.from(work.road()).chunkKeys());
+                        constructionChunks.addAll(RoadFootprint.from(work.road()).worldChunkKeys());
                         persistedEdges.add(work.owner());
                         // 终态验收可能改变跨度；只有真实进入本次保存的道路可提供缺口状态。
                         if (work.road().hasProtectedGap()) protectedEdges.add(work.owner());

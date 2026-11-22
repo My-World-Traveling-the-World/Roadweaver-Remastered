@@ -86,6 +86,15 @@ public final class RoadShardStorage {
         return RoadFileStorage.queryRectAsync(level, minBlockX, minBlockZ, maxBlockX, maxBlockZ);
     }
 
+    public static boolean readyForRecovery(ServerLevel level) {
+        return RoadFileStorage.readyForRecovery(level);
+    }
+
+    /** 之前可能从部分视图编译过空计划；重读后让实际道路参与下一次编译。 */
+    public static void refreshRecoveredPlans(ServerLevel level) {
+        RoadWorldgenPlanCache.invalidate(level);
+    }
+
     public static List<RoadData> loadAll(ServerLevel level) {
         return isOverworld(level) ? RoadFileStorage.loadAll(level) : List.of();
     }
@@ -162,6 +171,6 @@ public final class RoadShardStorage {
     }
 
     private static Set<Long> affectedChunks(RoadData road) {
-        return road == null ? Set.of() : RoadFootprint.from(road).chunkKeys();
+        return road == null ? Set.of() : RoadFootprint.from(road).worldChunkKeys();
     }
 }

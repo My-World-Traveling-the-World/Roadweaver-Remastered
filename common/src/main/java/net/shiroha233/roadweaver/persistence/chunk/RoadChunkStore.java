@@ -71,17 +71,7 @@ public final class RoadChunkStore implements AutoCloseable {
     private boolean metadataRepairPending;
     private RoadShardVerifier.Result pendingShardRepair;
 
-    /**
-     * **只读降级标志**（★ 2026-09-26 修 WorkBuddy R-5）。
-     *
-     * <p>首载遇 {@code IOException}（磁盘抖动 / 文件被占用 / 权限）时置位 ——
-     * 此时内存快照是空的，但**磁盘上的真索引可能完好**，
-     * 所以绝不能让后续写入用空快照把它覆盖掉。</p>
-     *
-     * <p>置位后：查询照常（读空快照，不崩）；**写路径一律拒绝**。
-     * 生成任务会因此 FAILED 并可重试，重进世界（IO 恢复正常）后自然恢复 ——
-     * 这远好于把玩家全部道路索引清成空。</p>
-     */
+    /** 任一条路暂时读不到，只能查询已读部分。完整快照发布后才恢复写入。 */
     private volatile boolean readOnlyDegraded;
 
     public RoadChunkStore(Path root) {
@@ -110,6 +100,24 @@ public final class RoadChunkStore implements AutoCloseable {
         ensureLoaded();
         return snapshot.get().queryChunk(chunkX, chunkZ);
     }
+
+    /** 恢复队列需要完整视图。普通查询仍能读已加载的部分；只有恢复入口允许限频重读。 */
+    public boolean readyForRecovery(long now) {
+        ensureLoaded();
+        if (!readOnlyDegraded) return true;
+        mutationLock.lock();
+        try {
+            if (readOnlyDegraded && now - lastRecoveryAttempt >= 5_000_000_000L) {
+                lastRecoveryAttempt = now;
+                loadSnapshotLocked();
+            }
+            return !readOnlyDegraded;
+        } finally {
+            mutationLock.unlock();
+        }
+    }
+
+    private long lastRecoveryAttempt;
 
     public List<RoadData> loadAll() {
         ensureLoaded();
@@ -261,12 +269,7 @@ public final class RoadChunkStore implements AutoCloseable {
 
     @Override
     public void close() {
-        // 当前实现没有后台线程或打开的文件句柄；实例由世界路径注册表负责释放。
-        //
-        // ★ 2026-09-26（R-5）：只读降级标志也在这里复位 —— 实例被关闭即
-        //   "该次访问结束"，下次重新创建/加载时应重新尝试真实读取，
-        //   而不是把上次的瞬时 IO 失败永久带下去。
-        readOnlyDegraded = false;
+        // 释放路径注册表的实例即可；仍被旧调用持有的部分视图不可解开写保护。
     }
 
     Path chunkPath(int chunkX, int chunkZ) {
@@ -285,60 +288,22 @@ public final class RoadChunkStore implements AutoCloseable {
 
     private void ensureLoadedLocked() {
         if (loaded) return;
+        lastRecoveryAttempt = System.nanoTime();
+        loadSnapshotLocked();
+    }
+
+    private void loadSnapshotLocked() {
         LoadedSnapshot loadedSnapshot;
         try {
             loadedSnapshot = readSnapshot();
-            // ★ 2026-09-26 修 W-8/I-5：**读成功 ⇒ 自动解除只读降级**。
-            //   原先只有在 close()（实例释放）时才复位，一次瞬时 IO 抖动会让
-            //   整个会话都写不进去。「能读就能写」—— 读成功说明 IO 已恢复。
-            if (readOnlyDegraded) {
-                readOnlyDegraded = false;
-                LOGGER.info("道路 ChunkPos 存储已可正常读取 —— 解除只读降级，恢复写入: {}", root);
-            }
+            if (loadedSnapshot.readFailure()) LOGGER.warn("道路数据尚未读全，保留原索引并等待重读：{}", root);
         } catch (IOException e) {
-            // ★ 2026-09-26 修 WorkBuddy R-5：**进入只读降级，绝不拿空快照去覆盖索引**。
-            //
-            // 原先这里只是 warn + 用一个空快照继续 —— 但随后**任何一次道路写入**
-            // 都会经 persistSnapshot 把这个空快照**全量写回 index.json**，
-            // 于是真索引被覆盖 ⇒ 全部道路"不可见"
-            // （.nbt 实体文件还在，但不施工、不显示，自动规划还可能重复造路）。
-            //
-            // ⚠️ 同一文件里存在**两套不对称的处理**（正是缺陷根源）：
-            //   · JSON **解析**失败 → quarantineCorrupt 隔离原文件（安全）
-            //   · IO **读**失败     → 静默空快照（危险）
-            // IO 失败（磁盘抖动 / 文件被占用 / 权限）**不代表数据不存在**，
-            // 恰恰最不该把它当成空库。
-            //
-            // 修法：置 readOnly 降级标志 —— 查询仍用空快照（只读不崩），
-            // 但**所有写路径直接拒绝**。宁可让生成任务 FAILED 重试（可恢复），
-            // 也不能把玩家的道路索引清掉（不可恢复）。
-            LOGGER.error("首次载入道路 ChunkPos 存储失败 —— 已进入**只读降级**，"
-                    + "本次会话不会写入道路索引（避免用空快照覆盖真实索引）: {}", root, e);
-            readOnlyDegraded = true;
-            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
+            LOGGER.error("道路索引暂时无法读取，保留原文件并等待重读：{}", root, e);
+            loadedSnapshot = new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, true, null);
         }
         snapshot.set(loadedSnapshot.snapshot());
         generation = loadedSnapshot.generation();
-        loaded = true;
-
-        if (loadedSnapshot.readFailure() && !readOnlyDegraded) {
-            // ★ P0（2026-11-15 外部独立审计）：单条读失败也进只读降级。
-            //
-            // 旧实现的保护是**不对称**的：`readSnapshot()` 整体抛 IOException 时
-            // 会进只读降级（下面 catch 那一支，注释写得很好：「IO 失败不代表数据不存在」），
-            // 但**单条 NBT 读失败**只是在条目循环里 `continue`，被当成「这条没了」。
-            // 于是 `rewriteMetadata` 变真 ⇒ 用剔掉失败条目的部分快照改写 index.json
-            // ⇒ 那条路永久从索引消失（NBT 仍在磁盘上，只能人工恢复）。
-            // 实测：写两条合法道路、临时锁住一份 NBT ⇒ 首次打开索引变一条，解锁后仍一条。
-            //
-            // 这里不改读路径（查询继续用这份部分快照，不崩），只**拒绝一切写入**：
-            // 索引保持原样，等下一次能完整读出时自然恢复。
-            readOnlyDegraded = true;
-            LOGGER.error("道路 ChunkPos 存储的聚合文件或分片本次读取失败 —— 已进入**只读降级**，"
-                    + "本次会话不会改写索引（避免把读不到的道路永久从索引剔除；"
-                    + "其 .nbt 文件仍在 {} 下，可重试或人工恢复）", root);
-        }
-        if (loadedSnapshot.rewriteMetadata() && !readOnlyDegraded) {
+        if (loadedSnapshot.rewriteMetadata() && !loadedSnapshot.readFailure()) {
             long repairGeneration = generation == 0L ? 1L : generation;
             metadataRepairPending = true;
             pendingShardRepair = loadedSnapshot.shards();
@@ -352,6 +317,9 @@ public final class RoadChunkStore implements AutoCloseable {
                 LOGGER.warn("修复道路 ChunkPos 分片元数据失败: {}", root, e);
             }
         }
+        // 先发布完整快照，再让恢复线程看见可用状态。
+        readOnlyDegraded = loadedSnapshot.readFailure();
+        loaded = true;
     }
 
     private void publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration) {

@@ -76,6 +76,10 @@ public final class RoadFileStorage {
         return isOverworld(level) ? store(level).queryChunk(chunkX, chunkZ) : List.of();
     }
 
+    public static boolean readyForRecovery(ServerLevel level) {
+        return store(level).readyForRecovery(System.nanoTime());
+    }
+
     public static List<RoadData> loadAll(ServerLevel level) {
         return isOverworld(level) ? store(level).loadAll() : List.of();
     }

@@ -20,6 +20,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DeferredChunkQueueTest {
     @Test
+    void unlockedRoadReturnsOnlyMissingChunksToTheRealQueue(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var roads = new ArrayList<net.shiroha233.roadweaver.core.model.RoadData>();
+        // 两条路均跨两个区块；每条的首块已经完工，解锁后只应补两个尾块。
+        for (int z : List.of(8, 40)) {
+            var segments = new ArrayList<net.shiroha233.roadweaver.core.model.RoadSegmentPlacement>();
+            for (int x = 8; x <= 24; x++) {
+                var p = new net.minecraft.core.BlockPos(x, 64, z);
+                segments.add(new net.shiroha233.roadweaver.core.model.RoadSegmentPlacement(p, List.of(p)));
+            }
+            roads.add(new net.shiroha233.roadweaver.core.model.RoadData(3, 1, List.of(), List.of(), segments, List.of(),
+                    java.util.Collections.nCopies(segments.size(), 64), z, z+1));
+        }
+        try (var init = new net.shiroha233.roadweaver.persistence.chunk.RoadChunkStore(root)) { init.addRoads(roads); }
+        java.nio.file.Path nbt;
+        try (var files = java.nio.file.Files.list(root.resolve("roads"))) { nbt = files.findFirst().orElseThrow(); }
+        var queue = new DeferredChunkQueue();
+        try (var store = new net.shiroha233.roadweaver.persistence.chunk.RoadChunkStore(root)) {
+            try (var lock = java.nio.channels.FileChannel.open(nbt, java.nio.file.StandardOpenOption.READ,
+                    com.sun.nio.file.ExtendedOpenOption.NOSHARE_READ)) {
+                assertFalse(store.readyForRecovery(System.nanoTime()));
+            }
+            assertTrue(store.readyForRecovery(System.nanoTime() + 6_000_000_000L));
+            var complete = (DeferredInitialRoadConstructionService.CompletedChunk) (chunk, fingerprint) -> chunk.x == 0;
+            assertEquals(2, store.loadAll().stream().mapToInt(road -> DeferredInitialRoadConstructionService.recoverUnfinished(
+                    net.shiroha233.roadweaver.persistence.chunk.RoadFootprint.from(road), net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(road), queue, complete)).sum());
+            assertEquals(Set.of(net.minecraft.world.level.ChunkPos.asLong(1, 0), net.minecraft.world.level.ChunkPos.asLong(1, 2)),
+                    Set.copyOf(queue.select(key -> BUILDABLE).build()));
+            assertEquals(0, store.loadAll().stream().mapToInt(road -> DeferredInitialRoadConstructionService.recoverUnfinished(
+                    net.shiroha233.roadweaver.persistence.chunk.RoadFootprint.from(road), net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(road), queue, complete)).sum());
+        }
+    }
+
+    @Test
     void loadHintFindsOneReadyChunkInTenThousandAndStillCapsProbes() {
         var queue = pending(10_000);
         List<Long> probes = new ArrayList<>();
