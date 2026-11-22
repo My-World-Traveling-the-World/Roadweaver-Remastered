@@ -4,7 +4,10 @@ package net.shiroha233.roadweaver.persistence.files;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
+import java.io.UncheckedIOException;
+import java.nio.file.NoSuchFileException;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -37,41 +40,50 @@ public final class SignTextFileStorage {
 
     public static synchronized void upsertBatch(ServerLevel level, Collection<PendingSignWrite> writes) {
         if (!isOverworld(level) || writes == null || writes.isEmpty()) return;
-        Map<Long, List<PendingSignText>> byChunk = new HashMap<>();
-        for (PendingSignWrite write : writes) {
+        Map<Long, List<PendingSignWrite>> byChunk = new HashMap<>();
+        for (var write : writes) {
             if (write == null || write.pos() == null) continue;
+            long key = ChunkPos.asLong(write.pos().getX() >> 4, write.pos().getZ() >> 4);
+            byChunk.computeIfAbsent(key, ignored -> new ArrayList<>()).add(write);
+        }
+        byChunk.forEach((key, batch) -> mergeChunk(chunkFile(level, key), batch));
+    }
+
+    static void mergeChunk(Path file, Collection<PendingSignWrite> writes) {
+        var rows = new LinkedHashMap<Long, PendingSignText>();
+        for (var old : loadChunk(file)) rows.put(old.id(), old);
+        for (var write : writes) {
             long id = write.pos().asLong();
-            long chunkKey = ChunkPos.asLong(write.pos().getX() >> 4, write.pos().getZ() >> 4);
-            List<PendingSignText> chunk = byChunk.computeIfAbsent(chunkKey, k -> loadChunk(level, k));
-            chunk.removeIf(existing -> existing.id() == id);
-            chunk.add(new PendingSignText(id, write.pos(), write.signType(), write.payload() == null ? "" : write.payload(), System.currentTimeMillis() / 1000L));
+            // 保留旧版“最后一次更新排在末尾”的顺序，但不再为每块牌扫整份分片。
+            rows.remove(id);
+            rows.put(id, new PendingSignText(id, write.pos(), write.signType(), write.payload() == null ? "" : write.payload(),
+                    System.currentTimeMillis() / 1000L));
         }
-        for (var entry : byChunk.entrySet()) {
-            saveChunk(level, entry.getKey(), entry.getValue());
-        }
+        saveChunk(file, new ArrayList<>(rows.values()));
     }
 
     public static synchronized List<PendingSignText> queryByChunk(ServerLevel level, int chunkX, int chunkZ, int limit) {
         if (!isOverworld(level) || limit <= 0) return List.of();
         long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
-        List<PendingSignText> chunk = loadChunk(level, chunkKey);
+        List<PendingSignText> chunk = loadChunk(chunkFile(level, chunkKey));
         if (chunk.size() <= limit) return new ArrayList<>(chunk);
         return new ArrayList<>(chunk.subList(0, limit));
     }
 
     public static synchronized void deleteByIds(ServerLevel level, List<Long> ids) {
         if (!isOverworld(level) || ids == null || ids.isEmpty()) return;
-        Map<Long, List<Long>> byChunk = new HashMap<>();
+        Map<Long, HashSet<Long>> byChunk = new HashMap<>();
         for (Long id : ids) {
             if (id == null) continue;
             BlockPos pos = BlockPos.of(id);
             long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
-            byChunk.computeIfAbsent(chunkKey, k -> new ArrayList<>()).add(id);
+            byChunk.computeIfAbsent(chunkKey, k -> new HashSet<>()).add(id);
         }
         for (var entry : byChunk.entrySet()) {
-            List<PendingSignText> chunk = loadChunk(level, entry.getKey());
+            Path file = chunkFile(level, entry.getKey());
+            List<PendingSignText> chunk = loadChunk(file);
             chunk.removeIf(existing -> entry.getValue().contains(existing.id()));
-            saveChunk(level, entry.getKey(), chunk);
+            saveChunk(file, chunk);
         }
     }
 
@@ -82,26 +94,30 @@ public final class SignTextFileStorage {
 
     public static synchronized void clearAllMemory() {}
 
-    private static List<PendingSignText> loadChunk(ServerLevel level, long chunkKey) {
+    static List<PendingSignText> loadChunk(Path file) {
+        // 先完成字节读取再解析，避免 Gson 把读盘失败包装成坏 JSON。
         try {
-            Path file = chunkFile(level, chunkKey);
-            if (!Files.exists(file)) return new ArrayList<>();
-            try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                SignChunkData data = SignTextShardStorageCompat.GSON.fromJson(reader, SignChunkData.class);
-                return data != null && data.items != null ? new ArrayList<>(data.items) : new ArrayList<>();
-            }
-        } catch (Exception e) {
-            FileStorageIO.quarantineCorrupt(chunkFile(level, chunkKey), LOGGER, "路牌文本分片损坏，已隔离");
+            String json = Files.readString(file, StandardCharsets.UTF_8);
+            SignChunkData data = SignTextShardStorageCompat.GSON.fromJson(json, SignChunkData.class);
+            if (data == null || data.items == null) throw new com.google.gson.JsonSyntaxException("缺少路牌列表");
+            return new ArrayList<>(data.items);
+        } catch (NoSuchFileException absent) {
+            return new ArrayList<>();
+        } catch (IOException temporarilyUnavailable) {
+            throw new UncheckedIOException(temporarilyUnavailable);
+        } catch (com.google.gson.JsonParseException corrupt) {
+            FileStorageIO.quarantineCorrupt(file, LOGGER, "路牌文本分片损坏");
+            // 隔离不成功也不能在原件上写入空表。
+            if (!Files.notExists(file)) throw new UncheckedIOException(new IOException("无法隔离：" + file, corrupt));
             return new ArrayList<>();
         }
     }
 
-    private static void saveChunk(ServerLevel level, long chunkKey, List<PendingSignText> items) {
+    private static void saveChunk(Path file, List<PendingSignText> items) {
         try {
-            Path file = chunkFile(level, chunkKey);
             FileStorageIO.writeStringAtomic(file, SignTextShardStorageCompat.GSON.toJson(new SignChunkData(items)));
         } catch (IOException e) {
-            throw new IllegalStateException("failed to save sign chunk", e);
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -117,7 +133,7 @@ public final class SignTextFileStorage {
     }
 
     private static final class SignChunkData {
-        List<PendingSignText> items = new ArrayList<>();
+        List<PendingSignText> items;
 
         SignChunkData() {}
         SignChunkData(List<PendingSignText> items) { this.items = items == null ? new ArrayList<>() : new ArrayList<>(items); }

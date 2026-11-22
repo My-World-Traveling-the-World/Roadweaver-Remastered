@@ -53,7 +53,14 @@ public final class SignTextService {
 
             int chunkX = ChunkPos.getX(chunkKey);
             int chunkZ = ChunkPos.getZ(chunkKey);
-            processChunk(level, chunkX, chunkZ);
+            try {
+                processChunk(level, chunkX, chunkZ);
+            } catch (java.io.UncheckedIOException unavailable) {
+                // 脏标记仍属于原区块，下一次调度继续；本 tick 不反复打开被锁的文件。
+                markChunkDirty(level, chunkX, chunkZ);
+                LOGGER.debug("路牌分片暂不可用，保留待写项：{},{}", chunkX, chunkZ, unavailable);
+                return;
+            }
         }
     }
 
@@ -155,12 +162,13 @@ public final class SignTextService {
 
         List<SignTextShardStorage.PendingSignWrite> memoryPending =
                 SignTextShardStorage.takeMemoryByChunk(level, chunkX, chunkZ, WRITE_BUDGET_PER_CHUNK);
+        var spill = new ArrayList<SignTextShardStorage.PendingSignWrite>();
         for (SignTextShardStorage.PendingSignWrite row : memoryPending) {
             if (row == null || row.pos() == null) continue;
             boolean ok = tryWrite(level, row.pos(), row.signType(), row.payload());
             if (!ok && !shouldDrop(level, row.pos())) {
                 if (row.retryCount() >= MAX_MEMORY_RETRIES) {
-                    SignTextFileStorage.upsertBatch(level, List.of(new SignTextFileStorage.PendingSignWrite(row.pos(), row.signType(), row.payload())));
+                    spill.add(row);
                 } else {
                     SignTextShardStorage.requeue(level, row);
                 }
@@ -168,11 +176,19 @@ public final class SignTextService {
             }
         }
 
+        if (!spill.isEmpty()) {
+            try {
+                SignTextShardStorage.upsertBatch(level, spill);
+            } catch (java.io.UncheckedIOException unavailable) {
+                // 文件写入才移交所有权；未成功的整批放回，避免丢字。
+                for (var row : spill) SignTextShardStorage.requeue(level, row);
+                throw unavailable;
+            }
+        }
         int remainingBudget = Math.max(0, WRITE_BUDGET_PER_CHUNK - memoryPending.size());
         if (remainingBudget == 0) {
-            if (needRetry || SignTextShardStorage.hasMemoryPending(level, chunkX, chunkZ)) {
-                markChunkDirty(level, chunkX, chunkZ);
-            }
+            // 本轮没有机会查磁盘；即使内存刚好处理完，仍须回来消费旧分片。
+            markChunkDirty(level, chunkX, chunkZ);
             return;
         }
 
@@ -199,7 +215,7 @@ public final class SignTextService {
         if (!doneIds.isEmpty()) {
             SignTextFileStorage.deleteByIds(level, doneIds);
         }
-        if (needRetry || SignTextShardStorage.hasMemoryPending(level, chunkX, chunkZ)) {
+        if (pending.size() == remainingBudget || needRetry || SignTextShardStorage.hasMemoryPending(level, chunkX, chunkZ)) {
             markChunkDirty(level, chunkX, chunkZ);
         }
     }
