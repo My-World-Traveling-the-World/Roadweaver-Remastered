@@ -46,14 +46,14 @@ public final class ProfileDpSource {
      * <p>把它们做成代价项是错的 —— 代价可以被"更划算的方案"打败，
      * 而这三条没有"更划算"的余地。</p>
      *
-     * @param pin            每站钉死的高度；{@code null} 或负值表示不钉
+     * 锁高是否存在由独立标记决定，地下道路的负高度与地表高度同样有效。
      * @param mustBeCovered  每站是否必须保持覆土（隧道段）；{@code null} 表示没有
      * @param minCover       覆土最小厚度（格）
      */
     /**
      * 求解约束。
      *
-     * @param pin            每站强制高度（{@code -1} = 不钉）
+     * @param pin            每站强制高度，仅在对应标记为真时读取
      * @param mustBeCovered  每站是否必须有覆土（隧道）
      * @param minCover       覆土下限
      * @param deckFloor      每站<b>桥面高度下界</b>（{@code Integer.MIN_VALUE} = 无下界）。
@@ -64,12 +64,14 @@ public final class ProfileDpSource {
      *                       <p>下界由 {@code RoadConstructionSafety.bridgeDeckSurfaceY}
      *                       算出（逐站查最高水位，并向两侧 {@code WATERCOURSE_HALF_WIDTH}
      *                       取样取最高，再加 {@code bridgeDeckClearance}）。</p>
+     * @param pinnedStations 每站锁高标记；负 Y（含 -1）也可锁定
      */
-    public record Constraints(int[] pin, boolean[] mustBeCovered, int minCover, int[] deckFloor) {
+    public record Constraints(int[] pin, boolean[] mustBeCovered, int minCover, int[] deckFloor,
+                              boolean[] pinnedStations) {
 
         /** 无约束。 */
         public static Constraints none() {
-            return new Constraints(null, null, 0, null);
+            return new Constraints(null, null, 0, null, null);
         }
 
         /** 兼容旧调用（无桥面下界）。 */
@@ -77,8 +79,16 @@ public final class ProfileDpSource {
             this(pin, mustBeCovered, minCover, null);
         }
 
+        /** 保留正高度夹具的省略写法；生产从明确的端点标记构造。 */
+        public Constraints(int[] pin, boolean[] mustBeCovered, int minCover, int[] deckFloor) {
+            this(pin, mustBeCovered, minCover, deckFloor, nonNegativePins(pin));
+        }
+
         public Constraints {
             if (minCover < 0) throw new IllegalArgumentException("minCover 不能为负");
+            if (pinnedStations != null && (pin == null || pinnedStations.length != pin.length)) {
+                throw new IllegalArgumentException("锁高标记与高度长度必须一致");
+            }
             if (pin != null && mustBeCovered != null && pin.length != mustBeCovered.length) {
                 throw new IllegalArgumentException("pin 与 mustBeCovered 长度必须一致");
             }
@@ -89,13 +99,21 @@ public final class ProfileDpSource {
 
         /** 某站是否被钉住。 */
         public boolean pinned(int i) {
-            return pin != null && i < pin.length && pin[i] >= 0;
+            return pinnedStations != null && i < pinnedStations.length && pinnedStations[i];
         }
 
         /** 某站是否必须有覆土。 */
         public boolean covered(int i) {
             return mustBeCovered != null && i < mustBeCovered.length && mustBeCovered[i];
         }
+    }
+
+    /** 仅供未传标记的旧纯数学夹具转换，不能用于含负高度的生产锁高。 */
+    static boolean[] nonNegativePins(int[] pin) {
+        if (pin == null) return null;
+        var present = new boolean[pin.length];
+        for (int i = 0; i < pin.length; i++) present[i] = pin[i] >= 0;
+        return present;
     }
 
     /** 一次翻译的产物：问题 + 用于回溯的边界信息。 */
@@ -144,6 +162,8 @@ public final class ProfileDpSource {
         int[] lo = new int[n];
         int[] hi = new int[n];
         int[] pin = new int[n];
+        // 桥面弦线也可能低于零，修复时必须与端点一起保留。
+        boolean[] fixed = new boolean[n];
         for (int i = 0; i < n; i++) {
             pin[i] = -1;
             lo[i] = terrainY[i] - maxCut;
@@ -168,6 +188,7 @@ public final class ProfileDpSource {
                         + "）—— 这两个契约互相矛盾，调用方接线错了");
             }
             pin[i] = v;
+            fixed[i] = true;
             lo[i] = v;
             hi[i] = v;
         }
@@ -208,12 +229,13 @@ public final class ProfileDpSource {
                     chord = floor[k];
                 }
                 pin[k] = chord;
+                fixed[k] = true;
                 lo[k] = chord;
                 hi[k] = chord;
             }
         }
         double[][] cost = CostModel.fromTerrain(terrainY, lo, hi, CostModel.Settings.defaults());
-        return new Prepared(new ProfileDpSolver.Problem(lo, hi, cost, maxStep, pin, maxStepPerTwo),
+        return new Prepared(new ProfileDpSolver.Problem(lo, hi, cost, maxStep, pin, maxStepPerTwo, fixed),
                 terrainY, crossing);
     }
 

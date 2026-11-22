@@ -27,6 +27,13 @@ public final class ProfileFallback {
                                          int maxStep, int perTwo,
                                          int[] pin, boolean[] mustCover, int minCover,
                                          int[] deckFloor) {
+        return terrainFollowing(terrainY, maxCut, maxFill, maxStep, perTwo,
+                new ProfileDpSource.Constraints(pin, mustCover, Math.max(0, minCover), deckFloor));
+    }
+
+    /** 正式编排复用同一份锁高标记，异常恢复也不能丢掉地下入口。 */
+    public static int[] terrainFollowing(int[] terrainY, int maxCut, int maxFill,
+                                         int maxStep, int perTwo, ProfileDpSource.Constraints constraints) {
         if (terrainY == null) throw new IllegalArgumentException("terrainY 不能为 null");
         int n = terrainY.length;
         if (n == 0) return new int[0];
@@ -35,20 +42,22 @@ public final class ProfileFallback {
         int fill = Math.max(0, maxFill);
         int step = Math.max(1, maxStep);
         int two = Math.max(1, perTwo);
-        int cover = Math.max(0, minCover);
+        int cover = constraints.minCover();
+        int[] pin = constraints.pin();
+        int[] deckFloor = constraints.deckFloor();
 
         // 覆土只限定上界；洞身下界采用本路段的有限高度域，不能被 maxCut 钉死成贴山起伏。
         int tunnelFloor = Arrays.stream(terrainY).min().orElse(0) - Math.max(cut, cover);
         int[] lo = new int[n];
         int[] hi = new int[n];
         for (int i = 0; i < n; i++) {
-            boolean covered = mustCover != null && i < mustCover.length && mustCover[i];
+            boolean covered = constraints.covered(i);
             lo[i] = covered ? tunnelFloor : terrainY[i] - cut;
             hi[i] = covered ? terrainY[i] - cover : terrainY[i] + fill;
             if (deckFloor != null && i < deckFloor.length && deckFloor[i] != Integer.MIN_VALUE) {
                 lo[i] = Math.max(lo[i], deckFloor[i]);
             }
-            if (pin != null && i < pin.length && pin[i] >= 0) {
+            if (constraints.pinned(i)) {
                 if (pin[i] < lo[i] && deckFloor != null && i < deckFloor.length && pin[i] < deckFloor[i]
                         || covered && pin[i] > hi[i]) {
                     throw new IllegalArgumentException("站钉与桥面下界或隧道覆土互斥，站=" + i);

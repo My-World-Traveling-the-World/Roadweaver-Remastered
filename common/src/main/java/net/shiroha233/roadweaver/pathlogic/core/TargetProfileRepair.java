@@ -32,7 +32,8 @@ final class TargetProfileRepair {
         // 最高合规包络只是用于找山体与洞口的预览，未通过下界证明前绝不作为成品返回。
         var preview = ProfileFeasibility.upperEnvelope(initial.hi(), step, two);
         for (int i = 0; i < terrain.length; i++) {
-            if (initial.pin()[i] >= 0 && preview[i] != initial.pin()[i]) return Optional.empty();
+            // 检查的是锁高存在性，洞口在零点以下也不许移动。
+            if (initial.pinned(i) && preview[i] != initial.pin()[i]) return Optional.empty();
         }
         var excavation = tunnels.apply(Arrays.stream(preview).boxed().toList());
         if (excavation.length != terrain.length) throw new IllegalArgumentException("隧道权限与站数不一致");
@@ -44,13 +45,13 @@ final class TargetProfileRepair {
         }
         var prepared = ProfileDpSource.prepare(terrain, crossing, cut, fill, step, two,
                 new ProfileDpSource.Constraints(constraints.pin(), covered, constraints.minCover(),
-                        constraints.deckFloor())).problem();
+                        constraints.deckFloor(), constraints.pinnedStations())).problem();
         var lower = prepared.lo().clone();
         var upper = prepared.hi();
         int floor = Math.min(Arrays.stream(lower).min().orElseThrow(), Arrays.stream(preview).min().orElseThrow());
         int openRepairs = 0, tunnelStations = 0;
         for (int i = 0; i < terrain.length; i++) {
-            if (prepared.pin()[i] >= 0) continue;
+            if (prepared.pinned(i)) continue;
             if (excavation[i]) {
                 // 已选隧道的挖深不属于地表路预算；有限高度域仍由本路已采地形限定。
                 lower[i] = floor;
@@ -70,7 +71,8 @@ final class TargetProfileRepair {
         var feasible = ProfileFeasibility.project(terrain, lower, upper, step, two);
         if (feasible.isEmpty()) return Optional.empty();
         var problem = new ProfileDpSolver.Problem(lower, upper,
-                CostModel.fromTerrain(terrain, lower, upper, CostModel.Settings.defaults()), step, prepared.pin(), two);
+                CostModel.fromTerrain(terrain, lower, upper, CostModel.Settings.defaults()), step,
+                prepared.pin(), two, prepared.pinnedStations());
         var optimized = ProfileDpSolver.solve(problem).map(ProfileDpSolver.Solution::profile);
         LOGGER.info("【纵断面施工窗口复核通过】 stations={} tunnelStations={} localOpenRepairs={} optimized={}",
                 terrain.length, tunnelStations, openRepairs, optimized.isPresent());

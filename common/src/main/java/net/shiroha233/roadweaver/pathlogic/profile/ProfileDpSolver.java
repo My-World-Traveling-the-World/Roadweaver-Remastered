@@ -71,7 +71,7 @@ public final class ProfileDpSolver {
             double[][] cost,
             /** 相邻两站之间允许的最大高度差（格）。 */
             int maxStep,
-            /** 每站被钉死的高度；{@code null} 或负值表示该站不钉。 */
+            /** 每站被钉死的高度；有无锁高由独立标记决定。 */
             int[] pin,
             /**
              * 二阶约束：<b>任意相隔两站</b>的高度差上限（「每两站最多升降 N 格」）。
@@ -84,11 +84,17 @@ public final class ProfileDpSolver {
              * 2026-11-13 的 AB 实测就是因为缺了它，给了 DP 两倍于生产允许的坡度，
              * 于是 DP 拿「更陡」去换「更少土方」—— 那个对比是不公平的。</p>
              */
-            int maxStepPerTwo) {
+            int maxStepPerTwo,
+            boolean[] pinnedStations) {
 
         /** 一阶模型的便捷构造（无二阶约束）。 */
         public Problem(int[] lo, int[] hi, double[][] cost, int maxStep, int[] pin) {
             this(lo, hi, cost, maxStep, pin, -1);
+        }
+
+        /** 只把正高度夹具的旧写法翻译成实际标记，避免复制求解逻辑。 */
+        public Problem(int[] lo, int[] hi, double[][] cost, int maxStep, int[] pin, int maxStepPerTwo) {
+            this(lo, hi, cost, maxStep, pin, maxStepPerTwo, ProfileDpSource.nonNegativePins(pin));
         }
 
         public Problem {
@@ -104,6 +110,9 @@ public final class ProfileDpSolver {
             if (pin != null && pin.length != lo.length) {
                 throw new IllegalArgumentException("pin 长度与站数不一致");
             }
+            if (pinnedStations != null && (pin == null || pinnedStations.length != lo.length)) {
+                throw new IllegalArgumentException("锁高标记长度与站数不一致");
+            }
             if (cost != null && cost.length != lo.length) {
                 throw new IllegalArgumentException("cost 行数与站数不一致");
             }
@@ -111,6 +120,11 @@ public final class ProfileDpSolver {
 
         public int stations() {
             return lo.length;
+        }
+
+        /** 高程可以为负，不能借数值判断该站有没有锁高。 */
+        public boolean pinned(int station) {
+            return pinnedStations != null && pinnedStations[station];
         }
     }
 
@@ -325,8 +339,7 @@ public final class ProfileDpSolver {
     // 转移阶段共用原判据，避免为性能重写一套窗口/钉住语义。
     static boolean allowed(Problem p, int i, int y) {
         if (y < p.lo()[i] || y > p.hi()[i]) return false;
-        int[] pin = p.pin();
-        return pin == null || pin[i] < 0 || pin[i] == y;
+        return !p.pinned(i) || p.pin()[i] == y;
     }
 
     static double costAt(Problem p, int i, int y) {

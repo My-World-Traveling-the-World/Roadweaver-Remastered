@@ -65,6 +65,25 @@ class TargetProfileSolverTest {
                         ProfileDpSource.Constraints constraints) {}
 
     @Test
+    void negativeEndpointsStayPinnedThroughDpAndConstraintRecovery() {
+        // -1 正好是旧哨兵；两端地面故意不等于锁高，让丢锁的产物一定不同。
+        for (int requested : new int[]{-16, -1}) {
+            int[] terrain = new int[TERRAIN.length];
+            Arrays.fill(terrain, requested + 2);
+            for (TargetProfileSolver.Solver solver : List.<TargetProfileSolver.Solver>of(
+                    ProfileDpSource::solve, (t, c, cut, fill, step, two, constraints) -> Optional.empty())) {
+                var profile = TargetProfileSolver.solve(null, centers(), terrain, terrain, null, null, PINNED,
+                        requested, requested, config(true), LIMITS, null, (i, c) -> Integer.MIN_VALUE,
+                        solver).orElseThrow();
+                assertEquals(requested, profile[0]);
+                assertEquals(requested, profile[profile.length - 1]);
+                assertEquals(0, ProfileFallback.violations(profile, 2, 4));
+                assertEquals(requested + 2, profile[4], "没有锁高的中间站仍能贴地");
+            }
+        }
+    }
+
+    @Test
     void zeroNormalizesToOneAndExplicitSwitchAloneDisablesSlope() {
         for (int requested : new int[]{0, 1, 8}) {
             var config = new ModConfig();

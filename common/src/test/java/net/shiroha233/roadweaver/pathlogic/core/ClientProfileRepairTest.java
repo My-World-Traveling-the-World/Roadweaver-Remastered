@@ -96,6 +96,19 @@ class ClientProfileRepairTest {
                 preview -> { throw new AssertionError("锁高已互斥，不应扩大地形采样"); }).isEmpty());
     }
 
+    @Test void negativeLockedHeightIsNotGivenAwayToAnExcavationRepair() {
+        int[] terrain = {-9, -6, -6, -6, -9};
+        var locks = new boolean[]{true, false, false, false, true};
+        var constraints = new ProfileDpSource.Constraints(new int[]{-11, 0, 0, 0, -11}, null, 3, null, locks);
+        var fixed = TargetProfileRepair.solve(terrain, null, 1, 1, 1, 2,
+                constraints, preview -> new boolean[]{false, true, true, true, false}).orElseThrow();
+        // 夹具要确实穿过修复分支，并能跨越原来的地表挖深下界。
+        assertEquals(-11, fixed[0]);
+        assertEquals(-11, fixed[4]);
+        assertTrue(fixed[2] < terrain[2] - 1);
+        assertEquals(0, ProfileFallback.violations(fixed, 1, 2));
+    }
+
     @Test void disablingCutCannotBeOverriddenByTheLocalConstructionBudget() {
         int[] terrain = {64, 80, 64};
         assertTrue(TargetProfileRepair.solve(terrain, null, 0, 4, 1, 1,

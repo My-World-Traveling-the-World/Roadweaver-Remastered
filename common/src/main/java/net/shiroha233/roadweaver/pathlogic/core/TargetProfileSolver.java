@@ -41,8 +41,7 @@ final class TargetProfileSolver {
         return applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
                 startBoundary, endBoundary, cfg, gradeLimits, connection,
                 (t, c, cut, fill, step, two, constraints) -> Optional.of(ProfileFallback.terrainFollowing(
-                        t, cut, fill, step, two, constraints.pin(), constraints.mustBeCovered(),
-                        constraints.minCover(), constraints.deckFloor())));
+                        t, cut, fill, step, two, constraints)));
     }
 
     static Optional<int[]> applyProfileSolver(
@@ -58,17 +57,16 @@ final class TargetProfileSolver {
     }
 
     /**
-     * 已钉住的站数（{@code pin} 用 {@code -1} 表示「不钉」）。
+     * 已钉住的站数按标记统计，不能把零高度以下的结构端点漏掉。
      *
      * <p>注意它与 {@link #countDeckFloors(int[])} 的哨兵值<b>不同</b>：
      * 两个数组语义不一样，混用一个统计函数会把日志写错 —— 而说谎的日志
      * 比没有日志更糟（本项目已因「静默降级 + 日志不实」吃过多次亏）。</p>
      */
-    private static int countPinned(int[] pin) {
-        if (pin == null) return 0;
+    private static int countPinned(boolean[] stations) {
         int c = 0;
-        for (int v : pin) {
-            if (v >= 0) c++;
+        for (boolean pinned : stations) {
+            if (pinned) c++;
         }
         return c;
     }
@@ -95,8 +93,7 @@ final class TargetProfileSolver {
         return solve(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
                 startBoundary, endBoundary, cfg, gradeLimits, connection, deckSampler, solver,
                 (t, c, cut, fill, step, two, constraints) -> Optional.of(ProfileFallback.terrainFollowing(
-                        t, cut, fill, step, two, constraints.pin(), constraints.mustBeCovered(),
-                        constraints.minCover(), constraints.deckFloor())));
+                        t, cut, fill, step, two, constraints)));
     }
 
     /** 世界边界只提供修复输入；优化器失败后仍须经过可行性判定，不能发布带跳变的数组。 */
@@ -118,10 +115,18 @@ final class TargetProfileSolver {
         // null ⇒ 回落解丢掉「结构端点钉高」和「桥面水位下界」这两条硬契约，
         // 而它们正是本方法最重要的保证。现在移出去，两条回落路径参数一致。
         int[] pin = new int[n];
+        boolean[] fixed = new boolean[n];
         java.util.Arrays.fill(pin, -1);
         if (pinnedMask != null) {
-            if (pinnedMask.length > 0 && pinnedMask[0]) pin[0] = startBoundary;
-            if (pinnedMask.length > n - 1 && pinnedMask[n - 1]) pin[n - 1] = endBoundary;
+            // 端点有无锁高由调用方给定，不以高度符号推断。
+            if (pinnedMask.length > 0 && pinnedMask[0]) {
+                pin[0] = startBoundary;
+                fixed[0] = true;
+            }
+            if (pinnedMask.length > n - 1 && pinnedMask[n - 1]) {
+                pin[n - 1] = endBoundary;
+                fixed[n - 1] = true;
+            }
         }
         int minCover = Math.max(1, gradeLimits.tunnelCoreOverburden());
         // mustBeCovered 用隧道掩码（覆土是隧道的要求）；crossing 用桥掩码（桥面钉直线）。
@@ -158,7 +163,7 @@ final class TargetProfileSolver {
             LOGGER.warn("【桥面下界采样失败，本次不施加该下界】 " + "RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
                     deckFailure.toString());
         }
-        var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor);
+        var constraints = new ProfileDpSource.Constraints(pin, tunnelMask, minCover, deckFloor, fixed);
         int perTwo = Math.max(1, cfg.maxSlopeStepPerTwoSegments());
         int maxStep = Math.max(1, (perTwo + 1) / 2);
         int maxCut = Math.max(0, gradeLimits.plainCut());
@@ -178,7 +183,7 @@ final class TargetProfileSolver {
             return solved;
         }
         LOGGER.warn("【纵断面地表窗口不可行，复核已选隧道与局部施工预算】 stations={} cut={} fill={} perTwo={} pins={} decks={} connection={}->{}",
-                n, maxCut, maxFill, perTwo, countPinned(pin), countDeckFloors(deckFloor),
+                n, maxCut, maxFill, perTwo, countPinned(fixed), countDeckFloors(deckFloor),
                 connection == null ? "?" : connection.from(), connection == null ? "?" : connection.to());
         var repaired = repair.solve(terrainY, isCrossing, maxCut, maxFill, maxStep, perTwo, constraints);
         if (repaired.isEmpty()) {
