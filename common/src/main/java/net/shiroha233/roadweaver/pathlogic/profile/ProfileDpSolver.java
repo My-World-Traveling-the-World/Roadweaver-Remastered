@@ -286,14 +286,13 @@ public final class ProfileDpSolver {
         int states = width * dCount;
         double[] prev = new double[states];
         double[] cur = new double[states];
-        // parent[i][k*dCount + dIdx] = 上一站的状态下标
-        int[][] parent = new int[n][states];
+        // 转移数组继续共用全局坐标；回溯只为每站合法高度窗口留父节点。
+        var parent = new ProfileParentRow[n];
 
         // ── 第 0 站：高差未定义，统一放在 zero 下标 ──
         java.util.Arrays.fill(prev, INF);
         for (int k = 0; k < width; k++) {
             int idx = k * dCount + zero;
-            parent[0][idx] = -1;
             int y = minH + k;
             if (!allowed(p, 0, y)) continue;
             prev[idx] = costAt(p, 0, y);
@@ -301,6 +300,8 @@ public final class ProfileDpSolver {
 
         for (int i = 1; i < n; i++) {
             java.util.Arrays.fill(cur, INF);
+            parent[i] = new ProfileParentRow((p.lo()[i] - minH) * dCount,
+                    (p.hi()[i] - p.lo()[i] + 1) * dCount, dCount);
             // 二站可行前驱是前缀或后缀；线性扫描替代高差两两枚举，父节点同价规则保留。
             ProfilePairTransitions.advance(p, i, minH, width, prev, cur, parent[i]);
             double[] tmp = prev;
@@ -320,18 +321,18 @@ public final class ProfileDpSolver {
         if (bestState < 0) return Optional.empty();
 
         // ── 回溯 ──
-        int[] stateAt = new int[n];
+        int[] profile = new int[n];
         int s = bestState;
         for (int i = n - 1; i >= 0; i--) {
-            stateAt[i] = s;
+            int k = s / dCount;
+            profile[i] = minH + k;
             if (i > 0) {
-                s = parent[i][s];
-                if (s < 0) return Optional.empty();
+                int previousDelta = parent[i].previousDelta(s);
+                if (previousDelta < 0) return Optional.empty();
+                // 同一高度可能来自不同高差；只重建父编号，不改变转移选优顺序。
+                int previousHeight = k - (s % dCount - lim);
+                s = previousHeight * dCount + previousDelta;
             }
-        }
-        int[] profile = new int[n];
-        for (int i = 0; i < n; i++) {
-            profile[i] = minH + stateAt[i] / dCount;
         }
         return Optional.of(new Solution(profile, bestCost));
     }

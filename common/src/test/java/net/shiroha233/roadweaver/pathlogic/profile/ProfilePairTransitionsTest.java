@@ -58,6 +58,29 @@ class ProfilePairTransitionsTest {
                 new double[][]{{Double.NaN, Double.POSITIVE_INFINITY}, {0, 0}}, 1, null, 1)));
     }
 
+    @Test void movingNarrowWindowsTraceParentsInGlobalHeightCoordinates() {
+        // 全局状态大于一个字节，但每行窗口很窄；移动窗口迫使路线持续爬升。
+        int n = 200;
+        var lo = new int[n];
+        var hi = new int[n];
+        for (int i = 0; i < n; i++) {
+            lo[i] = -108 + i / 2;
+            hi[i] = lo[i] + 5;
+        }
+        var p = new ProfileDpSolver.Problem(lo, hi, null, 2, null, 1);
+        assertTrue(compare(p));
+        int[] h = ProfileDpSolver.solve(p).orElseThrow().profile();
+        assertTrue(h[n - 1] - h[0] >= 94);
+    }
+
+    @Test void unsignedByteBoundaryAndWiderDeltaKeepExactlyTheSameProfile() {
+        // 前一高差位于无符号字节末端；超过边界仍须可解，不能截断父序号。
+        int[] lows = {0, 127, 127, 254};
+        for (int limit : new int[]{127, 128}) {
+            assertTrue(compare(new ProfileDpSolver.Problem(lows, lows, null, 127, null, limit)));
+        }
+    }
+
     @Test void smallProblemsAlsoMatchIndependentExhaustiveHeightEnumeration() {
         var random = new Random(129867);
         int feasible = 0;

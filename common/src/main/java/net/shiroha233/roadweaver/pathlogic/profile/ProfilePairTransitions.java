@@ -6,7 +6,7 @@ final class ProfilePairTransitions {
     private ProfilePairTransitions() {}
 
     static void advance(ProfileDpSolver.Problem p, int station, int minH, int width,
-                        double[] prev, double[] cur, int[] parent) {
+                        double[] prev, double[] cur, ProfileParentRow parent) {
         int limit = p.maxStepPerTwo(), count = 2 * limit + 1;
         if (station == 1) {
             // 首对高度还没有前一高差，仍只读取旧dummy状态，保留原边界契约。
@@ -20,7 +20,7 @@ final class ProfilePairTransitions {
                     int source = previous * count + limit;
                     if (!(prev[source] < Double.POSITIVE_INFINITY)) continue;
                     cur[k * count + di] = prev[source] + cost;
-                    parent[k * count + di] = source;
+                    parent.put(k * count + di, limit);
                 }
             }
             return;
@@ -35,7 +35,7 @@ final class ProfilePairTransitions {
                 if (value < best) { best = value; arg = pd; }
                 if (pd >= limit) {
                     int delta = count - 1 - pd;
-                    store(p, station, minH, width, previous, delta, count, limit, base, arg, best, cur, parent);
+                    store(p, station, minH, width, previous, delta, count, limit, arg, best, cur, parent);
                 }
             }
             best = Double.POSITIVE_INFINITY;
@@ -47,19 +47,19 @@ final class ProfilePairTransitions {
                     best = value; arg = pd;
                 }
                 if (pd <= limit)
-                    store(p, station, minH, width, previous, -pd, count, limit, base, arg, best, cur, parent);
+                    store(p, station, minH, width, previous, -pd, count, limit, arg, best, cur, parent);
             }
         }
     }
 
     private static void store(ProfileDpSolver.Problem p, int station, int minH, int width,
-                              int previous, int delta, int count, int limit, int base, int arg,
-                              double best, double[] cur, int[] parent) {
+                              int previous, int delta, int count, int limit, int arg,
+                              double best, double[] cur, ProfileParentRow parent) {
         int k = previous + delta;
         if (arg < 0 || Math.abs(delta) > p.maxStep() || k < 0 || k >= width
                 || !ProfileDpSolver.allowed(p, station, minH + k)) return;
         int destination = k * count + limit + delta;
         cur[destination] = best + ProfileDpSolver.costAt(p, station, minH + k);
-        parent[destination] = base + arg;
+        parent.put(destination, arg);
     }
 }
