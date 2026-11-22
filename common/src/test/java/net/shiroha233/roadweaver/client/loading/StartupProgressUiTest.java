@@ -38,6 +38,25 @@ class StartupProgressUiTest {
         assertEquals(0, InitialGenerationProgressTracker.snapshot(true).planningRound());
     }
 
+    @Test void coarseTopologyShowsDiscoveredEndpointsWithoutPretendingToKnowItsProgress() {
+        InitialGenerationProgressTracker.reset();
+        InitialGenerationProgressTracker.beginPlanningRound(1);
+        InitialGenerationProgressTracker.setPlanningTilePlan(1, "discovering_structures");
+        InitialGenerationProgressTracker.beginCoarseTopology(35);
+        var topology = InitialGenerationProgressTracker.snapshot(true);
+        assertEquals(InitialGenerationStage.PLANNING, topology.stage());
+        assertEquals("gui.roadweaver.initgen.stage.coarse_topology", topology.stageLabel());
+        assertEquals("已收集端点 35", topology.subProgressLabel());
+        assertEquals(1, topology.planningTilesDone());
+        assertEquals(25, topology.stagePercent(), "已完成的是端点扫描，粗拓扑尚未结束");
+        InitialGenerationProgressTracker.completePlanningSnapshots("structure_topology_ready");
+        assertEquals(100, InitialGenerationProgressTracker.snapshot(true).stagePercent());
+        // 扩域和新世界都不应把上一轮端点或里程碑带进新一轮。
+        InitialGenerationProgressTracker.beginPlanningRound(2);
+        assertEquals(0, InitialGenerationProgressTracker.snapshot(true).planningStartsTotal());
+        assertEquals(0, InitialGenerationProgressTracker.snapshot(true).stagePercent());
+    }
+
     @Test void unexecutedExactBranchIsNeverCheckedByCoarsePathing() {
         InitialGenerationProgressTracker.reset();
         InitialGenerationProgressTracker.enterStage(InitialGenerationStage.COARSE_SAMPLING, "sampling");
@@ -74,6 +93,7 @@ class StartupProgressUiTest {
         assertFalse(corridor.contains("InitialGenerationStage.PLANNING, \"predicting_road_corridor_structures\""));
         var planning = Files.readString(root.resolve("planning/AsyncPlanningOps.java"));
         assertTrue(planning.contains("InitialGenerationProgressTracker.beginPlanningRound(state.rounds());"));
+        assertTrue(planning.contains("InitialGenerationProgressTracker.beginCoarseTopology(points.size());"));
         var renderer = Files.readString(root.resolve("client/loading/LoadingGenerationOverlayRenderer.java"));
         assertTrue(renderer.contains("LoadingCardLayout.fit(sw, sh, 360, detailLines)"));
         assertTrue(renderer.contains("LoadingOverlayText.displayStages(snapshot.visitedStages())"));

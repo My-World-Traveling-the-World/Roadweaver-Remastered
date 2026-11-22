@@ -139,6 +139,7 @@ public final class LoadingOverlayText {
         String value = printable(operation);
         return switch (value) {
             case "waiting_for_wall_prewarm" -> "等待长城完成";
+            case "planning_coarse_topology" -> "根据粗地形选择连线";
             default -> value;
         };
     }

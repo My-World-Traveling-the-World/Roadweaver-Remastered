@@ -387,6 +387,7 @@
   "gui.roadweaver.initgen.stage.exact_sampling": "Sampling accurate terrain",
   "gui.roadweaver.initgen.stage.finished": "Initial generation finished",
   "gui.roadweaver.initgen.stage.planning": "Scanning structures and preparing links",
+  "gui.roadweaver.initgen.stage.coarse_topology": "Choosing links using coarse terrain",
   "gui.roadweaver.initgen.stage.post_processing": "Post-processing and flushing",
   "gui.roadweaver.initgen.stage.road_generation": "Generating final roads",
   "gui.roadweaver.initgen.stage_progress": "Stage Progress: %s%%",

@@ -389,6 +389,7 @@
   "gui.roadweaver.initgen.stage.exact_sampling": "精确采样地形",
   "gui.roadweaver.initgen.stage.finished": "初始生成完成",
   "gui.roadweaver.initgen.stage.planning": "扫描结构并准备连线",
+  "gui.roadweaver.initgen.stage.coarse_topology": "根据粗地形选择连线",
   "gui.roadweaver.initgen.stage.post_processing": "后处理与落盘",
   "gui.roadweaver.initgen.stage.road_generation": "精细生成道路",
   "gui.roadweaver.initgen.stage_progress": "阶段进度: %s%%",

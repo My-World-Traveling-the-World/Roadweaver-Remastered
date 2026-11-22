@@ -211,8 +211,7 @@ public final class AsyncPlanningOps {
                 }
                 timing.structureCount = points.size();
                 if (startupProgress) {
-                    InitialGenerationProgressTracker.setPlanningStartPlan(
-                            Math.max(1, points.size()), "planning_structure_connections");
+                    InitialGenerationProgressTracker.beginCoarseTopology(points.size());
                 }
                 if (points.size() < 2) {
                     if (startupProgress) {

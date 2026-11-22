@@ -59,6 +59,10 @@ public record InitialGenerationProgressSnapshot(
 ) {
     /** 提供当前阶段的可读子进度，让界面区分等待和实际工作。 */
     public String subProgressLabel() {
+        if ("gui.roadweaver.initgen.stage.coarse_topology".equals(stageLabel)) {
+            // 这是已收集的数据量，不是选边器的虚假剩余进度。
+            return "已收集端点 " + planningStartsDone;
+        }
         // 走廊检查沿用路径主阶段，却应展示结构计数，不能继续显示已完成的路径数。
         if ("gui.roadweaver.initgen.stage.corridor_check".equals(stageLabel)) {
             return planningStartsTotal > 0 ? "结构 " + planningStartsDone + "/" + planningStartsTotal : "";

@@ -145,6 +145,7 @@ public final class InitialGenerationProgressTracker {
         if (ROUTE_GENERATION_LOCKED.get()) return;
         PLANNING_ROUND.set(Math.max(1, round));
         VISITED_STAGES.clear();
+        resetPlanningCounters();
         enterStage(InitialGenerationStage.PLANNING, "discovering_structures");
     }
 
@@ -179,12 +180,7 @@ public final class InitialGenerationProgressTracker {
         CURRENT_ROAD_TASK.remove();
         ROAD_TASK_PROGRESS.clear();
         ROAD_TASK_SAMPLING_STEPS.clear();
-        PLANNING_TILES_TOTAL.set(0);
-        PLANNING_TILES_DONE.set(0);
-
-
-        PLANNING_EMPTY_STARTS.set(0);
-        PLANNING_SNAPSHOTS_READY.set(0);
+        resetPlanningCounters();
         TILES_TOTAL.set(0);
         TILES_LOADED.set(0);
         TILES_SAMPLED.set(0);
@@ -213,6 +209,16 @@ public final class InitialGenerationProgressTracker {
         INITIAL_THREADS.set(resolveInitialThreads());
         ACTIVE_WORKERS.set(0);
         CURRENT_SAMPLING_STEP.set(resolveConfiguredSamplingStep());
+    }
+
+    /** 下一轮扫描没有旧窗口的端点，也不能继承它的完成百分比。 */
+    private static void resetPlanningCounters() {
+        PLANNING_TILES_TOTAL.set(0);
+        PLANNING_TILES_DONE.set(0);
+        PLANNING_STARTS_TOTAL.set(0);
+        PLANNING_STARTS_DONE.set(0);
+        PLANNING_EMPTY_STARTS.set(0);
+        PLANNING_SNAPSHOTS_READY.set(0);
     }
 
     public static void finish() {
@@ -420,6 +426,16 @@ public final class InitialGenerationProgressTracker {
         if (operation != null && !operation.isBlank()) CURRENT_OPERATION.set(operation);
     }
 
+    /** 端点扫描已经完成；选边耗时未知，不能继续用 0/端点数伪装进度。 */
+    public static void beginCoarseTopology(int endpoints) {
+        int discovered = Math.max(0, endpoints);
+        PLANNING_TILES_DONE.set(PLANNING_TILES_TOTAL.get());
+        PLANNING_STARTS_TOTAL.set(discovered);
+        PLANNING_STARTS_DONE.set(discovered);
+        PLANNING_EMPTY_STARTS.set(0);
+        CURRENT_OPERATION.set("planning_coarse_topology");
+    }
+
     public static void recordPlanningStartDone(boolean empty) {
         PLANNING_STARTS_DONE.updateAndGet(done -> Math.min(PLANNING_STARTS_TOTAL.get(), done + 1));
         if (empty) PLANNING_EMPTY_STARTS.incrementAndGet();
@@ -594,8 +610,10 @@ public final class InitialGenerationProgressTracker {
         return new InitialGenerationProgressSnapshot(
                 active,
                 stage,
-                CORRIDOR_CHECK.get()
-                        ? "gui.roadweaver.initgen.stage.corridor_check" : stage.labelKey(),
+                CORRIDOR_CHECK.get() ? "gui.roadweaver.initgen.stage.corridor_check"
+                        : stage == InitialGenerationStage.PLANNING
+                        && "planning_coarse_topology".equals(CURRENT_OPERATION.get())
+                        ? "gui.roadweaver.initgen.stage.coarse_topology" : stage.labelKey(),
                 startedAt,
                 elapsed,
                 overallPercent,
@@ -737,6 +755,8 @@ public final class InitialGenerationProgressTracker {
 
     private static int planningPercent() {
         if (PLANNING_SNAPSHOTS_READY.get() != 0) return 100;
+        // 已完成扫描给出里程碑，测地选边没有可证明的百分比分母。
+        if ("planning_coarse_topology".equals(CURRENT_OPERATION.get())) return 25;
         int tileTotal = PLANNING_TILES_TOTAL.get();
         int startTotal = PLANNING_STARTS_TOTAL.get();
         if (startTotal > 0) {
