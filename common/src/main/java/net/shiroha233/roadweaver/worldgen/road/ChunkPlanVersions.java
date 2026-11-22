@@ -40,6 +40,10 @@ final class ChunkPlanVersions {
         reap(key, entry);
     }
     long advance() { return ++sequence; }
+    boolean needsInvalidation(long key, long revision) {
+        var entry = entries.get(key);
+        return entry != null && entry.revision != revision;
+    }
     void invalidate(long key, long revision) {
         var entry = entries.get(key);
         // 从未编译/已经淘汰的区块无旧结果可发布，不能为它建立永久版本条目。

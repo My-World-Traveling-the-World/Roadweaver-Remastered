@@ -123,6 +123,9 @@ registerMainRegression('waterOnlyBridgePolicy',
         'net.shiroha233.roadweaver.pathfinding.WaterOnlyBridgePolicyTest')
 registerMainRegression('roadConstructionSafetyPolicy',
         'net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafetyPolicyTest')
+// 同一组几何分布单独计时，避免将机器快慢当成功能回归结果。
+registerMainRegression('chunkPlanInvalidationBenchmark',
+        'net.shiroha233.roadweaver.worldgen.road.ChunkPlanVersionsTest')
 registerMainRegression('roadJUnitRegressionSuite',
         'net.shiroha233.roadweaver.RoadJUnitRegressionSuite')
 

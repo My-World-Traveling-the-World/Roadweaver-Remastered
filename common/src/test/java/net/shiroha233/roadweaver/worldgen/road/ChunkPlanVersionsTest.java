@@ -16,6 +16,27 @@ class ChunkPlanVersionsTest {
     private static final ChunkPos CHUNK = new ChunkPos(0, 0);
 
     @Test
+    void neighborhoodMatchesEveryReferenceKeyIncludingHolesAndDiagonals() {
+        int radius = RoadWorldgenPlanCache.invalidationRadiusChunksForTests();
+        var random = new java.util.Random(114);
+        for (int trial = 0; trial < 100; trial++) {
+            var centers = new ArrayList<Long>();
+            for (int i = 0; i <= trial; i++) centers.add(ChunkPos.asLong(random.nextInt(20)-10, random.nextInt(20)-10));
+            var expected = new java.util.HashSet<Long>();
+            for (long key : centers) for (int dx=-radius; dx<=radius; dx++) for (int dz=-radius; dz<=radius; dz++)
+                expected.add(ChunkPos.asLong(ChunkPos.getX(key)+dx, ChunkPos.getZ(key)+dz));
+            var actual = new java.util.HashSet<Long>();
+            ChunkPlanNeighborhood.visit(centers,radius,actual::add);
+            assertEquals(expected,actual);
+        }
+        // 长直线路段只扫一次重叠带；不能靠重复回调后集合去重冒充减少工作。
+        var line = java.util.stream.IntStream.range(0,100).mapToObj(x -> ChunkPos.asLong(x,-7)).toList();
+        var calls = new AtomicInteger();
+        ChunkPlanNeighborhood.visit(line,radius,k -> calls.incrementAndGet());
+        assertEquals((100+2*radius)*(1+2*radius), calls.get());
+    }
+
+    @Test
     void historicalInvalidationsWithoutCachedOrRunningWorkRetainNoKeys() {
         var session = new RoadWorldgenPlanCache.Session();
         var keys = new ArrayList<Long>();
@@ -96,6 +117,31 @@ class ChunkPlanVersionsTest {
         assertThrows(IllegalStateException.class, () -> session.get(new ChunkPos(-100, 0), CONFIG,
                 (a,b,c) -> { throw new IllegalStateException("非正常退出"); }, () -> 0));
         assertEquals(1, session.trackedChunks(), "失败退出不能泄漏额外认领");
+    }
+
+    /** 手工微基准只计刷新本身；同一夹具可分别搭配旧版和新版 Session 运行，不把机器耗时设为测试门槛。 */
+    public static void main(String[] args) {
+        for (String shape : List.of("line", "square", "sparse")) {
+            var centers = new ArrayList<Long>();
+            for (int i=0; i<100; i++) centers.add(switch (shape) {
+                case "line" -> ChunkPos.asLong(i,-7);
+                case "square" -> ChunkPos.asLong(i%10-5,i/10-5);
+                default -> ChunkPos.asLong(i*6,-7);
+            });
+            long[] samples = new long[151];
+            for (int run=-150; run<samples.length; run++) {
+                var session = new RoadWorldgenPlanCache.Session();
+                for (long key : centers) session.get(new ChunkPos(key), CONFIG,
+                        (p,c,r) -> RoadChunkPlan.empty(p,4,r),() -> 0L);
+                long start = System.nanoTime();
+                session.invalidate(centers);
+                long elapsed = System.nanoTime()-start;
+                if (run >= 0) samples[run] = elapsed;
+                assertEquals(0,session.trackedChunks());
+            }
+            java.util.Arrays.sort(samples);
+            System.out.printf("[CACHE-BENCH] shape=%s n=%d median_ns=%d%n",shape,samples.length,samples[75]);
+        }
     }
 
     private static void await(CountDownLatch latch) {

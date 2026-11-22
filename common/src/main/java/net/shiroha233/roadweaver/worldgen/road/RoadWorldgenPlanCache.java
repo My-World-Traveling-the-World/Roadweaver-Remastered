@@ -289,19 +289,13 @@ public final class RoadWorldgenPlanCache {
         void invalidate(Collection<Long> chunkKeys) {
             synchronized (cacheLock) {
                 long revision = versions.advance();
-                for (long packed : chunkKeys) {
-                    int chunkX = ChunkPos.getX(packed);
-                    int chunkZ = ChunkPos.getZ(packed);
-                    for (int deltaZ = -INVALIDATION_RADIUS_CHUNKS;
-                         deltaZ <= INVALIDATION_RADIUS_CHUNKS; deltaZ++) {
-                        for (int deltaX = -INVALIDATION_RADIUS_CHUNKS;
-                             deltaX <= INVALIDATION_RADIUS_CHUNKS; deltaX++) {
-                            long affected = ChunkPos.asLong(chunkX + deltaX, chunkZ + deltaZ);
-                            removeCached(affected);
-                            versions.invalidate(affected, revision);
-                        }
-                    }
-                }
+                // 从未缓存、也没有在途编译的区块无需失效；斜向重叠只更新同一版本一次。
+                if (versions.size() == 0) return;
+                ChunkPlanNeighborhood.visit(chunkKeys, INVALIDATION_RADIUS_CHUNKS, affected -> {
+                    if (!versions.needsInvalidation(affected, revision)) return;
+                    removeCached(affected);
+                    versions.invalidate(affected, revision);
+                });
             }
         }
 
