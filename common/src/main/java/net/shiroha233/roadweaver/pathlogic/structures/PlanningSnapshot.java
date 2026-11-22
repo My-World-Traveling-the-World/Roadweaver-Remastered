@@ -68,6 +68,13 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
     public static final PlanningSnapshot EMPTY = new PlanningSnapshot(
             Set.of(), Map.of(), Set.of(), Set.of(), Set.of(), LongSets.emptySet(), 0);
 
+    /** 补查覆盖范围而没有新增占地时，BAND 看见的硬障碍与软势没有变化。 */
+    public boolean sameRoutingObstacles(PlanningSnapshot other) {
+        return this == other || (other != null && roadRadius == other.roadRadius
+                && boxes.equals(other.boxes) && endpointOwners.equals(other.endpointOwners)
+                && forcedVerticalOwners.equals(other.forcedVerticalOwners));
+    }
+
     static PlanningSnapshot forRoute(StructureConnection connection, Collection<OwnedStructureBox> boxes) {
         return forRoute(connection, boxes, Set.of());
     }

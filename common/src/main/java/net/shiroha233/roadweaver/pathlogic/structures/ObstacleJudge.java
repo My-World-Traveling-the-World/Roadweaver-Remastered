@@ -98,6 +98,11 @@ import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceS
  * 判据与阈值一字未改（含缩进）。</p>
  */
 public final class ObstacleJudge {
+    /** 读取本次求解实际激活的快照，避免用另一个线程刚发布的版本做复用凭据。 */
+    public static PlanningSnapshot activeRoutingSnapshot() {
+        return StructureAvoidanceCache.ACTIVE_PLANNING_SNAPSHOT.get();
+    }
+
     public static BuildingObstacleMode buildingObstacleMode() {
         return BUILDING_OBSTACLE_MODE.get();
     }

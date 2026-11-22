@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.planning.terrain;
 
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
+import net.shiroha233.roadweaver.bridge.InitialBandSolveReuse;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -12,6 +13,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class TerrainSamplingSession {
     private final TerrainSamplingMode configuredMode;
     private final AtomicReference<TerrainSamplingSessionSnapshot> snapshot;
+    // 初次规划与初次精修只在同一个世界会话交接，防止命中更早存档或游玩期的路径。
+    private final AtomicReference<InitialBandSolveReuse> initialBand = new AtomicReference<>();
 
     public TerrainSamplingSession(TerrainSamplingMode configuredMode) {
         this.configuredMode = Objects.requireNonNullElse(configuredMode, TerrainSamplingMode.LEGACY_DIRECT);
@@ -45,6 +48,19 @@ public final class TerrainSamplingSession {
 
     public TerrainSamplingSessionSnapshot snapshot() {
         return snapshot.get();
+    }
+
+    InitialBandSolveReuse initialBand(RoadTerrainPlanningPort.InitialSolvePass pass) {
+        return switch (pass) {
+            case NONE -> null;
+            case CAPTURE -> initialBand.updateAndGet(previous ->
+                    previous == null ? new InitialBandSolveReuse() : previous);
+            case REPLAY -> initialBand.getAndSet(null);
+        };
+    }
+
+    public void clearInitialBand() {
+        initialBand.set(null);
     }
 
     public void recordBackend(String backend, String device) {

@@ -5,6 +5,7 @@ import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService.shouldAvoidPlanning;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -20,6 +21,7 @@ import net.shiroha233.roadweaver.pathfinding.Pathfinder;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
+import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 
 import net.shiroha233.roadweaver.pipeline.ab.BandRouteSolver;
 import net.shiroha233.roadweaver.pipeline.ab.RouteSolver;
@@ -66,13 +68,20 @@ public final class BandPathfinder implements Pathfinder {
     }
 
     private final TreeMaskSource treeMasks;
+    private final Supplier<PlanningSnapshot> routingSnapshot;
 
     public BandPathfinder() {
         this(HugeTreeReservation::planningMask);
     }
 
     BandPathfinder(TreeMaskSource treeMasks) {
+        this(treeMasks, () -> activeRoutingSnapshot());
+    }
+
+    // 保持两阶段走真实 BAND；离线只替换世界提供的保护快照。
+    BandPathfinder(TreeMaskSource treeMasks, Supplier<PlanningSnapshot> routingSnapshot) {
         this.treeMasks = treeMasks;
+        this.routingSnapshot = routingSnapshot;
     }
 
     /** 包围盒在起终点外侧额外留的余量（格）—— 给绕行留空间。 */
@@ -172,9 +181,32 @@ public final class BandPathfinder implements Pathfinder {
         // findRawPath 传 1；实际道路半径取施工配置，显式传入更宽时也不能漏掉路缘。
         var trees = treeMasks.snapshot(level, minX, minZ, maxX, maxZ,
                 Math.max(clearance, (int) Math.ceil(width / 2.0)));
-        boolean hasTrees = !trees.isEmpty();
         var waterCost = WaterCost.from(config);
 
+        // 精采、隧道提示或共桥优惠会改求解输入；只复用开局重复调用的原始粗求解。
+        var reuse = InitialBandSolveReuse.current();
+        if (reuse != null && !hasBan && !hasAttract
+                && terrain == reuse.activeTerrain()) {
+            return reuse.solve(new InitialBandSolveReuse.Key(start, end, buildingObstacleMode()),
+                    new InitialBandSolveReuse.Parameters(width, clearance, step, waterCost.wet(), waterCost.dry(),
+                            config.finslerGradeWeight(), config.finslerObstacleWeight(), config.elasticBandStiffness()),
+                    routingSnapshot.get(), trees,
+                    () -> solve(start, end, terrain, config, step, minX, minZ, columns, rows, clearance,
+                            trees, waterCost));
+        }
+        return solve(start, end, terrain, config, step, minX, minZ, columns, rows, clearance,
+                trees, waterCost);
+    }
+
+    private static PathResult solve(BlockPos start, BlockPos end, PathTerrainField terrain, PathfindingCostConfig config,
+                                    int step, int minX, int minZ, int columns, int rows, int clearance,
+                                    HugeTreeReservation.PlanningMask trees, WaterCost waterCost) {
+        // 求解继续读取同一任务快照；优惠、禁令与树掩码只影响本次调用。
+        var ban = config.corridorBan();
+        var attract = config.corridorAttract();
+        boolean hasBan = ban != null && !ban.isEmpty();
+        boolean hasAttract = attract != null && !attract.isEmpty();
+        boolean hasTrees = !trees.isEmpty();
         // ① 采地形（越界列用 0，并被下面标成不可通行）
         int[] heights = new int[columns * rows];
         boolean[] outOfTerrain = new boolean[columns * rows];

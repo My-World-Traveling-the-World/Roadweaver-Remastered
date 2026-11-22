@@ -538,7 +538,7 @@ public final class RouteRefinementOps {
 
             int step) {
 
-        return refineInitialBatchAsync(level, samplingBounds, connectionsToPlan, step, null, 0);
+        return refineInitialBatchAsync(level, samplingBounds, connectionsToPlan, step, null, 0, true);
 
     }
 
@@ -655,6 +655,12 @@ public final class RouteRefinementOps {
             int step,
             BlockPos samplingCenter,
             int samplingRadius) {
+        return refineInitialBatchAsync(level, samplingBounds, connectionsToPlan, step, samplingCenter, samplingRadius, false);
+    }
+
+    private static CompletableFuture<Void> refineInitialBatchAsync(
+            ServerLevel level, int[] samplingBounds, List<StructureConnection> connectionsToPlan,
+            int step, BlockPos samplingCenter, int samplingRadius, boolean replayInitialSolve) {
         if (level == null || !Level.OVERWORLD.equals(level.dimension())
                 || connectionsToPlan == null || connectionsToPlan.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -684,7 +690,9 @@ public final class RouteRefinementOps {
                     tasks,
                     pathfinding,
                     samplingCenter,
-                    samplingRadius);
+                    samplingRadius,
+                    replayInitialSolve ? RoadTerrainPlanningPort.InitialSolvePass.REPLAY
+                            : RoadTerrainPlanningPort.InitialSolvePass.NONE);
             RoadTerrainPlanningPort.Result result = TERRAIN_PLANNING.plan(request);
             if (!ThreadPoolManager.isEpoch(epoch)) return null;
             result = filterSuppressedPaths(level, result);

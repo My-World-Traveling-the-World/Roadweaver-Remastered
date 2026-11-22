@@ -6,6 +6,7 @@ import net.minecraft.core.Holder;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathfinding.terrain.SurfaceWaterClassifier;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -65,6 +66,16 @@ public final class CoarseTerrainRegion implements PathTerrainField {
     public CoarseRegionBounds bounds() {
         return bounds;
     }
+
+    /** BAND 还会读格点之间的高度；用实际粗瓦片身份而非网格大小判断等价。 */
+    public SolveTerrain solveTerrain() {
+        if (tiles == null) return null;
+        Map<CoarseTerrainTileKey, Long> revisions = new HashMap<>();
+        tiles.forEach((key, tile) -> revisions.put(key, tile.solveId()));
+        return new SolveTerrain(bounds, seaLevel, Map.copyOf(revisions));
+    }
+
+    public record SolveTerrain(CoarseRegionBounds bounds, int seaLevel, Map<CoarseTerrainTileKey, Long> tileRevisions) {}
 
     public int terrainArgbAtIndex(int index) {
         if (tiles == null) return terrainArgb[index];

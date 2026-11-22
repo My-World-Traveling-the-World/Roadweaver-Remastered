@@ -253,7 +253,7 @@ public final class PlanningBoundsOps {
                                                               List<StructureConnection> connections,
                                                               long epoch) {
         return planRoadTerrainWithPreparedSnapshots(level, minBlockX, minBlockZ, maxBlockX, maxBlockZ,
-                connections, epoch, null);
+                connections, epoch, null, false);
     }
 
     /** 准备快照后的地形规划保留核心与尾段分别计时，不改变规划调用与结果。
@@ -269,7 +269,8 @@ public final class PlanningBoundsOps {
                                                               int maxBlockZ,
                                                               List<StructureConnection> connections,
                                                               long epoch,
-                                                              long[] partsOut) {
+                                                              long[] partsOut,
+                                                              boolean captureInitialSolve) {
         if (level == null || connections == null || connections.isEmpty()
                 || !ThreadPoolManager.isEpoch(epoch)) return null;
         ModConfig config = ConfigService.get();
@@ -279,7 +280,9 @@ public final class PlanningBoundsOps {
                 level,
                 new RoadTerrainPlanningPort.Bounds(minBlockX, minBlockZ, maxBlockX, maxBlockZ),
                 connections,
-                config.pathfindingCost());
+                config.pathfindingCost(), null, 0,
+                captureInitialSolve ? RoadTerrainPlanningPort.InitialSolvePass.CAPTURE
+                        : RoadTerrainPlanningPort.InitialSolvePass.NONE);
         long phaseStartedAt = System.nanoTime();
         RoadTerrainPlanningPort.Result result = TERRAIN_PLANNING.plan(request);
         if (partsOut != null && partsOut.length > 0) {

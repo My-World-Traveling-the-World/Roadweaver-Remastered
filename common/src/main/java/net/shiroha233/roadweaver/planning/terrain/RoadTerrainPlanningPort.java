@@ -15,6 +15,9 @@ import java.util.Objects;
 public interface RoadTerrainPlanningPort {
     Result plan(Request request);
 
+    /** 两个开局生产入口显式登记；游玩期、全域精采和补线没有这次交接。 */
+    enum InitialSolvePass { NONE, CAPTURE, REPLAY }
+
     record Bounds(int minX, int minZ, int maxX, int maxZ) {
         public Bounds {
             if (maxX < minX || maxZ < minZ) {
@@ -28,12 +31,18 @@ public interface RoadTerrainPlanningPort {
                    List<StructureConnection> connections,
                    PathfindingCostConfig pathfinding,
                    BlockPos samplingCenter,
-                   int samplingRadius) {
+                   int samplingRadius,
+                   InitialSolvePass initialSolvePass) {
         public Request(ServerLevel level,
                        Bounds bounds,
                        List<StructureConnection> connections,
                        PathfindingCostConfig pathfinding) {
-            this(level, bounds, connections, pathfinding, null, 0);
+            this(level, bounds, connections, pathfinding, null, 0, InitialSolvePass.NONE);
+        }
+
+        public Request(ServerLevel level, Bounds bounds, List<StructureConnection> connections,
+                       PathfindingCostConfig pathfinding, BlockPos samplingCenter, int samplingRadius) {
+            this(level, bounds, connections, pathfinding, samplingCenter, samplingRadius, InitialSolvePass.NONE);
         }
 
         public Request {
@@ -44,6 +53,7 @@ public interface RoadTerrainPlanningPort {
             snapshot.sanitize();
             pathfinding = snapshot;
             samplingRadius = Math.max(0, samplingRadius);
+            Objects.requireNonNull(initialSolvePass, "initialSolvePass");
         }
 
         public boolean hasCircularSamplingMask() {

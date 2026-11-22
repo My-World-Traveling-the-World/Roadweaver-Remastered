@@ -52,6 +52,10 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                     request.connections().size(), "computing_coarse_paths");
 
             final CoarseTerrainRegion finalTerrain = terrain;
+            boolean replay = request.initialSolvePass() == InitialSolvePass.REPLAY;
+            var startup = TerrainSamplingSessions.forLevel(request.level()).initialBand(request.initialSolvePass());
+            // 批次只准备一次轻量地形身份，工作线程不需要重扫一遍所有瓦片。
+            var terrainIdentity = startup == null ? null : terrain.solveTerrain();
             LinkedHashMap<StructureConnection, List<BlockPos>> paths = new LinkedHashMap<>();
             long pathfindingStartedAt = System.nanoTime();
             // ════════════════════════════════════════════════════════════════════
@@ -68,8 +72,10 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
                 }
                 final StructureConnection routeConnection = connection;
                 pathFutures.add(CoarsePathTasks.DEFAULT.submit(() -> {
-                    List<BlockPos> path = RawPathSearch.find(
+                    java.util.function.Supplier<List<BlockPos>> search = () -> RawPathSearch.find(
                             request.level(), routeConnection, request.pathfinding(), cache, finalTerrain);
+                    List<BlockPos> path = startup == null ? search.get()
+                            : startup.inPass(replay, finalTerrain, terrainIdentity, search);
                     if (path != null && !path.isEmpty()) {
                         found.put(routeConnection, List.copyOf(path));
                     }
@@ -90,6 +96,11 @@ final class CoarseCorridorPlanningAdapter implements RoadTerrainPlanningPort {
             for (StructureConnection connection : request.connections()) {
                 List<BlockPos> path = found.get(connection);
                 if (path != null) paths.put(connection, path);
+            }
+            if (replay) {
+                LOGGER.info("【开局粗寻路复用】 routes={} captured={} reusedSolves={} recomputedSolves={}",
+                        request.connections().size(), startup != null, startup == null ? 0 : startup.hits(),
+                        startup == null ? 0 : startup.misses());
             }
             // ════════════════════════════════════════════════════════════════════
             // ② 协商（单线程纯函数，微秒级）→ ③ 第二遍并行（只重算被吸引的路）

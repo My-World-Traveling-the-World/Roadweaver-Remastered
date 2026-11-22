@@ -711,6 +711,9 @@ public final class InitialPlanWaiter {
             flushAndFinish(level);
         } catch (Throwable failure) {
             abort("blockUntilDone", failure);
+        } finally {
+            // 无任务或提前终止也结束这次交接，避免下一次开局拿到上一批路径。
+            TerrainSamplingSessions.forLevel(level).clearInitialBand();
         }
     }
 }

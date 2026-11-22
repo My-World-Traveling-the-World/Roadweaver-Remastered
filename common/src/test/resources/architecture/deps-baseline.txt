@@ -30,8 +30,9 @@ bridge -> band                               2
 bridge -> config                             3
 bridge -> core                               1
 bridge -> metric                             18
-bridge -> pathfinding                        13
-bridge -> pathlogic                          5
+# 2026-11-22：开局 BAND 解复用必须比较真实瓦片/保护快照/巨树掩码；继续沿现有桥接方向。
+bridge -> pathfinding                        15
+bridge -> pathlogic                          9
 bridge -> pipeline                           5
 bridge -> topology                           1
 client -> config                             21
@@ -137,7 +138,8 @@ persistence -> worldgen                           4
 pipeline -> band                               5
 pipeline -> metric                             6
 pipeline -> topology                           10
-planning -> bridge                             3
+# 开局采样会话持有桥接层的短期复用对象；只跨开局两次粗规划，不进入游玩期。
+planning -> bridge                             4
 planning -> compat                             11
 planning -> config                             75
 planning -> core                               94

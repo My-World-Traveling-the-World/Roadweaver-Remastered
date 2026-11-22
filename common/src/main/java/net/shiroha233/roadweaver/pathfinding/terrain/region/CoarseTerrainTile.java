@@ -8,6 +8,10 @@ import net.shiroha233.roadweaver.pathfinding.terrain.SurfaceWaterClassifier;
  * 单个持久化粗采样地形瓦片。
  */
 public final class CoarseTerrainTile {
+    private static final java.util.concurrent.atomic.AtomicLong NEXT_SOLVE_ID =
+            new java.util.concurrent.atomic.AtomicLong();
+    // 进程内身份能识别重读或重新采样的瓦片，不改变持久格式，也不延长数组寿命。
+    private final long solveId = NEXT_SOLVE_ID.incrementAndGet();
     private static final byte FLAG_COLUMN_WATER = 1;
     private static final byte FLAG_WATER_BIOME = 1 << 1;
     private static final byte FLAG_NEAR_WATER = 1 << 2;
@@ -52,6 +56,10 @@ public final class CoarseTerrainTile {
 
     public CoarseTerrainTileKey key() {
         return key;
+    }
+
+    long solveId() {
+        return solveId;
     }
 
     public int seaLevel() {

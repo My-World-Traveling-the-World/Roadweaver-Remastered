@@ -315,7 +315,7 @@ public final class AsyncPlanningOps {
                             terrain = planRoadTerrainWithPreparedSnapshots(
                                     level,
                                     terrainBounds[0], terrainBounds[1], terrainBounds[2], terrainBounds[3],
-                                    result.incoming(), epoch, terrainParts);
+                                    result.incoming(), epoch, terrainParts, startupProgress);
                             timing.terrainCoreNanos += terrainParts[0];
                             timing.terrainTailNanos += terrainParts[1];
                         }

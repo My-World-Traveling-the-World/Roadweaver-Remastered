@@ -523,6 +523,9 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.sampling.CpuAccurateHeightBackendTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.sampling.RuntimeCpuSamplingWorkTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.terrain.CoarsePathTasksTest"),
+                // 真正重放开局 BAND，防止阈值或避让变化后误用旧解。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.InitialBandSolveReuseTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.terrain.InitialBandHandoffTest"),
                 // 停服终态必须随全量执行，避免只在定向任务中通过。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.runtime.TaskLifecycleTest"),
                 // 分配前校验必须随全量运行，避免大范围异常被整型溢出伪装成小请求。

@@ -265,6 +265,11 @@ public final class HugeTreeReservation {
             return chunks.isEmpty();
         }
 
+        /** 路线只关心范围内实际禁行列；其他地方新增巨树不需要废弃这条线。 */
+        public boolean sameColumns(PlanningMask other) {
+            return this == other || (other != null && chunks.equals(other.chunks));
+        }
+
         public boolean blocks(int x, int z) {
             if (x < minX || x > maxX || z < minZ || z > maxZ) return false;
             BitSet bits = chunks.get(ChunkPos.asLong(x >> 4, z >> 4));

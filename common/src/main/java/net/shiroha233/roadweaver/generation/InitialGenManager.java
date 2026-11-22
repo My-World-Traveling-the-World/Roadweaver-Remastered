@@ -246,6 +246,8 @@ public final class InitialGenManager {
             // shared spawn is the only unknown endpoint we intentionally keep.
             StructureFileStorage.pruneUnknownNonSpawnEndpoints(level);
 
+            // 中断后重进也必须从干净的开局交接开始。
+            TerrainSamplingSessions.forLevel(level).clearInitialBand();
             var planning = RoadPlanningService.initialPlanAsync(level);
             var server = level.getServer();
             if (server == null) {
@@ -272,6 +274,7 @@ public final class InitialGenManager {
                     total.get(), generating.get(), done.get(), failed.get());
             update(level);
         } catch (Throwable failure) {
+            TerrainSamplingSessions.forLevel(level).clearInitialBand();
             abort("begin", failure);
         }
     }
