@@ -23,7 +23,14 @@ public final class PlanningConfig implements SubConfig {
         PIPELINE
     }
     /** 地形模式分为AUTO、偏隧道、偏桥与轻挖填四种；LIGHT_CUT仅收紧挖填，不等同偏桥或偏隧道。 */
-    public enum TerrainProfileMode { AUTO, TUNNEL_FIRST, BRIDGE_FIRST, LIGHT_CUT }
+    public enum TerrainProfileMode {
+        AUTO, TUNNEL_FIRST, BRIDGE_FIRST, LIGHT_CUT;
+
+        /** 隧道优先是明确的玩家选择；其余模式可保留已经合格的地表缓坡。 */
+        public boolean prefersExistingSurface() {
+            return this != TUNNEL_FIRST;
+        }
+    }
 
     private int initialPlanRadiusChunks = RoadConstants.DEFAULT_INITIAL_PLAN_RADIUS_CHUNKS;
     private boolean dynamicPlanEnabled = true;

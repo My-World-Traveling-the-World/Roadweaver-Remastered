@@ -4,6 +4,8 @@ import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.config.ConfigService;
+import net.shiroha233.roadweaver.config.sub.PlanningConfig.TerrainProfileMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -14,9 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 0.9.063（任务二）**管线级**证据：判据重写之后，生产入口
- * {@link PathSpanExtractor#refineTunnelSpans} 在「路面贴着地表爬过一座山」这条最典型的失效场景里，
- * 真的会吐出一条 {@link SpanType#TUNNEL}。
+ * 管线级证据：相同山体和剖面，缓坡按默认策略保留地表，显式隧道优先仍能出洞；
+ * 山体突起单独不足以证明地表不可行。
  *
  * <p>离线可跑：{@code level == null}、{@code cache == null} 时提取器退回
  * {@code center.getY()} 当中心站地形高度（见 {@code centerTerrainHeights}），因此只要把
@@ -60,7 +61,7 @@ class TunnelPipelineIntegrationTest {
     }
 
     @Test
-    void mountainWithSurfaceHuggingProfileNowYieldsATunnel() {
+    void explicitTunnelFirstStillBuildsOnMountainWithSurfaceHuggingProfile() {
         int[] terrain = mountainProfile();
         List<RoadSegmentPlacement> segments = segments(terrain);
         List<Integer> targetY = surfaceProfile(terrain);
@@ -73,9 +74,9 @@ class TunnelPipelineIntegrationTest {
         assertEquals(1, maxLegacyOverburden);
         assertTrue(maxLegacyOverburden < 8, "旧判据在这条纵断面上必须判不出隧道");
 
-        List<RoadSpan> spans = PathSpanExtractor.refineTunnelSpans(List.of(), segments, targetY, null, null);
+        List<RoadSpan> spans = refineInMode(segments, targetY, TerrainProfileMode.TUNNEL_FIRST);
         long tunnels = spans.stream().filter(span -> span != null && span.type() == SpanType.TUNNEL).count();
-        assertTrue(tunnels >= 1, "判据重写之后必须真的产出隧道 span，实际 " + tunnels
+        assertTrue(tunnels >= 1, "隧道优先必须真的产出隧道 span，实际 " + tunnels
                 + "（spans=" + spans.size() + "）");
 
         RoadSpan tunnel = spans.stream()
@@ -87,6 +88,38 @@ class TunnelPipelineIntegrationTest {
                 "隧道至少 3 站，实际 " + (endIndex - startIndex + 1));
         System.out.println("TunnelPipeline span=" + startIndex + ".." + endIndex
                 + " stations=" + (endIndex - startIndex + 1));
+    }
+
+    @Test
+    void defaultKeepsSurfaceOnlyWhenRoadFitsBothEarthworksAndGrade() {
+        var terrain = mountainProfile();
+        var segments = segments(terrain);
+        var gentle = surfaceProfile(terrain);
+        assertFalse(refineInMode(segments, gentle, TerrainProfileMode.AUTO).stream()
+                .anyMatch(span -> span.type() == SpanType.TUNNEL), "浅挖缓坡应保持地表");
+        var belowMountain = java.util.Collections.nCopies(STATIONS, BASE);
+        assertTrue(refineInMode(segments, belowMountain, TerrainProfileMode.AUTO).stream()
+                .anyMatch(span -> span.type() == SpanType.TUNNEL), "覆土过厚不能暗中改成普通路");
+        // 同一剖面挤到每格一站：挖填不变，仅坡度变陡，应保留穿山能力。
+        var steep = new ArrayList<RoadSegmentPlacement>();
+        for (int i = 0; i < terrain.length; i++) {
+            var pos = new BlockPos(i, terrain[i], 0);
+            steep.add(new RoadSegmentPlacement(pos, List.of(pos)));
+        }
+        assertTrue(refineInMode(steep, gentle, TerrainProfileMode.AUTO).stream()
+                .anyMatch(span -> span.type() == SpanType.TUNNEL), "陡坡不能只凭浅挖填改成露天");
+    }
+
+    private static List<RoadSpan> refineInMode(List<RoadSegmentPlacement> segments,
+                                                List<Integer> profile, TerrainProfileMode mode) {
+        var planning = ConfigService.get().planning();
+        var saved = planning.terrainProfileMode();
+        try {
+            planning.setTerrainProfileMode(mode);
+            return PathSpanExtractor.refineTunnelSpans(List.of(), segments, profile, null, null);
+        } finally {
+            planning.setTerrainProfileMode(saved);
+        }
     }
 
     /** 反向对照：同一套代码，地形换成缓丘就不能产出隧道。 */

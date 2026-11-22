@@ -190,7 +190,17 @@ class TunnelPortalAdvanceTest {
             // 路面贴着地表往上爬（每站只切 1 格）—— 0.9.063 管线用例的那条纵断面。
             targetY.add(terrain[i] - 1);
         }
-        List<RoadSpan> spans = PathSpanExtractor.refineTunnelSpans(List.of(), segments, targetY, null, null);
+        // 这个测试要验洞口分配，因此明确用仍要求打洞的模式；默认模式优先保留同地形的缓坡。
+        var planning = net.shiroha233.roadweaver.config.ConfigService.get().planning();
+        var saved = planning.terrainProfileMode();
+        List<RoadSpan> spans;
+        try {
+            planning.setTerrainProfileMode(
+                    net.shiroha233.roadweaver.config.sub.PlanningConfig.TerrainProfileMode.TUNNEL_FIRST);
+            spans = PathSpanExtractor.refineTunnelSpans(List.of(), segments, targetY, null, null);
+        } finally {
+            planning.setTerrainProfileMode(saved);
+        }
         RoadSpan tunnel = spans.stream()
                 .filter(span -> span != null && span.type() == SpanType.TUNNEL)
                 .findFirst()

@@ -269,6 +269,9 @@ public final class PathSpanExtractor {
         boolean[] envelopeSealed = new boolean[centers.size()];
         TunnelEnvelopeCriterion.Params tunnelParams = TunnelEnvelopeCriterion.Params.defaults();
         TunnelEnvelopeCriterion.Costs tunnelCosts = tunnelCosts();
+        // 复用纵断面限制和已经取到的列；显式要求隧道优先时，保留玩家的地形策略。
+        var profileMode = ConfigService.get().planning().terrainProfileMode();
+        SurfaceGradeLimits limits = SurfaceGradeLimits.capture(profileMode);
         int[] envelopeRuns = TunnelEnvelopeCriterion.runs(prominence,
                 TunnelEnvelopeCriterion.SEED_PROMINENCE_BLOCKS);
         for (int envelopeRun = 0; envelopeRun + 1 < envelopeRuns.length; envelopeRun += 2) {
@@ -284,13 +287,19 @@ public final class PathSpanExtractor {
                 LOGGER.info("【山体包络路线选择结果】 {}", candidate.routeChoiceLine());
             }
             if (!candidate.elected()) continue;
+            if (profileMode.prefersExistingSurface() && SurfaceTunnelPreference.canUseSurface(
+                    centers, targetY, Math.max(0, candidate.start() - 1),
+                    Math.min(centers.size() - 1, candidate.end() + 1), tunnelCosts.softGradeLimit(),
+                    i -> !bridge[i] && !isWetStation(centers, footprintSamples, i)
+                            && fullWidthSurfaceConnected(segments, centers, targetY, footprintSamples, accurate, i, limits))) {
+                LOGGER.info("【已有缓坡地表可满足挖填预算，取消隧道候选】 [ROAD-TUNNEL-SURFACE] seg={}..{}",
+                        candidate.start(), candidate.end());
+                continue;
+            }
             for (int i = candidate.start(); i <= candidate.end(); i++) {
                 envelopeSealed[i] = prominence[i] >= TunnelEnvelopeCriterion.TARGET_BURIAL_BLOCKS;
             }
         }
-        // One snapshot per refine pass: the per-station loop below must not
-        // hit the synchronized ConfigService for every road station.
-        SurfaceGradeLimits limits = SurfaceGradeLimits.capture();
         // 0.9.026: 这一行不再是「仅日志」—— 见下方 `buried`，开关现在真的会拦断陆上隧道。
         // 0.9.005-B 当时是 LOGGING ONLY（判定保持不变：!bridge + footprint max）。
         // 0.9.063（任务二）：`buried` 的判据已换成下面的**独立山体包络**（envelopeBuried），
