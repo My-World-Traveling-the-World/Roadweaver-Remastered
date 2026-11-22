@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.bridge.SampledTerrainField;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGrid;
+import net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTopologyGrid;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -15,6 +16,47 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PipelinePlannerSamplingTest {
+    @org.junit.jupiter.api.Test
+    void productionConstructorUsesCoarseTiles() throws Exception {
+        // 离线 plan 可注入采样器；另查带世界的生产入口，防止测试注入成功却仍整域精采。
+        var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+        assertNotNull(compiler);
+        var path = java.nio.file.Path.of("src/main/java/net/shiroha233/roadweaver/planning/impl/PipelinePlanner.java");
+        try (var files = compiler.getStandardFileManager(null, null, java.nio.charset.StandardCharsets.UTF_8)) {
+            var task = (com.sun.source.util.JavacTask) compiler.getTask(null, files, null, List.of("-proc:none"),
+                    null, files.getJavaFileObjects(path));
+            var called = new ArrayList<String>();
+            for (var unit : task.parse()) new com.sun.source.util.TreeScanner<Void, Void>() {
+                @Override public Void visitMethod(com.sun.source.tree.MethodTree method, Void unused) {
+                    if (method.getName().contentEquals("<init>") && method.getParameters().size() == 2
+                            && method.getParameters().getFirst().getType().toString().equals("ServerLevel")) {
+                        return super.visitMethod(method, unused);
+                    }
+                    return null;
+                }
+                @Override public Void visitMethodInvocation(com.sun.source.tree.MethodInvocationTree call, Void unused) {
+                    called.add(call.getMethodSelect().toString());
+                    return super.visitMethodInvocation(call, unused);
+                }
+            }.scan(unit, null);
+            assertTrue(called.contains("CoarseTopologyGrid.sample"), "生产构造器必须接粗地形瓦片");
+            assertFalse(called.contains("AccurateHeightSampler.create"), "选边不得额外启动精采样器");
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    void coarseProjectionFlattensWaterWithoutInventingWaterFromBiomeAlone() {
+        var bounds = net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseRegionBounds.aligned(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"), -16, 0, 0, 0, 8);
+        // 第二列仅有河流群系、地面却在海平面上；这不等于实际有水。
+        var region = new net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainRegion(
+                bounds, 63, new short[]{41, 70, 65}, new short[]{41, 70, 65}, new byte[]{3, 2, 0}, new int[3]);
+        var request = new net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightGridRequest(-16, 0, 3, 1, 8);
+        var grid = CoarseTopologyGrid.project(request, region);
+        assertArrayEquals(new int[]{63, 70, 65}, grid.motionBlocking());
+        assertArrayEquals(new int[]{41, 70, 65}, grid.oceanFloor());
+    }
+
     @org.junit.jupiter.api.Test
     void realTopologyUsesConfiguredGradeWeightInsteadOfAnotherDefaultMetric() {
         var config = net.shiroha233.roadweaver.config.ConfigService.get().pathfindingCost();
@@ -71,7 +113,7 @@ class PipelinePlannerSamplingTest {
         assertEquals(1, connections.size(), "不能靠回退或丢空结果冒充完成规划");
         assertEquals(a, connections.getFirst().from()); assertEquals(b, connections.getFirst().to());
         assertEquals(ConnectionStatus.PLANNED, connections.getFirst().status());
-        assertFalse(requests.isEmpty(), "实际 plan 必须触发精确高度边界");
+        assertFalse(requests.isEmpty(), "实际 plan 必须触发地形读取边界");
         assertTrue(requests.size() <= 4);
         assertEquals(-64, requests.getFirst().minX()); assertEquals(-64, requests.getFirst().minZ());
         if (span == 128) {

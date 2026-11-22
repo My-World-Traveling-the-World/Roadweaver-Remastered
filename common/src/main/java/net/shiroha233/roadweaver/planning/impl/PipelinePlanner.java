@@ -24,7 +24,7 @@ import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.metric.FinslerMetric;
 import net.shiroha233.roadweaver.metric.ObstacleField;
 import net.shiroha233.roadweaver.metric.TerrainField;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
+import net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTopologyGrid;
 import net.shiroha233.roadweaver.pipeline.QualityGate;
 import net.shiroha233.roadweaver.pipeline.RoadPipeline;
 import net.shiroha233.roadweaver.planning.NetworkPlanner;
@@ -59,7 +59,7 @@ import net.shiroha233.roadweaver.topology.TopologyPlan;
  *   <li>真要按结构避让，需要 {@code StructureAvoidanceService} 的规划快照 ——
  *       而那套是<b>按连接</b>预算的（{@code routeKey(level, connection)}），
  *       网络级此刻还没有连接，根本取不到快照，</li>
- *   <li>后续 A* 走线时避让照旧生效（判据一字不改）。</li>
+ *   <li>后续 BAND 走线时照常应用结构避让。</li>
  * </ul>
  * <p>代价是：结构密集区里测地距离可能略乐观。这属于「已知近似」，不是遗漏。</p>
  *
@@ -94,11 +94,9 @@ public final class PipelinePlanner implements NetworkPlanner {
     }
 
     public PipelinePlanner(ServerLevel level, int step) {
-        // 世界读入留在这一处，离线测试注入同一规划入口，不复制拓扑算法。
-        this(step, level == null ? null : () -> {
-            var sampler = AccurateHeightSampler.create(level);
-            return sampler::sampleGrid;
-        }, level == null ? "offline" : level.dimension().location().toString(), level == null ? 0 : level.getSeed());
+        // 选边只用粗瓦片，避免先精采整域再丢掉；同一步长的走廊粗规划可复用瓦片。
+        this(step, level == null ? null : () -> request -> CoarseTopologyGrid.sample(level, request),
+                level == null ? "offline" : level.dimension().location().toString(), level == null ? 0 : level.getSeed());
     }
 
     PipelinePlanner(int step, java.util.function.Supplier<TiledTerrainField.GridSampler> samplerFactory) {

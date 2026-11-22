@@ -114,6 +114,27 @@ class BridgeTemplatePlacementTest {
         assertEquals(expected, buildChunks(reversed, line, segment, middle, previous, List.of(right, left)));
     }
 
+    @Test
+    void oceanLengthSinusoidalBridgeWritesEveryCenterColumnAcrossChunks() {
+        // 1408 格接近实机断续跨度，16 格整段桥不足以暴露无量纲的投影误差。
+        var line = Line.withHorizontalBend(new Vec3(0, DECK, 0), new Vec3(0, DECK, 1408), 5);
+        var access = new Site(null);
+        access.water = true;
+        for (int z = 656; z < 752; z += 16) {
+            var middle = new BlockPos(-5, DECK, z + 7);
+            var previous = middle.north();
+            var segment = new RoadSegmentPlacement(middle, List.of(middle));
+            assertTrue(BridgeSegmentPlannerNew.processSegment(access, new ChunkPos(middle), ROAD,
+                    line, segment, middle, previous, DECK, false), "必须铺出区块 " + z);
+        }
+        // 弯顶真实中心在 x=-5 附近；逐列检查不是用总写块数代替桥面的连续性。
+        assertEquals(-5.0D, line.pointAt(0.5D).x, 1.0E-9D);
+        for (int z = 656; z < 752; z++) {
+            assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), access.written.get(new BlockPos(-5, DECK, z)),
+                    "断桥列 z=" + z);
+        }
+    }
+
     private static Map<BlockPos, BlockState> buildChunks(Site access, Line line, RoadSegmentPlacement segment,
             BlockPos middle, BlockPos previous, List<ChunkPos> order) {
         for (ChunkPos chunk : order) {

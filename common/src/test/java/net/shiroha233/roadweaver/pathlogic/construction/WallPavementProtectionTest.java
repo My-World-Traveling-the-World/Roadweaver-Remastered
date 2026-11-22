@@ -56,6 +56,36 @@ class WallPavementProtectionTest {
         assertFalse(site.writes.keySet().stream().anyMatch(p -> sameColumn(p, WALL)));
     }
 
+    @Test void actualRoadGradePavesBothDirectionsWithFullBlocksAndBottomSlabs() {
+        // 低平台→高平台→低平台：每个边界各需一个低侧底半砖，施工按反序执行。
+        var heights = new int[]{64, 64, 65, 65, 65, 64, 64};
+        var centers = new ArrayList<BlockPos>();
+        for (int i = 0; i < heights.length; i++) centers.add(new BlockPos(i, heights[i], 0));
+        var site = new Site(false);
+        var world = site.world();
+        for (int i : new int[]{6, 5, 4, 3, 2, 1, 0}) {
+            var pos = centers.get(i);
+            var seg = new RoadSegmentPlacement(pos, List.of(pos));
+            var grade = SegmentPaver.planGrade(world, seg, i, centers, heights, false);
+            assertTrue(SegmentPaver.paveSegment(world, null, seg, i, centers, heights, grade, 0,
+                    List.of(Blocks.STONE_BRICKS.defaultBlockState()), List.of(Blocks.STONE_BRICK_SLAB.defaultBlockState()),
+                    RandomSource.create(8), new ModConfig(), new HashMap<>(), false, ignored -> false));
+        }
+        var tops = centers.stream().map(pos -> {
+            var placed = site.writes.get(pos);
+            assertEquals(Blocks.STONE_BRICKS.defaultBlockState(), site.writes.get(pos.below()),
+                    "测试须实际铺出这一站的整砖");
+            if (placed != null && placed.is(Blocks.STONE_BRICK_SLAB)) {
+                assertEquals(net.minecraft.world.level.block.state.properties.SlabType.BOTTOM,
+                        placed.getValue(net.minecraft.world.level.block.SlabBlock.TYPE));
+                return pos.getY() * 2 + 1;
+            }
+            assertTrue(placed == null || placed.isAir());
+            return pos.getY() * 2;
+        }).toList();
+        assertEquals(List.of(128, 129, 130, 130, 130, 129, 128), tops);
+    }
+
     @Test void publicEntryUsesRealWallQueryRatherThanAnUnprotectedAdapter() throws Exception {
         // 行为用例替换了外部查询，还需证明公开入口真的把长城API接进同一生产循环。
         var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();

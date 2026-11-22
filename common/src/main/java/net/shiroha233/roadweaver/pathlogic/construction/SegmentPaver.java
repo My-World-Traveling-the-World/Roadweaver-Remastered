@@ -120,11 +120,8 @@ public final class SegmentPaver {
         int surfaceY = RoadConstructionSafety.representativeHeight(heights);
         int beforeY = neighborSurfaceY(world, centers, targetY, segmentIndex - 1, preservePlannedGrade, surfaceY);
         int afterY = neighborSurfaceY(world, centers, targetY, segmentIndex + 1, preservePlannedGrade, surfaceY);
-        // A bottom slab belongs to a station that sits strictly between two higher neighbours: that is what
-        // turns a one-block dip into a visible half step. The comparison used to accept a neighbour at the
-        // same height, so every station of a flat stretch counted as a dip and the valley floor came out as
-        // two consecutive stations of half-block pit.
-        boolean slabTransition = beforeY > surfaceY && afterY > surfaceY;
+        // 桥隧断面另有净空及接缝约束；只在普通路面加半格。
+        boolean slabTransition = !preservePlannedGrade && isHalfStepStation(beforeY, surfaceY, afterY);
         return new SegmentGrade(heights, terrain, preserveTunnelGrade, preserveCrossingGrade, slabTransition);
     }
 
@@ -345,7 +342,8 @@ public final class SegmentPaver {
                 }
             }
 
-            if (slabs != null && !slabs.isEmpty()) {
+            // 普通整砖写在 pos.below()；只补路面分支已在 pos 写了整砖，不能按同一零点再加半格。
+            if (columnAction == ColumnAction.PAVE_NORMAL && !baseMats.isEmpty() && slabs != null && !slabs.isEmpty()) {
                 if (grade.slabTransition()
                         && !isWallOwned(pos)) {
                     BlockState slabState = slabs.get(random.nextInt(slabs.size()));
@@ -364,6 +362,11 @@ public final class SegmentPaver {
             TunnelClearLedger.report(tunnelScope);
         }
         return true;
+    }
+
+    static boolean isHalfStepStation(int beforeY, int surfaceY, int afterY) {
+        // 普通路面的整砖顶面是 surfaceY，底半砖写在 surfaceY 并升高半格，要放在相邻一格的低侧。
+        return (long) beforeY - surfaceY == 1 || (long) afterY - surfaceY == 1;
     }
 
     /** 统一主路面、支撑和半砖的查询，避免额外写块分支各自漏接跨模组保护。 */
