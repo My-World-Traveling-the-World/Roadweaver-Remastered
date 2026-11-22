@@ -140,56 +140,56 @@ public final class RoadChunkStore implements AutoCloseable {
     }
 
     public void addRoad(RoadData road) {
-        if (!isValidRoad(road)) return;
-        mutationLock.lock();
-        try {
-            ensureLoadedLocked();
-            RoadSnapshot previous = snapshot.get();
-            RoadData frozen = RoadSnapshot.freezeForStorage(road);
-            long fingerprint = RoadFingerprint.compute(frozen);
-            RoadSnapshot.Entry existing = previous.entries().get(fingerprint);
-            if (existing != null && existing.road().equals(frozen)) return;
-
-            long nextGeneration = nextGeneration();
-            LinkedHashMap<Long, RoadSnapshot.Entry> entries = new LinkedHashMap<>(previous.entries());
-            entries.put(fingerprint, newEntry(fingerprint, frozen, nextGeneration));
-            publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration);
-        } finally {
-            mutationLock.unlock();
-        }
+        if (road != null) addRoads(List.of(road));
     }
 
-    /** 批量加入道路后仅重建发布一次不可变快照，避免每条路重复全量索引。 */
-    public void addRoads(Collection<RoadData> roads) {
-        if (roads == null || roads.isEmpty()) return;
+    /** 不变的道路仍可交给施工，但不刷新缓存；用最后保存的同指纹条目确定交付范围。 */
+    public RoadChunkChanges addRoads(Collection<RoadData> roads) {
+        if (roads == null || roads.isEmpty()) return RoadChunkChanges.EMPTY;
         mutationLock.lock();
         try {
             ensureLoadedLocked();
             RoadSnapshot previous = snapshot.get();
-            LinkedHashMap<Long, RoadSnapshot.Entry> entries = new LinkedHashMap<>(previous.entries());
+            var entries = new LinkedHashMap<>(previous.entries());
+            var accepted = new LinkedHashSet<Long>();
+            var affected = new LinkedHashSet<Long>();
             long nextGeneration = nextGeneration();
             boolean changed = false;
             for (RoadData road : roads) {
                 if (!isValidRoad(road)) continue;
                 RoadData frozen = RoadSnapshot.freezeForStorage(road);
                 long fingerprint = RoadFingerprint.compute(frozen);
-                RoadSnapshot.Entry existing = entries.get(fingerprint);
+                accepted.add(fingerprint);
+                var existing = entries.get(fingerprint);
                 if (existing != null && existing.road().equals(frozen)) continue;
-                entries.put(fingerprint, newEntry(fingerprint, frozen, nextGeneration));
+                var created = newEntry(fingerprint, frozen, nextGeneration);
+                if (existing != null) affected.addAll(existing.footprint().chunkKeys());
+                affected.addAll(created.footprint().chunkKeys());
+                entries.put(fingerprint, created);
                 changed = true;
             }
-            if (changed) publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration);
+            if (changed && !publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration, affected))
+                return RoadChunkChanges.EMPTY;
+            var delivered = new LinkedHashSet<Long>();
+            for (long fingerprint : accepted) delivered.addAll(entries.get(fingerprint).footprint().chunkKeys());
+            return RoadChunkChanges.committed(delivered, affected);
         } finally {
             mutationLock.unlock();
         }
+    }
+
+    /** 恢复时持有同一不可变快照的条目，复用首次读盘时就已建立的占地与指纹。 */
+    public Collection<RoadSnapshot.Entry> storedEntries() {
+        ensureLoaded();
+        return snapshot.get().entries().values();
     }
 
     public void replaceRoad(long oldFingerprint, RoadData newRoad) {
         replaceRoads(List.of(new RoadReplacement(oldFingerprint, newRoad)));
     }
 
-    public void replaceRoads(Collection<RoadReplacement> replacements) {
-        if (replacements == null || replacements.isEmpty()) return;
+    public RoadChunkChanges replaceRoads(Collection<RoadReplacement> replacements) {
+        if (replacements == null || replacements.isEmpty()) return RoadChunkChanges.EMPTY;
         mutationLock.lock();
         try {
             ensureLoadedLocked();
@@ -226,24 +226,26 @@ public final class RoadChunkStore implements AutoCloseable {
                 if (superseded != null) affectedChunks.addAll(superseded.footprint().chunkKeys());
                 affectedChunks.addAll(created.footprint().chunkKeys());
             }
-            if (changed) {
-                publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration, affectedChunks);
-            }
+            if (!changed || !publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration, affectedChunks))
+                return RoadChunkChanges.EMPTY;
+            return RoadChunkChanges.committed(Set.of(), affectedChunks);
         } finally {
             mutationLock.unlock();
         }
     }
 
-    public void deleteRoad(long fingerprint) {
+    public Set<Long> deleteRoad(long fingerprint) {
         mutationLock.lock();
         try {
             ensureLoadedLocked();
             RoadSnapshot previous = snapshot.get();
-            if (!previous.entries().containsKey(fingerprint)) return;
+            var old = previous.entries().get(fingerprint);
+            if (old == null) return Set.of();
             long nextGeneration = nextGeneration();
             LinkedHashMap<Long, RoadSnapshot.Entry> entries = new LinkedHashMap<>(previous.entries());
             entries.remove(fingerprint);
-            publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration);
+            return publish(previous, RoadSnapshot.fromEntryMap(entries), nextGeneration, old.footprint().chunkKeys())
+                    ? old.footprint().worldChunkKeys() : Set.of();
         } finally {
             mutationLock.unlock();
         }
@@ -322,16 +324,12 @@ public final class RoadChunkStore implements AutoCloseable {
         loaded = true;
     }
 
-    private void publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration) {
-        publish(previous, next, nextGeneration, null);
-    }
-
     /** 发布新旧快照时只刷新已知变化区块，未知范围必须遍历完整差集。
  *
      * @param affectedChunks A3：已知引用发生变化的区块集合；{@code null} 表示未知，
      *                       退化为 previous ∪ next 全量遍历（保持旧行为）。
      */
-    private void publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration,
+    private boolean publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration,
                          Set<Long> affectedChunks) {
         // 0.8.345：**补上写入闸门**。
         // 此前这里既不校验 RoadLifecycle.allowsWrites() 也不校验 epoch，
@@ -340,7 +338,7 @@ public final class RoadChunkStore implements AutoCloseable {
         // 与 StructureFileStorage 保持同一口径：停服即拒绝写入。
         if (!net.shiroha233.roadweaver.runtime.RoadLifecycle.allowsWrites()) {
             LOGGER.warn("【服务端正在停止，跳过当前代次道路发布】 " + "RoadWeaver road chunk publish skipped: server is stopping (generation {} dropped)", nextGeneration);
-            return;
+            return false;
         }
         // ★ 2026-09-26 修 WorkBuddy R-5：只读降级期间**拒绝一切写入**。
         //   否则会把"首载失败得到的空快照"全量写回 index.json，
@@ -369,6 +367,7 @@ public final class RoadChunkStore implements AutoCloseable {
                 LOGGER.warn("【施工内容变化影子检查失败】 " + "RoadWeaver construction content shadow failed at generation {}", nextGeneration, failure);
             }
         }
+        return true;
     }
 
     private static void reportConstructionChanges(RoadSnapshot previous, RoadSnapshot next) {

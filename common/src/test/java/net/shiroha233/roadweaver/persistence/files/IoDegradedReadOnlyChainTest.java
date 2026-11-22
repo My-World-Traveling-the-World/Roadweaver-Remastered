@@ -114,13 +114,11 @@ public final class IoDegradedReadOnlyChainTest {
 
     /** ⑤ RoadChunkStore 有对称的守卫（同一个缺陷类别，两处都要有）。 */
     private static void testChunkStoreHasSymmetricGuard() throws Exception {
-        // ⚠️ 注意：RoadChunkStore 有两个 publish 重载 ——
-        //    3 参数的只是转发，**真正的写入闸门在 4 参数的那个**里。
-        //    所以签名片段要带上第 4 个参数的特征（`long nextGeneration,` 后跟换行）。
+        // 检查真正写入的入口，避免把存储门面的提前返回误认为降级保护。
         String publishBody = readMethodBody(CHUNK_SRC,
-                "private void publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration,");
+                "private boolean publish(RoadSnapshot previous, RoadSnapshot next, long nextGeneration,");
         require(publishBody != null,
-                "找不到 RoadChunkStore.publish(...) 的 4 参数重载（真正的写入闸门所在）");
+                "找不到 RoadChunkStore.publish(...) 的 4 参数入口（真正的写入闸门所在）");
         require(publishBody.contains(CHUNK_FLAG),
                 "RoadChunkStore.publish() 没有检查 " + CHUNK_FLAG
                         + " —— 与 StructureFileStorage 是同一类缺陷，必须对称防守");

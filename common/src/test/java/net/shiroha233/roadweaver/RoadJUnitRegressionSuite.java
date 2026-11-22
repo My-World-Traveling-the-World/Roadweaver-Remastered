@@ -312,6 +312,8 @@ public final class RoadJUnitRegressionSuite {
                         // 加载唤醒和轮询上限必须和生产选队共用同一套离线守卫。
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.generation.DeferredChunkQueueTest"),
+                        org.junit.platform.engine.discovery.DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.generation.RoadCommitReplayTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTrackerTest"),
                         DiscoverySelectors.selectClass(

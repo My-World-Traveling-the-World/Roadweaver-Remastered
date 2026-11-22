@@ -71,8 +71,8 @@ public final class DeferredInitialRoadConstructionService {
         NO_CONSTRUCTION_REQUIRED.remove(level);
         int recovered = 0;
         CompletedChunk completed = (chunk, fingerprint) -> RoadConstructionLedger.isComplete(level, chunk, fingerprint);
-        for (var road : RoadShardStorage.loadAll(level)) {
-            recovered += recoverUnfinished(RoadFootprint.from(road), RoadShardStorage.computeFingerprint(road), state.pending, completed);
+        for (var entry : RoadShardStorage.storedEntries(level)) {
+            recovered += recoverUnfinished(entry.footprint(), entry.fingerprint(), state.pending, completed);
         }
         state.total = Math.max(state.total, state.completed + state.pending.size());
         state.needsRecovery = false;
@@ -262,10 +262,17 @@ public final class DeferredInitialRoadConstructionService {
         Set<Long> marked = NO_CONSTRUCTION_REQUIRED.get(level);
         if (marked == null || marked.isEmpty()) return 0;
         int removed = 0;
+        State state = null;
         for (Long key : chunkKeys) {
-            if (key != null && marked.remove(key)) removed++;
+            if (key != null && marked.remove(key)) {
+                // 标空时已从待办移除；仅解除标记不会唤醒已经加载的区块。
+                if (state == null) state = STATES.computeIfAbsent(level, ignored -> new State());
+                state.pending.add(key);
+                removed++;
+            }
         }
-        if (removed > 0) {
+        if (state != null) {
+            state.total = Math.max(state.total, state.completed + state.pending.size());
             LOGGER.info("【新道路使旧空计划失效，撤销无需施工标记】 " + "RoadWeaver cleared {} chunk(s) from no-construction-required "
                     + "(new road data landed; the earlier empty-plan conclusion is stale).",
                     removed);

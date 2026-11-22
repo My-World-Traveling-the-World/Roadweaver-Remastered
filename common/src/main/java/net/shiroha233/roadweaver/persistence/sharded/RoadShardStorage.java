@@ -7,14 +7,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.persistence.RoadReplacement;
-import net.shiroha233.roadweaver.persistence.chunk.RoadFootprint;
 import net.shiroha233.roadweaver.persistence.files.RoadFileStorage;
 import net.shiroha233.roadweaver.worldgen.road.RoadWorldgenPlanCache;
 import net.shiroha233.roadweaver.runtime.RoadLifecycle;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.LinkedHashSet;
+import net.shiroha233.roadweaver.persistence.chunk.RoadSnapshot;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,40 +22,26 @@ public final class RoadShardStorage {
     private RoadShardStorage() {}
 
     public static void addRoad(ServerLevel level, RoadData road) {
-        if (!RoadLifecycle.allowsWrites()) return;
-        if (!isOverworld(level) || road == null || road.roadSegmentList() == null
-                || road.roadSegmentList().isEmpty()) return;
-        long fingerprint = RoadFileStorage.computeFingerprint(road);
-        RoadData previous = RoadFileStorage.loadByFingerprint(level, fingerprint);
-        RoadFileStorage.addRoad(level, road);
-        LinkedHashSet<Long> affected = new LinkedHashSet<>(affectedChunks(previous));
-        affected.addAll(affectedChunks(road));
-        RoadWorldgenPlanCache.invalidate(level, affected);
-        // ★ 2026-09-26 修 WorkBuddy R-2：**同时解除"无需施工"终态标记**。
-        //
-        // 该标记的语义是"该区块编译出空计划 ⇒ 永久不用施工"，
-        // 但那只在"确实没有路"时成立。现在**新的道路数据落盘了**，
-        // 原来的结论就失效 —— 不解标的话回填器会永久跳过这个区块
-        // （本会话内缺一段路，重进世界才恢复）。
-        //
-        // 放在 invalidate 之后、用同一个 affected 集合：两者都是
-        // "这条路影响到的区块"，语义完全一致。
-        net.shiroha233.roadweaver.generation.DeferredInitialRoadConstructionService
-                .unmarkNoConstructionRequired(level, affected);
+        if (road != null) addRoads(level, List.of(road));
     }
 
-    public static void addRoads(ServerLevel level, Collection<RoadData> roads) {
-        if (!RoadLifecycle.allowsWrites() || !isOverworld(level)
-                || roads == null || roads.isEmpty()) return;
-        LinkedHashSet<Long> affected = new LinkedHashSet<>();
-        for (RoadData road : roads) {
-            if (road != null) affected.addAll(affectedChunks(road));
-        }
-        RoadFileStorage.addRoads(level, roads);
-        RoadWorldgenPlanCache.invalidate(level, affected);
-        // ★ 同上（R-2）：批量落盘也要解标
+    public static Set<Long> addRoads(ServerLevel level, Collection<RoadData> roads) {
+        if (!RoadLifecycle.allowsWrites() || !isOverworld(level)) return Set.of();
+        var committed = RoadFileStorage.addRoads(level, roads);
+        refreshConstruction(level, committed.changed());
+        return committed.delivered();
+    }
+
+    /** 索引提交成功后一起作废两处旧结论；否则回填会继续相信“这个区块没有路”。 */
+    static void refreshConstruction(ServerLevel level, Set<Long> changed) {
+        if (changed.isEmpty()) return;
+        RoadWorldgenPlanCache.invalidate(level, changed);
         net.shiroha233.roadweaver.generation.DeferredInitialRoadConstructionService
-                .unmarkNoConstructionRequired(level, affected);
+                .unmarkNoConstructionRequired(level, changed);
+    }
+
+    public static Collection<RoadSnapshot.Entry> storedEntries(ServerLevel level) {
+        return RoadFileStorage.storedEntries(level);
     }
 
     public static void preload(ServerLevel level) {
@@ -106,9 +91,8 @@ public final class RoadShardStorage {
     public static void deleteRoad(ServerLevel level, long fingerprint) {
         if (!RoadLifecycle.allowsWrites()) return;
         if (!isOverworld(level)) return;
-        RoadData previous = RoadFileStorage.loadByFingerprint(level, fingerprint);
-        RoadFileStorage.deleteRoad(level, fingerprint);
-        RoadWorldgenPlanCache.invalidate(level, affectedChunks(previous));
+        // 删除只需刷新旧占地；没有新增路面需要唤醒。
+        RoadWorldgenPlanCache.invalidate(level, RoadFileStorage.deleteRoad(level, fingerprint));
     }
 
     public static void replaceRoad(ServerLevel level, long oldFingerprint, RoadData newRoad) {
@@ -118,15 +102,8 @@ public final class RoadShardStorage {
     public static void replaceRoads(ServerLevel level, Collection<RoadReplacement> replacements) {
         if (!RoadLifecycle.allowsWrites()) return;
         if (!isOverworld(level) || replacements == null || replacements.isEmpty()) return;
-        LinkedHashSet<Long> affected = new LinkedHashSet<>();
-        for (RoadReplacement replacement : replacements) {
-            if (replacement == null) continue;
-            RoadData previous = RoadFileStorage.loadByFingerprint(level, replacement.oldFingerprint());
-            affected.addAll(affectedChunks(previous));
-            affected.addAll(affectedChunks(replacement.newRoad()));
-        }
-        RoadFileStorage.replaceRoads(level, replacements);
-        RoadWorldgenPlanCache.invalidate(level, affected);
+        var committed = RoadFileStorage.replaceRoads(level, replacements);
+        refreshConstruction(level, committed.changed());
     }
 
     public static long computeFingerprint(RoadData road) {
@@ -170,7 +147,4 @@ public final class RoadShardStorage {
         return level != null && Level.OVERWORLD.equals(level.dimension());
     }
 
-    private static Set<Long> affectedChunks(RoadData road) {
-        return road == null ? Set.of() : RoadFootprint.from(road).worldChunkKeys();
-    }
 }

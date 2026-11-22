@@ -8,6 +8,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.persistence.RoadReplacement;
 import net.shiroha233.roadweaver.persistence.chunk.RoadChunkStore;
+import net.shiroha233.roadweaver.persistence.chunk.RoadChunkChanges;
+import net.shiroha233.roadweaver.persistence.chunk.RoadSnapshot;
 import net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint;
 import net.shiroha233.roadweaver.runtime.RoadLifecycle;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
@@ -36,9 +38,8 @@ public final class RoadFileStorage {
         store(level).addRoad(road);
     }
 
-    public static void addRoads(ServerLevel level, Collection<RoadData> roads) {
-        if (!isOverworld(level)) return;
-        store(level).addRoads(roads);
+    public static RoadChunkChanges addRoads(ServerLevel level, Collection<RoadData> roads) {
+        return isOverworld(level) ? store(level).addRoads(roads) : RoadChunkChanges.EMPTY;
     }
 
     public static void preload(ServerLevel level) {
@@ -80,6 +81,10 @@ public final class RoadFileStorage {
         return store(level).readyForRecovery(System.nanoTime());
     }
 
+    public static Collection<RoadSnapshot.Entry> storedEntries(ServerLevel level) {
+        return isOverworld(level) ? store(level).storedEntries() : List.of();
+    }
+
     public static List<RoadData> loadAll(ServerLevel level) {
         return isOverworld(level) ? store(level).loadAll() : List.of();
     }
@@ -88,16 +93,16 @@ public final class RoadFileStorage {
         return isOverworld(level) ? store(level).loadByFingerprint(fingerprint) : null;
     }
 
-    public static void deleteRoad(ServerLevel level, long fingerprint) {
-        if (isOverworld(level)) store(level).deleteRoad(fingerprint);
+    public static java.util.Set<Long> deleteRoad(ServerLevel level, long fingerprint) {
+        return isOverworld(level) ? store(level).deleteRoad(fingerprint) : java.util.Set.of();
     }
 
     public static void replaceRoad(ServerLevel level, long oldFingerprint, RoadData newRoad) {
         if (isOverworld(level)) store(level).replaceRoad(oldFingerprint, newRoad);
     }
 
-    public static void replaceRoads(ServerLevel level, Collection<RoadReplacement> replacements) {
-        if (isOverworld(level)) store(level).replaceRoads(replacements);
+    public static RoadChunkChanges replaceRoads(ServerLevel level, Collection<RoadReplacement> replacements) {
+        return isOverworld(level) ? store(level).replaceRoads(replacements) : RoadChunkChanges.EMPTY;
     }
 
     public static boolean hasAnyRoad(ServerLevel level) {

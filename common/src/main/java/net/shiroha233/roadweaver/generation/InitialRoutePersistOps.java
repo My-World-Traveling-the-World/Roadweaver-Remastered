@@ -40,7 +40,6 @@ import net.shiroha233.roadweaver.persistence.WorldDataProvider;
 import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.persistence.files.InitialGenerationCheckpointStore;
 import net.shiroha233.roadweaver.planning.PlanningUtils;
-import net.shiroha233.roadweaver.persistence.chunk.RoadFootprint;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
@@ -191,8 +190,6 @@ public final class InitialRoutePersistOps {
         StreamsReflowingCompat.SamplingSession streams = StreamsReflowingCompat.openSession(level);
         Set<PlannedPathKey> persistedEdges = new HashSet<>();
         Set<PlannedPathKey> protectedEdges = new HashSet<>();
-        Set<Long> constructionChunks = new HashSet<>();
-        Object constructionLock = new Object();
         int processedFinalRoads = 0;
         List<RoadData> roadsToPersist = new ArrayList<>();
         AtomicReference<Throwable> firstFinalRoadFailure = new AtomicReference<>();
@@ -229,13 +226,10 @@ public final class InitialRoutePersistOps {
                 processedFinalRoads++;
                 InitialGenerationProgressTracker.recordFinalRoadDone(processedFinalRoads);
                 if (work.road() != null) {
-                    synchronized (constructionLock) {
-                        roadsToPersist.add(work.road());
-                        constructionChunks.addAll(RoadFootprint.from(work.road()).worldChunkKeys());
-                        persistedEdges.add(work.owner());
-                        // 终态验收可能改变跨度；只有真实进入本次保存的道路可提供缺口状态。
-                        if (work.road().hasProtectedGap()) protectedEdges.add(work.owner());
-                    }
+                    roadsToPersist.add(work.road());
+                    persistedEdges.add(work.owner());
+                    // 只有通过最终验收的道路才会参与本批交付。
+                    if (work.road().hasProtectedGap()) protectedEdges.add(work.owner());
                 }
             } catch (Throwable failure) {
                 firstFinalRoadFailure.compareAndSet(null, failure);
@@ -254,14 +248,17 @@ public final class InitialRoutePersistOps {
                 ThreadPoolManager.currentSharedRuntimeThreads());
         InitialGenerationProgressTracker.recordConstructionChunksDone(connected.size());
         long persistStartedAt = System.nanoTime();
-        RoadShardStorage.addRoads(level, roadsToPersist);
+        var constructionChunks = RoadShardStorage.addRoads(level, roadsToPersist);
+        // 停服时存储会拒绝交付，不能把只通过几何验收的边报告成已落盘。
+        if (!roadsToPersist.isEmpty() && constructionChunks.isEmpty())
+            throw new java.util.concurrent.CancellationException("道路批次未交付施工，取消发布开局结果");
         long persistMs = elapsedMs(persistStartedAt);
         LOGGER.info("【初始道路后处理和持久化耗时】 " + "RoadWeaver initial post-processing timing: mergeMs={} finalRoadsMs={} persistMs={} "
                         + "totalMs={} persistedRoads={} constructionChunks={}",
                 mergeMs, finalRoadsMs, persistMs, elapsedMs(postProcessStartedAt),
                 roadsToPersist.size(), constructionChunks.size());
         return new PersistedBatch(Set.copyOf(persistedEdges), Set.copyOf(protectedEdges),
-                Set.copyOf(constructionChunks));
+                constructionChunks);
     }
 
     public static long elapsedMs(long startedAtNanos) {

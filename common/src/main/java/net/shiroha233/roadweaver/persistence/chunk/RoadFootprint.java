@@ -83,9 +83,14 @@ public final class RoadFootprint {
 
     /** 索引把 X 放在高位，Minecraft 区块队列把 X 放在低位。存档保留原键，只在交给世界时转换。 */
     public Set<Long> worldChunkKeys() {
-        Set<Long> result = new LinkedHashSet<>(chunkKeys.size());
-        for (long key : chunkKeys) result.add(Long.rotateLeft(key, 32));
-        return result;
+        return toWorldKeys(chunkKeys);
+    }
+
+    static Set<Long> toWorldKeys(Set<Long> storageKeys) {
+        if (storageKeys.isEmpty()) return Set.of();
+        Set<Long> result = new LinkedHashSet<>(storageKeys.size());
+        for (long key : storageKeys) result.add(Long.rotateLeft(key, 32));
+        return Collections.unmodifiableSet(result);
     }
 
     public Set<Long> chunkKeys() {

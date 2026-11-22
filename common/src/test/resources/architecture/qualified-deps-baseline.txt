@@ -24,7 +24,7 @@ pathlogic -> persistence                     3
 pathlogic -> planning                        12
 pathlogic -> postprocess                     1
 pathlogic -> runtime                         2
-persistence -> generation                    2
+persistence -> generation                    1
 persistence -> runtime                       1
 planning -> config                           2
 planning -> core                             1

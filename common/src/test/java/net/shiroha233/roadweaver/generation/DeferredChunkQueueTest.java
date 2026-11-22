@@ -43,12 +43,12 @@ class DeferredChunkQueueTest {
             }
             assertTrue(store.readyForRecovery(System.nanoTime() + 6_000_000_000L));
             var complete = (DeferredInitialRoadConstructionService.CompletedChunk) (chunk, fingerprint) -> chunk.x == 0;
-            assertEquals(2, store.loadAll().stream().mapToInt(road -> DeferredInitialRoadConstructionService.recoverUnfinished(
-                    net.shiroha233.roadweaver.persistence.chunk.RoadFootprint.from(road), net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(road), queue, complete)).sum());
+            assertEquals(2, store.storedEntries().stream().mapToInt(entry -> DeferredInitialRoadConstructionService.recoverUnfinished(
+                    entry.footprint(), entry.fingerprint(), queue, complete)).sum());
             assertEquals(Set.of(net.minecraft.world.level.ChunkPos.asLong(1, 0), net.minecraft.world.level.ChunkPos.asLong(1, 2)),
                     Set.copyOf(queue.select(key -> BUILDABLE).build()));
-            assertEquals(0, store.loadAll().stream().mapToInt(road -> DeferredInitialRoadConstructionService.recoverUnfinished(
-                    net.shiroha233.roadweaver.persistence.chunk.RoadFootprint.from(road), net.shiroha233.roadweaver.persistence.chunk.RoadFingerprint.compute(road), queue, complete)).sum());
+            assertEquals(0, store.storedEntries().stream().mapToInt(entry -> DeferredInitialRoadConstructionService.recoverUnfinished(
+                    entry.footprint(), entry.fingerprint(), queue, complete)).sum());
         }
     }
 

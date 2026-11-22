@@ -63,7 +63,7 @@ generation -> core                               47
 generation -> map                                10
 generation -> pathfinding                        17
 generation -> pathlogic                          73
-generation -> persistence                        49
+generation -> persistence                        48
 generation -> planning                           85
 generation -> postprocess                        3
 generation -> runtime                            17
