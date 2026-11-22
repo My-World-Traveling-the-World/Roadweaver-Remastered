@@ -118,7 +118,7 @@ public final class InitialRoutePersistOps {
     }
 
     public static PersistedBatch persistInitialRoadBatch(ServerLevel level, List<RoadData> roads) {
-        if (roads == null || roads.isEmpty()) return new PersistedBatch(Set.of(), Set.of());
+        if (roads == null || roads.isEmpty()) return new PersistedBatch(Set.of(), Set.of(), Set.of());
         // P0-post C: the merge refine and the per-road finalization both run on the
         // shared runtime pool, which the precision waves have already restored to
         // the configured size (3 by default). Post-processing is the last startup
@@ -190,6 +190,7 @@ public final class InitialRoutePersistOps {
                 Math.max(1, connected.size()), "processing_final_roads");
         StreamsReflowingCompat.SamplingSession streams = StreamsReflowingCompat.openSession(level);
         Set<PlannedPathKey> persistedEdges = new HashSet<>();
+        Set<PlannedPathKey> protectedEdges = new HashSet<>();
         Set<Long> constructionChunks = new HashSet<>();
         Object constructionLock = new Object();
         int processedFinalRoads = 0;
@@ -232,6 +233,8 @@ public final class InitialRoutePersistOps {
                         roadsToPersist.add(work.road());
                         constructionChunks.addAll(RoadFootprint.from(work.road()).chunkKeys());
                         persistedEdges.add(work.owner());
+                        // 终态验收可能改变跨度；只有真实进入本次保存的道路可提供缺口状态。
+                        if (work.road().hasProtectedGap()) protectedEdges.add(work.owner());
                     }
                 }
             } catch (Throwable failure) {
@@ -257,7 +260,8 @@ public final class InitialRoutePersistOps {
                         + "totalMs={} persistedRoads={} constructionChunks={}",
                 mergeMs, finalRoadsMs, persistMs, elapsedMs(postProcessStartedAt),
                 roadsToPersist.size(), constructionChunks.size());
-        return new PersistedBatch(Set.copyOf(persistedEdges), Set.copyOf(constructionChunks));
+        return new PersistedBatch(Set.copyOf(persistedEdges), Set.copyOf(protectedEdges),
+                Set.copyOf(constructionChunks));
     }
 
     public static long elapsedMs(long startedAtNanos) {

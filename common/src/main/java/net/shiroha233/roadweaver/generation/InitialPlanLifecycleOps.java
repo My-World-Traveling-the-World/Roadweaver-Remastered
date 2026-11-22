@@ -20,8 +20,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
-import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathlogic.junction.ExistingRoadJunctionService;
 import net.shiroha233.roadweaver.pathlogic.validation.FinalRoadStructureValidator;
@@ -96,7 +94,7 @@ public final class InitialPlanLifecycleOps {
     public static void batchUpdateConnectionStatus(WorldDataProvider provider,
                                                     ServerLevel level,
                                                     Map<PlannedPathKey, GenResult> results,
-                                                    Set<PlannedPathKey> persistedEdges,
+                                                    PersistedBatch persisted,
                                                     List<StructureConnection> supplementalConnections) {
         if ((results == null || results.isEmpty())
                 && (supplementalConnections == null || supplementalConnections.isEmpty())) return;
@@ -113,9 +111,9 @@ public final class InitialPlanLifecycleOps {
                 PlannedPathKey key = PlannedPathKey.of(supplemental);
                 boolean alreadyPresent = updated.stream().anyMatch(existing ->
                         existing != null && PlannedPathKey.of(existing).equals(key));
-                if (!alreadyPresent && persistedEdges.contains(key)) {
+                if (!alreadyPresent && persisted.edges().contains(key)) {
                     StructureConnection completed = new StructureConnection(
-                            supplemental.from(), supplemental.to(), ConnectionStatus.COMPLETED);
+                            supplemental.from(), supplemental.to(), terminalStatus(true, key, persisted));
                     updated.add(completed);
                     changedConnections.add(new ConnectionChange(null, completed));
                     changed = true;
@@ -131,11 +129,9 @@ public final class InitialPlanLifecycleOps {
             if (result == null) continue;
             StructureConnection effective = result.effectiveConnection() != null ? result.effectiveConnection() : original;
             PlannedPathKey effectiveKey = PlannedPathKey.of(effective);
-            boolean completed = result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
-                    && persistedEdges.contains(effectiveKey);
-            ConnectionStatus newStatus = !completed ? ConnectionStatus.FAILED
-                    : result.road() != null && result.road().hasProtectedGap()
-                    ? ConnectionStatus.PROTECTED_GAP : ConnectionStatus.COMPLETED;
+            ConnectionStatus newStatus = terminalStatus(
+                    result.result() == RoadGenerationService.InitialTaskResult.COMPLETED, effectiveKey, persisted);
+            boolean completed = newStatus != ConnectionStatus.FAILED;
             StructureConnection changedConnection = new StructureConnection(
                     completed ? effective.from() : original.from(),
                     completed ? effective.to() : original.to(),
@@ -177,6 +173,12 @@ public final class InitialPlanLifecycleOps {
                 }
             }
         }
+    }
+
+    /** 计算成功只是一票；后处理拒绝、或终态新增保护缺口，必须反映在最终路网状态。 */
+    static ConnectionStatus terminalStatus(boolean calculated, PlannedPathKey key, PersistedBatch persisted) {
+        if (!calculated || !persisted.edges().contains(key)) return ConnectionStatus.FAILED;
+        return persisted.protectedEdges().contains(key) ? ConnectionStatus.PROTECTED_GAP : ConnectionStatus.COMPLETED;
     }
 
     public static void ensureInitialConnectionsTerminal(WorldDataProvider provider, ServerLevel level) {
@@ -259,6 +261,11 @@ public final class InitialPlanLifecycleOps {
                             + "generation entirely; only failed routes stay eligible for later repair waves.",
                     completed + protectedGap + failed + filtered + stillPending,
                     completed, protectedGap, failed, filtered, stillPending);
+            var connectivity = InitialNetworkConnectivity.summarize(all, level.getSharedSpawnPos());
+            LOGGER.info("【已发布可连接路网，仅统计无保护缺口的计划边】 [INITIAL-REALIZED-TOPOLOGY] "
+                            + "endpoints={} components={} largest={} spawnComponent={}",
+                    connectivity.endpoints(), connectivity.components(), connectivity.largest(),
+                    connectivity.spawnComponent());
         } catch (Throwable ignored) {
             // 汇总日志失败不能影响收尾。
         }

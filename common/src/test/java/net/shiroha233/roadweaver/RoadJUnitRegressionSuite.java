@@ -510,6 +510,8 @@ public final class RoadJUnitRegressionSuite {
                 // 观测必须连到真实候选和终态结果，不能只验证格式器。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.metrics.RoadBuildEvidenceTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.planning.RouteEvidenceWiringTest"),
+                // 终态连通性必须实际进入手工注册的全套回归。
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.generation.InitialNetworkConnectivityTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pipeline.ConnectionEvidenceTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetTerrainInputsTest"),
                 // 保留模式必须直接跑编排；另用窄语法树守住世界端口接线。

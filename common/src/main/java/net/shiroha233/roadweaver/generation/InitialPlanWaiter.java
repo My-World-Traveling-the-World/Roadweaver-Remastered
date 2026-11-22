@@ -697,7 +697,7 @@ public final class InitialPlanWaiter {
                 DetailedRoadGenerationStats.logSummary(System.nanoTime() - detailedGenerationStartedAt);
                 PersistedBatch persisted = persistInitialRoadBatch(level, finalBatch.roads());
                 initialConstructionChunks = persisted.chunkKeys();
-                batchUpdateConnectionStatus(provider, level, finalBatch.results(), persisted.edges(),
+                batchUpdateConnectionStatus(provider, level, finalBatch.results(), persisted,
                         supplementalConnections);
             }
             ensureInitialConnectionsTerminal(provider, level);

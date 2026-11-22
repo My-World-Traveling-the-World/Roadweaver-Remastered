@@ -547,7 +547,8 @@ public final class InitialGenManager {
             Map<PlannedPathKey, GenResult> results,
             List<RoadData> roads) {}
 
-    record PersistedBatch(Set<PlannedPathKey> edges, Set<Long> chunkKeys) {}
+    /** 取最终准备落盘的跨度，合并前的原路不能决定状态是否有缺口。 */
+    record PersistedBatch(Set<PlannedPathKey> edges, Set<PlannedPathKey> protectedEdges, Set<Long> chunkKeys) {}
 
 
     /** 服务端主线程等待时继续处理受管理任务，避免区块请求与等待形成死锁。 */
