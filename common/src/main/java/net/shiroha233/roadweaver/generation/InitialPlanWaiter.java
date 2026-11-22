@@ -37,9 +37,7 @@ import net.shiroha233.roadweaver.generation.progress.InitialGenerationStage;
 import net.shiroha233.roadweaver.map.MapPatchService;
 import net.shiroha233.roadweaver.persistence.RoadPositionQuery;
 import net.shiroha233.roadweaver.persistence.WorldDataProvider;
-import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.persistence.files.InitialGenerationCheckpointStore;
-import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.persistence.chunk.RoadFootprint;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
@@ -47,10 +45,8 @@ import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.structures.precompute.RoadsideStructurePrecomputer;
 import net.shiroha233.roadweaver.structures.precompute.RoadsideVillagePrecomputer;
 import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
-import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.RoadPlanningService;
 import net.shiroha233.roadweaver.planning.RoadPlanningReadinessIndex;
-import net.shiroha233.roadweaver.planning.ConnectionFallbackService;
 import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import net.shiroha233.roadweaver.structures.placement.SpawnCabinPlacer;
@@ -180,7 +176,6 @@ public final class InitialPlanWaiter {
                 int configuredStep = ConfigService.get().pathfindingCost().effectivePathGridStep();
                 int[] startupBounds = ConflictWindowOps.initialSamplingBounds(level, roadTasks);
                 List<Integer> tiers = RoutePrecisionRetryPolicy.initialBatchSteps(configuredStep);
-                int candidateCompleted = 0;
                 int candidateRetained = 0;
 
                 for (int tierIndex = 0; tierIndex < tiers.size() && !remaining.isEmpty(); tierIndex++) {
@@ -510,162 +505,10 @@ public final class InitialPlanWaiter {
                             "finished");
                 }
 
-                List<StructureConnection> supplementalConnections = new ArrayList<>();
-                if (TOPOLOGY_CANDIDATES_ENABLED) {
-                // Topology candidates are tried in bounded waves. A wave shares
-                // one terrain batch, while each original edge is removed as soon
-                // as one candidate succeeds.
-                Map<PlannedPathKey, List<StructureConnection>> candidateLists = new HashMap<>();
-                int candidateInput = remaining.size();
-                InitialGenerationProgressTracker.setRoutePhaseOperation(
-                        InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "finished");
-                InitialGenerationProgressTracker.beginRoutePhase(
-                        InitialGenerationProgressTracker.RoutePhase.CANDIDATE, remaining.size(), "planning");
-                for (StructureConnection original : remaining) {
-                    candidateLists.put(PlannedPathKey.of(original),
-                            ConnectionFallbackService.candidates(level, original));
-                }
-                InitialGenerationProgressTracker.updateRetryStates(0, remaining.size());
-                for (int candidateIndex = 0; candidateIndex < ConnectionFallbackService.MAX_CANDIDATES
-                        && !remaining.isEmpty(); candidateIndex++) {
-                    Map<PlannedPathKey, StructureConnection> candidateOwners = new HashMap<>();
-                    Set<Long> candidateEndpointOwners = new HashSet<>();
-                    for (StructureConnection original : remaining) {
-                        List<StructureConnection> candidates = candidateLists.get(PlannedPathKey.of(original));
-                        if (candidates != null && candidateIndex < candidates.size()) {
-                            StructureConnection candidate = candidates.get(candidateIndex);
-                            PlannedPathKey candidateKey = PlannedPathKey.of(candidate);
-                            long fromKey = PlanningUtils.pos2dKey(candidate.from());
-                            long toKey = PlanningUtils.pos2dKey(candidate.to());
-                            // Reserve both endpoints for this wave. This is
-                            // stronger than edge de-duplication: two distinct
-                            // fallback edges must not race on one structure.
-                            if (candidateEndpointOwners.contains(fromKey)
-                                    || candidateEndpointOwners.contains(toKey)) {
-                                LOGGER.warn("【候补端点已占用，拒绝冲突替换】 " + "RoadWeaver skipped conflicting fallback candidate original={}->{} candidate={}->{} reason=endpoint_reserved",
-                                        original.from(), original.to(), candidate.from(), candidate.to());
-                                continue;
-                            }
-                            if (candidateOwners.putIfAbsent(candidateKey, original) == null) {
-                                candidateEndpointOwners.add(fromKey);
-                                candidateEndpointOwners.add(toKey);
-                            }
-                        }
-                    }
-                    if (candidateOwners.isEmpty()) break;
-                    List<StructureConnection> candidateRemaining = new ArrayList<>(candidateOwners.keySet().size());
-                    for (StructureConnection original : remaining) {
-                        List<StructureConnection> candidates = candidateLists.get(PlannedPathKey.of(original));
-                        if (candidates == null || candidateIndex >= candidates.size()) continue;
-                        StructureConnection candidate = candidates.get(candidateIndex);
-                        if (candidateOwners.get(PlannedPathKey.of(candidate)) == original) {
-                            candidateRemaining.add(candidate);
-                        }
-                    }
-                    List<StructureConnection> candidateFailed = candidateRemaining;
-                    for (int step : RoutePrecisionRetryPolicy.candidateBatchSteps(configuredStep)) {
-                        if (candidateFailed.isEmpty()) break;
-                        InitialGenerationProgressTracker.beginRoutePhase(
-                                InitialGenerationProgressTracker.RoutePhase.CANDIDATE, candidateFailed.size(),
-                                "sampling");
-                        InitialGenerationProgressTracker.updateRetryStates(0, remaining.size());
-                        InitialGenerationProgressTracker.enterStage(
-                                InitialGenerationStage.ROAD_GENERATION,
-                                "candidate_refinement_step_" + step);
-                        InitialGenerationProgressTracker.setCurrentSamplingStep(step);
-                        await(level, RouteRefinementOps.refineInitialRoutesAsync(
-                                level, candidateFailed, step, 100));
-                        InitialGenerationProgressTracker.setRoutePhaseOperation(
-                                InitialGenerationProgressTracker.RoutePhase.CANDIDATE, "generating");
-                        BatchGenerationResult batch = submitAndCollectAtStep(level, candidateFailed, step);
-                        List<StructureConnection> nextCandidates = new ArrayList<>();
-                        for (StructureConnection candidate : candidateFailed) {
-                            GenResult raw = batch.results().get(PlannedPathKey.of(candidate));
-                            StructureConnection original = candidateOwners.get(PlannedPathKey.of(candidate));
-                            if (original == null) continue;
-                            if (raw != null && raw.result() == RoadGenerationService.InitialTaskResult.COMPLETED
-                                    && raw.road() != null) {
-                                candidateCompleted++;
-                                RoadData candidateRoad = raw.road();
-                                RoadData originalRoad = protectedGapFallbacks.get(PlannedPathKey.of(original)) == null
-                                        ? null
-                                        : protectedGapFallbacks.get(PlannedPathKey.of(original)).road();
-                                boolean connected = candidateConnectsToExistingNetwork(candidateRoad, generatedRoads);
-                                boolean spawnConnected = originalRoad == null
-                                        || SpawnConnectivityValidator.replacementRemainsConnected(
-                                        level, candidateRoad, originalRoad, generatedRoads);
-                                boolean originalSpawnConnected = originalRoad != null
-                                        && SpawnConnectivityValidator.routeRemainsConnected(
-                                        level, originalRoad, generatedRoads);
-                                if (originalRoad != null) {
-                                    boolean sameDirection = SpawnConnectivityValidator.sameOverallDirection(
-                                            originalRoad, candidateRoad);
-                                    if (!sameDirection) {
-                                        // Different-direction branches are a
-                                        // valid fork, so keep both routes.
-                                        removeGeneratedRoad(generatedRoads, originalRoad);
-                                        generatedRoads.add(originalRoad);
-                                        generatedRoads.add(candidateRoad);
-                                        GenResult retainedOriginal = new GenResult(
-                                                PlannedPathKey.of(original), original,
-                                                RoadGenerationService.InitialTaskResult.COMPLETED, originalRoad);
-                                        resolved.put(retainedOriginal.originalKey(), retainedOriginal);
-                                        addSupplementalConnection(supplementalConnections, candidate);
-                                        LOGGER.info("【原路与候补方向不同，保留两条连接】 " + "RoadWeaver retained different-direction original and candidate original={}->{} candidate={}->{} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
-                                                original.from(), original.to(), candidate.from(), candidate.to(),
-                                                originalSpawnConnected, spawnConnected);
-                                    } else {
-                                        // Same-direction candidates replace the
-                                        // failed original. A different-direction
-                                        // candidate is kept with the original
-                                        // whenever both are spawn-rooted,
-                                        // regardless of existing-road contact.
-                                        generatedRoads.add(candidateRoad);
-                                        GenResult mapped = new GenResult(
-                                                PlannedPathKey.of(original), raw.effectiveConnection(), raw.result(), candidateRoad);
-                                        resolved.put(mapped.originalKey(), mapped);
-                                        LOGGER.info("【同方向候补替换已接受】 " + "RoadWeaver accepted same-direction candidate replacement original={}->{} candidate={}->{} sameDirection={} originalConnectedToSpawn={} candidateConnectedToSpawn={}",
-                                                original.from(), original.to(), candidate.from(), candidate.to(),
-                                                sameDirection, originalSpawnConnected, spawnConnected);
-                                    }
-                                } else {
-                                    // No protected original exists: use the
-                                    // successful candidate as the only route.
-                                    generatedRoads.add(candidateRoad);
-                                    GenResult mapped = new GenResult(
-                                            PlannedPathKey.of(original), raw.effectiveConnection(), raw.result(), candidateRoad);
-                                    resolved.put(mapped.originalKey(), mapped);
-                                    LOGGER.info("【候补连接替换已接受】 " + "RoadWeaver accepted candidate replacement original={}->{} candidate={}->{} connected={}",
-                                            original.from(), original.to(), candidate.from(), candidate.to(), connected);
-                                }
-                            } else {
-                                if (raw != null && raw.road() != null) {
-                                    removeGeneratedRoad(generatedRoads, raw.road());
-                                }
-                                StructureFileStorage.recordFailedFallbackAttempt(level, original, candidate);
-                                nextCandidates.add(candidate);
-                            }
-                        }
-                        candidateFailed = nextCandidates;
-                    }
-                    List<StructureConnection> nextRemaining = new ArrayList<>();
-                    for (StructureConnection original : remaining) {
-                        if (!resolved.containsKey(PlannedPathKey.of(original))) nextRemaining.add(original);
-                    }
-                    remaining = nextRemaining;
-                    done.set(resolved.size());
-                    // Candidate waves also leave unresolved originals pending.
-                    failed.set(0);
-                    InitialGenerationProgressTracker.updateRetryStates(0, remaining.size());
-                    InitialGenerationProgressTracker.updateConnections(
-                            roadTasks.size(), 0, done.get(), 0);
-                    LOGGER.info("【候补道路生成波次进度】 " + "RoadWeaver candidate generation wave: candidateIndex={} completed={} remaining={}",
-                            candidateIndex + 1, resolved.size(), remaining.size());
-                }
-
-                InitialGenerationProgressTracker.setRoutePhaseOperation(
-                        InitialGenerationProgressTracker.RoutePhase.CANDIDATE, "finished");
-                }
+                // 原边仍报告真实失败；只有能连接已确认分量的补边才另行提交终态验收。
+                List<StructureConnection> supplementalConnections = InitialConnectivityRepair.run(
+                        level, provider.getStructureConnections(level), remaining, resolved, profileFailures,
+                        configuredStep, ConfigService.get().planning().planMaxEdgeLenBlocks(), generatedRoads);
 
                 for (StructureConnection unresolved : remaining) {
                     PlannedPathKey key = PlannedPathKey.of(unresolved);

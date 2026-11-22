@@ -122,7 +122,6 @@ import static net.shiroha233.roadweaver.generation.InitialPlanWaiter.*;
 public final class InitialGenManager {
     static final int INITIAL_HEIGHT_PREFETCH_BATCH_COLUMNS = 4096;
     /** 禁用拓扑替代候选以保留原边失败原因，不默默改换连接。 */
-    static final boolean TOPOLOGY_CANDIDATES_ENABLED = false;
     private InitialGenManager() {}
 
     static final Logger LOGGER = LoggerFactory.getLogger("roadweaver");

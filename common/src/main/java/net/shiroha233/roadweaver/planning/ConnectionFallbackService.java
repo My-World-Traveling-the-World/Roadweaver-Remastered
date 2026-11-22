@@ -37,12 +37,24 @@ public final class ConnectionFallbackService {
     }
 
     public static List<StructureConnection> candidates(ServerLevel level, StructureConnection failed) {
+        return candidates(level, failed, null, false, SEARCH_RADIUS_BLOCKS);
+    }
+
+    /** 开局补边只允许接回另一端已有的可用分量，不用待办边或保护缺口证明接通。 */
+    public static List<StructureConnection> startupCandidates(ServerLevel level, StructureConnection failed,
+            List<StructureConnection> settled, int edgeLengthLimit) {
+        return candidates(level, failed, settled, true, Math.min(SEARCH_RADIUS_BLOCKS, edgeLengthLimit));
+    }
+
+    private static List<StructureConnection> candidates(ServerLevel level, StructureConnection failed,
+            List<StructureConnection> settled, boolean startup, int radius) {
         if (level == null || failed == null || !Level.OVERWORLD.equals(level.dimension())) return List.of();
 
         StructureFileStorage.StructureSnapshot snapshot = StructureFileStorage.getStructureSnapshot(level);
         Set<Long> manualKeys = StructureFileStorage.manualStructureKeys(level);
-        List<StructureConnection> existing = WorldDataProvider.getInstance().getStructureConnections(level);
-        BlockPos looseEndpoint = selectLooseEndpoint(failed, existing);
+        List<StructureConnection> existing = startup ? settled
+                : WorldDataProvider.getInstance().getStructureConnections(level);
+        BlockPos looseEndpoint = selectLooseEndpoint(failed, existing, startup);
         List<BlockPos> snapshotPositions = new ArrayList<>();
         for (StructureInfo info : snapshot.locations().structureInfos()) {
             if (info != null && info.pos() != null
@@ -64,15 +76,17 @@ public final class ConnectionFallbackService {
             BlockPos from = PlanningUtils.posFrom2dKey(road.ownerA2dKey());
             BlockPos to = PlanningUtils.posFrom2dKey(road.ownerB2dKey());
             if (!same2d(from, to)) {
-                persisted.add(new StructureConnection(from, to, ConnectionStatus.COMPLETED));
+                persisted.add(new StructureConnection(from, to, road.hasProtectedGap()
+                        ? ConnectionStatus.PROTECTED_GAP : ConnectionStatus.COMPLETED));
             }
         }
         List<StructureConnection> ranked = rankCandidates(
-                failed, snapshotPositions, manualKeys, existing, persisted);
+                failed, snapshotPositions, manualKeys, existing, persisted, startup, radius);
         if (ranked.isEmpty()) return ranked;
         List<StructureConnection> pending = new ArrayList<>(ranked.size());
         for (StructureConnection candidate : ranked) {
-            if (!StructureFileStorage.hasFailedFallbackAttempt(level, failed, candidate)) {
+            if (!StructureFileStorage.hasFailedFallbackAttempt(level, failed, candidate)
+                    && !StructureFileStorage.isConnectionSuppressed(level, candidate.from(), candidate.to())) {
                 pending.add(candidate);
             }
         }
@@ -91,13 +105,20 @@ public final class ConnectionFallbackService {
             Set<Long> manualKeys,
             List<StructureConnection> existing,
             List<StructureConnection> persisted) {
+        return rankCandidates(failed, snapshotPositions, manualKeys, existing, persisted, false, SEARCH_RADIUS_BLOCKS);
+    }
+
+    /** 纯拓扑判据，两条路径继续共用手绘端点、方向和保留边检查。 */
+    static List<StructureConnection> rankCandidates(StructureConnection failed, Collection<BlockPos> snapshotPositions,
+            Set<Long> manualKeys, List<StructureConnection> existing, List<StructureConnection> persisted,
+            boolean requireAnchorComponent, int radius) {
         if (failed == null || failed.from() == null || failed.to() == null) return List.of();
         Set<Long> manual = manualKeys == null ? Set.of() : manualKeys;
         List<StructureConnection> current = existing == null ? List.of() : existing;
         List<StructureConnection> saved = persisted == null ? List.of() : persisted;
         long fromKey = PlanningUtils.pos2dKey(failed.from());
         long toKey = PlanningUtils.pos2dKey(failed.to());
-        BlockPos looseEndpoint = selectLooseEndpoint(failed, current);
+        BlockPos looseEndpoint = selectLooseEndpoint(failed, current, requireAnchorComponent);
         long looseKey = PlanningUtils.pos2dKey(looseEndpoint);
 
         // Map-created connections register both endpoints as manual. A manual
@@ -111,11 +132,12 @@ public final class ConnectionFallbackService {
 
         NetworkGraph graph = new NetworkGraph();
         Set<PlannedPathKey> occupied = new HashSet<>();
-        addConnections(graph, occupied, current, failed, false);
-        addConnections(graph, occupied, saved, failed, true);
+        addConnections(graph, occupied, current, failed, false, requireAnchorComponent);
+        addConnections(graph, occupied, saved, failed, true, requireAnchorComponent);
 
         Set<Long> looseComponent = graph.component(looseKey);
         Set<Long> anchorComponent = graph.component(anchorKey);
+        if (requireAnchorComponent && anchorComponent.contains(looseKey)) return List.of();
         // Endpoints of in-flight/planned edges are reserved. A candidate must
         // never wait on another route's endpoint, otherwise two fallback tasks
         // can form a dependency cycle.
@@ -142,13 +164,14 @@ public final class ConnectionFallbackService {
             if (candidateKey == fromKey || candidateKey == toKey || manual.contains(candidateKey)
                     || reservedEndpoints.contains(candidateKey)) continue;
             if (looseComponent.contains(candidateKey)) continue;
+            if (requireAnchorComponent && !anchorComponent.contains(candidateKey)) continue;
 
             int priority = candidatePriority(candidateKey, anchorComponent, graph);
             int sidePriority = directionSidePriority(failed, looseEndpoint, candidate);
             // Never cross to the opposite side of the failed edge. That is
             // where another active route most often creates a dependency cycle.
             if (sidePriority >= 2) continue;
-            addCandidate(ranked, occupied, looseEndpoint, candidate, priority, sidePriority);
+            addCandidate(ranked, occupied, looseEndpoint, candidate, priority, sidePriority, radius);
         }
 
         ranked.sort(Comparator.comparingInt(Candidate::sidePriority)
@@ -169,7 +192,7 @@ public final class ConnectionFallbackService {
                                        Set<PlannedPathKey> occupied,
                                        List<StructureConnection> connections,
                                        StructureConnection failed,
-                                       boolean persisted) {
+                                       boolean persisted, boolean confirmedOnly) {
         if (connections == null) return;
         for (StructureConnection connection : connections) {
             if (connection == null || connection.from() == null || connection.to() == null) continue;
@@ -179,6 +202,7 @@ public final class ConnectionFallbackService {
             if (PlanningUtils.sameEdge(connection, failed)
                     || connection.status() == ConnectionStatus.FAILED
                     || connection.status() == ConnectionStatus.PROTECTED_GAP) continue;
+            if (confirmedOnly && connection.status() != ConnectionStatus.COMPLETED) continue;
             boolean confirmed = persisted || connection.status() == ConnectionStatus.COMPLETED;
             graph.add(connection.from(), connection.to(), confirmed);
         }
@@ -204,13 +228,13 @@ public final class ConnectionFallbackService {
                                      BlockPos looseEndpoint,
                                      BlockPos candidate,
                                      int priority,
-                                     int sidePriority) {
+                                     int sidePriority, int radius) {
         StructureConnection replacement = new StructureConnection(flat(looseEndpoint), candidate);
         PlannedPathKey key = PlannedPathKey.of(replacement);
         if (occupied.contains(key)) return;
 
         long displacement = horizontalDistanceSquared(looseEndpoint, candidate);
-        if (displacement > (long) SEARCH_RADIUS_BLOCKS * SEARCH_RADIUS_BLOCKS) return;
+        if (displacement > (long) radius * radius) return;
         ranked.add(new Candidate(replacement, priority, displacement, sidePriority));
     }
 
@@ -235,21 +259,23 @@ public final class ConnectionFallbackService {
     }
 
     /** 优先保留已有可行连接更多的一端为网络锚点，降低替换造成的断网风险。 */
-    private static BlockPos selectLooseEndpoint(StructureConnection failed, List<StructureConnection> existing) {
-        int fromDegree = viableDegree(failed.from(), failed, existing);
-        int toDegree = viableDegree(failed.to(), failed, existing);
+    private static BlockPos selectLooseEndpoint(StructureConnection failed, List<StructureConnection> existing,
+                                                 boolean confirmedOnly) {
+        int fromDegree = viableDegree(failed.from(), failed, existing, confirmedOnly);
+        int toDegree = viableDegree(failed.to(), failed, existing, confirmedOnly);
         // Ties use the connection's destination as the replaceable endpoint.
         return toDegree <= fromDegree ? flat(failed.to()) : flat(failed.from());
     }
 
     private static int viableDegree(BlockPos endpoint,
                                     StructureConnection failed,
-                                    List<StructureConnection> existing) {
+                                    List<StructureConnection> existing, boolean confirmedOnly) {
         if (existing == null || endpoint == null) return 0;
         int degree = 0;
         for (StructureConnection connection : existing) {
             if (connection == null || PlanningUtils.sameEdge(connection, failed)
                     || connection.status() == ConnectionStatus.FAILED) continue;
+            if (confirmedOnly && connection.status() != ConnectionStatus.COMPLETED) continue;
             if (same2d(endpoint, connection.from()) || same2d(endpoint, connection.to())) degree++;
         }
         return degree;

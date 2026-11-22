@@ -1,11 +1,19 @@
 /* 文件职责：用含失败、保护缺口和成功补边的同一端点图验证终态口径。 */
 package net.shiroha233.roadweaver.generation;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
+import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
+import net.shiroha233.roadweaver.core.model.RoadSpan;
+import net.shiroha233.roadweaver.core.model.SpanType;
+import net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator;
+import net.shiroha233.roadweaver.planning.PlanningUtils;
 import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,5 +50,29 @@ final class InitialNetworkConnectivityTest {
         assertEquals(ConnectionStatus.FAILED, InitialPlanLifecycleOps.terminalStatus(true, rejected, persisted));
         assertEquals(ConnectionStatus.COMPLETED, InitialPlanLifecycleOps.terminalStatus(true, full, persisted));
         assertEquals(ConnectionStatus.FAILED, InitialPlanLifecycleOps.terminalStatus(false, full, persisted));
+    }
+
+    @Test
+    void repairWillOnlySubmitTheCandidateItActuallyGeneratedWithoutAGap() {
+        var edge = new StructureConnection(new BlockPos(-4, 0, 0), new BlockPos(5, 0, 0));
+        var key = PlannedPathKey.of(edge);
+        var result = RoadGenerationService.InitialTaskResult.COMPLETED;
+        long from = PlanningUtils.pos2dKey(edge.from()), to = PlanningUtils.pos2dKey(edge.to());
+        var stations = IntStream.rangeClosed(-4, 5).mapToObj(x -> {
+            var p = new BlockPos(x, 64, 0);
+            return new RoadSegmentPlacement(p, List.of(p.north(2), p.north(), p, p.south(), p.south(2)));
+        }).toList();
+        var target = Collections.nCopies(stations.size(), 64);
+        var full = new RoadData(5, 1, List.of(), List.of(), stations, List.of(), target, from, to);
+        var gap = new RoadData(5, 1, List.of(), List.of(), stations,
+                List.of(new RoadSpan(stations.get(4).middlePos(), stations.get(5).middlePos(), SpanType.PROTECTED_GAP)),
+                target, from, to);
+        // 两份几何都合法，区别只在于保护缺口是否切断了这条候补。
+        assertTrue(RoadDataValidator.validateFinalRoad(full).valid());
+        assertTrue(RoadDataValidator.validateFinalRoad(gap).valid());
+        assertTrue(InitialConnectivityRepair.usable(edge, new InitialGenManager.GenResult(key, edge, result, full)));
+        assertFalse(InitialConnectivityRepair.usable(edge, new InitialGenManager.GenResult(key, edge, result, gap)));
+        assertFalse(InitialConnectivityRepair.usable(new StructureConnection(edge.from(), edge.to().east()),
+                new InitialGenManager.GenResult(key, edge, result, full)));
     }
 }

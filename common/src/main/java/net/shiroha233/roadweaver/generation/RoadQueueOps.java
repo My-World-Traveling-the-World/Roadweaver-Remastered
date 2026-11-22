@@ -17,7 +17,6 @@ import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.config.PathFeatureConfig;
