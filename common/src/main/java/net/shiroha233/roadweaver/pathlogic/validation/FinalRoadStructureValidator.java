@@ -4,6 +4,7 @@ package net.shiroha233.roadweaver.pathlogic.validation;
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotUnavailableException;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshot;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureOwnerKey;
 import net.shiroha233.roadweaver.pathlogic.structures.OwnedStructureBox;
@@ -92,23 +93,16 @@ public final class FinalRoadStructureValidator {
     private static Map<Long, AccurateHeightSample> prefetchMissingValidationColumns(
             RoadData road, AccurateHeightSampler sampler) {
         if (road.roadSegmentList() == null || road.roadSegmentList().isEmpty()) return Map.of();
-        List<BlockPos> positions = new ArrayList<>();
-        positions.addAll(RoadConstructionVolumePlanner.terrainSamplePositions(road));
-        for (var segment : road.roadSegmentList()) {
-            if (segment == null) continue;
-            if (segment.middlePos() != null) positions.add(segment.middlePos());
-            if (segment.positions() != null) positions.addAll(segment.positions());
-        }
+        List<BlockPos> positions = validationColumns(
+                RoadConstructionVolumePlanner.terrainSamplePositions(road), road.roadSegmentList());
         if (positions.isEmpty()) return Map.of();
         // 批查询已经获得不可变的精确列值；直接交给同一次体积校验，避免丢掉后逐列再次查缓存。
         Map<Long, AccurateHeightSample> cached = sampler.cachedSamples(positions);
         Set<Long> known = cached.keySet();
         List<BlockPos> missing = new ArrayList<>();
-        Set<Long> seen = new HashSet<>();
         for (BlockPos position : positions) {
-            if (position == null) continue;
             long key = AccurateHeightSample.key(position.getX(), position.getZ());
-            if (!known.contains(key) && seen.add(key)) missing.add(position);
+            if (!known.contains(key)) missing.add(position);
         }
         if (missing.isEmpty()) {
             if (DetailedRoadGenerationStats.routeTiming() != null) {
@@ -134,7 +128,6 @@ public final class FinalRoadStructureValidator {
         java.util.Map<Long, Integer> footprintByChunk = new java.util.LinkedHashMap<>();
         List<BlockPos> sparse = new ArrayList<>();
         for (BlockPos position : positions) {
-            if (position == null) continue;
             long footprintChunkKey = net.minecraft.world.level.ChunkPos.asLong(
                     Math.floorDiv(position.getX(), 16), Math.floorDiv(position.getZ(), 16));
             footprintByChunk.merge(footprintChunkKey, 1, Integer::sum);
@@ -152,7 +145,7 @@ public final class FinalRoadStructureValidator {
             // 让 volume walk 与后续同区块的路全部命中共享缓存。
             int missingInChunk = entry.getValue().size();
             int footprintInChunk = footprintByChunk.getOrDefault(entry.getKey(), missingInChunk);
-            if (missingInChunk >= 4 || missingInChunk * 2 >= footprintInChunk) {
+            if (useWholeChunk(missingInChunk, footprintInChunk)) {
                 wholeChunks.add(entry.getKey());
                 wholeChunkColumns += missingInChunk;
             } else {
@@ -178,6 +171,29 @@ public final class FinalRoadStructureValidator {
         }
         // 新取样仍由原精确缓存读回；只在本次读到时记住，不跨校验重试保存。
         return cached;
+    }
+
+    /** 分子和分母必须是同一组 X/Z 列；同一站的桥面、路幅和地形高度不各算一列。 */
+    static List<BlockPos> validationColumns(List<BlockPos> volume, List<RoadSegmentPlacement> segments) {
+        var unique = new Long2ObjectLinkedOpenHashMap<BlockPos>();
+        for (BlockPos position : volume) addColumn(unique, position);
+        for (var segment : segments) {
+            if (segment == null) continue;
+            addColumn(unique, segment.middlePos());
+            if (segment.positions() != null) {
+                for (BlockPos position : segment.positions()) addColumn(unique, position);
+            }
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private static void addColumn(Long2ObjectLinkedOpenHashMap<BlockPos> unique, BlockPos pos) {
+        if (pos != null) unique.putIfAbsent(AccurateHeightSample.key(pos.getX(), pos.getZ()), pos);
+    }
+
+    /** 稀疏边界只以真实占地列计数，重复列不能把应整块预取的批次误判为逐列。 */
+    static boolean useWholeChunk(int missingUnique, int footprintUnique) {
+        return missingUnique >= 4 || 2L * missingUnique >= footprintUnique;
     }
 
     static ValidationResult validate(PlanningSnapshot snapshot,

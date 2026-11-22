@@ -263,7 +263,8 @@ public final class DetailedRoadGenerationStats {
                     connection, nanosToMillis(spanNanos), nanosToMillis(validationNanos),
                     missingColumns, totalColumns);
             if (columnSourceCached > 0L || columnSourcePrefetched > 0L || columnSourceSampled > 0L) {
-                LOGGER.info("【终态校验地形列的缓存和补样来源】 " + "RoadWeaver final validation column source: cached={} prefetched={} sampled={} connection={}",
+                // 每次校验内按 X/Z 去重；同一条路重验仍会累计，日志不把它说成全路唯一列。
+                LOGGER.info("【终态校验地形列来源，各轮校验累计】 " + "RoadWeaver final validation column source: cached={} prefetched={} sampled={} connection={}",
                         columnSourceCached, columnSourcePrefetched, columnSourceSampled, connection);
             }
         }

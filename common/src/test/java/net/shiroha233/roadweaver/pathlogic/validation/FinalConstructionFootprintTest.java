@@ -73,4 +73,23 @@ final class FinalConstructionFootprintTest {
         assertFalse(centers.contains(OUTER_COLUMN));
         return road;
     }
+
+    @Test
+    void duplicatesOfFootprintColumnsMustNotHideAWholeChunkPrefetch() {
+        var columns = List.of(new BlockPos(-5, 68, -2), new BlockPos(-4, 68, -2),
+                new BlockPos(-3, 68, -2), new BlockPos(-2, 68, -2), new BlockPos(-1, 68, -2));
+        // 施工体积已提供路幅；同列的路面换了 Y，仍只算一次精确地形取样。
+        var station = new RoadSegmentPlacement(columns.getFirst().above(), List.of(columns.getLast().below()));
+        var unique = FinalRoadStructureValidator.validationColumns(columns, List.of(station));
+        assertEquals(columns, unique);
+        assertTrue(FinalRoadStructureValidator.useWholeChunk(3, unique.size()));
+        assertFalse(FinalRoadStructureValidator.useWholeChunk(2, unique.size()));
+
+        // 补充只出现在站点描述的列，防止去重实现误删整个路幅来源。
+        var extra = new BlockPos(0, 68, -2);
+        var beside = new RoadSegmentPlacement(extra, List.of(extra.above(), columns.getLast()));
+        var expanded = FinalRoadStructureValidator.validationColumns(columns, List.of(station, beside));
+        assertEquals(6, expanded.size());
+        assertEquals(extra, expanded.getLast());
+    }
 }
