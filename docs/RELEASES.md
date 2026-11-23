@@ -1,8 +1,10 @@
 # RoadWeaver 发布台账
 
-## 0.9.120 / RoadWeaver API 1.1.1（2026-11-23，仅构建）
+## 0.9.120 / RoadWeaver API 1.1.1（2026-11-23）
 
-道路和 API 现在是两个独立安装包。道路继续声明 `roadweaver_api`，主 JAR 没有内置副本；长城、河流可各自配 API 使用。标准构建、1867 项回归、三个坏包和 Fabric Loader 独立／合装矩阵通过。成品路径和升级方法见[验证手册](VALIDATION.md)。未安装到 WAYFARING。
+道路和 API 现在是两个独立安装包。道路继续声明 `roadweaver_api`，主 JAR 没有内置副本；长城、河流可各自配 API 使用。标准构建、1867 项回归、三个坏包和 Fabric Loader 独立／合装矩阵通过。道路成品仅本地构建，未安装到 WAYFARING。
+
+[独立 API GitHub Release](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/releases/tag/api-v1.1.1) 已公开；下载件 SHA-256 `d854ad519c69de62542758255f12619c38e6592b397a3abd097fe7996f7e7149`，模组元数据及 26 个契约类与本机验过的包一致。玩家安装及构建入口见[验证手册](VALIDATION.md)。
 
 ## 0.9.119（2026-11-23，仅构建）
 
