@@ -1,0 +1,87 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+def roadJar = tasks.named('remapJar').flatMap { it.archiveFile }
+def apiJar = project(':api-fabric').tasks.named('remapJar').flatMap { it.archiveFile }
+def contractPrefix = 'net/shiroha233/roadweaver/api/'
+def checkRoad = { File file ->
+    new ZipFile(file).withCloseable { jar ->
+        def meta = new JsonSlurper().parse(jar.getInputStream(jar.getEntry('fabric.mod.json')), 'UTF-8')
+        if (meta.id != 'roadweaver' || meta.depends?.roadweaver_api != '>=1.1.0') {
+            throw new GradleException('道路必须声明匹配版本的外置 roadweaver_api')
+        }
+        // 同时检查未声明、改名的嵌套件和直接混入的 class，防止开发包掩盖重复定义。
+        Collections.list(jar.entries()).each { entry ->
+            if (entry.name.startsWith(contractPrefix) && entry.name.endsWith('.class')) {
+                throw new GradleException('道路主包含有外置契约类')
+            }
+            if (entry.name.endsWith('.jar')) {
+                new ZipInputStream(jar.getInputStream(entry)).withCloseable { nested ->
+                    for (def item = nested.nextEntry; item != null; item = nested.nextEntry) {
+                        if ((item.name.startsWith(contractPrefix) && item.name.endsWith('.class'))
+                                || (item.name == 'fabric.mod.json'
+                                    && new JsonSlurper().parseText(new String(nested.readAllBytes(), 'UTF-8')).id == 'roadweaver_api')) {
+                            throw new GradleException('道路主包嵌入了独立前置')
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.register('verifySeparateApi') {
+    group = 'verification'
+    dependsOn tasks.named('remapJar'), ':api-fabric:verifyStandaloneApi'
+    inputs.file(roadJar)
+    doLast {
+        checkRoad(roadJar.get().asFile)
+        logger.lifecycle('[API-SEPARATE] PASS {}', roadJar.get().asFile.name)
+    }
+}
+
+tasks.register('separateApiRegression') {
+    group = 'verification'
+    dependsOn tasks.named('verifySeparateApi')
+    doLast {
+        File directory = layout.buildDirectory.dir('api-package-regression').get().asFile
+        directory.mkdirs()
+        new ZipFile(roadJar.get().asFile).withCloseable { jar ->
+            def metadata = new JsonSlurper().parse(jar.getInputStream(jar.getEntry('fabric.mod.json')), 'UTF-8')
+            def withoutApi = new LinkedHashMap(metadata)
+            withoutApi.depends = metadata.depends.findAll { k, v -> k != 'roadweaver_api' }
+            // 每个副本都来自实际发布包，用生产检查器验证过去的内嵌方式会被拒绝。
+            def mutants = [
+                'missing-dependency': ['fabric.mod.json': JsonOutput.toJson(withoutApi).getBytes('UTF-8')],
+                'renamed-nested-api': ['META-INF/jars/unrelated-name.jar': apiJar.get().asFile.bytes],
+                'shaded-contract-class': [("${contractPrefix}RoadWeaverApi.class".toString()): new byte[0]]
+            ]
+            mutants.each { name, changes ->
+                File broken = new File(directory, "${name}.jar")
+                new ZipOutputStream(new FileOutputStream(broken)).withCloseable { output ->
+                    def write = { String path, byte[] bytes ->
+                        output.putNextEntry(new ZipEntry(path))
+                        output.write(bytes)
+                        output.closeEntry()
+                    }
+                    Collections.list(jar.entries()).findAll { !changes.containsKey(it.name) }.each {
+                        write(it.name, jar.getInputStream(it).bytes)
+                    }
+                    changes.each { path, bytes -> write(path, bytes) }
+                }
+                try {
+                    checkRoad(broken)
+                } catch (GradleException expected) {
+                    return
+                }
+                throw new GradleException("道路验包守卫接受了坏包：${name}")
+            }
+            logger.lifecycle('[API-SEPARATE-REGRESSION] PASS rejected={}', mutants.size())
+        }
+    }
+}
+tasks.named('check') { dependsOn tasks.named('separateApiRegression') }

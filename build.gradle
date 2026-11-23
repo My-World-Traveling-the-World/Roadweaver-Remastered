@@ -24,7 +24,7 @@ allprojects {
 	
 	group = 'net.shiroha233.roadweaver'
 	// 区分纵断面绕行版与上一轮部署件，方便同种子比对。
-	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.119'
+	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.120'
 	repositories {
 		maven { url = 'https://maven.architectury.dev/' }
 		maven { url = 'https://maven.fabricmc.net/' }

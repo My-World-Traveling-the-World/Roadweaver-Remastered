@@ -1,5 +1,15 @@
 {
   "legacyCommit": "2c6547a683f6219a5b7c9c4d9f871a77cf3751e0",
+  "approvedResourceChanges": {
+    "api-fabric/src/main/resources/fabric.mod.json": {
+      "sha256": "05c18cfb9d2c1f66ce705399626e2e1406ac835be962c4f24e2fcef39440734c",
+      "reason": "独立前置公开标明适用的 Minecraft 版本，不反向依赖道路、长城或河流"
+    },
+    "fabric/src/main/resources/fabric.mod.json": {
+      "sha256": "75204f3f4129c97acf7f5b49ce8f3b3882891b755b7b0a67aff56ca8abae7c19",
+      "reason": "道路只声明外置前置依赖，移除嵌套前置；Gradle 另外验实际成品"
+    }
+  },
   "apiTokenSha256": {
     "api/src/main/java/net/shiroha233/roadweaver/api/RoadNetworkApi.java": "cc03ce1d17b4112940f881f801f8f2c0778d3331cfd769ec4d3734df6ecaad5a",
     "api/src/main/java/net/shiroha233/roadweaver/api/RoadWeaverApi.java": "889dea1c10f775366392dc169b48e03e4b484a19693744eb7da7d389a198ea51",

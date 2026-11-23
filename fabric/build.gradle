@@ -27,7 +27,9 @@ repositories {
 }
 
 dependencies {
-	implementation project(":api")
+	// 开发端也加载独立前置；命名空间取 Mojang named，正式道路包不包含接口。
+	compileOnly(project(path: ":api", configuration: "namedElements")) { transitive = false }
+	modLocalRuntime files(project(':api-fabric').tasks.named('devModJar').flatMap { it.archiveFile })
 	implementation project(":common")
 	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
@@ -121,51 +123,7 @@ shadowJar {
 	exclude 'module-info.class'
 }
 
-// ── 把 roadweaver_api 契约 mod 作为**嵌套 jar** 嵌进本 jar ────────────────────────
-//
-// ## 为什么要有这一步
-// 道路对外契约（`roadweaver_api`）本来是**单独部署的一个 mod**。分成两个部署件的原因是
-// 历史事故：`api.interop` 当年在道路 jar 里，0.8.406 删实现时**契约跟着一起被删**，
-// 五个外部 mod 静默失效，而它们的测试吃着同一份幽灵 jar 所以永远是绿的。
-//
-// 但分成两个**发布件**是错的 —— 一个仓库发布时不可能发两个 jar。
-// 所以改成 **Jar-in-Jar**：发布物仍然只有一个 jar，但 Fabric 会从 `META-INF/jars/`
-// 里把 `roadweaver_api` 当成独立 mod 发现，于是：
-//   · 消费方的 `depends: {"roadweaver_api": ">=1"}` **照旧成立**（7 个下游一行都不用改）；
-//   · 契约仍然是**独立的 class 树 + 独立的 fabric.mod.json + 独立的版本号**，
-//     「删实现 ≠ 删契约」这条物理保障还在；
-//   · 发布/分发只有一个文件。
-//
-// ## 为什么用「后处理 Zip」而不是 Loom 的 include
-// `include(...)` 期待**未 remap 的 named 产物**，会自己再 remap 一遍；而
-// `:api-fabric:remapJar` 的产物**已经是 intermediary 口径**，交给 include 会被二次
-// remap，类名直接毁掉。这里直接把两个成品 jar 拼在一起 —— 零 remap、完全确定。
-//
-// 产物落在 `build/final/`，文件名与 `remapJar` 完全一致，便于部署脚本复用。
-tasks.register('embedApiJar', Zip) {
-	group = 'build'
-	description = 'Merge roadweaver_api into this jar as a nested (JiJ) jar; single publishable artifact.'
-	dependsOn tasks.named('remapJar')
-	dependsOn project(':api-fabric').tasks.named('remapJar')
-
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-	from({ zipTree(tasks.named('remapJar').get().archiveFile.get().asFile) }) {
-		// 万一 remapJar 产物里已经有同名嵌套件，先剔掉，避免重复条目
-		exclude 'META-INF/jars/roadweaver-api.jar'
-	}
-	from({ project(':api-fabric').tasks.named('remapJar').get().archiveFile.get().asFile }) {
-		into 'META-INF/jars'
-		rename { 'roadweaver-api.jar' }
-	}
-
-	// 文件名与 remapJar 完全一致，只是目录换成 build/final
-	archiveFileName = tasks.named('remapJar').get().archiveFile.get().asFile.name
-	destinationDirectory = layout.buildDirectory.dir('final')
-}
-
-// 标准build也要走嵌套与真实验包，防止开发者只拿到缺API的同名中间件。
-apply from: rootProject.file('gradle/embedded-api.gradle')
+apply from: rootProject.file('gradle/separate-road-api.gradle')
 
 remapJar {
 	inputFile.set shadowJar.archiveFile

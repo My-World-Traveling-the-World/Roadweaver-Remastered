@@ -28,11 +28,6 @@
 	"mixins": [
 		"roadweaver.mixins.json"
 	],
-	"jars": [
-		{
-			"file": "META-INF/jars/roadweaver-api.jar"
-		}
-	],
 	"depends": {
 		"roadweaver_api": ">=1.1.0",
 		"fabricloader": ">=0.16.10",

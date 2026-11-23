@@ -1,6 +1,6 @@
 # RoadWeaver 旧版与重制版功能对照
 
-对照基线：同级只读旧仓库 `roadweaver@2c6547a`，重制版第46轮（现行代码重新核对）。冻结版的[八域明细](functional-inventory/README.md)用于列场景，从两边的工厂、入口和实际调用复核，不把同名类、配置键或测试数量当作功能。
+对照基线：同级只读旧仓库 `roadweaver@2c6547a`，重制版第46轮。冻结版的[八域明细](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/tree/f2c06ea93c3d77e71c982086f59e688c433bd426/docs/functional-inventory)用于列场景，从两边的工厂、入口和实际调用复核，不把同名类、配置键或测试数量当作功能。
 
 按下面定义的 **30 个场景组**，重制版 **24 组保留、4 组换实现、2 组旧算法选择已退役**。同一组包含多条入口时只计一次；“保留”指在适用维度、配置和依赖条件下能走到相应生产逻辑，不等于同一种子结果一致，也不代表真机完成率。
 

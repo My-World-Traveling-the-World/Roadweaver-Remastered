@@ -1,31 +1,14 @@
-# RoadWeaver 文档导航
+# RoadWeaver 开发文档
 
-接手先读[开发现状](STATUS.md)和[交接台账](HANDOFF.md)最后一轮，再按[验证手册](VALIDATION.md)跑基线。
+| 想找什么 | 入口 |
+| --- | --- |
+| 当前生成链与能力 | [开发现状](STATUS.md) |
+| 配置、后续任务 | [配置说明](CONFIGURATION.md) · [路线](ROADMAP.md) |
+| 构建、独立前置、回归 | [验证手册](VALIDATION.md) |
+| 分层边界、开发约定与日志 | [架构](../ARCHITECTURE.md) · [约定](../CONVENTIONS.md) · [日志](LOGGING.md) |
+| 旧版能力核对 | [功能核对](FEATURE-PARITY-CHECK.md) |
+| 最近改动和验证 | [交接](HANDOFF.md) · [发布台账](RELEASES.md) |
 
-当前配置实施与验证见[最新交接](HANDOFF.md)第95轮；已安装批次见[验收记录](PLAYTEST-20261121.md)。源码、构建件与安装件分别记录，不以源码更新代表已部署；真实产物和性能仍待验证。
+旧审计、实验和运行产物已移出文件树，需追查时查[清理前的 Git 快照](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/tree/f2c06ea93c3d77e71c982086f59e688c433bd426/docs)。
 
-| 要查什么 | 唯一入口 |
-|---|---|
-| 默认在跑什么、哪部分待真机 | [开发现状](STATUS.md) |
-| 新版配置分类、范围、新参数及删除项 | [配置说明](CONFIGURATION.md) |
-| 下一步做什么、按什么顺序验收 | [技术路线](ROADMAP.md) |
-| 三模组局部算法、全量架构盘点和测量边界 | [2026-11-21联合深审](THREE-MOD-OPTIMIZATION-20261121.md) |
-| WAYFARING安装目录、依赖与Mixin冲突、重复包备份 | [2026-11-21目录审计](MODPACK-AUDIT-20261121.md) |
-| 架构与开发规则 | [架构](../ARCHITECTURE.md) · [开发约定](../CONVENTIONS.md) |
-| 怎么编译、回归、真机对照、打包 | [验证手册](VALIDATION.md) |
-| 中文日志、诊断标记与注释契约 | [日志与源码说明](LOGGING.md) |
-| 旧版能力有没有丢 | [功能对照](FEATURE-PARITY-CHECK.md) |
-| 每轮改动、变异与未验证项 | [交接台账](HANDOFF.md) |
-| 已发布的产物和回退方式 | [发布台账](RELEASES.md) |
-| 历史审计、实验和原文 | [历史资料](archive/README.md) |
-
-## 测试读取的台账
-
-| 路径 | 读取者 |
-|---|---|
-| [根目录重制替换台账](../REFACTOR.md) | `LegacyLedgerTest` |
-| [S5 方法映射](S5-METHOD-MAP.md) | `S5MethodMapTest` |
-| [S5 文件台账](S5-POSTPROCESS-LEDGER.md) | `PostprocessLedgerTest` |
-| [跨层依赖基线](../common/src/test/resources/architecture/deps-baseline.txt) | `ArchitectureGuardTest` |
-
-机器台账保持原路径和格式。生产接线或默认值变动更新现状；下一步改路线；实验数据写交接或发布记录。历史资料中的「当时状态」不需要追着代码改。
+根目录 [REFACTOR.md](../REFACTOR.md)、[S5 方法映射](S5-METHOD-MAP.md)、[S5 文件台账](S5-POSTPROCESS-LEDGER.md)和纵断面 JSON 夹具由测试直接读取。新报告及基准输出放在 `build/`。

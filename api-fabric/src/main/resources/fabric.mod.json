@@ -2,8 +2,8 @@
 	"schemaVersion": 1,
 	"id": "roadweaver_api",
 	"version": "${version}",
-	"name": "RoadWeaver API",
-	"description": "Stable cross-mod contract for RoadWeaver. Contains no implementation; all calls are forwarded to RoadWeaver when it is installed and degrade safely when it is not.",
+	"name": "RoadWeaver API · PlainCraft Worldgen",
+	"description": "Shared library for RoadWeaver Remastered, PlainCraft Great Wall and compatible river mods. It does not generate anything on its own.",
 	"authors": [
 		"shiroha233"
 	],
@@ -11,6 +11,7 @@
 	"environment": "*",
 	"depends": {
 		"fabricloader": ">=0.16.10",
+		"minecraft": "~1.21.1",
 		"java": ">=21"
 	}
 }

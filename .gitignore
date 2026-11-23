@@ -108,3 +108,5 @@ roadweaver-后期重构路线图.md
 # 功能契约/性能探针运行产生的解释器缓存不属于交付源码。
 /scripts/parity/__pycache__/
 /scripts/benchmarks/__pycache__/
+/docs/evidence/*
+!/docs/evidence/client-road-profile-failures-20261121.json

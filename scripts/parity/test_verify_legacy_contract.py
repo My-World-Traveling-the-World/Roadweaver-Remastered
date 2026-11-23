@@ -36,6 +36,24 @@ class LegacyContractTest(unittest.TestCase):
             (root/"lang.json").write_text("{}",encoding="utf-8")
             self.assertEqual(4,len(verify(root,baseline)))
 
+    def test_approved_resource_revision_rejects_accidental_revert(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metadata = root / "fabric.mod.json"
+            old, new = b"embedded", b"standalone"
+            baseline = {
+                "apiTokenSha256": {}, "registrations": {}, "languages": {},
+                "resourceSha256": {metadata.name: hashlib.sha256(old).hexdigest()},
+                "approvedResourceChanges": {
+                    metadata.name: {"sha256": hashlib.sha256(new).hexdigest()}
+                },
+            }
+            # 记录允许的新元数据后，恢复旧的内嵌状态也必须失败。
+            metadata.write_bytes(new)
+            self.assertEqual([], verify(root, baseline))
+            metadata.write_bytes(old)
+            self.assertEqual(1, len(verify(root, baseline)))
+
 
 if __name__ == "__main__":
     unittest.main()

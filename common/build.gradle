@@ -7,14 +7,9 @@ dependencies {
     // Architectury API（作为 mod 依赖以启用 Loom 重映射）
     modImplementation("dev.architectury:architectury:${project.architectury_version}")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
-    // 对外契约模块。**必须用 implementation 而不是 compileOnly**：
-    // 测试（roadJUnitRegressionSuite）要能真的加载 api 里的枚举与接口，
-    // 历史上 api.interop 的失败正是「依赖方拿 compile-only 幽灵 jar 编译和测试，
-    // 测试永远绿而运行时必炸」。这里让测试吃真件。
-    // **必须显式取 namedElements**：直接写 project(":api") 在 architectury 下会解析到
-    // transformProductionFabric 的 intermediary 变体，测试运行时就会出现
-    // NoClassDefFoundError: net/minecraft/class_3218（测试 classpath 是 named）。
-    implementation(project(path: ":api", configuration: "namedElements")) { transitive = false }
+    // 独立前置提供运行时接口；离线回归仍使用同一份 Mojang named 契约，避免错误映射。
+    compileOnly(project(path: ":api", configuration: "namedElements")) { transitive = false }
+    testImplementation(project(path: ":api", configuration: "namedElements")) { transitive = false }
     // 长城接口（只有 1 个 class 的极小 jar；compileOnly，不进产物）
     //
     // ⚠ 这两个工程是**独立的**，道路仓库不收录长城的任何产物 ——

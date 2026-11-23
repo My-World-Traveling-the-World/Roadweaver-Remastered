@@ -19,6 +19,11 @@ def verify(root, baseline):
     errors = []
     for group in ("apiTokenSha256", "resourceSha256"):
         for relative, expected in baseline[group].items():
+            if group == "resourceSha256":
+                # 有意改变发包元数据时登记新摘要，保留原始旧版值，也不放开任意变更。
+                upgrade = baseline.get("approvedResourceChanges", {}).get(relative)
+                if upgrade is not None:
+                    expected = upgrade["sha256"]
             path = root / relative
             if not path.is_file():
                 errors.append("缺少旧版契约文件: " + relative)

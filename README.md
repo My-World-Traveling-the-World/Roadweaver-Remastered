@@ -10,7 +10,7 @@ RoadWeaver builds a road network between villages and other structures in Minecr
 
 ## What you need
 
-**Minecraft 1.21.1, Fabric Loader 0.16.10 or later, Java 21 or later, Fabric API, and Cloth Config API.** Install the RoadWeaver Remastered mod. It includes **RoadWeaver API**, so you do not need the standalone API.
+**Minecraft 1.21.1, Fabric Loader 0.16.10 or later, Java 21 or later, Fabric API, and Cloth Config API.** Install RoadWeaver Remastered and the [standalone RoadWeaver API](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/releases/tag/api-v1.1.1) as separate JARs. Use one copy of the API when combining any of the three mods.
 
 ## Playing with other mods
 

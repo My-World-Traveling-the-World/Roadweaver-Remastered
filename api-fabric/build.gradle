@@ -1,13 +1,7 @@
 // 文件职责：把 api 契约模块打包成可独立加载的 Fabric mod（mod id `roadweaver_api`）。
 //
-// 为什么保持独立mod身份：随道路发布时由embedApiJar嵌入成品，无需玩家另装；
-// 不装道路的下游仍可单独提供契约包，不能把“独立模块”误写成“必须双文件部署”。
-//   1. 超速飞行 / chunky-autogen 等 mod 需要**实现**本契约的接口。若契约只存在于
-//      roadweaver 主 jar，它们就必须硬依赖 roadweaver —— 不装道路就没法加载。
-//   2. 独立部署后，消费方在 fabric.mod.json 里声明 depends: { "roadweaver_api": ">=1" }，
-//      Fabric 加载期就会强制检查存在性 —— 缺了是**明确报错**，而不是运行期
-//      NoClassDefFoundError。这正是历史上 roadweaver.api.interop 的失败点：
-//      依赖方拿一个 compile-only 幽灵 jar 编译并测试，测试永远绿、运行时必炸。
+// 路、墙、河共用独立成品；安装一份即可。发布用 -PapiOnly，
+// 这样发布前置不需要拉取任何消费方，也不会把道路实现带进去。
 plugins {
     id 'com.gradleup.shadow' version '8.3.6'
 }
@@ -16,7 +10,7 @@ plugins {
 // 而且消费方的 fabric.mod.json 写的是 depends: roadweaver_api >= 1 ——
 // 用道路那种 2.3.1-1.21.1-... 的长版本号去比 >=1 语义不清。
 // 终态失败是向后兼容的新增能力；提高次版本避免加载器选中不含该方法的旧包。
-version = '1.1.0'
+version = '1.1.1'
 
 architectury {
     fabric()
@@ -48,6 +42,8 @@ shadowJar {
     exclude "architectury.common.json"
     configurations = [project.configurations.shadowCommon]
     archiveClassifier = "dev-shadow"
+    // 前置单独分发时也要带上契约源码的 MIT 许可。
+    from(rootProject.file('LICENSE'))
 }
 
 remapJar {
@@ -55,6 +51,8 @@ remapJar {
     dependsOn shadowJar
     archiveClassifier = null
 }
+
+apply from: rootProject.file('gradle/standalone-api.gradle')
 
 jar {
     archiveClassifier = "dev"

@@ -1,6 +1,6 @@
 # S5 方法级台账：3 个 REPLACE_BY_DP 文件的删除边界
 
-> **相关文档**：本文只说「删什么」。[`S7-SWITCH-CHECKLIST.md`](archive/S7-SWITCH-CHECKLIST.md)
+> **相关文档**：本文只说「删什么」。[历史切换清单](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/blob/f2c06ea93c3d77e71c982086f59e688c433bd426/docs/archive/S7-SWITCH-CHECKLIST.md)
 > 记录当时的拆除顺序，其「第 3 级前置 A」还写明了
 > `SurfaceGradeLimits` 必须先抽出来才能删 `RoadGradePlanner`。
 > 文件级分类见 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)。
