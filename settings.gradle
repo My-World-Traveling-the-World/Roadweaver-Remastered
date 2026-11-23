@@ -56,8 +56,4 @@ rootProject.name = 'roadweaver'
 
 // PlainCraft ships Fabric only. Keep the upstream NeoForge sources as a
 // reference directory, but never configure or resolve that platform.
-include 'api', 'api-fabric'
-// 独立前置发布不需要长城或河流的编译契约，也不配置道路主工程。
-if (!providers.gradleProperty('apiOnly').isPresent()) {
-	include 'common', 'fabric'
-}
+include 'common', 'fabric'

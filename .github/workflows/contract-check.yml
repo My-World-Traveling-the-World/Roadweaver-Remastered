@@ -7,12 +7,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 固定迁移时的契约提交，避免前置主分支后续变化影响道路旧基线。
+      - uses: actions/checkout@v4
+        with:
+          repository: My-World-Traveling-the-World/PlainCraft-Worldgen-API
+          ref: b696c413de0d5da89d2c07c45979dadd949237d6
+          path: .worldgen-api
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       # 冻结基线随仓库保存，CI不依赖开发机上的旧仓库路径。
       - name: Check preserved legacy contracts
-        run: python scripts/parity/verify_legacy_contract.py
+        run: python scripts/parity/verify_legacy_contract.py --api-root .worldgen-api
       - name: Test contract rejection fixtures
         run: python -m unittest discover -s scripts/parity -v
       - name: Test route evidence summaries

@@ -6,7 +6,10 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 def roadJar = tasks.named('remapJar').flatMap { it.archiveFile }
-def apiJar = project(':api-fabric').tasks.named('remapJar').flatMap { it.archiveFile }
+// 负控使用独立仓库真正会交给玩家的 intermediary 包。
+def apiJar = providers.provider {
+    rootProject.worldgenApiArtifact('api-fabric/build/contract/roadweaver-api-intermediary.jar')
+}
 def contractPrefix = 'net/shiroha233/roadweaver/api/'
 def checkRoad = { File file ->
     new ZipFile(file).withCloseable { jar ->
@@ -36,7 +39,7 @@ def checkRoad = { File file ->
 
 tasks.register('verifySeparateApi') {
     group = 'verification'
-    dependsOn tasks.named('remapJar'), ':api-fabric:verifyStandaloneApi'
+    dependsOn tasks.named('remapJar')
     inputs.file(roadJar)
     doLast {
         checkRoad(roadJar.get().asFile)
@@ -57,7 +60,7 @@ tasks.register('separateApiRegression') {
             // 每个副本都来自实际发布包，用生产检查器验证过去的内嵌方式会被拒绝。
             def mutants = [
                 'missing-dependency': ['fabric.mod.json': JsonOutput.toJson(withoutApi).getBytes('UTF-8')],
-                'renamed-nested-api': ['META-INF/jars/unrelated-name.jar': apiJar.get().asFile.bytes],
+                'renamed-nested-api': ['META-INF/jars/unrelated-name.jar': apiJar.get().bytes],
                 'shaded-contract-class': [("${contractPrefix}RoadWeaverApi.class".toString()): new byte[0]]
             ]
             mutants.each { name, changes ->

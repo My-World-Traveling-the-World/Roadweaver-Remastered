@@ -1,5 +1,9 @@
 # RoadWeaver 发布台账
 
+## 云游四海世界生成 API 1.1.2（2026-11-23）
+
+前置源码已迁往独立仓库。[v1.1.2](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases/tag/v1.1.2) 提供 `plaincraft-worldgen-api-1.1.2.jar`。发布件 SHA-256 为 `06a66b459b52357a73215079eb082cee1d45130673c29ff6455fbb48e718dca2`。升级时用它替换旧前置，`roadweaver_api` 只放一份。
+
 ## 0.9.120 / RoadWeaver API 1.1.1（2026-11-23）
 
 道路和 API 现在是两个独立安装包。道路继续声明 `roadweaver_api`，主 JAR 没有内置副本；长城、河流可各自配 API 使用。标准构建、1867 项回归、三个坏包和 Fabric Loader 独立／合装矩阵通过。道路成品仅本地构建，未安装到 WAYFARING。

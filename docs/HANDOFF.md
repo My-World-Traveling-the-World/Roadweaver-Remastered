@@ -2,6 +2,15 @@
 
 之前的轮次及原始报告见[清理前快照](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/blob/f2c06ea93c3d77e71c982086f59e688c433bd426/docs/HANDOFF.md)。后文的内嵌包和历史部署只描述当轮。
 
+## 第123轮：云游四海世界生成 API 源码迁仓（2026-11-23，API 1.1.2）
+
+1. **改了什么（生成行为等价）**：道路移除前置源码模块和旧发版任务。道路、长城、河流统一从同级 `plaincraft-worldgen-api` 的构建输出读取契约。前置 Java 源码 25 个文件与迁移前逐字一致，Fabric ID 继续使用 `roadweaver_api`。
+2. **验证**：外置 Gradle 8.8 构建独立前置和道路成品，`PASS tests=1867 skipped=0 aborted=0 failed=0`。下载 GitHub 成品后核对哈希、元数据和 26 个契约 class，均与相应基准一致。Fabric Loader 0.19.3 用下载件通过前置单独、三个玩法分别搭配前置、三者合装共五组依赖求解。
+3. **我没能验证什么**：未跑整合包新世界的预热、联动与落块。旧版契约报告仍有迁移前已有的 5 项差异，前后报告对拍完全相同，当前工作未放宽旧基线。
+4. **变异记录**：缺依赖声明、混入改名的前置 JAR、直接混入契约 class 的三份坏道路包均被构建守卫拒绝。三个玩法分别去掉前置后，Loader 都明确拒绝。产物记录在工作区 `build/worldgen-api-matrix-1.1.2/`。
+5. **文档及下一步**：删除独立的过时预热复盘，现行阶段归入 [开发现状](STATUS.md)，回归夹具保留。实机继续按照 [后续路线](ROADMAP.md) 验收。
+6. **交付与回退**：可在 [前置 v1.1.2](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases/tag/v1.1.2) 下载新命名成品，升级替换旧前置，同一个实例只保留一份。本轮未改玩家实例。
+
 ## 第122轮：共用 API 改为独立前置（2026-11-23，0.9.120 / API 1.1.1）
 
 1. **改了什么（发包方式变更、生成行为等价）**：移除道路内的嵌套 API 和重复类路径，保留 `roadweaver_api` 身份、Java 包、签名和独立版本。道路开发运行也加载独立前置；`-PapiOnly` 可不构建玩法项目，独立发布任务只上传正式 API。

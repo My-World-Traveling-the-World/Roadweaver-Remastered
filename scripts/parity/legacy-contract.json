@@ -2,8 +2,8 @@
   "legacyCommit": "2c6547a683f6219a5b7c9c4d9f871a77cf3751e0",
   "approvedResourceChanges": {
     "api-fabric/src/main/resources/fabric.mod.json": {
-      "sha256": "05c18cfb9d2c1f66ce705399626e2e1406ac835be962c4f24e2fcef39440734c",
-      "reason": "独立前置公开标明适用的 Minecraft 版本，不反向依赖道路、长城或河流"
+      "sha256": "2eb834987d7231e4b0b4a486c5ed1b0d08b3e4cffad89bb798ccde9129470f9a",
+      "reason": "独立前置迁仓并改显示名，保留模组 ID、适用版本与依赖契约"
     },
     "fabric/src/main/resources/fabric.mod.json": {
       "sha256": "75204f3f4129c97acf7f5b49ce8f3b3882891b755b7b0a67aff56ca8abae7c19",

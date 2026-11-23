@@ -28,8 +28,9 @@ repositories {
 
 dependencies {
 	// 开发端也加载独立前置；命名空间取 Mojang named，正式道路包不包含接口。
-	compileOnly(project(path: ":api", configuration: "namedElements")) { transitive = false }
-	modLocalRuntime files(project(':api-fabric').tasks.named('devModJar').flatMap { it.archiveFile })
+	// 开发启动使用 named 版可加载前置，生产成品只声明依赖。
+	compileOnly files(rootProject.worldgenApiArtifact('api/build/contract/roadweaver-api-contract-named.jar'))
+	modLocalRuntime files(rootProject.worldgenApiArtifact('api-fabric/build/contract/roadweaver-api-fabric-devmod.jar'))
 	implementation project(":common")
 	common(project(path: ":common", configuration: "namedElements")) { transitive = false }
 	shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }

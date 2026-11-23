@@ -8,8 +8,9 @@ dependencies {
     modImplementation("dev.architectury:architectury:${project.architectury_version}")
     compileOnly("net.fabricmc:fabric-loader:${project.loader_version}")
     // 独立前置提供运行时接口；离线回归仍使用同一份 Mojang named 契约，避免错误映射。
-    compileOnly(project(path: ":api", configuration: "namedElements")) { transitive = false }
-    testImplementation(project(path: ":api", configuration: "namedElements")) { transitive = false }
+    def apiContract = rootProject.worldgenApiArtifact("api/build/contract/roadweaver-api-contract-named.jar")
+    compileOnly files(apiContract)
+    testImplementation files(apiContract)
     // 长城接口（只有 1 个 class 的极小 jar；compileOnly，不进产物）
     //
     // ⚠ 这两个工程是**独立的**，道路仓库不收录长城的任何产物 ——
@@ -87,6 +88,8 @@ def registerMainRegression = { String taskName, String testClass ->
         dependsOn tasks.named('testClasses')
         classpath = sourceSets.test.runtimeClasspath
         mainClass = testClass
+        // 源码守卫和契约 JAR 查找走同一配置，避免扫描到同名旧目录。
+        systemProperty 'roadweaver.worldgenApiRoot', rootProject.worldgenApiRoot.absolutePath
     }
 }
 

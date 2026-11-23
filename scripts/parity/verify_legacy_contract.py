@@ -15,7 +15,7 @@ def tokens_digest(path):
     return hashlib.sha256("\0".join(values).encode()).hexdigest()
 
 
-def verify(root, baseline):
+def verify(root, baseline, api_root=None):
     errors = []
     for group in ("apiTokenSha256", "resourceSha256"):
         for relative, expected in baseline[group].items():
@@ -24,7 +24,9 @@ def verify(root, baseline):
                 upgrade = baseline.get("approvedResourceChanges", {}).get(relative)
                 if upgrade is not None:
                     expected = upgrade["sha256"]
-            path = root / relative
+            # 路径键保持旧快照口径，仅在提供独立契约路径时分流。
+            path = (api_root if api_root is not None and relative.startswith(("api/", "api-fabric/"))
+                    else root) / relative
             if not path.is_file():
                 errors.append("缺少旧版契约文件: " + relative)
                 continue
@@ -56,9 +58,10 @@ def verify(root, baseline):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--api-root", type=Path, help="独立世界生成 API 仓库路径")
     args = parser.parse_args()
     baseline = json.loads(Path(__file__).with_name("legacy-contract.json").read_text(encoding="utf-8"))
-    errors = verify(args.root, baseline)
+    errors = verify(args.root, baseline, args.api_root or args.root.parent / "plaincraft-worldgen-api")
     print(json.dumps({"legacyCommit": baseline["legacyCommit"], "errors": errors,
                       "apiFiles": len(baseline["apiTokenSha256"]),
                       "resources": len(baseline["resourceSha256"]),

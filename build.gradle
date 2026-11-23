@@ -8,6 +8,17 @@ architectury {
 	minecraft = '1.21.1'
 }
 
+// 道路只依赖独立前置的开发件；集中解析路径，编译、开发启动和验包用同一版本。
+ext.worldgenApiRoot = file(providers.gradleProperty('worldgenApiProjectDir')
+        .orElse('../plaincraft-worldgen-api').get())
+ext.worldgenApiArtifact = { String relative ->
+    File artifact = new File(worldgenApiRoot, relative)
+    if (!artifact.isFile()) {
+        throw new GradleException("缺云游四海世界生成 API 开发件：${artifact}；请先按独立前置 README 构建。")
+    }
+    artifact
+}
+
 def legacyIdeOutputDirs = [
 	file('common/bin'),
 	file('fabric/bin')

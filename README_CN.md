@@ -10,7 +10,7 @@
 
 ## 安装需要什么
 
-**Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API 和 Cloth Config API。** 新版需要分别放入 **RoadWeaver 重制版**和[**独立 RoadWeaver API**](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/releases/tag/api-v1.1.1) 两个 JAR。道路、长城和河流合装时，前置只放一份。
+**Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API 和 Cloth Config API。** 新版需要分别放入 **RoadWeaver 重制版**和[**云游四海世界生成 API**](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases) 两个 JAR。道路、长城和河流合装时，前置只放一份。
 
 ## 一起安装有什么变化
 

@@ -36,8 +36,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ApiModulePurityTest {
 
-    /** api 模块源码根。JavaExec 的工作目录是 common 模块，所以往上一级找。 */
-    private static final Path API_SRC = Paths.get("..", "api", "src", "main", "java");
+    /** 从独立前置仓库读源码，避免道路目录下的残留副本让守卫误绿。 */
+    private static final Path API_SRC = Paths.get(
+            System.getProperty("roadweaver.worldgenApiRoot", "../../plaincraft-worldgen-api"),
+            "api", "src", "main", "java");
 
     private static final Pattern IMPORT = Pattern.compile(
             "^\\s*import\\s+(?:static\\s+)?(net\\.shiroha233\\.roadweaver\\.[\\w.]+)\\s*;", Pattern.MULTILINE);
@@ -48,7 +50,7 @@ class ApiModulePurityTest {
     void apiModuleMustNotReferenceInternalPackages() throws IOException {
         assertTrue(Files.isDirectory(API_SRC),
                 "api 模块源码目录不存在: " + API_SRC.toAbsolutePath()
-                        + "（工作目录应为 common 模块）");
+                        + "（请检查 worldgenApiProjectDir）");
 
         List<String> violations = new ArrayList<>();
         try (Stream<Path> files = Files.walk(API_SRC)) {
