@@ -113,7 +113,7 @@ pathlogic -> config                             81
 #   方向正确：业务层(pathlogic) 依赖基础设施(persistence)，不是反过来。
 pathlogic -> core                               202
 pathlogic -> decoration                         26
-pathlogic -> generation                         60
+pathlogic -> generation                         59
 # 2026-11-15 批2：89 -> 91。GroundBanSources 与 ModeDpBridge 各引入一次
 #   pathfinding.terrain.PathTerrainField —— 禁地面掩码需要「水面」这一独立证据源，
 #   不再复用旧判定的 isCrossing（解除循环论证）。

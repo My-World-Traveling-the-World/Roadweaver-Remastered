@@ -66,7 +66,8 @@ final class InitialConnectivityRepair {
         var retained = new ArrayList<StructureConnection>();
         int rejected = 0;
         try {
-            awaitInitialFuture(level, RouteRefinementOps.refineInitialRoutesAsync(level, candidates, step, 100));
+            // 候补是新连线，沿用常规间距；有既有走廊时才允许在冲突窗口补修。
+            awaitInitialFuture(level, RouteRefinementOps.refineInitialRoutesAsync(level, candidates, step));
             InitialGenerationProgressTracker.setRoutePhaseOperation(phase, "generating");
             var batch = InitialRouteSubmitOps.submitAndCollectAtStep(level, candidates, step);
             for (StructureConnection candidate : candidates) {

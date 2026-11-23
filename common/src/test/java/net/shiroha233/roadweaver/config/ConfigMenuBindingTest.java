@@ -28,7 +28,7 @@ final class ConfigMenuBindingTest {
                 expected.add(owner.getName() + "." + field.getName());
             }
         }
-        assertEquals(196, expected.size(), "字段变化须审查菜单、缓存与适用阶段");
+        assertEquals(197, expected.size(), "新增局部修复间距也必须有独立真实控件");
         var options = ConfigOption.bind(config);
         assertEquals(expected, new HashSet<>(options.stream().map(ConfigOption::id).toList()));
         assertEquals(expected.size(), options.size(), "重复控件也会导致保存时覆盖另一个选择");

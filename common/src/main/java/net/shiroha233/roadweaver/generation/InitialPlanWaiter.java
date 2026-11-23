@@ -173,7 +173,10 @@ public final class InitialPlanWaiter {
                         new HashMap<>();
                 List<RoadData> generatedRoads = new ArrayList<>();
                 List<StructureConnection> remaining = new ArrayList<>(roadTasks);
-                int configuredStep = ConfigService.get().pathfindingCost().effectivePathGridStep();
+                var pathfinding = ConfigService.get().pathfindingCost();
+                int configuredStep = pathfinding.effectivePathGridStep();
+                // 绑定、探测、预取、拼接、重新提交使用同一局部档位，否则旧走廊会因缓存键失配而漏读。
+                int localRepairStep = pathfinding.localRepairGridStep();
                 int[] startupBounds = ConflictWindowOps.initialSamplingBounds(level, roadTasks);
                 List<Integer> tiers = RoutePrecisionRetryPolicy.initialBatchSteps(configuredStep);
                 int candidateRetained = 0;
@@ -271,7 +274,7 @@ public final class InitialPlanWaiter {
                                         } else {
                                             RoadPlanningService.rememberProtectedGapHints(task, result.road());
                                             RoadPlanningService.rebindGeneratedRouteForRetry(level, task, result.road(),
-                                                    RoutePrecisionRetryPolicy.localRepairBatchSteps(configuredStep).get(0));
+                                                    localRepairStep);
                                             protectedGapFallbacks.put(result.originalKey(), result);
                                             removeGeneratedRoad(generatedRoads, result.road());
                                             next.add(task);
@@ -346,15 +349,10 @@ public final class InitialPlanWaiter {
                     int[] localRetained = {0};
                     int[] localCompleted = {0};
                     Set<PlannedPathKey> buildingConflictRoutes = new HashSet<>();
-                    // The rebound path cache entry lives under the local-repair
-                    // step, so the conflict probe must query the same step or
-                    // the fingerprint check silently misses it.
-                    int localProbeStep =
-                            RoutePrecisionRetryPolicy.localRepairBatchSteps(configuredStep).get(0);
                     for (StructureConnection task : remaining) {
                         PlannedPathKey key = PlannedPathKey.of(task);
                         if (protectedGapFallbacks.containsKey(key)
-                                || RoadPlanningService.hasBuildingConflict(level, task, localProbeStep)) {
+                                || RoadPlanningService.hasBuildingConflict(level, task, localRepairStep)) {
                             buildingConflictRoutes.add(key);
                         }
                     }
@@ -365,128 +363,126 @@ public final class InitialPlanWaiter {
                             "sampling");
                     InitialGenerationProgressTracker.updateRetryStates(remaining.size(), 0);
                     long localRepairWaveStartedAt = System.nanoTime();
-                    for (int step : RoutePrecisionRetryPolicy.localRepairBatchSteps(configuredStep)) {
-                        InitialGenerationProgressTracker.setCurrentSamplingStep(step);
-                        // 0.8.318：把局部修复波次拆成"splice 阶段"与"整条重生成阶段"两段计时。
-                        // 真机该波次 wallMs=224621，但 24 次 splice 本身只花 14s、统一预取 21s，
-                        // 剩余约 190s 都在按 step=2 重生成被交接的路。纯观测。
-                        long splicePhaseStartedAt = System.nanoTime();
-                        await(level, RouteRefinementOps.refineInitialRoutesAsync(
-                                level, remaining, step, 100));
-                        long splicePhaseMs = elapsedMs(splicePhaseStartedAt);
-                        InitialGenerationProgressTracker.setRoutePhaseOperation(
-                                InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "planning");
-                        InitialGenerationProgressTracker.enterStage(
-                                InitialGenerationStage.ROAD_GENERATION,
-                                "local_repair_step_" + step);
-                        InitialGenerationProgressTracker.setRoutePhaseOperation(
-                                InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "generating");
-                        long regenerateStartedAt = System.nanoTime();
-                        // 0.8.325：局部 splice 没产出 rebound 路径的路，重生成必然立刻失败
-                        // （旧代码会照排一次任务再在 worker 里拒收）。这里提交前就剔掉，
-                        // 并把"剔了几条 / 实际重生成几条"写进拆分日志，省掉纯白跑的调度。
-                        List<StructureConnection> regenerable = new ArrayList<>(remaining.size());
-                        int skippedNoRebound = 0;
-                        for (StructureConnection task : remaining) {
-                            if (RoadGenerationService.hasLocalRepairReboundPath(level, task, step)) {
-                                regenerable.add(task);
-                            } else {
-                                skippedNoRebound++;
-                                LOGGER.info("【缺少绑定路径，跳过局部修复重算】 " + "RoadWeaver local repair regenerate skipped: no rebound path "
-                                                + "step={} connection={}->{}", step, task.from(), task.to());
-                            }
+                    InitialGenerationProgressTracker.setCurrentSamplingStep(localRepairStep);
+                    // 0.8.318：把局部修复波次拆成"splice 阶段"与"整条重生成阶段"两段计时。
+                    // 真机该波次 wallMs=224621，但 24 次 splice 本身只花 14s、统一预取 21s，
+                    // 剩余约 190s 都在按 step=2 重生成被交接的路。纯观测。
+                    long splicePhaseStartedAt = System.nanoTime();
+                    await(level, RouteRefinementOps.refineInitialRoutesAsync(
+                            level, remaining, localRepairStep));
+                    long splicePhaseMs = elapsedMs(splicePhaseStartedAt);
+                    InitialGenerationProgressTracker.setRoutePhaseOperation(
+                            InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "planning");
+                    InitialGenerationProgressTracker.enterStage(
+                            InitialGenerationStage.ROAD_GENERATION,
+                            "local_repair_step_" + localRepairStep);
+                    InitialGenerationProgressTracker.setRoutePhaseOperation(
+                            InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "generating");
+                    long regenerateStartedAt = System.nanoTime();
+                    // 0.8.325：局部 splice 没产出 rebound 路径的路，重生成必然立刻失败
+                    // （旧代码会照排一次任务再在 worker 里拒收）。这里提交前就剔掉，
+                    // 并把"剔了几条 / 实际重生成几条"写进拆分日志，省掉纯白跑的调度。
+                    List<StructureConnection> regenerable = new ArrayList<>(remaining.size());
+                    int skippedNoRebound = 0;
+                    for (StructureConnection task : remaining) {
+                        if (RoadGenerationService.hasLocalRepairReboundPath(level, task, localRepairStep)) {
+                            regenerable.add(task);
+                        } else {
+                            skippedNoRebound++;
+                            LOGGER.info("【缺少绑定路径，跳过局部修复重算】 " + "RoadWeaver local repair regenerate skipped: no rebound path "
+                                            + "step={} connection={}->{}", localRepairStep, task.from(), task.to());
                         }
-                        BatchGenerationResult batch = regenerable.isEmpty()
-                                ? new BatchGenerationResult(Map.of(), List.of())
-                                : submitAndCollectAtStep(level, regenerable, step, true);
-                        long regenerateMs = elapsedMs(regenerateStartedAt);
-                        LOGGER.info("【局部修复拼接和重算耗时】 " + "RoadWeaver local repair step split: step={} routes={} regenerated={} "
-                                        + "skippedNoRebound={} spliceMs={} regenerateMs={}",
-                                step, remaining.size(), regenerable.size(), skippedNoRebound,
-                                splicePhaseMs, regenerateMs);
-                        generatedRoads.addAll(batch.roads());
-                        List<StructureConnection> next = new ArrayList<>();
-                        int localProcessed = 0;
-                        for (StructureConnection task : remaining) {
-                            PlannedPathKey taskKey = PlannedPathKey.of(task);
-                            GenResult result = batch.results().get(PlannedPathKey.of(task));
-                            rememberProfileConflict(profileFailures, result);
-                            localProcessed++;
-                            String localOutcome;
-                            if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
-                                    && result.road() != null) {
-                                localOutcome = result.road().hasProtectedGap()
-                                        ? "COMPLETED(protected gap retained)" : "COMPLETED";
-                            } else {
-                                localOutcome = "PENDING(after local repair)";
-                            }
-                            if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
-                                    && result.road() != null) {
-                                if (result.road().hasProtectedGap()) {
-                                    // Building conflicts never enter topology
-                                    // candidates. A usable locally repaired
-                                    // route with a protected gap is terminal —
-                                    // but only when it is not worse than the
-                                    // first-wave route we still hold: the
-                                    // finer step can find a shorter corridor
-                                    // that crosses more buildings (real-machine
-                                    // data: 1 run -> 4 and 1 run -> 7 runs).
-                                    GenResult fallback = protectedGapFallbacks.get(taskKey);
-                                    GenResult chosen = result;
-                                    if (fallback != null && fallback.road() != null
-                                            && leavesFewerGaps(fallback.road(), result.road())) {
-                                        chosen = fallback;
-                                        removeGeneratedRoad(generatedRoads, result.road());
-                                        generatedRoads.add(fallback.road());
-                                        LOGGER.info("【修复结果未更优，保留首轮保护缺口路线】 " + "RoadWeaver kept first-wave gap route over local repair result "
-                                                        + "firstRuns={} firstBlocks={} repairedRuns={} repairedBlocks={} connection={}->{}",
-                                                protectedGapRuns(fallback.road()),
-                                                Math.round(protectedGapBlocks(fallback.road())),
-                                                protectedGapRuns(result.road()),
-                                                Math.round(protectedGapBlocks(result.road())),
-                                                task.from(), task.to());
-                                    }
-                                    resolved.put(taskKey, chosen);
-                                    InitialGenerationProgressTracker.routePhaseRetained();
-                                    localRetained[0]++;
-                                    LOGGER.info("【建筑局部修复已得到可保留路线，停止候补替换】 " + "RoadWeaver local building repair succeeded with retained gap; candidate handoff skipped connection={}->{}",
-                                            task.from(), task.to());
-                                } else {
-                                    resolved.put(result.originalKey(), result);
-                                    localCompleted[0]++;
-                                }
-                            } else {
-                                GenResult protectedFallback = protectedGapFallbacks.get(taskKey);
-                                if (protectedFallback != null && protectedFallback.road() != null) {
-                                    // The building detour failed. Keep the
-                                    // original route and its explicit gap;
-                                    // never try a different topology candidate.
-                                    generatedRoads.add(protectedFallback.road());
-                                    resolved.put(taskKey, protectedFallback);
-                                    InitialGenerationProgressTracker.routePhaseRetained();
-                                    localRetained[0]++;
-                                    LOGGER.warn("【建筑局部修复失败，保留保护缺口并跳过候补】 " + "RoadWeaver building local repair failed; retained protected gap and skipped candidates connection={}->{} reason=see_previous_local_repair_diagnostics",
-                                            task.from(), task.to());
-                                } else if (!buildingConflictRoutes.contains(taskKey)) {
-                                    next.add(task);
-                                } else {
-                                    LOGGER.error("【建筑局部修复失败且无可保留路线，跳过候补】 " + "RoadWeaver building local repair failed without retainable route; candidates skipped connection={}->{}",
-                                            task.from(), task.to());
-                                    resolved.put(taskKey, new GenResult(taskKey, task,
-                                            RoadGenerationService.InitialTaskResult.FAILED, null));
-                                }
-                            }
-                            // 0.8.355：精细重算波次同样逐条打日志 + 落断点。
-                            LOGGER.info("【精细重算连接处理进度】 " + "RoadWeaver fine regenerate connection [{}/{}] step={} {} -> {} : {} "
-                                            + "(totalDone={} remaining={})",
-                                    localProcessed, remaining.size(), step,
-                                    task.from(), task.to(), localOutcome,
-                                    resolved.size(), next.size());
-                            recordCheckpoint(level, InitialGenerationStage.ROAD_GENERATION,
-                                    resolved.size(), roadTasks.size());
-                        }
-                        remaining = next;
                     }
+                    BatchGenerationResult batch = regenerable.isEmpty()
+                            ? new BatchGenerationResult(Map.of(), List.of())
+                            : submitAndCollectAtStep(level, regenerable, localRepairStep, true);
+                    long regenerateMs = elapsedMs(regenerateStartedAt);
+                    LOGGER.info("【局部修复拼接和重算耗时】 " + "RoadWeaver local repair step split: step={} routes={} regenerated={} "
+                                    + "skippedNoRebound={} spliceMs={} regenerateMs={}",
+                            localRepairStep, remaining.size(), regenerable.size(), skippedNoRebound,
+                            splicePhaseMs, regenerateMs);
+                    generatedRoads.addAll(batch.roads());
+                    List<StructureConnection> next = new ArrayList<>();
+                    int localProcessed = 0;
+                    for (StructureConnection task : remaining) {
+                        PlannedPathKey taskKey = PlannedPathKey.of(task);
+                        GenResult result = batch.results().get(PlannedPathKey.of(task));
+                        rememberProfileConflict(profileFailures, result);
+                        localProcessed++;
+                        String localOutcome;
+                        if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
+                                && result.road() != null) {
+                            localOutcome = result.road().hasProtectedGap()
+                                    ? "COMPLETED(protected gap retained)" : "COMPLETED";
+                        } else {
+                            localOutcome = "PENDING(after local repair)";
+                        }
+                        if (result != null && result.result() == RoadGenerationService.InitialTaskResult.COMPLETED
+                                && result.road() != null) {
+                            if (result.road().hasProtectedGap()) {
+                                // Building conflicts never enter topology
+                                // candidates. A usable locally repaired
+                                // route with a protected gap is terminal —
+                                // but only when it is not worse than the
+                                // first-wave route we still hold: the
+                                // finer step can find a shorter corridor
+                                // that crosses more buildings (real-machine
+                                // data: 1 run -> 4 and 1 run -> 7 runs).
+                                GenResult fallback = protectedGapFallbacks.get(taskKey);
+                                GenResult chosen = result;
+                                if (fallback != null && fallback.road() != null
+                                        && leavesFewerGaps(fallback.road(), result.road())) {
+                                    chosen = fallback;
+                                    removeGeneratedRoad(generatedRoads, result.road());
+                                    generatedRoads.add(fallback.road());
+                                    LOGGER.info("【修复结果未更优，保留首轮保护缺口路线】 " + "RoadWeaver kept first-wave gap route over local repair result "
+                                                    + "firstRuns={} firstBlocks={} repairedRuns={} repairedBlocks={} connection={}->{}",
+                                            protectedGapRuns(fallback.road()),
+                                            Math.round(protectedGapBlocks(fallback.road())),
+                                            protectedGapRuns(result.road()),
+                                            Math.round(protectedGapBlocks(result.road())),
+                                            task.from(), task.to());
+                                }
+                                resolved.put(taskKey, chosen);
+                                InitialGenerationProgressTracker.routePhaseRetained();
+                                localRetained[0]++;
+                                LOGGER.info("【建筑局部修复已得到可保留路线，停止候补替换】 " + "RoadWeaver local building repair succeeded with retained gap; candidate handoff skipped connection={}->{}",
+                                        task.from(), task.to());
+                            } else {
+                                resolved.put(result.originalKey(), result);
+                                localCompleted[0]++;
+                            }
+                        } else {
+                            GenResult protectedFallback = protectedGapFallbacks.get(taskKey);
+                            if (protectedFallback != null && protectedFallback.road() != null) {
+                                // The building detour failed. Keep the
+                                // original route and its explicit gap;
+                                // never try a different topology candidate.
+                                generatedRoads.add(protectedFallback.road());
+                                resolved.put(taskKey, protectedFallback);
+                                InitialGenerationProgressTracker.routePhaseRetained();
+                                localRetained[0]++;
+                                LOGGER.warn("【建筑局部修复失败，保留保护缺口并跳过候补】 " + "RoadWeaver building local repair failed; retained protected gap and skipped candidates connection={}->{} reason=see_previous_local_repair_diagnostics",
+                                        task.from(), task.to());
+                            } else if (!buildingConflictRoutes.contains(taskKey)) {
+                                next.add(task);
+                            } else {
+                                LOGGER.error("【建筑局部修复失败且无可保留路线，跳过候补】 " + "RoadWeaver building local repair failed without retainable route; candidates skipped connection={}->{}",
+                                        task.from(), task.to());
+                                resolved.put(taskKey, new GenResult(taskKey, task,
+                                        RoadGenerationService.InitialTaskResult.FAILED, null));
+                            }
+                        }
+                        // 0.8.355：精细重算波次同样逐条打日志 + 落断点。
+                        LOGGER.info("【精细重算连接处理进度】 " + "RoadWeaver fine regenerate connection [{}/{}] step={} {} -> {} : {} "
+                                        + "(totalDone={} remaining={})",
+                                localProcessed, remaining.size(), localRepairStep,
+                                task.from(), task.to(), localOutcome,
+                                resolved.size(), next.size());
+                        recordCheckpoint(level, InitialGenerationStage.ROAD_GENERATION,
+                                resolved.size(), roadTasks.size());
+                    }
+                    remaining = next;
                     InitialGenerationProgressTracker.setRoutePhaseOperation(
                             InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR,
                             "finished");

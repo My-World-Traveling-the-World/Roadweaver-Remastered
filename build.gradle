@@ -23,7 +23,8 @@ allprojects {
 	apply plugin: 'architectury-plugin'
 	
 	group = 'net.shiroha233.roadweaver'
-	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.117'
+	// 成品需与已安装的固定2格版本可区分，回退时可以核对准确文件。
+	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.118'
 	repositories {
 		maven { url = 'https://maven.architectury.dev/' }
 		maven { url = 'https://maven.fabricmc.net/' }

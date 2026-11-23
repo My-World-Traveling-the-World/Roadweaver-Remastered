@@ -5,8 +5,11 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.shiroha233.roadweaver.config.meta.ConfigKeyTable;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
+import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
 import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import net.shiroha233.roadweaver.pathfinding.Pathfinder;
+import net.shiroha233.roadweaver.persistence.WorldgenFingerprint;
+import net.shiroha233.roadweaver.planning.path.PlannedPathFingerprintService;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
@@ -132,6 +135,33 @@ final class CurrentConfigContractTest {
         var meta = ConfigKeyTable.byJsonKey("pathGridStep").orElseThrow();
         assertEquals(RoadConstants.PATH_GRID_STEP_MIN, meta.min().intValue());
         assertEquals(RoadConstants.PATH_GRID_STEP_MAX, meta.max().intValue());
+    }
+
+    @Test
+    void localRepairGridUsesItsOwnRangeWithoutInvalidatingFirstPass() throws Exception {
+        // 既有配置缺这个字段时保留旧的2格；修改它不会冲掉低成本的首轮缓存。
+        var config = ConfigService.decodeCurrent(JsonParser.parseString(
+                "{\"pathfindingCost\":{\"pathGridStep\":16}}").getAsJsonObject());
+        var pathfinding = config.pathfindingCost();
+        assertEquals(2, pathfinding.localRepairGridStep());
+        var worldgen = new WorldgenFingerprint("1".repeat(64), 1, 3955);
+        var mode = TerrainSamplingMode.COARSE_CORRIDOR;
+        var payloadBefore = payloads(config);
+        assertFalse(payloadBefore.getFirst().contains("localRepairGridStep"),
+                "新增默认字段也不能改变原路径缓存身份");
+        var originalRetry = PlannedPathFingerprintService.create(worldgen, mode,
+                pathfinding.withPathGridStep(pathfinding.localRepairGridStep()));
+        pathfinding.setLocalRepairGridStep(999);
+        config.sanitize();
+        assertEquals(8, pathfinding.localRepairGridStep());
+        assertEquals(16, pathfinding.effectivePathGridStep());
+        assertEquals(payloadBefore, payloads(config));
+        // 实际交给局部规划的步长仍区分缓存，8格修复不能误读先前的2格结果。
+        assertNotEquals(originalRetry, PlannedPathFingerprintService.create(worldgen, mode,
+                pathfinding.withPathGridStep(pathfinding.localRepairGridStep())));
+        pathfinding.setLocalRepairGridStep(0);
+        assertEquals(1, ConfigService.decodeCurrent(GSON.toJsonTree(config).getAsJsonObject())
+                .pathfindingCost().localRepairGridStep());
     }
 
     @Test

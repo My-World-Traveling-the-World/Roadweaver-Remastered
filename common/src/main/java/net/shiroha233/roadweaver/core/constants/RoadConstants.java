@@ -22,6 +22,11 @@ public final class RoadConstants {
     /** 局部修复允许降至一格采样，避免粗格漏过狭小通路。 */
     public static final int PATH_GRID_STEP_MIN = 1;
 
+    /** 保留既有两格的局部修复精度；一格留给需要更密网格的玩家。 */
+    public static final int DEFAULT_LOCAL_REPAIR_GRID_STEP = 2;
+    /** 冲突圆窗最小半径是16格，限制步长以免小窗口内只有一两个采样点。 */
+    public static final int LOCAL_REPAIR_GRID_STEP_MAX = 8;
+
     public static final int DEFAULT_PLAN_MAX_EDGE_LEN_BLOCKS = 2048;
     public static final int DEFAULT_BRIDGE_JOIN_LEN_BLOCKS = 1536;
     public static final double DEFAULT_COMPONENT_MIN_ANGLE_DEG = 35.0;

@@ -24,14 +24,6 @@ public final class RoutePrecisionRetryPolicy {
         return fullRouteSteps(configuredStep);
     }
 
-    /** 局部修复单独一波以刷新冲突上下文；不代表启用已关闭的拓扑替换。 */
-    public static List<Integer> localRepairBatchSteps(int configuredStep) {
-        // Local conflict repair uses a 2-block level. It is only patching the
-        // recorded conflict windows, so the finest 1-block pass is unnecessary
-        // and made the local repair the dominant startup cost.
-        return List.of(Math.max(2, RoadConstants.PATH_GRID_STEP_MIN));
-    }
-
     /** 拓扑候选沿用玩家精度，避免换点同时偷偷换精度。 */
     public static List<Integer> candidateBatchSteps(int configuredStep) {
         return List.of(Math.max(RoadConstants.PATH_GRID_STEP_MIN,

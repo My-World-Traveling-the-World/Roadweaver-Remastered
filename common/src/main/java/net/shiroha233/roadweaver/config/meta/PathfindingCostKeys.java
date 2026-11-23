@@ -47,8 +47,15 @@ public final class PathfindingCostKeys {
             ConfigKey.integer("pathGridStep", RoadConstants.DEFAULT_PATH_GRID_STEP, RoadConstants.PATH_GRID_STEP_MIN, RoadConstants.PATH_GRID_STEP_MAX,
                     ConfigCategory.PERFORMANCE, ConfigTier.BASIC, ConfigStatus.ACTIVE,
                     "寻路网格间距", "Path grid spacing",
-                    "BAND/Fast Marching及局部修复的采样间隔，8表示8格一个节点",
+                    "首轮寻路的采样间隔，8表示8格一个节点；开局冲突窗口重试有独立间距。",
                     "格", "新架构里步长只是搜索粒度，几何由弹性带在方块坐标系里做"),
+            // 两档摆在同一页，玩家调的是窗口里的采样密度，不是绕行半径。
+            ConfigKey.integer("localRepairGridStep", RoadConstants.DEFAULT_LOCAL_REPAIR_GRID_STEP,
+                    RoadConstants.PATH_GRID_STEP_MIN, RoadConstants.LOCAL_REPAIR_GRID_STEP_MAX,
+                    ConfigCategory.PERFORMANCE, ConfigTier.BASIC, ConfigStatus.ACTIVE,
+                    "局部修复网格间距", "Local repair grid spacing",
+                    "开局对未解决的冲突做局部绕行时的采样间隔。越小越细，可能耗时更长；默认2格。此项不改变首轮间距或局部冲突半径。",
+                    "格", "只影响新的局部修复；不改变首轮寻路或局部冲突半径"),
 
             ConfigKey.decimal("heuristicWeight", RoadConstants.DEFAULT_HEURISTIC_WEIGHT, 0.0, 10.0D,
                     ConfigCategory.PROFILE, ConfigTier.EXPERT, ConfigStatus.ACTIVE,

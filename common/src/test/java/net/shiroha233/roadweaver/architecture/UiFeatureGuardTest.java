@@ -293,7 +293,7 @@ public final class UiFeatureGuardTest {
         assertTrue(renderer.contains("ConfigOption.bind(draft)"));
         assertTrue(renderer.contains("new OpenStructureSelectionEntry()"));
         assertTrue(renderer.contains("new OpenPresetEditorEntry()"));
-        assertEquals(196, net.shiroha233.roadweaver.config.meta.ConfigOption.bind(
+        assertEquals(197, net.shiroha233.roadweaver.config.meta.ConfigOption.bind(
                 new net.shiroha233.roadweaver.config.ModConfig()).size());
         assertEquals(8, net.shiroha233.roadweaver.config.meta.ConfigCategory.values().length);
     }

@@ -138,15 +138,15 @@ import static net.shiroha233.roadweaver.planning.PlanningBoundsOps.*;
 
  *
 
- * <h2>★ 三档精化，成本递增</h2>
+ * <h2>首轮精修与冲突修复职责不同，避免把局部重试当成整路重算</h2>
 
  * <ul>
 
- *   <li>{@code refineInitialRoutesAsync} —— 整批初始路线（最粗）；</li>
+ *   <li>{@code refineInitialRoutesAsync} —— 为未解决路线聚合并预取冲突窗口；</li>
 
- *   <li>{@code refineInitialBatchAsync} —— 按批（中等）；</li>
+ *   <li>{@code refineInitialBatchAsync} —— 在首轮路线上按批准备走廊精修；</li>
 
- *   <li>{@code refineLocalRouteWindowAsync} —— 只修某个冲突窗口（最细、最贵）。</li>
+ *   <li>{@code refineLocalRouteWindowAsync} —— 在单个冲突窗口内尝试绕行，再拼回原路线。</li>
 
  * </ul>
 
@@ -178,9 +178,7 @@ public final class RouteRefinementOps {
 
             List<StructureConnection> connections,
 
-            int step,
-
-            int paddingBlocks) {
+            int step) {
 
         if (level == null || connections == null || connections.isEmpty()) {
 
@@ -188,11 +186,7 @@ public final class RouteRefinementOps {
 
         }
 
-        // Local repair is intentionally fixed to the user's 100-block
-
-        // conflict radius. The caller's legacy padding argument must not
-
-        // accidentally enlarge the building search or sampling window.
+        // 圆窗半径独立于网格间距；精度改变只增加或减少窗内采点，不扩大精采范围。
 
         int padding = ConfigService.get().planning().localConflictRadiusBlocks();
 

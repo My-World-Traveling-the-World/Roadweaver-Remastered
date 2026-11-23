@@ -29,6 +29,8 @@ public final class PathfindingCostConfig implements SubConfig {
     private double heuristicWeight = RoadConstants.DEFAULT_HEURISTIC_WEIGHT;
     private double deviationWeight = RoadConstants.DEFAULT_DEVIATION_WEIGHT;
     private int pathGridStep = RoadConstants.DEFAULT_PATH_GRID_STEP;
+    // 局部重试与首轮搜索用不同的网格，调精修不该增加首轮整条路的采样量。
+    private int localRepairGridStep = RoadConstants.DEFAULT_LOCAL_REPAIR_GRID_STEP;
 
     // 桥隧判据比较翻山与挖隧道的费用，软硬阈值都不能误当作废弃寻路参数。
     private double softGradeLimit = RoadConstants.DEFAULT_SOFT_GRADE_LIMIT;
@@ -87,6 +89,8 @@ public final class PathfindingCostConfig implements SubConfig {
         deviationWeight = finiteNonNegative(deviationWeight, RoadConstants.DEFAULT_DEVIATION_WEIGHT);
         pathGridStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN,
                 Math.min(RoadConstants.PATH_GRID_STEP_MAX, pathGridStep));
+        localRepairGridStep = Math.max(RoadConstants.PATH_GRID_STEP_MIN,
+                Math.min(RoadConstants.LOCAL_REPAIR_GRID_STEP_MAX, localRepairGridStep));
 
         softGradeLimit = finiteFraction(softGradeLimit, RoadConstants.DEFAULT_SOFT_GRADE_LIMIT);
         hardGradeLimit = finiteFraction(hardGradeLimit, RoadConstants.DEFAULT_HARD_GRADE_LIMIT);
@@ -148,6 +152,7 @@ public final class PathfindingCostConfig implements SubConfig {
         copy.heuristicWeight = this.heuristicWeight;
         copy.deviationWeight = this.deviationWeight;
         copy.pathGridStep = this.pathGridStep;
+        copy.localRepairGridStep = this.localRepairGridStep;
         copy.softGradeLimit = this.softGradeLimit;
         copy.hardGradeLimit = this.hardGradeLimit;
         copy.softGradePenalty = this.softGradePenalty;
@@ -202,6 +207,9 @@ public final class PathfindingCostConfig implements SubConfig {
     public void setDeviationWeight(double v) { this.deviationWeight = v; }
     public int pathGridStep() { return pathGridStep; }
     public void setPathGridStep(int v) { this.pathGridStep = v; }
+    /** 单独传给冲突窗口重试，避免临时改写主网格时覆盖这档配置。 */
+    public int localRepairGridStep() { return localRepairGridStep; }
+    public void setLocalRepairGridStep(int v) { this.localRepairGridStep = v; }
     /** 算法是固定能力，不再读取或保存旧算法选择键。 */
     public PathfindingAlgorithm pathfindingAlgorithm() { return PathfindingAlgorithm.BAND; }
 

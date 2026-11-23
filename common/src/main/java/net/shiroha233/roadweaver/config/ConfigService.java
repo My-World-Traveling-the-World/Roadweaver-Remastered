@@ -96,7 +96,10 @@ public final class ConfigService {
         root.add("planning", GSON.toJsonTree(INSTANCE.planning()));
         // 绕行倍率改变候选路径，挖填与海底策略改变最终剖面；两类缓存均不能复用旧身份。
         root.add("terrainProfile", GSON.toJsonTree(INSTANCE.terrainProfile()));
-        root.add("pathfindingCost", GSON.toJsonTree(INSTANCE.pathfindingCost()));
+        // 冲突重试的缓存键已写入实际网格步长；调这档不应使首轮缓存或开局覆盖重算。
+        JsonObject pathfinding = GSON.toJsonTree(INSTANCE.pathfindingCost()).getAsJsonObject();
+        pathfinding.remove("localRepairGridStep");
+        root.add("pathfindingCost", pathfinding);
         root.add("roadAppearance", GSON.toJsonTree(INSTANCE.roadAppearance()));
         root.add("bridge", GSON.toJsonTree(INSTANCE.bridge()));
         root.add("roadsideStructure", GSON.toJsonTree(INSTANCE.roadsideStructure()));

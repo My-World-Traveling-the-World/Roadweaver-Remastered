@@ -50,7 +50,6 @@ import net.shiroha233.roadweaver.structures.precompute.RoadsideStructurePrecompu
 import net.shiroha233.roadweaver.structures.precompute.RoadsideVillagePrecomputer;
 import net.shiroha233.roadweaver.runtime.RoadLifecycle;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
-import net.shiroha233.roadweaver.generation.RoutePrecisionRetryPolicy;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.generation.ConnectionDeletionService;
 import net.shiroha233.roadweaver.generation.DetailedRoadGenerationStats;
@@ -825,14 +824,10 @@ public final class Road {
 
     /** 重绑缓存使用局部修复将查询的精度键，避免下一波因键不同丢失已有走廊。
  *
-     * Rebinding stores the route under the precision that the local-repair
-     * wave later queries. Using the full-route step here leaves the rebound
-     * cache under a different key, which made the following local pass report
-     * "missing persisted route path".
+     * 失败时按局部档位保存已有走廊，后续窗口修复能找到它；按首轮档位保存会查不到。
      */
     int localRetryStep() {
-        int configured = genConfig == null ? 4 : Math.max(1, genConfig.pathfinding().effectivePathGridStep());
-        return RoutePrecisionRetryPolicy.localRepairBatchSteps(configured).get(0);
+        return genConfig.pathfinding().localRepairGridStep();
     }
 
 

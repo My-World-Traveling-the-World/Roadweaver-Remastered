@@ -45,13 +45,10 @@ final class RoutePrecisionRetryPolicyTest {
     }
 
     @Test
-    void localRepairIsPublishedAsItsOwnRetryWave() {
-        // Local conflict repair uses a 2-block sampling level; it patches only
-        // the recorded conflict windows, so the finest 1-block pass is skipped.
-        assertEquals(List.of(2), RoutePrecisionRetryPolicy.localRepairBatchSteps(8));
-        assertEquals(List.of(2), RoutePrecisionRetryPolicy.localRepairBatchSteps(4));
-        assertEquals(List.of(2), RoutePrecisionRetryPolicy.localRepairBatchSteps(2));
-        assertEquals(List.of(2), RoutePrecisionRetryPolicy.localRepairBatchSteps(1));
+    void initialBatchOnlyRunsTheSelectedMainStep() {
+        // 1格和8格首轮都只跑一遍，局部修复另派发，不能变成额外的整路精采。
+        assertEquals(List.of(1), RoutePrecisionRetryPolicy.initialBatchSteps(1));
+        assertEquals(List.of(8), RoutePrecisionRetryPolicy.initialBatchSteps(8));
     }
 
     @Test
