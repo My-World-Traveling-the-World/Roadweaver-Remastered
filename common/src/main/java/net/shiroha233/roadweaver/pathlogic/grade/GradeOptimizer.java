@@ -1,6 +1,6 @@
 /* 文件职责：最优坡度剖面求解 —— 在「土方量」与「偏离原高」之间找最优折中。  *
  * ⚠ 待删（批1）：重制台账「纵断面与坡度」域。已被 pathlogic/profile/ProfileDpSolver 取代。
- *   删除条件（三条全满足才许删，见 REFACTOR.md 的删除判定）：
+ *   删除条件（三条全满足才许删，见 HANDOFF.md 的删除判定）：
  *     ① pathlogic/profile 的 DP 内核有独立测试且全绿；
  *     ② 本类零外部引用（全模块扫描，含 fabric/api 与 JSON）；
  *     ③ 删完回归仍全绿。

@@ -79,9 +79,9 @@ class GuardPreconditionTest {
         // 每个条目 = 一个守卫会读的东西。少任何一个，对应守卫就会跳过或读不到基线。
         Map<String, String> required = new LinkedHashMap<>();
         required.put("settings.gradle", "所有守卫的根标记");
-        required.put("REFACTOR.md", "LegacyLedgerTest（台账）+ S5MethodMapTest");
-        required.put("docs/S5-METHOD-MAP.md", "S5MethodMapTest");
-        required.put("docs/S5-POSTPROCESS-LEDGER.md", "PostprocessLedgerTest");
+        required.put("common/src/test/resources/architecture/legacy-replacement-baseline.txt", "LegacyLedgerTest（台账）+ S5MethodMapTest");
+        required.put("common/src/test/resources/architecture/postprocess-methods-baseline.txt", "S5MethodMapTest");
+        required.put("common/src/test/resources/architecture/postprocess-files-baseline.txt", "PostprocessLedgerTest");
         required.put("common/src/main/java/net/shiroha233/roadweaver", "所有源码扫描类守卫");
         required.put("common/src/test/java/net/shiroha233/roadweaver", "回归登记守卫");
         required.put("common/src/test/resources/architecture/dead-code-baseline.txt", "DeadCodeGuardTest");

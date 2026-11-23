@@ -1,7 +1,7 @@
 /* 文件职责：配置界面的结构列表组件 —— 支持树形展示与模组图标。
  *
  * ⚠ 本类在 fabric 侧使用、体量不小且**在 common 里无法单测**（依赖 GuiGraphics 一族）。
- * 配置界面整体拆分是遗留工作，见 REFACTOR.md 的 S6。
+ * 独立保留结构选择器，避免将结构筛选与通用配置表单的状态混在一起。
  */
 package net.shiroha233.roadweaver.client.config;
 

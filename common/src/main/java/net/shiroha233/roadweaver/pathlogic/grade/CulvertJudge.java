@@ -8,7 +8,7 @@ import net.shiroha233.roadweaver.config.ConfigService;
  *
  * <p>本文件<b>不属于</b>待删（批1）范围：它是 2026-11-15 从
  * {@link RoadConstructionSafety} 抽出的<b>新</b>判据类，与该文件同属
- * 批 1 的「保留输入」（KEEP_INPUT），不删。台账登记见 {@code REFACTOR.md}
+ * 批 1 的「保留输入」（KEEP_INPUT），不删。台账登记见 {@code HANDOFF.md}
  * 的 {@code LEDGER|1} 行。</p>
  *
  * <h2>为什么单独成类</h2>

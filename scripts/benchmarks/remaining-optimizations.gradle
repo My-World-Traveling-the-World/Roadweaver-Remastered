@@ -36,7 +36,7 @@ gradle.projectsEvaluated {
             dependsOn compile
             classpath = p.sourceSets.test.runtimeClasspath + p.files(out)
             mainClass = main
-            args p.rootProject.file("docs/evidence/${name}-${tag}.json").absolutePath, baseline
+            args p.rootProject.file("build/evidence/${name}-${tag}.json").absolutePath, baseline
             jvmArgs '-Xms512m', '-Xmx512m'
         }
     }

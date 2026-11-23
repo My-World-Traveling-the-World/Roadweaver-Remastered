@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       边界锁定、端点共享高度等，都会再改一遍剖面；</li>
  *   <li>地形是<b>合成</b>的，不是真实存档的采样；</li>
  *   <li>所以本研究的定位是「早期信号」，不是「能否切默认」的依据。
- *       后者仍然要真实会话里的 {@code [PROFILE-AB-SUMMARY]}（见 REFACTOR.md）。</li>
+ *       后者仍然要真实会话里的 {@code [PROFILE-AB-SUMMARY]}（见 HANDOFF.md）。</li>
  * </ul>
  *
  * <h2>它能回答什么</h2>

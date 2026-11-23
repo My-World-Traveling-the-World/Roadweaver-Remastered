@@ -5,7 +5,7 @@
  * 因为它们没有共同的目标函数，只能靠互相打补丁收敛。
   *
  * ⚠ 待删（批1）：重制台账「纵断面与坡度」域。已被 pathlogic/profile/ProfileDpSolver + ModeDpSolver 取代。
- *   删除条件（三条全满足才许删，见 REFACTOR.md 的删除判定）：
+ *   删除条件（三条全满足才许删，见 HANDOFF.md 的删除判定）：
  *     ① pathlogic/profile 的 DP 内核有独立测试且全绿；
  *     ② 本类零外部引用（全模块扫描，含 fabric/api 与 JSON）；
  *     ③ 删完回归仍全绿。

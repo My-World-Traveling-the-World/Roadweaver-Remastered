@@ -68,7 +68,7 @@ public final class PostprocessLedgerTest {
                     .resolve("net").resolve("shiroha233").resolve("roadweaver");
             if (Files.isDirectory(cand)) {
                 srcRoot = cand;
-                ledger = dir.resolve("docs").resolve("S5-POSTPROCESS-LEDGER.md");
+                ledger = dir.resolve("common/src/test/resources/architecture/postprocess-files-baseline.txt");
                 return;
             }
             dir = dir.getParent();

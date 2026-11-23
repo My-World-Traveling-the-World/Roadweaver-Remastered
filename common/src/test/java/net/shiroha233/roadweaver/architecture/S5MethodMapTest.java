@@ -119,7 +119,7 @@ public final class S5MethodMapTest {
     @Test
     void 台账必须覆盖受管文件的每个方法() throws IOException {
         Assumptions.assumeTrue(srcRoot != null, "找不到源码根，跳过");
-        Path map = repoRoot.resolve("docs").resolve("S5-METHOD-MAP.md");
+        Path map = repoRoot.resolve("common/src/test/resources/architecture/postprocess-methods-baseline.txt");
         assertTrue(Files.isRegularFile(map), "缺 S5 方法台账：" + map);
         Map<String, Map<String, String>> listed = readMap(map);
 
@@ -160,7 +160,7 @@ public final class S5MethodMapTest {
     @Test
     void 可删方法的外部引用必须恒为零() throws IOException {
         Assumptions.assumeTrue(srcRoot != null, "跳过");
-        Path map = repoRoot.resolve("docs").resolve("S5-METHOD-MAP.md");
+        Path map = repoRoot.resolve("common/src/test/resources/architecture/postprocess-methods-baseline.txt");
         assertTrue(Files.isRegularFile(map), "缺 S5 方法台账");
         Map<String, Map<String, String>> listed = readMap(map);
 

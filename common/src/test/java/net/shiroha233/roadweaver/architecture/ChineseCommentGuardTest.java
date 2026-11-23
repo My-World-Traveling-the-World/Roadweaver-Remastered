@@ -33,12 +33,10 @@ final class ChineseCommentGuardTest {
     void everyAttachedProductionJavadocHasChineseBody() throws IOException {
         Path root = Path.of("..").toAbsolutePath().normalize();
         List<Path> paths = new ArrayList<>();
-        // 空扫描必须失败，不能把目录消失当作已覆盖。
-        for (String module : List.of("api", "api-fabric", "common", "fabric", "neoforge")) {
-            Path directory = root.resolve(module);
-            assertTrue(Files.isDirectory(directory), "缺少模块：" + directory);
-            Path main = directory.resolve("src/main");
-            if (!Files.exists(main)) continue;
+        // 只扫描本仓库实际构建的模块，独立前置不再属于这棵源码树。
+        for (String module : List.of("common", "fabric")) {
+            Path main = root.resolve(module).resolve("src/main/java");
+            assertTrue(Files.isDirectory(main), "缺少生产源码：" + main);
             try (var walk = Files.walk(main)) {
                 paths.addAll(walk.filter(p -> p.toString().endsWith(".java")).toList());
             }

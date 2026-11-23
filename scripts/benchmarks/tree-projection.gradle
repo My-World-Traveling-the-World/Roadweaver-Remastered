@@ -13,7 +13,10 @@ gradle.projectsEvaluated {
   dependsOn compile
   classpath=p.sourceSets.test.runtimeClasspath+p.files(out)
   mainClass='net.shiroha233.roadweaver.pathlogic.construction.TreeProjectionProbe'
-  args p.rootProject.file('docs/evidence/tree-projection-benchmark-20261120.json').absolutePath
+  def report=p.rootProject.file('build/evidence/tree-projection-benchmark-20261120.json')
+  // 首次运行也能导出，因为构建输出目录不纳入版本控制。
+  doFirst { report.parentFile.mkdirs() }
+  args report.absolutePath
   jvmArgs '-Xms512m','-Xmx512m'
  }
 }

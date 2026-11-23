@@ -26,10 +26,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class ClientProfileRepairTest {
     static Stream<int[]> terrains() throws Exception {
         Path root = Path.of("").toAbsolutePath();
-        while (root != null && !Files.isDirectory(root.resolve("docs/evidence"))) root = root.getParent();
+        while (root != null && !Files.isDirectory(root.resolve("common/src/test/resources/profile"))) root = root.getParent();
         assertNotNull(root, "必须找到已提交的客户端证据，不能因工作目录不同而跳过");
         var data = JsonParser.parseString(Files.readString(
-                root.resolve("docs/evidence/client-road-profile-failures-20261121.json"))).getAsJsonObject();
+                root.resolve("common/src/test/resources/profile/client-road-profile-failures-20261121.json"))).getAsJsonObject();
         var samples = data.getAsJsonArray("samples");
         assertEquals(6, samples.size());
         var arrays = new ArrayList<int[]>();

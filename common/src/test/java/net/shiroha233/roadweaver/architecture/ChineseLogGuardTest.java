@@ -31,12 +31,10 @@ final class ChineseLogGuardTest {
     void everyProductionLoggingCallHasAChineseDescription() throws IOException {
         Path root = Path.of("..").toAbsolutePath().normalize();
         List<Path> sources = new ArrayList<>();
-        // 显式遍历全部模块；目录消失不能被当成零日志自动通过。
-        for (String module : List.of("api", "api-fabric", "common", "fabric", "neoforge")) {
-            Path directory = root.resolve(module);
-            assertTrue(Files.isDirectory(directory), "缺少生产模块：" + directory);
-            Path main = directory.resolve("src/main");
-            if (!Files.exists(main)) continue; // neoforge仅有构建配置，没有生产源码。
+        // 只扫描本仓库实际构建的模块，独立前置不再属于这棵源码树。
+        for (String module : List.of("common", "fabric")) {
+            Path main = root.resolve(module).resolve("src/main/java");
+            assertTrue(Files.isDirectory(main), "缺少生产源码：" + main);
             try (var walk = Files.walk(main)) {
                 sources.addAll(walk.filter(p -> p.toString().endsWith(".java")).toList());
             }

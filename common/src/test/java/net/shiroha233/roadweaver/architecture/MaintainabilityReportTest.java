@@ -56,7 +56,7 @@ public final class MaintainabilityReportTest {
     // ── 方法级注释的 ratchet 底线（2026-11-13 实测）──────────────
     // 这三层是 depth-D 的剩余部分，规模远大于文件头（合计 4,887 个元素），
     // 短期做不完。先锁成「只许升不许降」，让进度可见、不许倒退；
-    // 具体推进节奏与取舍见 REFACTOR.md。
+    // 具体推进节奏与取舍见 HANDOFF.md。
     /** 有注释的 public 方法数（实测 906 / 3,338）。 */
     private static final int PUBLIC_METHOD_DOC_FLOOR = 906;
     /** 有注释的 private 方法数（实测 271 / 1,549）。 */

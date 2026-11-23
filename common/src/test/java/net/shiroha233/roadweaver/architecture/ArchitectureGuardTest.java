@@ -37,10 +37,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>有效代码行超过 800 的类必须属于基线集合（不许新增；注释不计）</li>
  *   <li>超过 60 个方法的类必须属于基线集合（不许新增）</li>
  *   <li>有「文件职责」头注的文件数不得少于基线</li>
- *   <li>{@code ARCHITECTURE.md} 必须列出每个新架构包的职责</li>
+ *   <li>{@code HANDOFF.md} 必须列出每个新架构包的职责</li>
  * </ol>
  *
- * @see <a href="file:../../../../../../../ARCHITECTURE.md">ARCHITECTURE.md</a>
+ * @see <a href="file:../../../../../../../HANDOFF.md">HANDOFF.md</a>
  */
 class ArchitectureGuardTest {
 
@@ -208,7 +208,7 @@ class ArchitectureGuardTest {
             }
         }
         assertTrue(violations.isEmpty(),
-                "层依赖必须单向（ARCHITECTURE.md 的依赖表）。反向依赖违反项:\n  "
+                "层依赖必须单向（HANDOFF.md 的依赖表）。反向依赖违反项:\n  "
                         + String.join("\n  ", violations));
     }
 
@@ -486,9 +486,9 @@ class ArchitectureGuardTest {
 
     @Test
     void 架构文档必须说明每个新架构包() throws IOException {
-        Path doc = Paths.get("..", "ARCHITECTURE.md");
+        Path doc = Paths.get("..", "HANDOFF.md");
         assertTrue(Files.isRegularFile(doc),
-                "ARCHITECTURE.md 不存在（工作目录应为 common 模块，往上一级找）: "
+                "HANDOFF.md 不存在（工作目录应为 common 模块，往上一级找）: "
                         + doc.toAbsolutePath());
         String text = Files.readString(doc, StandardCharsets.UTF_8);
         List<String> missing = new ArrayList<>();
@@ -496,7 +496,7 @@ class ArchitectureGuardTest {
             if (!text.contains(pkg)) missing.add(pkg);
         }
         assertTrue(missing.isEmpty(),
-                "ARCHITECTURE.md 缺这些新架构包的职责说明（文档与代码必须同源）: "
+                "HANDOFF.md 缺这些新架构包的职责说明（文档与代码必须同源）: "
                         + String.join(", ", missing));
     }
 

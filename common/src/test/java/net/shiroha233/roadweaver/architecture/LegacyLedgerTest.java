@@ -53,7 +53,7 @@ final class LegacyLedgerTest {
     static void locateRepo() {
         Path dir = Paths.get(System.getProperty("user.dir")).toAbsolutePath();
         for (int i = 0; i < 6 && dir != null; i++) {
-            if (Files.isRegularFile(dir.resolve("REFACTOR.md"))) {
+            if (Files.isRegularFile(dir.resolve("settings.gradle"))) {
                 repoRoot = dir;
                 return;
             }
@@ -78,8 +78,8 @@ final class LegacyLedgerTest {
     }
 
     private static List<Row> rows() throws IOException {
-        Assumptions.assumeTrue(repoRoot != null, "找不到 REFACTOR.md，跳过台账守卫");
-        List<String> lines = Files.readAllLines(repoRoot.resolve("REFACTOR.md"), StandardCharsets.UTF_8);
+        Assumptions.assumeTrue(repoRoot != null, "找不到道路工程根目录");
+        List<String> lines = Files.readAllLines(repoRoot.resolve("common/src/test/resources/architecture/legacy-replacement-baseline.txt"), StandardCharsets.UTF_8);
         List<Row> out = new ArrayList<>();
         boolean inside = false;
         for (String raw : lines) {
@@ -183,7 +183,7 @@ final class LegacyLedgerTest {
      * 而批 4/5/6/7 都是 {@code TODO} ⇒ 它们的 {@code newPkg} 从未被检查。</p>
      *
      * <h2>为什么不直接把 newPkg 改成真实路径</h2>
-     * <p>因为<b>真实做法根本不是「搬到新包」</b>：{@code ARCHITECTURE.md} 顶部已定案
+     * <p>因为<b>真实做法根本不是「搬到新包」</b>：{@code HANDOFF.md} 顶部已定案
      * 「保留旧仓的顶层包结构，<b>就地重构</b>」，批 4/5/6/7 的实现就长在旧包里
      * （{@code pathlogic/junction} 4 类 / {@code postprocess} 13 类 /
      * {@code pathlogic/structures} 23 类 / {@code pathlogic/validation} 4 类）。</p>

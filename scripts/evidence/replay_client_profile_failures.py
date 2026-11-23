@@ -9,7 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE = ROOT / "common/src/main/java/net/shiroha233/roadweaver/pathlogic/profile"
-SOURCES = ("ProfileDpSolver", "ProfilePairTransitions", "CostModel", "ProfileDpSource", "ProfileFallback", "ProfileFeasibility")
+# 回溯父表已独立成类，离线探针也要编译它才能重放当前生产求解器。
+SOURCES = ("ProfileDpSolver", "ProfilePairTransitions", "ProfileParentRow", "CostModel",
+           "ProfileDpSource", "ProfileFallback", "ProfileFeasibility")
 PROBE = r"""
 import java.nio.file.*;
 import java.util.*;
@@ -40,7 +42,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jdk", type=Path, default=Path(r"C:\Program Files\Java\jdk-21"))
     parser.add_argument("--evidence", type=Path,
-                        default=ROOT / "docs/evidence/client-road-profile-failures-20261121.json")
+                        default=ROOT / "common/src/test/resources/profile/client-road-profile-failures-20261121.json")
     options = parser.parse_args()
     evidence = json.loads(options.evidence.read_text(encoding="utf-8"))
     if evidence["parameters"] != {"cut": 5, "fill": 4, "maxStep": 1, "perTwo": 1}:

@@ -1,0 +1,9 @@
+<!-- LEDGER:BEGIN -->
+LEDGER|1|纵断面与坡度|pathlogic/grade|pathlogic/profile|DONE|3543
+LEDGER|2|桥隧判定|pathlogic/tunnel|pathlogic/profile|IN_PROGRESS|2918
+LEDGER|3|桥体与施工|pathlogic/bridge|pathlogic/construction|IN_PROGRESS|4085
+LEDGER|4|路口与合并|pathlogic/junction|roadnet|TODO|1877
+LEDGER|5|几何后处理|postprocess|geometry|TODO|5615
+LEDGER|6|结构避让|pathlogic/structures|avoidance|TODO|6291
+LEDGER|7|验证与收尾|pathlogic/validation|validate|TODO|1594
+<!-- LEDGER:END -->

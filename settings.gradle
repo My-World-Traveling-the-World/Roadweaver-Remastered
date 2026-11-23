@@ -54,6 +54,5 @@ dependencyResolutionManagement {
 
 rootProject.name = 'roadweaver'
 
-// PlainCraft ships Fabric only. Keep the upstream NeoForge sources as a
-// reference directory, but never configure or resolve that platform.
+// 重制版只发布 Fabric，共享代码仍由 common 提供。
 include 'common', 'fabric'

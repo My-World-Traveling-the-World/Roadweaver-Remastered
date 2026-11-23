@@ -1,29 +1,3 @@
-# S5 方法级台账：3 个 REPLACE_BY_DP 文件的删除边界
-
-> **相关文档**：本文只说「删什么」。[历史切换清单](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/blob/f2c06ea93c3d77e71c982086f59e688c433bd426/docs/archive/S7-SWITCH-CHECKLIST.md)
-> 记录当时的拆除顺序，其「第 3 级前置 A」还写明了
-> `SurfaceGradeLimits` 必须先抽出来才能删 `RoadGradePlanner`。
-> 文件级分类见 [`S5-POSTPROCESS-LEDGER.md`](S5-POSTPROCESS-LEDGER.md)。
-
-> 由 `S5MethodMapTest` 机器校验：**分类为 `DELETE_WITH_LEGACY` 的方法，外部引用必须恒为 0**。
-> 注意：那个统计按 `\b名称\s*\(` 匹配，抓不到 `Type.method()` 与纯类型用法 —— 所以本表仍可能是错的，抽查时请自己 grep。
-> 一旦有人从别处调用它，守卫会红 —— 因为它就意味着「这个删不掉了」。
-
-## 分类口径
-
-| 类别 | 含义 |
-|---|---|
-| `DELETE_WITH_LEGACY` | **15** |
-| `LEGACY_ONLY` | 18 |
-| `KEEP_INPUT` | 2 |
-| `AMBIGUOUS`（待人工核） | 4 |
-
-## 旧链路成员（一起消失）
-
-`AccurateGradeRepairPlanner`, `AccuratePathHeightResolver`, `GradeOptimizer`, `PathSpanExtractor`, `RawPathSearch`, `RoadGradePlanner`, `SlopeContinuityEnforcer`, `TargetYComputation`
-
-## 台账
-
 <!-- S5M:BEGIN -->
 <!-- ★ 2026-11-13 修正：SurfaceGradeLimits 原先被标成 DELETE_WITH_LEGACY / 外部引用 0，
      实测被 4 个生产文件引用（其中 TunnelFootprintSampler 与
@@ -76,21 +50,5 @@ S5M|SlopeContinuityEnforcer|constrainRun|0||DELETE_WITH_LEGACY
      按 S7「第 3 级前置 A」把该 record 抽成了顶层类型
      pathlogic/grade/SurfaceGradeLimits.java。它不再是 RoadGradePlanner 的方法，
      所以不该留在本台账（否则 S5MethodMapTest 会报「台账登记了不存在的方法」）。
-     新类型的归属见 S5-POSTPROCESS-LEDGER.md（KEEP_INPUT）。 -->
+     新类型的归属见 postprocess-files-baseline.txt（KEEP_INPUT）。 -->
 <!-- S5M:END -->
-
-## 汇总
-
-| 分类 | 数量 |
-|---|---|
-| `DELETE_WITH_LEGACY` | **15** |
-| `LEGACY_ONLY` | 18 |
-| `KEEP_INPUT` | 2 |
-| `AMBIGUOUS`（待人工核） | 4 |
-
-`DELETE_WITH_LEGACY` + `LEGACY_ONLY` = **33** 个方法待旧链路整体下线后删除，
-占当前台账 39 个方法的约 **85%**。这是 S7 第一波删除的真实体量。
-（2026-11-15 更正：此前把 15+18 错写成 35。）
-
-**必须等旧链路整体下线再一起删** —— 同包内部还在互相调用，单独删任何一个都会编译失败。
-这也正是它们被归为「与旧链路同生共死」的原因。
