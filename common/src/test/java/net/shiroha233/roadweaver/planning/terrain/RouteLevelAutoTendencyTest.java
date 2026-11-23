@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -38,6 +39,20 @@ final class RouteLevelAutoTendencyTest {
 
     private final StructureConnection connection = new StructureConnection(
             new BlockPos(0, 64, 0), new BlockPos(320, 64, 0));
+
+    @Test void autoKeepsABuildableSurfaceButExplicitTunnelModeStaysExplicit() {
+        var auto = PlanningConfig.TerrainProfileMode.AUTO;
+        var forced = PlanningConfig.TerrainProfileMode.TUNNEL_FIRST;
+        assertTrue(RawPathSearch.preferSurfaceCorridor(auto, true, false, true, true));
+        // 坡度和保护列要同时通过；不能为了少挖隧道接受不可施工的绕路。
+        assertFalse(RawPathSearch.preferSurfaceCorridor(auto, true, false, false, true));
+        assertFalse(RawPathSearch.preferSurfaceCorridor(auto, true, false, true, false));
+        assertFalse(RawPathSearch.preferSurfaceCorridor(forced, true, false, true, true));
+        assertEquals(RouteProfileTendency.Tendency.BALANCED,
+                RawPathSearch.effectiveAutoTendency(RouteProfileTendency.Tendency.TUNNEL_FIRST, false));
+        assertEquals(RouteProfileTendency.Tendency.TUNNEL_FIRST,
+                RawPathSearch.effectiveAutoTendency(RouteProfileTendency.Tendency.TUNNEL_FIRST, true));
+    }
 
     @AfterEach
     void restoreDefaults() {

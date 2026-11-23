@@ -23,8 +23,6 @@ import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.postprocess.PathPostProcessor;
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
-import net.shiroha233.roadweaver.core.model.RoadData;
-import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.planning.terrain.RoadTerrainPlanningPipeline;
 import net.shiroha233.roadweaver.planning.terrain.RoadTerrainPlanningPort;
@@ -567,5 +565,12 @@ public final class PathMetricsOps {
         return new DirectRouteConnections(
                 new StructureConnection(planningStart, planningEnd, ConnectionStatus.PLANNED),
                 new StructureConnection(startIn, endIn, ConnectionStatus.PLANNED));
+    }
+
+    /** 局部替代必须使用正式道路站距和横截面；失配时不交付半份结果。 */
+    public static List<RoadSegmentPlacement> rasterizeLocalRepair(List<BlockPos> candidate, int width) {
+        var dense = PathPostProcessor.densifyStationGaps(candidate, 2);
+        var rebuilt = PathPostProcessor.rasterizeStations(dense, width);
+        return rebuilt == null || rebuilt.size() != dense.size() ? List.of() : rebuilt;
     }
 }

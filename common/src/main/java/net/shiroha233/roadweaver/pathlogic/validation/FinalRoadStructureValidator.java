@@ -27,6 +27,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.BitSet;
+import net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +80,31 @@ public final class FinalRoadStructureValidator {
                 roadId(road), result.safe(), hit != null, hit == null ? -1 : hit.segmentIndex(),
                 hit == null ? "-" : hit.kind(), hit == null ? "-" : hit.representativePos());
         return result;
+    }
+
+    /** 使用同一最终体积和确有碰撞的保护盒；不要求建筑恰好来自单一的模板导入器。 */
+    public static RoadData retainLocalizedSurfaceGaps(ServerLevel level, StructureConnection connection,
+            RoadData road, TerrainSamplingCache cache, StreamsReflowingCompat.SamplingSession streams) {
+        var snapshot = StructureAvoidanceService.requirePlanningSnapshot(level, connection);
+        var sampler = cache.getAccurateSampler(level);
+        var context = RoadConstructionVolumePlanner.Context.forWorld(level, sampler, streams,
+                prefetchMissingValidationColumns(road, sampler));
+        return retainLocalizedSurfaceGaps(snapshot, road, context);
+    }
+
+    static RoadData retainLocalizedSurfaceGaps(PlanningSnapshot snapshot, RoadData road,
+            RoadConstructionVolumePlanner.Context context) {
+        var gaps = new LocalizedSurfaceGaps(road);
+        boolean allLocal = RoadConstructionVolumePlanner.visit(road, context, volume -> {
+            if (!isRoadBodyVolume(volume.kind())) return true;
+            Collision hit = findCollision(snapshot, volume);
+            return hit == null || gaps.record(hit);
+        });
+        if (!allLocal) return null;
+        var candidate = gaps.finish();
+        // 扫全量碰撞后再核实施工端确实跳过它们；其他保留站必须仍是合法产物。
+        return candidate != null && RoadDataValidator.validateFinalRoad(candidate).valid()
+                && validate(snapshot, candidate, context).safe() ? candidate : null;
     }
 
     /** 先预取体积遍历会触及的全部列；密集覆盖按块、稀疏部分按列，避免校验中反复世界采样。
@@ -216,19 +243,9 @@ public final class FinalRoadStructureValidator {
             // bridge/template/support volumes remain protected.
             if (!isRoadBodyVolume(volume.kind())) return true;
             if (audit != null) audit.visit(volume);
-            OwnedStructureBox owned = switch (volume.kind()) {
-                case ROAD_FALLING_CAP, BRIDGE_FALLING_CAP -> snapshot.findFallingCapCollision(
-                        volume.x(), volume.z(), volume.minY(), volume.maxY());
-                default -> snapshot.findCollision(volume.x(), volume.z(), volume.minY(), volume.maxY());
-            };
-            if (owned == null) return true;
-            // Endpoint structures are explicitly allowed to receive this road
-            // during planning. Apply the same rule to the final swept-volume
-            // check instead of rejecting the route only at save time.
-            if (snapshot.endpointOwners().contains(owned.owner())) return true;
-            collision.set(new Collision(
-                    volume.segmentIndex(), volume.kind(), volume.representativePos(),
-                    volume.minY(), volume.maxY(), owned.owner(), owned.box()));
+            Collision hit = findCollision(snapshot, volume);
+            if (hit == null) return true;
+            collision.set(hit);
             return false;
         });
         if (!completed && collision.get() == null) {
@@ -237,6 +254,18 @@ public final class FinalRoadStructureValidator {
         return collision.get() == null
                 ? ValidationResult.success()
                 : ValidationResult.failure("protected-structure-intersection", collision.get());
+    }
+
+    /** 验收与留缺口共用碰撞口径；连接自己的入口还是允许接入。 */
+    private static Collision findCollision(PlanningSnapshot snapshot, RoadConstructionVolumePlanner.ColumnVolume volume) {
+        OwnedStructureBox owned = switch (volume.kind()) {
+            case ROAD_FALLING_CAP, BRIDGE_FALLING_CAP -> snapshot.findFallingCapCollision(
+                    volume.x(), volume.z(), volume.minY(), volume.maxY());
+            default -> snapshot.findCollision(volume.x(), volume.z(), volume.minY(), volume.maxY());
+        };
+        if (owned == null || snapshot.endpointOwners().contains(owned.owner())) return null;
+        return new Collision(volume.segmentIndex(), volume.kind(), volume.representativePos(),
+                volume.minY(), volume.maxY(), owned.owner(), owned.box());
     }
 
     private static long roadId(RoadData road) {
@@ -515,6 +544,43 @@ public final class FinalRoadStructureValidator {
 
         private static ValidationResult failure(String reason, Collision collision) {
             return new ValidationResult(false, reason, collision);
+        }
+    }
+
+    /** 只收集可以独立跳过的普通施工站；候选最终仍要过同一套体素验证。 */
+    private static final class LocalizedSurfaceGaps {
+        private static final int MAX_SKIPPED_STATIONS = 24;
+        private final BitSet hit = new BitSet();
+        private final ConstructionSpanMasks.Masks spans;
+        private final RoadData road;
+
+        LocalizedSurfaceGaps(RoadData road) {
+            this.road = road;
+            this.spans = ConstructionSpanMasks.of(road, 0);
+        }
+
+        boolean record(FinalRoadStructureValidator.Collision collision) {
+            int i = collision.segmentIndex();
+            // 连桥模板、隧道断面和端口有站外体素，不能靠掩掉中间一站保证不重叠。
+            if (collision.kind() != RoadConstructionVolumePlanner.Kind.ROAD || i < 2 || i >= spans.size() - 2
+                    || spans.preserveGradeAt(i) || spans.directCrossingAt(i) || spans.tunnelAt(i)
+                    || spans.networkReuseAt(i)) return false;
+            hit.set(i);
+            // 同一个站有很多碰撞列，限额按站计；不给大范围冲突伪造一条看似完工的连接。
+            return hit.cardinality() <= Math.min(MAX_SKIPPED_STATIONS, spans.size() / 4);
+        }
+
+        RoadData finish() {
+            if (hit.isEmpty()) return null;
+            var modified = new ArrayList<>(road.spans());
+            for (int from = hit.nextSetBit(0); from >= 0; ) {
+                int to = hit.nextClearBit(from);
+                modified.add(new RoadSpan(road.roadSegmentList().get(from).middlePos(),
+                        road.roadSegmentList().get(to - 1).middlePos(), SpanType.PROTECTED_GAP));
+                from = hit.nextSetBit(to);
+            }
+            return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
+                    road.roadSegmentList(), modified, road.targetY(), road.ownerA2dKey(), road.ownerB2dKey());
         }
     }
 }

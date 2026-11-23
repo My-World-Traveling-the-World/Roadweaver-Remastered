@@ -179,28 +179,22 @@ public final class Road {
             if (InitialGenManager.isActive()) {
                 InitialGenerationProgressTracker.advanceCurrentRoadTask(420, "road_span_extraction");
             }
-            long spansStartedAt = System.nanoTime();
-            List<RoadSpan> spans = extractPhysicalSpans(segments, level, cache, terrain, streams);
-            if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
-            long spanExtractionNanos = System.nanoTime() - spansStartedAt;
-            DetailedRoadGenerationStats.recordSpanExtraction(spanExtractionNanos);
-            DetailedRoadGenerationStats.RouteTiming spanTiming = DetailedRoadGenerationStats.routeTiming();
-            if (spanTiming != null) spanTiming.addSpanExtraction(spanExtractionNanos);
-            LOGGER.info("【路线跨度提取阶段结果】 " + "RoadWeaver route stage=span_extraction connection={}->{} spans={} {}",
-                    rawStart, rawEnd, spans.size(), summarizeSpans(spans));
             long targetHeightStartedAt = System.nanoTime();
-            if (containsPhysicalCrossing(spans)) {
-                List<Integer> provisionalTargetY = computeTargetY(
-                        level, segments, List.of(), cache, terrain, genConfig, streams);
-                List<RoadSpan> provisionalTunnels = PathSpanExtractor.refineTunnelSpans(
-                        List.of(), segments, provisionalTargetY, level, cache);
-                spans = SpanConflictResolver.retainVerticallyRelevantCrossings(
-                        spans, provisionalTunnels, segments, provisionalTargetY,
-                        level, cache, terrain, streams, genConfig.tunnelClearHeight(),
-                        routeBridgeMinWaterDepth());
+            // 这时已有正式宽度的站序。先复用它定位问题，不能等到存出 RoadData 才允许绕行。
+            var routeTerrain = terrain;
+            var preparation = RoadProfileRecovery.solve(segments, width,
+                    candidate -> solveInitialProfile(candidate, level, cache, routeTerrain, streams),
+                    (line, station, accept) -> StructureRepair.trySurface(line, station, width, level,
+                            connection, cache.getAccurateSampler(level), genConfig.pathfinding(), accept));
+            if (preparation.segments() != segments) {
+                segments = preparation.segments();
+                PathFinalizeOps.refreshPlanningSnapshot(level, connection,
+                        segments.stream().map(RoadSegmentPlacement::middlePos).toList());
+                LOGGER.info("【纵断面地表绕行通过，进入原有施工校验】 connection={}->{} 站数={}",
+                        rawStart, rawEnd, segments.size());
             }
-            spans = new ArrayList<>(spans);
-            List<Integer> targetY = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);
+            List<RoadSpan> spans = preparation.spans();
+            List<Integer> targetY = preparation.heights();
             InitialGenerationProgressTracker.advanceCurrentRoadTask(680, "road_target_height_ready");
             if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
             spans = PathSpanExtractor.refineTunnelSpans(spans, segments, targetY, level, cache);
@@ -475,27 +469,13 @@ public final class Road {
             DetailedRoadGenerationStats.recordPlanningRepair(System.nanoTime() - planningRepairStartedAt);
             long finalValidationStartedAt = System.nanoTime();
             FinalRoadStructureValidator.ValidationResult structureValidation = null;
+            // 绕行无解时原候选仍可能只需保留一个小缺口，不能让失败的绕行吃掉它。
+            RoadData beforeStructureDetour = rd;
             for (int structureAttempt = finalStructureAttempt; structureAttempt <= 3; structureAttempt++) {
                 structureValidation = FinalRoadStructureValidator.validate(level, connection, rd, cache, streams);
                 InitialGenerationProgressTracker.advanceCurrentRoadTask(940, "road_structure_validation");
                 if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
                 if (structureValidation.safe()) break;
-                RoadData gapped = FinalRoadStructureValidator.retainVerifiedBuildingGaps(
-                        level, connection, rd, cache, streams);
-                if (gapped != null) {
-                    FinalRoadStructureValidator.ValidationResult gapStructureValidation =
-                            FinalRoadStructureValidator.validate(level, connection, gapped, cache, streams);
-                    if (gapStructureValidation.safe()) {
-                        rd = gapped;
-                        segments = rd.roadSegmentList();
-                        spans = rd.spans();
-                        targetY = rd.targetY();
-                        structureValidation = gapStructureValidation;
-                        LOGGER.warn("【最终体积碰撞后保留内部已确认建筑的保护缺口】 " + "RoadWeaver retained all internal verified-building protection gaps after final volume collision "
-                                        + "connection={}->{}", rawStart, rawEnd);
-                        break;
-                    }
-                }
                 FinalRoadStructureValidator.Collision collision = structureValidation.collision();
                 LOGGER.error("【最终施工体积与保护区域相交，拒绝当前产物】 " + "RoadWeaver rejected finalized construction volume {} -> {} reason={} "
                                 + "attempt={} segment={} kind={} pos={} y={}..{} owner={} box={}",
@@ -598,6 +578,23 @@ public final class Road {
                 LOGGER.info("【最终体积碰撞后的局部结构绕行已接受】 " + "RoadWeaver accepted local structure detour after final volume collision "
                                 + "attempt={} connection={}->{}",
                         structureAttempt + 1, rawStart, rawEnd);
+            }
+            if (structureValidation != null && structureValidation.collision() != null) {
+                RoadData gapped = FinalRoadStructureValidator.retainLocalizedSurfaceGaps(
+                        level, connection, beforeStructureDetour, cache, streams);
+                if (gapped == null) {
+                    // 保留原本已支持的实物建筑缺口；新分支只处理中间普通路面。
+                    gapped = FinalRoadStructureValidator.retainVerifiedBuildingGaps(
+                            level, connection, beforeStructureDetour, cache, streams);
+                }
+                if (gapped != null && FinalRoadWaterValidator.validate(level, gapped, cache, streams).safe()) {
+                    rd = gapped;
+                    segments = rd.roadSegmentList();
+                    spans = rd.spans();
+                    targetY = rd.targetY();
+                    structureValidation = FinalRoadStructureValidator.ValidationResult.success();
+                    LOGGER.warn("【结构绕行未通过，仅保留实际碰撞的施工缺口】 connection={}->{}", rawStart, rawEnd);
+                }
             }
             long finalValidationNanos = System.nanoTime() - finalValidationStartedAt;
             DetailedRoadGenerationStats.recordFinalValidation(finalValidationNanos);
@@ -764,6 +761,28 @@ public final class Road {
                                                 StreamsReflowingCompat.SamplingSession streams) {
         return PathSpanExtractor.extractSpans(segments, level, cache, terrain, streams,
                 routeBridgeMinWaterDepth());
+    }
+
+    /** 初稿和局部改线重新提取水域与隧道许可，不能把旧线的跨度直接贴到新线。 */
+    private RoadProfileRecovery.Profile solveInitialProfile(List<RoadSegmentPlacement> segments, ServerLevel level,
+            TerrainSamplingCache cache, PathTerrainField terrain, StreamsReflowingCompat.SamplingSession streams) {
+        long started = System.nanoTime();
+        List<RoadSpan> spans = extractPhysicalSpans(segments, level, cache, terrain, streams);
+        long elapsed = System.nanoTime() - started;
+        DetailedRoadGenerationStats.recordSpanExtraction(elapsed);
+        var timing = DetailedRoadGenerationStats.routeTiming();
+        if (timing != null) timing.addSpanExtraction(elapsed);
+        LOGGER.info("【路线跨度提取阶段结果】 RoadWeaver route stage=span_extraction connection={}->{} spans={} {}",
+                connection.from(), connection.to(), spans.size(), summarizeSpans(spans));
+        if (containsPhysicalCrossing(spans)) {
+            var preview = computeTargetY(level, segments, List.of(), cache, terrain, genConfig, streams);
+            var tunnels = PathSpanExtractor.refineTunnelSpans(List.of(), segments, preview, level, cache);
+            spans = SpanConflictResolver.retainVerticallyRelevantCrossings(spans, tunnels, segments, preview,
+                    level, cache, terrain, streams, genConfig.tunnelClearHeight(), routeBridgeMinWaterDepth());
+        }
+        spans = new ArrayList<>(spans);
+        return new RoadProfileRecovery.Profile(segments, spans,
+                computeTargetY(level, segments, spans, cache, terrain, genConfig, streams));
     }
 
     /**

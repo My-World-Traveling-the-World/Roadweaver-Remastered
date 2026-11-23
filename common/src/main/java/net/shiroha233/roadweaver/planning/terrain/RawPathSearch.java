@@ -70,7 +70,8 @@ final class RawPathSearch {
             List<BlockPos> route = keepAllowedReplacement(config, result.rawPath(),
                     MountainSwitchbackPlanner.replaceIfSafer(
                             result.rawPath(), start, end, terrain, config, true));
-            List<BlockPos> modeRoute = applyCoarseTerrainModes(route, terrain, config, globalBridgeMinDepth());
+            var routeProfile = applyCoarseTerrainModes(route, terrain, config, globalBridgeMinDepth());
+            List<BlockPos> modeRoute = routeProfile.stations();
             Map<RoadTerrainType, Integer> terrainCounts;
             StreamsReflowingCompat.SamplingSession streams =
                     StreamsReflowingCompat.openSession(level);
@@ -93,7 +94,6 @@ final class RawPathSearch {
                     profileMode, mountainFraction, waterFraction,
                     planning.autoMountainThresholdFraction(),
                     planning.autoWaterThresholdFraction());
-            RouteProfileTendency.set(connection, tendency);
             boolean tunnelFirst = profileMode == PlanningConfig.TerrainProfileMode.TUNNEL_FIRST
                     || (profileMode == PlanningConfig.TerrainProfileMode.AUTO
                     && tendency == RouteProfileTendency.Tendency.TUNNEL_FIRST);
@@ -118,20 +118,20 @@ final class RawPathSearch {
                 // Rebuild the tunnel-hint precheck with the relaxed depth so
                 // shallow water columns stay protected from coarse tunnel
                 // conversion, matching what span extraction will later see.
-                List<BlockPos> bridged = applyCoarseTerrainModes(
-                        route, terrain, config, routeBridgeMinDepth);
-                if (bridged != null && bridged.size() >= 2) modeRoute = bridged;
+                routeProfile = applyCoarseTerrainModes(route, terrain, config, routeBridgeMinDepth);
+                modeRoute = routeProfile.stations();
             }
             boolean transitionProblem = hasUnbuildableCoarseTransition(modeRoute, terrain);
             boolean structureProblem = hasCoarseStructureConflict(modeRoute, terrain, step);
             if (wantsHeightAware(
                     planning.coarseHeightAwareEnabled(),
-                    transitionProblem || structureProblem, tunnelFirst, mountain)) {
+                    transitionProblem || structureProblem, tunnelFirst && routeProfile.needsTunnel(), mountain)) {
                 List<BlockPos> heightAware = CoarseHeightAwarePlanner.find(
                         start, end, terrain, config, planning.heightAwareStateLimit());
                 if (heightAware != null && heightAware.size() >= 2
                         && allowedByCorridor(config, heightAware)) {
-                    heightAware = applyCoarseTerrainModes(heightAware, terrain, config, routeBridgeMinDepth);
+                    var candidateProfile = applyCoarseTerrainModes(heightAware, terrain, config, routeBridgeMinDepth);
+                    heightAware = candidateProfile.stations();
                     // A straight corridor whose cut/fill (or single span rise)
                     // exceeds the build thresholds must be replaced by a longer
                     // but buildable height-aware reroute. Score preference only
@@ -151,15 +151,20 @@ final class RawPathSearch {
                     // protected gap behind an unavoidable building.
                     boolean preferSafer = (!currentBuildable && candidateBuildable)
                             || (!currentClear && candidateClear);
-                    if (preferSafer || betterCoarseCandidate(heightAware, modeRoute, terrain, step)) {
+                    boolean preferSurface = preferSurfaceCorridor(profileMode, routeProfile.needsTunnel(),
+                            candidateProfile.needsTunnel(), candidateBuildable, candidateClear);
+                    if (preferSafer || preferSurface || betterCoarseCandidate(heightAware, modeRoute, terrain, step)) {
                         LOGGER.info("【高度感知的粗规划绕行已接受】 " + "RoadWeaver accepted height-aware coarse reroute: originalNodes={} reroutedNodes={} forced={} step={}",
                                 modeRoute.size(), heightAware.size(), preferSafer, step);
                         modeRoute = heightAware;
+                        routeProfile = candidateProfile;
                     }
                 }
             }
-            if (hasTunnelHeightHints(route, modeRoute)) {
-                PathTerrainField hintedTerrain = new TunnelHintTerrainField(terrain, route, modeRoute, step);
+            // 山地比例只是启动候选的信号；找到可走的地表走廊后不再授权后续算法偏向挖隧道。
+            RouteProfileTendency.set(connection, effectiveAutoTendency(tendency, routeProfile.needsTunnel()));
+            if (routeProfile.needsTunnel()) {
+                PathTerrainField hintedTerrain = new TunnelHintTerrainField(terrain, routeProfile.surface(), modeRoute, step);
                 // 2026-11-14 修复（审计 NEW-8）：这次隧道提示重搜原先在 HARD 作用域之外
                 // 直接调 findRawPath —— 此时 BuildingObstacleMode 已回落到 PENALTY，
                 // 硬障碍被全部无视。与主搜索同一口径包进 HARD 作用域。
@@ -175,14 +180,30 @@ final class RawPathSearch {
                             MountainSwitchbackPlanner.replaceIfSafer(
                                     hintedResult.rawPath(), start, end, hintedTerrain, config));
                     if (rerouted != null && rerouted.size() >= 2) {
-                        LOGGER.info("【考虑隧道的粗规划绕行已接受】 " + "RoadWeaver coarse tunnel-aware reroute accepted: originalNodes={} reroutedNodes={} step={}",
-                                route.size(), rerouted.size(), step);
-                        return applyCoarseTerrainModes(rerouted, terrain, config, routeBridgeMinDepth);
+                        var candidate = applyCoarseTerrainModes(rerouted, terrain, config, routeBridgeMinDepth);
+                        if (!hasUnbuildableCoarseTransition(candidate.stations(), terrain)
+                                && !hasCoarseStructureConflict(candidate.stations(), terrain, step)) {
+                            LOGGER.info("【考虑隧道的粗规划绕行已接受】 RoadWeaver coarse tunnel-aware reroute accepted: originalNodes={} reroutedNodes={} step={}",
+                                    route.size(), rerouted.size(), step);
+                            RouteProfileTendency.set(connection, effectiveAutoTendency(tendency, candidate.needsTunnel()));
+                            return candidate.stations();
+                        }
                     }
                 }
             }
             return modeRoute;
         }
+    }
+
+    static boolean preferSurfaceCorridor(PlanningConfig.TerrainProfileMode mode, boolean currentNeedsTunnel,
+            boolean candidateNeedsTunnel, boolean buildable, boolean clear) {
+        return mode.prefersExistingSurface() && currentNeedsTunnel && !candidateNeedsTunnel && buildable && clear;
+    }
+
+    static RouteProfileTendency.Tendency effectiveAutoTendency(RouteProfileTendency.Tendency tendency,
+            boolean needsTunnel) {
+        return tendency == RouteProfileTendency.Tendency.TUNNEL_FIRST && !needsTunnel
+                ? RouteProfileTendency.Tendency.BALANCED : tendency;
     }
 
     /** 山路换线不是重新授权；越线候选不能替掉已经遵守禁令的 BAND 主线。 */
@@ -404,13 +425,8 @@ final class RawPathSearch {
         return false;
     }
 
-    private static boolean hasTunnelHeightHints(List<BlockPos> original, List<BlockPos> hinted) {
-        if (original == null || hinted == null || original.size() != hinted.size()) return false;
-        for (int i = 0; i < original.size(); i++) {
-            if (hinted.get(i).getY() + 2 < original.get(i).getY()) return true;
-        }
-        return false;
-    }
+    /** 提示剖面对应自己的原始站序；两次搜索生成的不同站序不能逐索引对比。 */
+    private record CoarseProfile(List<BlockPos> surface, List<BlockPos> stations, boolean needsTunnel) {}
 
     /** 粗地形的持续山脊可投影隧道弦；水列受跨越保护，不在这里变山体隧道。
  *
@@ -420,18 +436,17 @@ final class RawPathSearch {
      * height resolution. Water columns remain crossing-protected and are not
      * converted into mountain tunnels here.
      */
-    private static List<BlockPos> applyCoarseTerrainModes(List<BlockPos> path,
+    private static CoarseProfile applyCoarseTerrainModes(List<BlockPos> path,
                                                            PathTerrainField terrain,
                                                            PathfindingCostConfig config,
                                                            int bridgeMinWaterDepth) {
-        if (path == null || path.size() < 5 || terrain == null || config == null) return path;
+        if (path == null || path.size() < 5 || terrain == null || config == null)
+            return new CoarseProfile(path, path, false);
         int size = path.size();
         int[] sampledTerrain = new int[size];
         boolean[] crossings = new boolean[size];
         try {
-            // Depth is resolved by the caller (global mode + route-level AUTO
-            // tendency) so the coarse tunnel precheck cannot disagree with
-            // what span extraction will later see for the same route.
+            // 过水列不参与山体隧道预检；桥深与后续提取使用同一趋势口径。
             for (int i = 0; i < size; i++) {
                 BlockPos point = path.get(i);
                 sampledTerrain[i] = terrain.height(point.getX(), point.getZ());
@@ -444,7 +459,7 @@ final class RawPathSearch {
             List<BlockPos> result = new ArrayList<>(size);
             for (int i = 0; i < size; i++) {
                 int y = tunnelAwareProfile[i];
-                if (y != sampledTerrain[i]) changed++;
+                if (y + 2 < sampledTerrain[i]) changed++;
                 BlockPos point = path.get(i);
                 result.add(new BlockPos(point.getX(), y, point.getZ()));
             }
@@ -452,10 +467,10 @@ final class RawPathSearch {
                 LOGGER.info("【粗规划桥隧模式预检统计】 " + "RoadWeaver coarse terrain mode precheck: tunnelCandidateStations={} totalStations={} step={}",
                         changed, size, config.effectivePathGridStep());
             }
-            return List.copyOf(result);
+            return new CoarseProfile(path, List.copyOf(result), changed > 0);
         } catch (RuntimeException failure) {
             LOGGER.debug("【粗规划桥隧模式预检已跳过】 " + "RoadWeaver coarse terrain mode precheck skipped", failure);
-            return path;
+            return new CoarseProfile(path, path, false);
         }
     }
 

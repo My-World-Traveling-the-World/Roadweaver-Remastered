@@ -35,6 +35,30 @@ final class FinalConstructionFootprintTest {
     }
 
     @Test
+    void aConfirmedSideCollisionLeavesOnlyOneUnbuiltStation() {
+        var road = footprint(null);
+        var snapshot = FootprintStructureFixture.snapshot(OUTER_COLUMN);
+        assertFalse(FinalRoadStructureValidator.validate(snapshot, road, FLAT).safe());
+        var repaired = FinalRoadStructureValidator.retainLocalizedSurfaceGaps(snapshot, road, FLAT);
+        assertNotNull(repaired, "确有占地碰撞，不应丢掉两侧的合法路面");
+        var center = road.roadSegmentList().get(2).middlePos();
+        assertEquals(List.of(new RoadSpan(center, center, SpanType.PROTECTED_GAP)), repaired.spans());
+        assertEquals(road.targetY(), repaired.targetY());
+        var writtenStations = new java.util.TreeSet<Integer>();
+        assertTrue(RoadConstructionVolumePlanner.visit(repaired, FLAT, volume -> {
+            if (volume.kind() == RoadConstructionVolumePlanner.Kind.ROAD) writtenStations.add(volume.segmentIndex());
+            return true;
+        }));
+        assertEquals(java.util.Set.of(0, 1, 3, 4), writtenStations);
+        assertTrue(FinalRoadStructureValidator.validate(snapshot, repaired, FLAT).safe());
+        assertNull(FinalRoadStructureValidator.retainLocalizedSurfaceGaps(FootprintStructureFixture.snapshot(null), road, FLAT));
+        var end = road.roadSegmentList().getFirst().middlePos();
+        assertFalse(FinalRoadStructureValidator.validate(FootprintStructureFixture.snapshot(end), road, FLAT).safe());
+        assertNull(FinalRoadStructureValidator.retainLocalizedSurfaceGaps(FootprintStructureFixture.snapshot(end), road, FLAT),
+                "靠入口的冲突不能冒充路中间缺口");
+    }
+
+    @Test
     void observesTreeReservationAtFinalOuterColumnWithoutChangingTheRoadDecision() {
         var snapshot = FootprintStructureFixture.snapshot(null);
         var lookup = (FinalRoadStructureValidator.ReservationLookup)
