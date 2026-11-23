@@ -74,17 +74,20 @@ public final class RoadWorldgenPlanCache {
         return SESSIONS.computeIfAbsent(level, ignored -> new Session());
     }
 
-    private static RoadChunkPlan compile(ServerLevel level,
-                                         ChunkPos chunkPos,
-                                         PlanConfig config,
-                                         long revision) {
+    private static RoadChunkPlan compile(ServerLevel level, ChunkPos chunkPos,
+                                         PlanConfig config, long revision, RoadChunkIntersection.GeometryCache geometry) {
         return compile(chunkPos, config, revision, new RoadChunkPlanCompiler.Query(
                 (minX, minZ, maxX, maxZ) -> RoadShardStorage.queryRect(level, minX, minZ, maxX, maxZ),
-                chunk -> RoadShardStorage.queryChunk(level, chunk)));
+                chunk -> RoadShardStorage.queryChunk(level, chunk)), geometry);
     }
 
     // 离线与生产执行同一编译正文，只有真正读取世界的两处调用允许注入。
     static RoadChunkPlan compile(ChunkPos chunkPos, PlanConfig config, long revision, RoadChunkPlanCompiler.Query query) {
+        return compile(chunkPos, config, revision, query, null);
+    }
+
+    static RoadChunkPlan compile(ChunkPos chunkPos, PlanConfig config, long revision, RoadChunkPlanCompiler.Query query,
+                                 RoadChunkIntersection.GeometryCache geometry) {
         int minX = chunkPos.getMinBlockX() - QUERY_MARGIN_BLOCKS;
         int minZ = chunkPos.getMinBlockZ() - QUERY_MARGIN_BLOCKS;
         int maxX = chunkPos.getMaxBlockX() + QUERY_MARGIN_BLOCKS;
@@ -92,7 +95,7 @@ public final class RoadWorldgenPlanCache {
         return compileSafely(chunkPos, config.clearHeight(), revision, () -> {
             var roads = query.rectangle().read(minX, minZ, maxX, maxZ);
             RoadChunkPlan plan = RoadChunkPlanCompiler.compile(chunkPos, roads,
-                    !config.bridgeEnabled(), config.clearHeight(), revision);
+                    !config.bridgeEnabled(), config.clearHeight(), revision, geometry);
             // The broad rect query goes through the physical-ownership dedup,
             // which can claim a merged road's corridor for a nearby primary
             // and suppress it here even though that primary never actually
@@ -104,7 +107,7 @@ public final class RoadWorldgenPlanCache {
                 var shardRoads = query.chunk().apply(chunkPos);
                 if (shardRoads != null && !shardRoads.isEmpty()) {
                     RoadChunkPlan shardPlan = RoadChunkPlanCompiler.compile(chunkPos, shardRoads,
-                            !config.bridgeEnabled(), config.clearHeight(), revision);
+                            !config.bridgeEnabled(), config.clearHeight(), revision, geometry);
                     if (!shardPlan.slices().isEmpty()) {
                         plan = shardPlan;
                     }
@@ -153,6 +156,8 @@ public final class RoadWorldgenPlanCache {
     static final class Session {
         private final Object cacheLock = new Object();
         private final ChunkPlanVersions versions = new ChunkPlanVersions();
+        // 只复用不可变的站位边界，版本变化后的高度、跨度和占用仍按本次道路数据重新编译。
+        private final RoadChunkIntersection.GeometryCache geometry = new RoadChunkIntersection.GeometryCache();
         // 配置或版本不同的编译不能互相等候；表项只活到真实编译退出，不保留历史。
         private final Map<ChunkPlanFlight.Key, ChunkPlanFlight> flights = new java.util.HashMap<>();
         /**
@@ -189,7 +194,7 @@ public final class RoadWorldgenPlanCache {
                     }
                 };
         RoadChunkPlan get(ServerLevel level, ChunkPos chunkPos, PlanConfig requested) {
-            return get(chunkPos, requested, (chunk, config, revision) -> compile(level, chunk, config, revision),
+            return get(chunkPos, requested, (chunk, config, revision) -> compile(level, chunk, config, revision, geometry),
                     System::nanoTime);
         }
 

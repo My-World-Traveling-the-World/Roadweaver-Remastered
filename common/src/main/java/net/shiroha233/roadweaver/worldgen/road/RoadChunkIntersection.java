@@ -5,6 +5,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 
+import com.google.common.cache.CacheBuilder;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,9 +35,62 @@ final class RoadChunkIntersection {
 
     private RoadChunkIntersection() {}
 
+    private static final int MIN_STATIONS = 256;
+    private static final int MIN_SPREAD = 96;
+
+    static final class GeometryCache {
+        // 每个世界独立，弱引用按不可变站列的身份比较；索引只存四个整数一组，不持有道路或配置。
+        private final com.google.common.cache.Cache<List<RoadSegmentPlacement>, RoadStationBounds> ready =
+                CacheBuilder.newBuilder().weakKeys().maximumSize(128).build();
+
+        RoadStationBounds.Selection near(List<RoadSegmentPlacement> placements, ChunkPos chunk, int margin) {
+            // 短路及首尾聚拢的路在进入共享缓存前退出，避免密集场景为并发查表付费。
+            if (placements.size() < MIN_STATIONS) return null;
+            var first = placements.getFirst().middlePos();
+            var last = placements.getLast().middlePos();
+            if (first == null || last == null
+                    || Math.abs(first.getX() - last.getX()) < MIN_SPREAD
+                    && Math.abs(first.getZ() - last.getZ()) < MIN_SPREAD) return null;
+            return ready.asMap().computeIfAbsent(placements, RoadChunkIntersection::makeBounds).find(chunk, margin);
+        }
+    }
+
+    private static RoadStationBounds makeBounds(List<RoadSegmentPlacement> placements) {
+        int size = placements.size();
+        int group = RoadStationBounds.GROUP;
+        int[] boxes = new int[((size - 1) / group + 1) * 4];
+        for (int first = 0, offset = 0; first < size; first += group, offset += 4) {
+            Arrays.fill(boxes, offset, offset + 2, Integer.MAX_VALUE);
+            Arrays.fill(boxes, offset + 2, offset + 4, Integer.MIN_VALUE);
+            int end = Math.min(size, first + group);
+            for (int i = first; i < end; i++) {
+                var placement = placements.get(i);
+                include(boxes, offset, placement.middlePos());
+                if (placement.positions() != null) for (BlockPos p : placement.positions()) include(boxes, offset, p);
+            }
+            // 站点两侧的连线及密度边都可跨组；保留相邻端点的包围盒，继续交给原判定筛选。
+            if (first > 0) include(boxes, offset, placements.get(first - 1).middlePos());
+            if (end < size) include(boxes, offset, placements.get(end).middlePos());
+        }
+        return new RoadStationBounds(boxes, size);
+    }
+
+    private static void include(int[] boxes, int i, BlockPos p) {
+        if (p == null) return;
+        boxes[i] = Math.min(boxes[i], p.getX());
+        boxes[i + 1] = Math.min(boxes[i + 1], p.getZ());
+        boxes[i + 2] = Math.max(boxes[i + 2], p.getX());
+        boxes[i + 3] = Math.max(boxes[i + 3], p.getZ());
+    }
+
+
+
     static boolean segmentIntersectsChunk(BlockPos from, BlockPos to,
                                                   int minX, int minZ, int maxX, int maxZ) {
         if (from == null || to == null) return false;
+        // 取整后的线采样不超出整数端点的包围盒，盒外不用逐格运行原判定。
+        if (Math.max(from.getX(), to.getX()) < minX || Math.min(from.getX(), to.getX()) > maxX
+                || Math.max(from.getZ(), to.getZ()) < minZ || Math.min(from.getZ(), to.getZ()) > maxZ) return false;
         int dx = to.getX() - from.getX();
         int dz = to.getZ() - from.getZ();
         int samples = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
@@ -97,7 +152,15 @@ final class RoadChunkIntersection {
      */
     static boolean roadTouchesChunk(List<RoadSegmentPlacement> placements,
                                             ChunkPos chunkPos, int halfWidth) {
-        int margin = Math.max(RoadChunkPlanCompiler.BRIDGE_TEMPLATE_MARGIN_BLOCKS, halfWidth + RoadChunkPlanCompiler.BANK_WIDTH + 1);
+        return roadTouchesChunk(placements, chunkPos, queryMargin(halfWidth), null);
+    }
+
+    static int queryMargin(int halfWidth) {
+        return Math.max(RoadChunkPlanCompiler.BRIDGE_TEMPLATE_MARGIN_BLOCKS, halfWidth + RoadChunkPlanCompiler.BANK_WIDTH + 1);
+    }
+
+    static boolean roadTouchesChunk(List<RoadSegmentPlacement> placements, ChunkPos chunkPos, int margin,
+                                    RoadStationBounds.Selection selection) {
         int minBoundaryX = chunkPos.getMinBlockX() - margin;
         int minBoundaryZ = chunkPos.getMinBlockZ() - margin;
         int maxBoundaryX = chunkPos.getMaxBlockX() + margin;
@@ -106,34 +169,41 @@ final class RoadChunkIntersection {
         int chunkMinZ = chunkPos.getMinBlockZ();
         int chunkMaxX = chunkPos.getMaxBlockX();
         int chunkMaxZ = chunkPos.getMaxBlockZ();
-        BlockPos previousMiddle = null;
-        for (RoadSegmentPlacement placement : placements) {
-            if (placement == null) {
-                previousMiddle = null;
-                continue;
-            }
-            BlockPos middle = placement.middlePos();
-            if (middle != null
-                    && middle.getX() >= minBoundaryX && middle.getX() <= maxBoundaryX
-                    && middle.getZ() >= minBoundaryZ && middle.getZ() <= maxBoundaryZ) {
-                return true;
-            }
-            List<BlockPos> positions = placement.positions();
-            if (positions != null) {
-                for (BlockPos position : positions) {
-                    if (position != null
-                            && position.getX() >= chunkMinX && position.getX() <= chunkMaxX
-                            && position.getZ() >= chunkMinZ && position.getZ() <= chunkMaxZ) {
-                        return true;
+        for (int run = 0; run < RoadStationBounds.Selection.count(selection); run++) {
+            int start = RoadStationBounds.Selection.start(selection, run);
+            int end = RoadStationBounds.Selection.end(selection, run, placements.size());
+            // 裁剪候选并不切断边，保留首站前的真实相邻站用于精确检测。
+            var previous = start == 0 ? null : placements.get(start - 1);
+            BlockPos previousMiddle = previous == null ? null : previous.middlePos();
+            for (int i = start; i < end; i++) {
+                RoadSegmentPlacement placement = placements.get(i);
+                if (placement == null) {
+                    previousMiddle = null;
+                    continue;
+                }
+                BlockPos middle = placement.middlePos();
+                if (middle != null
+                        && middle.getX() >= minBoundaryX && middle.getX() <= maxBoundaryX
+                        && middle.getZ() >= minBoundaryZ && middle.getZ() <= maxBoundaryZ) {
+                    return true;
+                }
+                List<BlockPos> positions = placement.positions();
+                if (positions != null) {
+                    for (BlockPos position : positions) {
+                        if (position != null
+                                && position.getX() >= chunkMinX && position.getX() <= chunkMaxX
+                                && position.getZ() >= chunkMinZ && position.getZ() <= chunkMaxZ) {
+                            return true;
+                        }
                     }
                 }
+                if (previousMiddle != null && middle != null
+                        && segmentIntersectsChunk(previousMiddle, middle,
+                        minBoundaryX, minBoundaryZ, maxBoundaryX, maxBoundaryZ)) {
+                    return true;
+                }
+                previousMiddle = middle;
             }
-            if (previousMiddle != null && middle != null
-                    && segmentIntersectsChunk(previousMiddle, middle,
-                    minBoundaryX, minBoundaryZ, maxBoundaryX, maxBoundaryZ)) {
-                return true;
-            }
-            previousMiddle = middle;
         }
         return false;
     }

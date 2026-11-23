@@ -126,6 +126,9 @@ registerMainRegression('roadConstructionSafetyPolicy',
 // 同一组几何分布单独计时，避免将机器快慢当成功能回归结果。
 registerMainRegression('chunkPlanInvalidationBenchmark',
         'net.shiroha233.roadweaver.worldgen.road.ChunkPlanVersionsTest')
+// 对拍通过后单独计时，避免按机器快慢决定功能回归通过与否。
+registerMainRegression('roadStationBoundsBenchmark',
+        'net.shiroha233.roadweaver.worldgen.road.RoadStationBoundsBenchmark')
 registerMainRegression('roadJUnitRegressionSuite',
         'net.shiroha233.roadweaver.RoadJUnitRegressionSuite')
 

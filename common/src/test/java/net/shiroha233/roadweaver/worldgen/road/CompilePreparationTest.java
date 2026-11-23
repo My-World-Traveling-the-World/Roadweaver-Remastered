@@ -58,6 +58,76 @@ class CompilePreparationTest {
         assertNotSame(prep.secondary(road,true),prep.secondary(road,false));
         var equal=road(0,0,64,1);assertEquals(road,equal);assertNotSame(prep.owner(road),prep.owner(equal));
     }
+    @Test void indexedWindowsMatchFrozenPlansAtSplitEdgesFootprintsAndBridges() {
+        var stations = new ArrayList<RoadSegmentPlacement>();
+        var heights = new ArrayList<Integer>();
+        for (int i = 0; i < 387; i++) {
+            int x = i < 32 ? -450 + i : 200 + i - 32;
+            int y = 68 + i % 3;
+            var middle = new BlockPos(x, y, -40);
+            var outside = i == 200 ? new BlockPos(-93, y, -75) : middle.offset(0, 0, 2);
+            stations.add(new RoadSegmentPlacement(middle, List.of(middle, outside)));
+            heights.add(y + i % 2);
+        }
+        var spans = new ArrayList<RoadSpan>();
+        int i = 2;
+        for (var type : SpanType.values()) {
+            // 跨区块桥模板独立于长边夹具，其他跨度放在长边之后。
+            int from = type == SpanType.BRIDGE ? 3 : 64 + 22 * i++;
+            spans.add(new RoadSpan(stations.get(from).middlePos(), stations.get(from + 9).middlePos(), type));
+        }
+        var road = new RoadData(7, 0, List.of(), List.of(), stations, spans, heights, 31, 131);
+        var cache = new RoadChunkIntersection.GeometryCache();
+        for (boolean bridgeDensities : new boolean[]{false, true}) {
+            ChunkPos cross = new ChunkPos(-7, -3), edge = new ChunkPos(-6, -5), bridge = new ChunkPos(-28, -4);
+            int nonempty = 0;
+            for (var chunk : List.of(cross, edge, bridge, new ChunkPos(-28, -3), new ChunkPos(13, -3),
+                    new ChunkPos(16, -3), new ChunkPos(20, -3), new ChunkPos(25, -3), new ChunkPos(34, -3), new ChunkPos(39, -8))) {
+                var expected = FrozenRoadChunkPlanCompiler.compile(chunk, List.of(road), bridgeDensities, 7, 519);
+                var actual = RoadChunkPlanCompiler.compile(chunk, List.of(road), bridgeDensities, 7, 519, cache);
+                same(expected, actual);
+                if (!actual.isEmpty()) nonempty++;
+                if (chunk.equals(cross)) {
+                    var slice = actual.slices().getFirst();
+                    var indices = new HashSet<Integer>();
+                    for (int n = 0; n < slice.segmentCount(); n++) indices.add(slice.segmentIndexAt(n));
+                    assertTrue(indices.containsAll(List.of(31, 32)));
+                }
+                if (chunk.equals(edge)) assertTrue(actual.densityStamp().isOccupied(3, 5));
+                if (chunk.equals(bridge)) assertFalse(actual.slices().isEmpty(), "桥外扩实际跨到相邻块");
+            }
+            assertTrue(nonempty > 6);
+        }
+    }
+
+    @Test void onlyLongSpreadOutRoutesSelectRemoteStationsAndNewGeometryDoesNotReuseTheirBounds() {
+        var longRoad = rangeRoad(1024, false);
+        var cache = new RoadChunkIntersection.GeometryCache();
+        var chunk = new ChunkPos(-5, -2);
+        int margin = RoadChunkIntersection.queryMargin(3);
+        var selection = cache.near(longRoad.roadSegmentList(), chunk, margin);
+        assertNotNull(selection);
+        assertEquals(1, RoadStationBounds.Selection.count(selection));
+        assertEquals(64, RoadStationBounds.Selection.end(selection, 0, 1024)
+                - RoadStationBounds.Selection.start(selection, 0));
+        var moved = rangeRoad(1024, true);
+        assertNull(cache.near(moved.roadSegmentList(), chunk, margin), "不同的紧凑站列不得命中长路索引");
+        assertNull(cache.near(rangeRoad(80, false).roadSegmentList(), chunk, margin), "短路无需查索引");
+        var noSelection = cache.near(longRoad.roadSegmentList(), new ChunkPos(-500, 30), margin);
+        assertEquals(0, RoadStationBounds.Selection.count(noSelection));
+    }
+
+    static RoadData rangeRoad(int size, boolean compact) {
+        var stations = new ArrayList<RoadSegmentPlacement>();
+        var heights = new ArrayList<Integer>();
+        for (int i = 0; i < size; i++) {
+            var middle = new BlockPos(compact ? -128 + i % 15 : -128 + i, 64, compact ? -24 + i / 15 % 10 : -24);
+            stations.add(new RoadSegmentPlacement(middle, List.of(middle.offset(0, 0, -1), middle, middle.offset(0, 0, 1))));
+            heights.add(64);
+        }
+        return new RoadData(5, 0, List.of(), List.of(), stations, List.of(), heights, 106, 208);
+    }
+
     static void same(RoadChunkPlan a,RoadChunkPlan b) {
         assertEquals(a.chunkPos(),b.chunkPos());assertEquals(a.revision(),b.revision());assertEquals(a.slices().size(),b.slices().size());
         for(int k=0;k<a.slices().size();k++){var x=a.slices().get(k);var y=b.slices().get(k);assertEquals(x.road(),y.road());assertEquals(x.segmentCount(),y.segmentCount());

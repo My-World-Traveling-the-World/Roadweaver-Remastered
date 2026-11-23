@@ -53,6 +53,11 @@ public final class RoadChunkPlanCompiler {
                                         boolean includeBridgeSegments,
                                         int clearHeight,
                                         long revision) {
+        return compile(chunkPos, roads, includeBridgeSegments, clearHeight, revision, null);
+    }
+
+    static RoadChunkPlan compile(ChunkPos chunkPos, Collection<RoadData> roads, boolean includeBridgeSegments,
+                                 int clearHeight, long revision, RoadChunkIntersection.GeometryCache geometry) {
         if (chunkPos == null) {
             throw new IllegalArgumentException("chunkPos must not be null");
         }
@@ -80,7 +85,9 @@ public final class RoadChunkPlanCompiler {
             // span 掩码、不做 markOccupied、不输出 produced 0 localIndices。
             // 预筛条件是主循环所有触达判定的上界,因此真正相交的 chunk 的
             // 编译结果不变。
-            if (!RoadChunkIntersection.roadTouchesChunk(placements, chunkPos, halfWidth)) continue;
+            int margin = RoadChunkIntersection.queryMargin(halfWidth);
+            var selection = geometry == null ? null : geometry.near(placements, chunkPos, margin);
+            if (!RoadChunkIntersection.roadTouchesChunk(placements, chunkPos, margin, selection)) continue;
 
             ExactSpans spans = spanInputs.get(road);
             boolean[] bridgeMask = spans.mask(SpanType.BRIDGE);
@@ -99,44 +106,47 @@ public final class RoadChunkPlanCompiler {
             int chunkMaxX = chunkPos.getMaxBlockX();
             int chunkMaxZ = chunkPos.getMaxBlockZ();
 
-            for (int i = 0; i < placements.size(); i++) {
-                RoadSegmentPlacement placement = placements.get(i);
-                if (placement == null || placement.middlePos() == null) continue;
-                // A NETWORK_REUSE span belongs to the earlier road which supplied
-                // its exact stations.  The later road must not contribute any
-                // density stamp, clearing, bridge margin, or occupancy here.
-                boolean skipStamping = (networkReuseMask != null && networkReuseMask[i]
-                        && !allTunnelJunctionMask[i])
-                        || (protectedGapMask != null && protectedGapMask[i]);
-                if (!skipStamping) {
-                    markOccupied(occupied, placement, chunkPos, halfWidth);
-                }
-                int featureMargin = bridgeMask != null && bridgeMask[i]
-                        ? BRIDGE_TEMPLATE_MARGIN_BLOCKS
-                        : 0;
-                // Task 11: masked stations still count towards localIndices.
-                // Skipping them entirely left chunks whose every station was a
-                // reuse/gap station with zero localIndices -> empty worldgen
-                // plan -> a visible gap even though a road shard exists. The
-                // slice is produced (PathFeature itself skips the masked
-                // stations while paving), only the raster stamp is skipped.
-                // Task 3: a station also belongs to this chunk when the line
-                // to either neighbour crosses it - two placements can sit in
-                // adjacent chunks while their connecting edge passes through
-                // this one, and the raster pass stamps by edge.
-                boolean touches = RoadChunkIntersection.intersectsChunk(placement, chunkMinX, chunkMinZ, chunkMaxX, chunkMaxZ, featureMargin);
-                if (!touches && i > 0 && placements.get(i - 1) != null) {
-                    touches = RoadChunkIntersection.segmentIntersectsChunk(placements.get(i - 1).middlePos(),
-                            placement.middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
-                            chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
-                }
-                if (!touches && i + 1 < placements.size() && placements.get(i + 1) != null) {
-                    touches = RoadChunkIntersection.segmentIntersectsChunk(placement.middlePos(),
-                            placements.get(i + 1).middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
-                            chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
-                }
-                if (touches) {
-                    localIndices.add(i);
+            for (int run = 0; run < RoadStationBounds.Selection.count(selection); run++) {
+                int end = RoadStationBounds.Selection.end(selection, run, placements.size());
+                for (int i = RoadStationBounds.Selection.start(selection, run); i < end; i++) {
+                    RoadSegmentPlacement placement = placements.get(i);
+                    if (placement == null || placement.middlePos() == null) continue;
+                    // A NETWORK_REUSE span belongs to the earlier road which supplied
+                    // its exact stations.  The later road must not contribute any
+                    // density stamp, clearing, bridge margin, or occupancy here.
+                    boolean skipStamping = (networkReuseMask != null && networkReuseMask[i]
+                            && !allTunnelJunctionMask[i])
+                            || (protectedGapMask != null && protectedGapMask[i]);
+                    if (!skipStamping) {
+                        markOccupied(occupied, placement, chunkPos, halfWidth);
+                    }
+                    int featureMargin = bridgeMask != null && bridgeMask[i]
+                            ? BRIDGE_TEMPLATE_MARGIN_BLOCKS
+                            : 0;
+                    // Task 11: masked stations still count towards localIndices.
+                    // Skipping them entirely left chunks whose every station was a
+                    // reuse/gap station with zero localIndices -> empty worldgen
+                    // plan -> a visible gap even though a road shard exists. The
+                    // slice is produced (PathFeature itself skips the masked
+                    // stations while paving), only the raster stamp is skipped.
+                    // Task 3: a station also belongs to this chunk when the line
+                    // to either neighbour crosses it - two placements can sit in
+                    // adjacent chunks while their connecting edge passes through
+                    // this one, and the raster pass stamps by edge.
+                    boolean touches = RoadChunkIntersection.intersectsChunk(placement, chunkMinX, chunkMinZ, chunkMaxX, chunkMaxZ, featureMargin);
+                    if (!touches && i > 0 && placements.get(i - 1) != null) {
+                        touches = RoadChunkIntersection.segmentIntersectsChunk(placements.get(i - 1).middlePos(),
+                                placement.middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
+                                chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
+                    }
+                    if (!touches && i + 1 < placements.size() && placements.get(i + 1) != null) {
+                        touches = RoadChunkIntersection.segmentIntersectsChunk(placement.middlePos(),
+                                placements.get(i + 1).middlePos(), chunkMinX - featureMargin, chunkMinZ - featureMargin,
+                                chunkMaxX + featureMargin, chunkMaxZ + featureMargin);
+                    }
+                    if (touches) {
+                        localIndices.add(i);
+                    }
                 }
             }
             if (!localIndices.isEmpty()) {
@@ -169,49 +179,52 @@ public final class RoadChunkPlanCompiler {
             }
 
             List<Integer> targetY = road.targetY();
-            for (int i = 0; i < placements.size() - 1; i++) {
-                if (!isRenderable(placements.get(i)) || !isRenderable(placements.get(i + 1))) continue;
-                boolean firstReused = networkReuseMask != null && networkReuseMask[i];
-                boolean secondReused = networkReuseMask != null && networkReuseMask[i + 1];
-                boolean firstProtectedGap = protectedGapMask != null && protectedGapMask[i];
-                boolean secondProtectedGap = protectedGapMask != null && protectedGapMask[i + 1];
-                // Do not stamp the transition edge either.  A bridge template
-                // may extend well beyond a single station, so retaining this
-                // edge lets a secondary road write bridge abutments or piers
-                // into the primary road's shared corridor.
-                // A protected gap is an intentional unpaved interval. Do not
-                // let the raster fill/carve pass bridge across either edge of
-                // the skipped station.
-                if ((firstReused || secondReused)
-                        && !(allTunnelJunctionMask[i] || allTunnelJunctionMask[i + 1])) continue;
-                if (firstProtectedGap || secondProtectedGap) continue;
-                boolean isBridge = bridgeMask != null && (bridgeMask[i] || bridgeMask[i + 1]);
-                if (isBridge && !includeBridgeSegments) continue;
-                // Tunnel spans are excavated by RoadTunnelBuilder.  They must
-                // never enter the ordinary density fill/carve pass: if the
-                // tunnel preflight later rejects a protected section, a
-                // normal terrain stamp here would already have cut a deep
-                // open trench and leave a ravine without a roof.  Portal and
-                // junction sections are also handled by the tunnel builder.
-                boolean isTunnel = (tunnelMask != null && (tunnelMask[i] || tunnelMask[i + 1]))
-                        || (allTunnelJunctionMask[i] || allTunnelJunctionMask[i + 1]);
-                if (isTunnel) continue;
-                boolean isDirectCrossing = directCrossingMask != null
-                        && (directCrossingMask[i] || directCrossingMask[i + 1]);
+            for (int run = 0; run < RoadStationBounds.Selection.count(selection); run++) {
+                int end = RoadStationBounds.Selection.end(selection, run, placements.size() - 1);
+                for (int i = RoadStationBounds.Selection.start(selection, run); i < end; i++) {
+                    if (!isRenderable(placements.get(i)) || !isRenderable(placements.get(i + 1))) continue;
+                    boolean firstReused = networkReuseMask != null && networkReuseMask[i];
+                    boolean secondReused = networkReuseMask != null && networkReuseMask[i + 1];
+                    boolean firstProtectedGap = protectedGapMask != null && protectedGapMask[i];
+                    boolean secondProtectedGap = protectedGapMask != null && protectedGapMask[i + 1];
+                    // Do not stamp the transition edge either.  A bridge template
+                    // may extend well beyond a single station, so retaining this
+                    // edge lets a secondary road write bridge abutments or piers
+                    // into the primary road's shared corridor.
+                    // A protected gap is an intentional unpaved interval. Do not
+                    // let the raster fill/carve pass bridge across either edge of
+                    // the skipped station.
+                    if ((firstReused || secondReused)
+                            && !(allTunnelJunctionMask[i] || allTunnelJunctionMask[i + 1])) continue;
+                    if (firstProtectedGap || secondProtectedGap) continue;
+                    boolean isBridge = bridgeMask != null && (bridgeMask[i] || bridgeMask[i + 1]);
+                    if (isBridge && !includeBridgeSegments) continue;
+                    // Tunnel spans are excavated by RoadTunnelBuilder.  They must
+                    // never enter the ordinary density fill/carve pass: if the
+                    // tunnel preflight later rejects a protected section, a
+                    // normal terrain stamp here would already have cut a deep
+                    // open trench and leave a ravine without a roof.  Portal and
+                    // junction sections are also handled by the tunnel builder.
+                    boolean isTunnel = (tunnelMask != null && (tunnelMask[i] || tunnelMask[i + 1]))
+                            || (allTunnelJunctionMask[i] || allTunnelJunctionMask[i + 1]);
+                    if (isTunnel) continue;
+                    boolean isDirectCrossing = directCrossingMask != null
+                            && (directCrossingMask[i] || directCrossingMask[i + 1]);
 
-                BlockPos a = placements.get(i).middlePos();
-                BlockPos b = placements.get(i + 1).middlePos();
-                int y0 = targetAt(targetY, i, a.getY());
-                int y1 = targetAt(targetY, i + 1, b.getY());
-                // 禁切填与普通路段的影响半径相同。远离本区块的跨路段也不必创建光栅条目。
-                int radius = halfWidth + BANK_WIDTH;
-                if (Math.max(a.getX(), b.getX()) + radius < chunkMinX
-                        || Math.min(a.getX(), b.getX()) - radius > chunkMaxX
-                        || Math.max(a.getZ(), b.getZ()) + radius < chunkMinZ
-                        || Math.min(a.getZ(), b.getZ()) - radius > chunkMaxZ) continue;
-                var segment = new RasterSegment(a.getX(), a.getZ(), y0,
-                        b.getX(), b.getZ(), y1, halfWidth);
-                (isDirectCrossing ? terrainStampExclusions : rasterSegments).add(segment);
+                    BlockPos a = placements.get(i).middlePos();
+                    BlockPos b = placements.get(i + 1).middlePos();
+                    int y0 = targetAt(targetY, i, a.getY());
+                    int y1 = targetAt(targetY, i + 1, b.getY());
+                    // 禁切填与普通路段的影响半径相同。远离本区块的跨路段也不必创建光栅条目。
+                    int radius = halfWidth + BANK_WIDTH;
+                    if (Math.max(a.getX(), b.getX()) + radius < chunkMinX
+                            || Math.min(a.getX(), b.getX()) - radius > chunkMaxX
+                            || Math.max(a.getZ(), b.getZ()) + radius < chunkMinZ
+                            || Math.min(a.getZ(), b.getZ()) - radius > chunkMaxZ) continue;
+                    var segment = new RasterSegment(a.getX(), a.getZ(), y0,
+                            b.getX(), b.getZ(), y1, halfWidth);
+                    (isDirectCrossing ? terrainStampExclusions : rasterSegments).add(segment);
+                }
             }
         }
 
