@@ -1,5 +1,11 @@
 # roadweaver-next 发布台账
 
+## 0.9.117 长路站位范围复用（2026-11-23，已安装 WAYFARING）
+
+源码 `54dd50b`。对每区块只扫描可能触及的长路站组；桥隧、施工归属、切填和站序通过冻结编译器对拍。回归 1859/0/0/0、两处故意破坏报红，内嵌 API 检查和 7 个坏包负控通过。成品 7210214 B，SHA-256 `c58c4f12a6768a41e05a93d9638bf0d1b7de5a609a7b8a94faa18160801bd8a8`。实际 Fabric Loader 0.19.3 / Java 25.0.3 离线依赖解析选中 786 个模组，安装件唯一内嵌 API 1.1.0 的 26 个公开类逐字不变。
+
+退出游戏后可用工作区根 `build/wayfaring-trimod-20261123-optimization/Rollback.ps1` 核对并恢复道路 .116、长城 .134、河流 fix12。安装证据见同目录 `receipt.json`、`postflight.json` 和 `loader-before/resolve.log`，未做世界产物实机验收。
+
 ## 0.9.116 道路二阶剖面回溯压缩（2026-11-23，已安装 WAYFARING）
 
 源码 `faed01d`，含本页下方 0.9.115 的修复。只缩小二阶父表；冻结旧公式的高度序列和总代价不变。回归 1857/0/0/0，两处剖面负控均红，内嵌 API 及 7 个坏包负控通过。成品 7204236 B，SHA-256 `70a50baa051f3de34bc0866fe2dbcdb112fcae484d85c3356c28125239b96088`。安装件与构建件一致，内嵌 API 1.1.0 仅一份且 26 个公开类逐字不变。回退：退出游戏，按工作区根 `build/wayfaring-trimod-20261123/Rollback.ps1` 核对本轮包与备份后恢复上套（道路 .114、长城 .131、河流 fix10）。同目录 `receipt.json`、`postflight.json` 可定位安装证据。没做真机产物验收。
