@@ -129,6 +129,9 @@ public final class GradeOptimizer {
         for (int k = 1; k < length; k++) {
             int targetPrev = targetY[start + k - 1];
             int targetHere = targetY[start + k];
+            // 站距与土方模式只依赖当前站，不能在每对候选高度内重复换算。
+            int allowedStep = adjacentStepAt(adjacentStep, stationSpacing, start + k);
+            boolean flat = isBridge(flatCostMask, start + k);
             java.util.Arrays.fill(current, inf);
             for (int c = low; c <= high; c++) {
                 int y = targetHere + c;
@@ -140,7 +143,7 @@ public final class GradeOptimizer {
                         continue;
                     }
                     int step = Math.abs(y - (targetPrev + a));
-                    int excess = Math.max(0, step - adjacentStepAt(adjacentStep, stationSpacing, start + k));
+                    int excess = Math.max(0, step - allowedStep);
                     int cost = value + excess * SLOPE_EXCESS_WEIGHT;
                     if (cost < best) {
                         best = cost;
@@ -150,7 +153,7 @@ public final class GradeOptimizer {
                 if (best >= inf) {
                     continue;
                 }
-                int total = best + deviationCost(c, isBridge(flatCostMask, start + k));
+                int total = best + deviationCost(c, flat);
                 if (total < current[c - low]) {
                     current[c - low] = total;
                     parent[k * h + (c - low)] = (byte) (bestA - low);
@@ -174,17 +177,14 @@ public final class GradeOptimizer {
             return;
         }
 
-        int[] offsets = new int[length];
         int cursor = bestC;
         for (int k = length - 1; k >= 0; k--) {
-            offsets[k] = cursor;
+            // 终点已选定，沿父节点直接回写，省去整段偏移数组和一次遍历。
+            out[start + k] = targetY[start + k] + cursor;
             if (k == 0) {
                 break;
             }
             cursor = (parent[k * h + (cursor - low)] & 0xFF) + low;
-        }
-        for (int k = 0; k < length; k++) {
-            out[start + k] = targetY[start + k] + offsets[k];
         }
     }
 

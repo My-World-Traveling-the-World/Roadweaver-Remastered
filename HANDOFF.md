@@ -48,3 +48,11 @@ python -B -m unittest discover -s scripts/evidence -v
 4. **负控**：粗边升高量固定为 1 → `broadHillKeepsSurfaceAtEightBlockSpacing` 红；首轮精采禁用稀疏坡限 → `accurateRefreshOfSparseCorridorDoesNotFlattenALegalSlope` 红；绕行距离预算置零 → `boundedSurfaceSearchUsesAnOpenPassAndRejectsAnOverlongDetour` 红。三组源码均按原字节恢复。
 5. **下一步**：用同种子和相同参数比较隧道总长、实际连通数量、半砖坡道、长桥、绕墙及开局各阶段耗时。纵断面 crossing 解耦和第二次平滑维持现状，等待现场对照。
 6. **历史与回退**：本轮基于 `3db0866`，可单独回退，已有道路记录的读取格式不变。[清理前开发记录](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/tree/474cd905872a772adf3d783efddec54c4457da77/docs)。
+## 2026-11-24 · 热路径优化
+
+1. **改动**：精采样纵断面按站换算坡限并复用土方模式；回溯直接写出高程，省去每段偏移数组。候选代价和等分取舍维持原样。
+2. **验证**：全量回归 1871 项，零跳过和失败；Fabric 构建及独立前置验包通过。
+3. **未验证**：未在整合包量纵断面耗时或总预热耗时。
+4. **负控**：本轮沿用现有剖面守卫，未新增守卫或负控。
+5. **下一步**：同种子比较开局耗时与路线产物；后续优先定位走廊精采和纵断面各自耗时。
+6. **历史与回退**：基线 93685cd；本轮可单独回退，存档和配置格式不变。
