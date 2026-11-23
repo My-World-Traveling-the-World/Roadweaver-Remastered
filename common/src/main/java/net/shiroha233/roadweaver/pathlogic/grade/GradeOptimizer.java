@@ -221,30 +221,37 @@ public final class GradeOptimizer {
                                               int leftAnchor, int rightAnchor,
                                               int maxStepPerTwoSegments,
                                               int tunnelCoreOverburden) {
+        return surfaceCutFeasible(terrain, crossing, leftAnchor, rightAnchor,
+                maxStepPerTwoSegments, tunnelCoreOverburden, null);
+    }
+
+    /** 粗采样用每条边的实际升高预算；细站仍用原来的逐站预算。 */
+    static boolean surfaceCutFeasible(int[] terrain, boolean[] crossing,
+                                       int leftAnchor, int rightAnchor,
+                                       int maxStepPerTwoSegments, int tunnelCoreOverburden,
+                                       int[] coarseRise) {
         int adjacentStep = maxStepPerTwoSegments > 0
                 ? Math.max(1, (Math.min(8, maxStepPerTwoSegments) + 1) / 2)
                 : Integer.MAX_VALUE / 2;
         int from = Math.max(0, Math.min(leftAnchor, rightAnchor));
         int to = Math.min(terrain.length - 1, Math.max(leftAnchor, rightAnchor));
-        int[] forward = new int[terrain.length];
+        // 只保存锚点窗内的前向结果，反向扫描可直接检查，无需另分配全路数组。
+        int[] forward = new int[to - from + 1];
         int y = terrain[from];
-        forward[from] = y;
+        forward[0] = y;
         for (int i = from + 1; i <= to; i++) {
-            y = clamp(terrain[i], y - adjacentStep, y + adjacentStep);
-            forward[i] = y;
+            int rise = coarseRise == null ? adjacentStep : coarseRise[i];
+            y = clamp(terrain[i], y - rise, y + rise);
+            forward[i - from] = y;
         }
-        int[] backward = new int[terrain.length];
         y = terrain[to];
-        backward[to] = y;
-        for (int i = to - 1; i >= from; i--) {
-            y = clamp(terrain[i], y - adjacentStep, y + adjacentStep);
-            backward[i] = y;
-        }
-        int deepest = 0;
-        for (int i = from; i <= to; i++) {
+        for (int i = to; i >= from; i--) {
+            if (i < to) {
+                int rise = coarseRise == null ? adjacentStep : coarseRise[i + 1];
+                y = clamp(terrain[i], y - rise, y + rise);
+            }
             if (isBridge(crossing, i)) continue;
-            int upper = Math.min(forward[i], backward[i]);
-            deepest = Math.max(deepest, terrain[i] - upper);
+            int upper = Math.min(forward[i - from], y);
             if (terrain[i] - upper > TUNNEL_SURFACE_CUT_BUDGET) {
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("【明挖深度超过门槛，允许采用隧道弦线】 " + "RoadWeaver tunnel chord justified: surface cut would reach {} blocks at station {} (anchor span {}..{}) overburden threshold {}",

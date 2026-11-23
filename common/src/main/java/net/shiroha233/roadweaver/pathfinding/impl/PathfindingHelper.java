@@ -52,6 +52,13 @@ public final class PathfindingHelper {
     public static boolean edgeIntersectsPlanningObstacle(BlockPos from, BlockPos to,
                                                          int horizontalClearance,
                                                          int step) {
+        return edgeIntersectsPlanningObstacle(from, to, step,
+                probe -> StructureAvoidanceService.shouldAvoidPlanning(probe, horizontalClearance));
+    }
+
+    /** 边采样共用相同几何，不同候选在调用端决定所需的保护判据。 */
+    public static boolean edgeIntersectsPlanningObstacle(BlockPos from, BlockPos to,
+            int step, java.util.function.Predicate<BlockPos> blocked) {
         if (from == null || to == null) return false;
         double horizontal = Math.hypot(to.getX() - from.getX(), to.getZ() - from.getZ());
         if (horizontal < 0.001D) return false;
@@ -63,7 +70,7 @@ public final class PathfindingHelper {
                     (int) Math.round(from.getX() + (to.getX() - from.getX()) * t),
                     (int) Math.round(from.getY() + (to.getY() - from.getY()) * t),
                     (int) Math.round(from.getZ() + (to.getZ() - from.getZ()) * t));
-            if (StructureAvoidanceService.shouldAvoidPlanning(probe, horizontalClearance)) {
+            if (blocked.test(probe)) {
                 return true;
             }
         }

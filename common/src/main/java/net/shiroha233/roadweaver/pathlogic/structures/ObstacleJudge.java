@@ -262,6 +262,13 @@ public final class ObstacleJudge {
         return Math.max(0, (int) Math.ceil(width / 2.0D));
     }
 
+    /** 与 BAND 同源；绕坡候选也须在展开前取一次巨树的只读保护快照。 */
+    public static net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation.PlanningMask planningTreeMask(
+            ServerLevel level, int minX, int minZ, int maxX, int maxZ, int radius) {
+        return net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation.planningMask(
+                level, minX, minZ, maxX, maxZ, radius);
+    }
+
     /** 结构端点允许接近所属结构；最终体积触楼时裁在安全站，而非直接丢弃整条连接。
  *
      * Structure-to-structure roads are allowed to enter their endpoint

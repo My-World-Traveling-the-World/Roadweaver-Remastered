@@ -20,7 +20,8 @@ S5M|RoadGradePlanner|enforceGradeCap|0||DELETE_WITH_LEGACY
 S5M|RoadGradePlanner|lowerRunToGradeCap|0||DELETE_WITH_LEGACY
 S5M|RoadGradePlanner|windowRun|0||DELETE_WITH_LEGACY
 S5M|RoadGradePlanner|smoothProfileWithinBudget|0||DELETE_WITH_LEGACY
-S5M|RoadGradePlanner|applyProactiveTunnelProfile|2|RawPathSearch(1),TargetYComputation(2)|LEGACY_ONLY
+S5M|RoadGradePlanner|applyProactiveTunnelProfile|1|LegacyTargetProfile(2)；粗剖面共用隧道弦内核|KEEP_INPUT
+S5M|RoadGradePlanner|planCoarseTerrainProfile|1|RawPathSearch(1)|KEEP_INPUT
 S5M|RoadGradePlanner|planAccurateGradeProfile|1|AccuratePathHeightResolver(1)|LEGACY_ONLY
 S5M|RoadGradePlanner|planConfiguredGradeProfile|1|AccurateGradeRepairPlanner(1)|LEGACY_ONLY
 S5M|RoadGradePlanner|removeSingleStationSpikes|1|TargetYComputation(1)|LEGACY_ONLY

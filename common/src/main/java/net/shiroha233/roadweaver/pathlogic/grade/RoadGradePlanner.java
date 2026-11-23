@@ -292,10 +292,24 @@ public final class RoadGradePlanner {
                                         boolean[] pinnedMask,
                                         double[] stationSpacing,
                                         GradeCap.Mode mode) {
+        return enforceGradeCap(source, protectedMask, pinnedMask, stationSpacing, mode, false);
+    }
+
+    /** 粗线精采仍不是施工站；长边的相邻高差要随水平距离折算。 */
+    private static int[] enforceGradeCap(int[] source, boolean[] protectedMask, boolean[] pinnedMask,
+            double[] stationSpacing, GradeCap.Mode mode, boolean sparsePath) {
         if (source == null || source.length == 0) return new int[0];
         int[] result = source.clone();
         int window = GradeCap.riseStations(mode);
         if (window <= 1 || GradeCap.riseBlocks(mode) <= 0 || result.length < 3) return result;
+        // 每站不再回扫至锚点；稀疏或弧长模式在长缓坡上也保持线性扫描。
+        double[] distance = stationSpacing == null ? null : new double[result.length];
+        if (distance != null) {
+            for (int i = 1; i < distance.length; i++) {
+                double step = i < stationSpacing.length ? stationSpacing[i] : 0.0D;
+                distance[i] = distance[i - 1] + (step > 0.0D && Double.isFinite(step) ? step : 1.0D);
+            }
+        }
 
         int index = 0;
         while (index < result.length) {
@@ -304,14 +318,15 @@ public final class RoadGradePlanner {
             while (index < result.length && !isBridge(protectedMask, index)) index++;
             int end = index - 1;
             if (start < end) {
-                lowerRunToGradeCap(result, start, end, window, mode, pinnedMask, stationSpacing);
+                lowerRunToGradeCap(result, start, end, window, mode, pinnedMask, distance, sparsePath);
             }
         }
         return result;
     }
 
     static void lowerRunToGradeCap(int[] profile, int start, int end, int window,
-                                           GradeCap.Mode mode, boolean[] pinnedMask, double[] stationSpacing) {
+                                           GradeCap.Mode mode, boolean[] pinnedMask, double[] distance,
+                                           boolean sparsePath) {
         int passes = Math.min(2 * window + 4, 32);
         for (int pass = 0; pass < passes; pass++) {
             boolean changed = false;
@@ -319,8 +334,9 @@ public final class RoadGradePlanner {
             int anchor = start;
             for (int i = start + 1; i <= end; i++) {
                 if (!isPinned(pinnedMask, i)) {
-                    int allowedUp = GradeCap.maxRise(windowRun(stationSpacing, anchor, i), mode);
-                    int limit = Math.min(profile[anchor] + allowedUp, profile[i - 1] + 1);
+                    int allowedUp = GradeCap.maxRise(windowRun(distance, anchor, i), mode);
+                    int edge = sparsePath ? Math.max(1, GradeCap.maxRise(windowRun(distance, i - 1, i), mode)) : 1;
+                    int limit = Math.min(profile[anchor] + allowedUp, profile[i - 1] + edge);
                     if (profile[i] > limit) {
                         profile[i] = limit;
                         changed = true;
@@ -332,8 +348,9 @@ public final class RoadGradePlanner {
             int backAnchor = end;
             for (int i = end - 1; i >= start; i--) {
                 if (!isPinned(pinnedMask, i)) {
-                    int allowedDown = GradeCap.maxRise(windowRun(stationSpacing, i, backAnchor), mode);
-                    int limit = Math.min(profile[backAnchor] + allowedDown, profile[i + 1] + 1);
+                    int allowedDown = GradeCap.maxRise(windowRun(distance, i, backAnchor), mode);
+                    int edge = sparsePath ? Math.max(1, GradeCap.maxRise(windowRun(distance, i, i + 1), mode)) : 1;
+                    int limit = Math.min(profile[backAnchor] + allowedDown, profile[i + 1] + edge);
                     if (profile[i] > limit) {
                         profile[i] = limit;
                         changed = true;
@@ -345,15 +362,9 @@ public final class RoadGradePlanner {
         }
     }
 
-    /** {@return 索引 from→to 之间实际走过的水平距离（{@code spacing == null} 时按 1.0 格/站）} */
-    static double windowRun(double[] spacing, int from, int to) {
-        if (spacing == null) return Math.max(0, to - from);
-        double sum = 0.0D;
-        for (int i = from + 1; i <= to && i < spacing.length; i++) {
-            double step = spacing[i];
-            sum += (step > 0.0D && !Double.isNaN(step)) ? step : 1.0D;
-        }
-        return sum;
+    /** 通过里程差取窗长；逐站模型仍按每站一格计算。 */
+    static double windowRun(double[] distance, int from, int to) {
+        return distance == null ? to - from : distance[to] - distance[from];
     }
 
     /** 纵断面平滑轮数。 */
@@ -439,6 +450,17 @@ public final class RoadGradePlanner {
                                                     boolean slopeEnabled,
                                                     int maxStepPerTwoSegments,
                                                     boolean[] pinnedMask) {
+        return applyProactiveTunnelProfile(profile, terrain, crossing, slopeEnabled,
+                maxStepPerTwoSegments, pinnedMask, null);
+    }
+
+    /** 粗站用格/格坡限换算的升高预算，不能把 8 格采样边当成 1 格施工站。 */
+    public static int[] planCoarseTerrainProfile(int[] terrain, boolean[] crossing, int[] coarseRise) {
+        return applyProactiveTunnelProfile(terrain, terrain, crossing, true, 0, null, coarseRise);
+    }
+
+    private static int[] applyProactiveTunnelProfile(int[] profile, int[] terrain, boolean[] crossing,
+            boolean slopeEnabled, int maxStepPerTwoSegments, boolean[] pinnedMask, int[] coarseRise) {
         if (profile == null || terrain == null || profile.length != terrain.length
                 || profile.length < 5) {
             return profile == null ? new int[0] : profile.clone();
@@ -490,7 +512,7 @@ public final class RoadGradePlanner {
             // surface cut would exceed the budget becomes a tunnel chord
             // (tasks 5/14: cuttable slopes must not become deep tunnels).
             if (surfaceCutFeasible(terrain, crossing, leftAnchor, rightAnchor,
-                    maxStepPerTwoSegments, limits.tunnelCoreOverburden())) {
+                    maxStepPerTwoSegments, limits.tunnelCoreOverburden(), coarseRise)) {
                 index = runEnd + 1;
                 continue;
             }
@@ -538,7 +560,19 @@ public final class RoadGradePlanner {
             }
             index = runEnd + 1;
         }
-        if (slopeEnabled) {
+        if (coarseRise != null) {
+            // 两向坡限只传播于陆地；水列不参与压低剖面，留给精细桥面规划。
+            for (int i = 1; i < size; i++) {
+                if (!isBridge(crossing, i - 1) && !isBridge(crossing, i)) {
+                    result[i] = Math.min(result[i], result[i - 1] + coarseRise[i]);
+                }
+            }
+            for (int i = size - 1; i > 0; i--) {
+                if (!isBridge(crossing, i - 1) && !isBridge(crossing, i)) {
+                    result[i - 1] = Math.min(result[i - 1], result[i] + coarseRise[i]);
+                }
+            }
+        } else if (slopeEnabled) {
             result = enforceContinuousSlopePreferCut(result, crossing, maxStepPerTwoSegments);
         }
         return result;
@@ -596,6 +630,13 @@ public final class RoadGradePlanner {
                                                  boolean slopeLimitEnabled,
                                                  boolean[] flatCostMask,
                                                  double[] stationSpacing) {
+        return planAccurateGradeProfile(targetY, splitMask, maxStepPerTwoSegments,
+                slopeLimitEnabled, flatCostMask, stationSpacing, false);
+    }
+
+    /** 首轮走廊精采与加密后的施工精采共享算法，但只有施工站保留相邻一格限制。 */
+    public static int[] planAccurateGradeProfile(int[] targetY, boolean[] splitMask, int maxStepPerTwoSegments,
+            boolean slopeLimitEnabled, boolean[] flatCostMask, double[] stationSpacing, boolean sparsePath) {
         if (targetY == null || targetY.length < 3) {
             return targetY == null ? new int[0] : targetY.clone();
         }
@@ -607,7 +648,7 @@ public final class RoadGradePlanner {
         // 0.9.061：坡度上限档位（每 N 站抬 1 格）。分层 DAG 的软坡度罚只看相邻站
         // （adjacentStep=(step2+1)/2），表达不了「8 站抬 1 格」这种窗口约束，
         // 所以这里再用一次硬窗口把它压进档位。只降不升，与 prefer-cut 的契约一致。
-        result = enforceGradeCap(result, splitMask, null, stationSpacing, GradeCap.current());
+        result = enforceGradeCap(result, splitMask, null, stationSpacing, GradeCap.current(), sparsePath);
         int changed = 0;
         int cutStations = 0;
         int fillStations = 0;

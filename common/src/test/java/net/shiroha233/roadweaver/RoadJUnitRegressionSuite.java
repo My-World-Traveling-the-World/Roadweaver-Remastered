@@ -325,6 +325,8 @@ public final class RoadJUnitRegressionSuite {
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.planning.terrain.TerrainProfileModeSearchBehaviorTest"),
                         DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.planning.terrain.CoarseSurfacePreferenceTest"),
+                        DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainTileCacheConcurrencyTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.pathfinding.terrain.region.CoarseTerrainTileSubmitIntervalBillingTest"),

@@ -34,8 +34,8 @@ allprojects {
 	apply plugin: 'architectury-plugin'
 	
 	group = 'net.shiroha233.roadweaver'
-	// 区分纵断面绕行版与上一轮部署件，方便同种子比对。
-	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.120'
+	// 区分地表绕坡修复与上一版成品，方便同种子对照隧道与开局耗时。
+	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.121'
 	repositories {
 		maven { url = 'https://maven.architectury.dev/' }
 		maven { url = 'https://maven.fabricmc.net/' }

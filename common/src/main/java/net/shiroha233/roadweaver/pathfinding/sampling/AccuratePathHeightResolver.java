@@ -28,6 +28,12 @@ public final class AccuratePathHeightResolver {
     public static List<BlockPos> resolve(List<BlockPos> path,
                                          PathTerrainField terrain,
                                          AccurateHeightSampler sampler) {
+        return resolve(path, terrain, sampler, false);
+    }
+
+    /** 走廊中心还未加密时必须按真实距离限坡；不能把采样精度误当最终站距。 */
+    public static List<BlockPos> resolve(List<BlockPos> path, PathTerrainField terrain,
+            AccurateHeightSampler sampler, boolean sparsePath) {
         if (path == null || path.isEmpty()) {
             return path;
         }
@@ -91,7 +97,8 @@ public final class AccuratePathHeightResolver {
         }
         int[] gradeProfile = RoadGradePlanner.planAccurateGradeProfile(
                 targetY, splitMask, slopeStep(), slopeLimitEnabled(), tunnelHints,
-                SlopeContinuityEnforcer.configuredStationSpacing(path));
+                sparsePath ? SlopeContinuityEnforcer.stationSpacing(path)
+                        : SlopeContinuityEnforcer.configuredStationSpacing(path), sparsePath);
 
         List<BlockPos> resolved = new ArrayList<>(path.size());
         for (int i = 0; i < path.size(); i++) {

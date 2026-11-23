@@ -20,6 +20,8 @@ python -B -m unittest discover -s scripts/evidence -v
 
 开局读取当前存档的索引与台账，等待已安装的河流、长城。收集结构端点，用粗地形选边和规划走廊。默认精采样限于走廊，再生成站列、纵断面和桥隧跨度。合并路口后按最终占地验证，再发布计划。H 地图显示计划，区块回填与新区块生成负责铺设。
 
+粗阶段的桥隧只是候选：不能用稀疏网格定稿桥头、洞口和路面高度。开局精规划确认后，将站列、`targetY` 和 `spans` 一起写入道路记录。施工按记录编译区块占地，仍复核保护列和落块条件。
+
 | 包 | 职责 |
 | --- | --- |
 | `metric` | 地形、坡度与障碍的通行代价 |
@@ -40,9 +42,9 @@ python -B -m unittest discover -s scripts/evidence -v
 
 ## 当前交接 · 2026-11-23
 
-1. **改动**：统一三个文档入口，迁移测试基线和重放样本，移除旧 NeoForge 发包配置与阶段专项工具。
-2. **验证**：道路回归 `PASS tests=1867 skipped=0 aborted=0 failed=0`，Fabric 构建成功，独立前置验包及 3 个拒绝用例通过。24 项 Python 工具测试通过，离线重放读完 6 条历史样本。
-3. **未验证**：完整整合包的预热耗时、跨区块长桥和游戏内最终铺设。
-4. **负控**：暂移 `postprocess-methods-baseline.txt` 后，`GuardPreconditionTest` 的文件存在守卫及 `S5MethodMapTest` 的两项判据报错。基线已恢复。
-5. **下一步**：用同种子新档和旧档副本查连通性、坡道、长桥、绕墙及回填尾延迟。纵断面 crossing 解耦与第二次平滑仍待现场对照。
-6. **历史与回退**：[清理前开发记录](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/tree/474cd905872a772adf3d783efddec54c4457da77/docs)，旧版发布状态见本仓库版本更新。
+1. **改动**：粗阶段和走廊的首轮精采都按真实水平距离计算升高量，加密后仍使用施工站的高差限制。纯陆且已有隧道提示时，在现有高程感知、地表偏好模式下尝试一次地表绕坡；受山地绕行倍率、最多 24,000 状态和 300 ms 搜索软限约束。过水、共用走廊和显式隧道优先保留原流程。没有合格候选时仍允许桥隧。未更改默认参数或存档格式。
+2. **验证**：道路回归 `PASS tests=1871 skipped=0 aborted=0 failed=0`，Fabric 构建、独立前置验包及 3 个拒绝用例通过。合成地形覆盖缓山、山口、超预算绕行、不可绕山脊、过水和首轮精采的稀疏缓坡。
+3. **未验证**：真实世界的隧道占比、盘山路质量、连通率、开局耗时及动画、跨区块长桥和游戏内铺设。不把合成测试当作实机收益。新增搜索存在限时退出，实际吃满预算的频率也待测。
+4. **负控**：粗边升高量固定为 1 → `broadHillKeepsSurfaceAtEightBlockSpacing` 红；首轮精采禁用稀疏坡限 → `accurateRefreshOfSparseCorridorDoesNotFlattenALegalSlope` 红；绕行距离预算置零 → `boundedSurfaceSearchUsesAnOpenPassAndRejectsAnOverlongDetour` 红。三组源码均按原字节恢复。
+5. **下一步**：用同种子和相同参数比较隧道总长、实际连通数量、半砖坡道、长桥、绕墙及开局各阶段耗时。纵断面 crossing 解耦和第二次平滑维持现状，等待现场对照。
+6. **历史与回退**：本轮基于 `3db0866`，可单独回退，已有道路记录的读取格式不变。[清理前开发记录](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/tree/474cd905872a772adf3d783efddec54c4457da77/docs)。
