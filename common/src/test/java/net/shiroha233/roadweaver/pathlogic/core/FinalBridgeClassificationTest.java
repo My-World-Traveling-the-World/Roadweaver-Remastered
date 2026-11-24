@@ -17,6 +17,33 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 复现现场的“已通过→补判干谷→按原陡岸锁高→整路失败”，不是重放现场全部地形。 */
 final class FinalBridgeClassificationTest {
+    @Test void productionFinishesBridgeClassificationInsideTheProfileRecoveryBoundary() throws Exception {
+        // 行为测试之外核对真正生成入口，防止只修离线端口而生产仍沿用旧循环。
+        var root = java.nio.file.Path.of("").toAbsolutePath();
+        while (root != null && !java.nio.file.Files.isRegularFile(root.resolve("common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/Road.java")))
+            root = root.getParent();
+        assertNotNull(root);
+        var source = root.resolve("common/src/main/java/net/shiroha233/roadweaver/pathlogic/core/Road.java");
+        var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+        try (var files = compiler.getStandardFileManager(null, null, null)) {
+            var task = (com.sun.source.util.JavacTask) compiler.getTask(null, files, null,
+                    List.of("-proc:none"), null, files.getJavaFileObjects(source.toFile()));
+            var calls = new java.util.ArrayList<String>();
+            new com.sun.source.util.TreeScanner<Void, String>() {
+                @Override public Void visitMethod(com.sun.source.tree.MethodTree method, String context) {
+                    return super.visitMethod(method, method.getName().toString());
+                }
+                @Override public Void visitMethodInvocation(com.sun.source.tree.MethodInvocationTree call, String method) {
+                    calls.add(method + ":" + call.getMethodSelect());
+                    return super.visitMethodInvocation(call, method);
+                }
+            }.scan(task.parse(), null);
+            assertEquals(1, calls.stream().filter("solveInitialProfile:RoadProfileRecovery.finish"::equals).count());
+            assertEquals(List.of("solveInitialProfile:FillBridgeExtender.refineFinalFillBridgeSpans"),
+                    calls.stream().filter(call -> call.endsWith(":FillBridgeExtender.refineFinalFillBridgeSpans")).toList());
+        }
+    }
+
     @Test void dryCrossingKeepsTheAcceptedGradeInsteadOfRelockingTheRawBanks() {
         int[] terrain = {104, 104, 106, 98, 108, 108, 108};
         var segments = line(terrain);

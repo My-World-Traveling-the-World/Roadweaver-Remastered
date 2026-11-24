@@ -513,15 +513,28 @@ public final class StructureRepair {
                         replacement = LocalRouteSearch.findLocalRoute(original, sampler, config.withPathGridStep(step),
                                 radius, exclude, step, false, 0, null, Integer.MIN_VALUE, center);
                     }
+                    // 每个半径保留搜索出口，预算耗尽与真正无路不能再混成一个false。
+                    String searchDiag = consumeLocalSearchDiag();
+                    String verdict = "no_candidate";
+                    if (replacement != null) verdict = "grade_or_length_rejected";
                     if (RepairAcceptance.isAccepted(original, replacement)) {
                         var candidate = new ArrayList<BlockPos>(path.size() - original.size() + replacement.size());
                         candidate.addAll(path.subList(0, from));
                         candidate.addAll(replacement);
                         candidate.addAll(path.subList(to + 1, path.size()));
                         // 局部纵坡修复不能解除上游对禁止走廊的约束。
-                        if (RawPathSearch.keepAllowedReplacement(config, path, candidate) == candidate
-                                && accept.test(List.copyOf(candidate))) return true;
+                        if (RawPathSearch.keepAllowedReplacement(config, path, candidate) != candidate) {
+                            verdict = "corridor_rejected";
+                        } else if (accept.test(List.copyOf(candidate))) {
+                            LOGGER.info("【纵断面局部绕行接受】 center={} radius={} window={}..{} {}",
+                                    center, radius, from, to, searchDiag);
+                            return true;
+                        } else {
+                            verdict = "profile_or_geometry_rejected";
+                        }
                     }
+                    LOGGER.info("【纵断面局部绕行未接受】 center={} radius={} step={} window={}..{} reason={} {}",
+                            center, radius, step, from, to, verdict, searchDiag);
                 }
             }
             if (radius == limit) return false;

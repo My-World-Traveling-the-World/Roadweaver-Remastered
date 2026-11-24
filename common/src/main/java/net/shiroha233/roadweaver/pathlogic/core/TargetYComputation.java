@@ -208,12 +208,26 @@ public final class TargetYComputation {
         // 改动后：DP 拿到全部输入（含上移的 tunnelMask / gradeLimits）后立刻求解；
         // 普通窗口无解时先复核物理隧道与有界路堑；修复仍无解就明确失败。
         // 只有显式保留模式或关闭坡限才返回 empty，不能把 DP 无解转交旧 pass。
-        java.util.Optional<int[]> dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
+        // 求解拒绝也必须留下地形；原来在成功出口录制，现场失败路线恰好全部漏录。
+        ProfileTerrainRecorder.record(
+                connection == null ? "?" : connection.from() + "->" + connection.to(), terrainY, isCrossing);
+        java.util.Optional<int[]> dpProfile;
+        try {
+            dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
                 terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary, endBoundary,
                 cfg, gradeLimits, connection,
                 // 留下实机重放需要的失败站与限制站，外层生成负责按连接汇总。
                 (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solveForRoad(
                         heights, crossing, cut, fill, step, two, constraints, windowTiming, dpTiming, tunnelSelector));
+        } catch (IllegalArgumentException failure) {
+            // 高程数组来自本次精采；不能拿中心点携带的旧规划Y代替地形来判断锁高是否正确。
+            LOGGER.warn("【纵断面拒绝输入】 connection={}->{} cause={} startXZ={} startTerrain={} startLocked={} "
+                            + "startPinned={} endXZ={} endTerrain={} endLocked={} endPinned={}",
+                    connection == null ? "?" : connection.from(), connection == null ? "?" : connection.to(),
+                    failure.toString(), centers.getFirst(), terrainY[0], startBoundary, pinnedMask[0],
+                    centers.getLast(), terrainY[n - 1], endBoundary, pinnedMask[n - 1]);
+            throw failure;
+        }
         final int[] legacySnapshot;
         if (dpProfile.isPresent()) {
             // DP 成功：不跑旧 pass。AB 观测器的 legacy 臂因此不存在（见下方 null 守卫）。
@@ -377,11 +391,6 @@ public final class TargetYComputation {
         ModeDpBridge.observe(terrainY, groundBans, isCrossing,
                 gradeLimits, cfg, centers, spans,
                 connection == null ? "?" : connection.from() + "->" + connection.to());
-        // 把真实地形录成一行，供 CI 重放（有录制文件时 ProfileTerrainReplayTest 会自动启用）。
-        // 只在地形、不录旧剖面 —— 我们要比的是「同一地形，两种算法各自算出的解」。
-        ProfileTerrainRecorder.record(
-                connection == null ? "?" : connection.from() + "->" + connection.to(),
-                terrainY, isCrossing);
         return out;
     }
 
