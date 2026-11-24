@@ -197,24 +197,6 @@ public final class Road {
             List<Integer> targetY = preparation.heights();
             InitialGenerationProgressTracker.advanceCurrentRoadTask(680, "road_target_height_ready");
             if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
-            spans = PathSpanExtractor.refineTunnelSpans(spans, segments, targetY, level, cache);
-            // A bridge profile can expose a low bank only after its first
-            // height pass.  Settle the bounded bridge/fill/tunnel relationship
-            // before persisting RoadData so chunk generation never has to skip
-            // an unsafe bridge approach column.
-            for (int bridgeRefinement = 0; bridgeRefinement < 3; bridgeRefinement++) {
-                if (ConnectionDeletionService.shouldAbort(level, connection)) return null;
-                List<RoadSpan> refinedSpans = FillBridgeExtender.refineFinalFillBridgeSpans(
-                        spans, segments, targetY, level, cache);
-                refinedSpans = FillBridgeExtender.extendExistingStreamsBridgeApproaches(
-                        refinedSpans, segments, streams);
-                if (refinedSpans.equals(spans)) break;
-                spans = refinedSpans;
-                SettledProfile settled = settleProfile(segments, spans, level, cache, terrain,
-                        genConfig, streams);
-                spans = settled.spans();
-                targetY = settled.targetY();
-            }
             List<RoadSpan> protectedGaps = protectedGapSpans(
                     level, connection, segments);
             if (!protectedGaps.isEmpty()) {
@@ -781,8 +763,17 @@ public final class Road {
                     level, cache, terrain, streams, genConfig.tunnelClearHeight(), routeBridgeMinWaterDepth());
         }
         spans = new ArrayList<>(spans);
-        return new RoadProfileRecovery.Profile(segments, spans,
-                computeTargetY(level, segments, spans, cache, terrain, genConfig, streams));
+        var heights = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);
+        spans = PathSpanExtractor.refineTunnelSpans(spans, segments, heights, level, cache);
+        // 桥头延伸与最终干谷分类都在恢复边界内，后期冲突也有机会寻找同端点旁路。
+        return RoadProfileRecovery.finish(new RoadProfileRecovery.Profile(segments, spans, heights),
+                current -> FillBridgeExtender.extendExistingStreamsBridgeApproaches(current, segments, streams),
+                current -> {
+                    var settled = settleProfile(segments, current, level, cache, terrain, genConfig, streams);
+                    return new RoadProfileRecovery.Profile(segments, settled.spans(), settled.targetY());
+                },
+                current -> FillBridgeExtender.refineFinalFillBridgeSpans(
+                        current.spans(), segments, current.heights(), level, cache));
     }
 
     /**

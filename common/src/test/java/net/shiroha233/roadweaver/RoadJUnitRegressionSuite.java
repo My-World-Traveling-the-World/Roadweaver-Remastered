@@ -515,6 +515,7 @@ public final class RoadJUnitRegressionSuite {
                 // 求解异常必须保留与正常路径相同的端点、桥面及覆土约束。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetProfileSolverTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.RoadProfileRecoveryTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.FinalBridgeClassificationTest"),
                 // 现场失败重放与独立可行性对拍，防止全绿却整批道路被拒。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.ClientProfileRepairTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.profile.ProfileFeasibilityTest"),

@@ -53,6 +53,21 @@ final class RoadProfileRecovery {
         }
     }
 
+    /** 河岸延伸重新求解；干谷只分类最终路面，不能再钉回原始陡岸。 */
+    static Profile finish(Profile initial,
+            Function<List<RoadSpan>, List<RoadSpan>> extendRiverBanks,
+            Function<List<RoadSpan>, Profile> solve,
+            Function<Profile, List<RoadSpan>> classifyDry) {
+        var current = initial;
+        for (int pass = 0; pass < 3; pass++) {
+            var extended = extendRiverBanks.apply(current.spans());
+            if (extended.equals(current.spans())) break;
+            current = solve.apply(extended);
+        }
+        // 干谷来自最终路面与最低占地的差值；重新求桥弦会覆盖已经合法的缓坡。
+        return new Profile(current.segments(), classifyDry.apply(current), current.heights());
+    }
+
     static int repairStation(ProfileConflict conflict, int size) {
         int station = conflict.station(), limiter = conflict.limitingStation();
         if (station < 0 || station >= size || limiter < 0 || limiter >= size) return -1;
