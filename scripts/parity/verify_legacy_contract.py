@@ -19,6 +19,10 @@ def verify(root, baseline, api_root=None):
     errors = []
     for group in ("apiTokenSha256", "resourceSha256"):
         for relative, expected in baseline[group].items():
+            if group == "apiTokenSha256":
+                revision = baseline.get("approvedApiChanges", {}).get(relative)
+                if revision is not None:
+                    expected = revision["sha256"]
             if group == "resourceSha256":
                 # 有意改变发包元数据时登记新摘要，保留原始旧版值，也不放开任意变更。
                 upgrade = baseline.get("approvedResourceChanges", {}).get(relative)
@@ -41,7 +45,9 @@ def verify(root, baseline, api_root=None):
             continue
         actual = sorted([list(x) if isinstance(x, tuple) else x
                          for x in re.findall(spec["pattern"], path.read_text(encoding="utf-8"))])
-        if actual != spec["values"]:
+        # 零匹配必须失败；合法新增项单独登记，不能覆盖掉旧注册的验收清单。
+        expected = sorted(spec["values"] + spec.get("approvedAdditions", []))
+        if not actual or actual != expected:
             errors.append("网络/键位注册变化: " + relative)
     for relative, spec in baseline["languages"].items():
         path = root / relative
@@ -49,7 +55,9 @@ def verify(root, baseline, api_root=None):
             errors.append("缺少语言文件: " + relative)
             continue
         keys = set(json.loads(path.read_text(encoding="utf-8")))
-        missing = set(spec["keys"]) - set(spec["retiredAlgorithmOptions"]) - keys
+        retired = set(spec["retiredAlgorithmOptions"]) | set(
+            baseline.get("approvedRetiredConfigKeys", {}).get(relative, []))
+        missing = set(spec["keys"]) - retired - keys
         if missing:
             errors.append("缺少仍受支持的语言键: " + relative + " " + str(sorted(missing)))
     return errors
