@@ -55,7 +55,9 @@ public final class TargetYComputation {
                                                    RoadGenerationConfig cfg,
                                                    StreamsReflowingCompat.SamplingSession streams,
                                      StructureConnection connection,
-                                     int bridgeMinWaterDepth, java.util.function.Function<List<Integer>, boolean[]> tunnelSelector) {
+                                     int bridgeMinWaterDepth,
+                                     java.util.function.LongConsumer windowTiming, java.util.function.LongConsumer dpTiming,
+                                     java.util.function.Function<List<Integer>, boolean[]> tunnelSelector) {
         int n = segments.size();
         throwIfInterrupted();
         List<BlockPos> centers = new ArrayList<>(n);
@@ -211,7 +213,7 @@ public final class TargetYComputation {
                 cfg, gradeLimits, connection,
                 // 留下实机重放需要的失败站与限制站，外层生成负责按连接汇总。
                 (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solveForRoad(
-                        heights, crossing, cut, fill, step, two, constraints, tunnelSelector));
+                        heights, crossing, cut, fill, step, two, constraints, windowTiming, dpTiming, tunnelSelector));
         final int[] legacySnapshot;
         if (dpProfile.isPresent()) {
             // DP 成功：不跑旧 pass。AB 观测器的 legacy 臂因此不存在（见下方 null 守卫）。

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.profile.CostModel;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSolver;
@@ -30,19 +31,31 @@ final class TargetProfileRepair {
 
     static Optional<int[]> solve(int[] terrain, boolean[] crossing, int cut, int fill, int step, int two,
             ProfileDpSource.Constraints constraints, Function<List<Integer>, boolean[]> tunnels) {
-        return solve(terrain, crossing, cut, fill, step, two, constraints, tunnels, ignored -> {});
+        return solve(terrain, crossing, cut, fill, step, two, constraints, tunnels, ignored -> {}, null);
     }
 
     /** 真实道路保留拒绝见证，调度器才能区分约束冲突与缺粗路线等失败。 */
     static Optional<int[]> solveForRoad(int[] terrain, boolean[] crossing, int cut, int fill, int step, int two,
             ProfileDpSource.Constraints constraints, Function<List<Integer>, boolean[]> tunnels) {
-        return solve(terrain, crossing, cut, fill, step, two, constraints, tunnels,
-                conflict -> { throw new ProfileConflict.Rejected(conflict); });
+        return solveForRoad(terrain, crossing, cut, fill, step, two, constraints, null, null, tunnels);
+    }
+
+    static Optional<int[]> solveForRoad(int[] terrain, boolean[] crossing, int cut, int fill, int step, int two,
+            ProfileDpSource.Constraints constraints, LongConsumer windowTiming, LongConsumer dpTiming,
+            Function<List<Integer>, boolean[]> tunnels) {
+        long started = windowTiming == null ? 0L : System.nanoTime();
+        try {
+            return solve(terrain, crossing, cut, fill, step, two, constraints, tunnels,
+                    conflict -> { throw new ProfileConflict.Rejected(conflict); }, dpTiming);
+        } finally {
+            // 早退和冲突也占用纵断面预算，仍需计入总窗口。
+            if (windowTiming != null) windowTiming.accept(System.nanoTime() - started);
+        }
     }
 
     private static Optional<int[]> solve(int[] terrain, boolean[] crossing, int cut, int fill, int step, int two,
             ProfileDpSource.Constraints constraints, Function<List<Integer>, boolean[]> tunnels,
-            Consumer<ProfileConflict> rejected) {
+            Consumer<ProfileConflict> rejected, LongConsumer dpTiming) {
         if (rejectCoveredPin(terrain, constraints, rejected)) return Optional.empty();
         var initial = ProfileDpSource.prepare(terrain, crossing, cut, fill, step, two, constraints).problem();
         // 最高合规包络只是用于找山体与洞口的预览，未通过下界证明前绝不作为成品返回。
@@ -108,7 +121,13 @@ final class TargetProfileRepair {
         var problem = new ProfileDpSolver.Problem(lower, upper,
                 CostModel.fromTerrain(terrain, lower, upper, CostModel.Settings.defaults()), step,
                 prepared.pin(), two, prepared.pinnedStations());
-        var optimized = ProfileDpSolver.solve(problem).map(ProfileDpSolver.Solution::profile);
+        long solveStarted = dpTiming == null ? 0L : System.nanoTime();
+        Optional<int[]> optimized;
+        try {
+            optimized = ProfileDpSolver.solve(problem).map(ProfileDpSolver.Solution::profile);
+        } finally {
+            if (dpTiming != null) dpTiming.accept(System.nanoTime() - solveStarted);
+        }
         LOGGER.info("【纵断面施工窗口复核通过】 stations={} tunnelStations={} localOpenRepairs={} optimized={}",
                 terrain.length, tunnelStations, openRepairs, optimized.isPresent());
         // 数学投影已经逐站证明上下界和两种坡限；优化器未返回时可采用同一新版可行解。

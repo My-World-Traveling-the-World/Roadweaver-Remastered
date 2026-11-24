@@ -10,6 +10,7 @@ import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongConsumer;
 
 /**
  * 最终道路路径精确高度解析器。
@@ -34,10 +35,17 @@ public final class AccuratePathHeightResolver {
     /** 走廊中心还未加密时必须按真实距离限坡；不能把采样精度误当最终站距。 */
     public static List<BlockPos> resolve(List<BlockPos> path, PathTerrainField terrain,
             AccurateHeightSampler sampler, boolean sparsePath) {
+        return resolve(path, terrain, sampler, sparsePath, null, null);
+    }
+
+    /** 由生成入口收集耗时，采样层不反向依赖调度或日志。 */
+    public static List<BlockPos> resolve(List<BlockPos> path, PathTerrainField terrain,
+            AccurateHeightSampler sampler, boolean sparsePath, LongConsumer columnTiming, LongConsumer gradeTiming) {
         if (path == null || path.isEmpty()) {
             return path;
         }
 
+        long columnsStarted = columnTiming == null ? 0L : System.nanoTime();
         List<BlockPos> missing = new ArrayList<>();
         for (BlockPos position : path) {
             if (!hasAccurateTerrainSample(terrain, position)) {
@@ -64,6 +72,7 @@ public final class AccuratePathHeightResolver {
                     : sample != null ? sampler.surfaceHeight(sample)
                     : sampler.surfaceHeight(position.getX(), position.getZ());
         }
+        if (columnTiming != null) columnTiming.accept(System.nanoTime() - columnsStarted);
         int runStart = -1;
         for (int i = 0; i <= path.size(); i++) {
             boolean hint = i < path.size()
@@ -95,10 +104,13 @@ public final class AccuratePathHeightResolver {
                 targetY[i] = Math.min(position.getY(), exactHeights[i]);
             }
         }
+        // 精采阶段也会求一次坡面，单列计时以免把算法时间误归给地形查询。
+        long gradeStarted = gradeTiming == null ? 0L : System.nanoTime();
         int[] gradeProfile = RoadGradePlanner.planAccurateGradeProfile(
                 targetY, splitMask, slopeStep(), slopeLimitEnabled(), tunnelHints,
                 sparsePath ? SlopeContinuityEnforcer.stationSpacing(path)
                         : SlopeContinuityEnforcer.configuredStationSpacing(path), sparsePath);
+        if (gradeTiming != null) gradeTiming.accept(System.nanoTime() - gradeStarted);
 
         List<BlockPos> resolved = new ArrayList<>(path.size());
         for (int i = 0; i < path.size(); i++) {

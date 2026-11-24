@@ -20,6 +20,10 @@ public final class DetailedRoadGenerationStats {
     private static final LongAdder ROAD_NANOS = new LongAdder();
     private static final LongAdder PLANNED_PATH_LOOKUP_NANOS = new LongAdder();
     private static final LongAdder EXACT_HEIGHT_NANOS = new LongAdder();
+    private static final LongAdder EXACT_COLUMN_NANOS = new LongAdder();
+    private static final LongAdder EXACT_GRADE_NANOS = new LongAdder();
+    private static final LongAdder PROFILE_WINDOW_NANOS = new LongAdder();
+    private static final LongAdder PROFILE_DP_NANOS = new LongAdder();
     private static final LongAdder GRADE_REPAIR_NANOS = new LongAdder();
     private static final LongAdder STRUCTURE_CORRIDOR_NANOS = new LongAdder();
     private static final LongAdder GLOBAL_REROUTE_NANOS = new LongAdder();
@@ -68,6 +72,10 @@ public final class DetailedRoadGenerationStats {
         ROAD_NANOS.reset();
         PLANNED_PATH_LOOKUP_NANOS.reset();
         EXACT_HEIGHT_NANOS.reset();
+        EXACT_COLUMN_NANOS.reset();
+        EXACT_GRADE_NANOS.reset();
+        PROFILE_WINDOW_NANOS.reset();
+        PROFILE_DP_NANOS.reset();
         GRADE_REPAIR_NANOS.reset();
         STRUCTURE_CORRIDOR_NANOS.reset();
         GLOBAL_REROUTE_NANOS.reset();
@@ -76,6 +84,11 @@ public final class DetailedRoadGenerationStats {
         STREAMS_PREWARM_NANOS.reset();
         SPAN_EXTRACTION_NANOS.reset();
         TARGET_HEIGHT_NANOS.reset();
+        // 同一客户端重开世界时，父项及子项都必须从同一会话起点计数。
+        PLANNING_REPAIR_NANOS.reset();
+        WATER_VALIDATION_NANOS.reset();
+        HEIGHT_STEP_REPAIR_NANOS.reset();
+        FINAL_VALIDATION_NANOS.reset();
         ROADSIDE_STRUCTURE_NANOS.reset();
         ROADSIDE_VILLAGE_NANOS.reset();
         CORRIDOR_REFRESHES.reset();
@@ -100,6 +113,11 @@ public final class DetailedRoadGenerationStats {
 
     public static void recordPlannedPathLookup(long nanos) { add(PLANNED_PATH_LOOKUP_NANOS, nanos); }
     public static void recordExactHeight(long nanos) { add(EXACT_HEIGHT_NANOS, nanos); }
+    /** 子项只作归因，不能再次加进整路耗时。 */
+    public static void recordExactColumns(long nanos) { add(EXACT_COLUMN_NANOS, nanos); }
+    public static void recordExactGrade(long nanos) { add(EXACT_GRADE_NANOS, nanos); }
+    public static void recordProfileWindow(long nanos) { add(PROFILE_WINDOW_NANOS, nanos); }
+    public static void recordProfileDp(long nanos) { add(PROFILE_DP_NANOS, nanos); }
     public static void recordGradeRepair(long nanos) { add(GRADE_REPAIR_NANOS, nanos); }
     public static void recordStructureCorridor(long nanos) { add(STRUCTURE_CORRIDOR_NANOS, nanos); }
     public static void recordGlobalReroute(long nanos) { add(GLOBAL_REROUTE_NANOS, nanos); }
@@ -138,7 +156,8 @@ public final class DetailedRoadGenerationStats {
                         + "finalValidationMs={} "
                         + "waterValidationMs={} heightStepRepairMs={} "
                         + "roadsideStructuresMs={} roadsideVillagesMs={} corridorRefreshes={} "
-                        + "corridorSkips={} corridorNewChunks={} corridorNewStarts={}",
+                        + "corridorSkips={} corridorNewChunks={} corridorNewStarts={} "
+                        + "exactColumnsMs={} exactGradeMs={} profileWindowMs={} profileDpMs={}",
                 ROADS.sum(), COMPLETED_ROADS.sum(), FAILED_ROADS.sum(), wallNanos / 1_000_000L,
                 millis(ROAD_NANOS),
                 millis(PLANNED_PATH_LOOKUP_NANOS), millis(EXACT_HEIGHT_NANOS), millis(GRADE_REPAIR_NANOS),
@@ -148,7 +167,8 @@ public final class DetailedRoadGenerationStats {
                 millis(WATER_VALIDATION_NANOS), millis(HEIGHT_STEP_REPAIR_NANOS),
                 millis(ROADSIDE_STRUCTURE_NANOS), millis(ROADSIDE_VILLAGE_NANOS),
                 CORRIDOR_REFRESHES.sum(), CORRIDOR_SKIPS.sum(), CORRIDOR_NEW_CHUNKS.sum(),
-                CORRIDOR_NEW_STARTS.sum());
+                CORRIDOR_NEW_STARTS.sum(), millis(EXACT_COLUMN_NANOS), millis(EXACT_GRADE_NANOS),
+                millis(PROFILE_WINDOW_NANOS), millis(PROFILE_DP_NANOS));
         logChunkBatch();
     }
 

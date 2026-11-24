@@ -117,7 +117,8 @@ public final class PathFinalizeOps {
         InitialGenerationProgressTracker.advanceCurrentRoadTask(50, "road_exact_height");
         long exactHeightStartedAt = System.nanoTime();
         // 首轮精采只刷新稀疏走廊，逐格施工限坡在加密后执行。
-        List<BlockPos> upstreamFallbackPath = AccuratePathHeightResolver.resolve(rawPath, terrain, accurate, true);
+        List<BlockPos> upstreamFallbackPath = AccuratePathHeightResolver.resolve(rawPath, terrain, accurate, true,
+                DetailedRoadGenerationStats::recordExactColumns, DetailedRoadGenerationStats::recordExactGrade);
         DetailedRoadGenerationStats.recordExactHeight(System.nanoTime() - exactHeightStartedAt);
         InitialGenerationProgressTracker.advanceCurrentRoadTask(220, "road_grade_repair");
         List<BlockPos> finalPath = upstreamFallbackPath;
@@ -169,7 +170,8 @@ public final class PathFinalizeOps {
             DetailedRoadGenerationStats.recordConstructionSetup(System.nanoTime() - constructionSetupStartedAt);
             exactHeightStartedAt = System.nanoTime();
             List<BlockPos> constructionTerrain = AccuratePathHeightResolver.resolve(
-                    constructionCenters, null, accurate);
+                    constructionCenters, null, accurate, false,
+                    DetailedRoadGenerationStats::recordExactColumns, DetailedRoadGenerationStats::recordExactGrade);
             DetailedRoadGenerationStats.recordExactHeight(System.nanoTime() - exactHeightStartedAt);
             InitialGenerationProgressTracker.advanceCurrentRoadTask(840, "road_construction_repair");
             List<BlockPos> repairedConstruction = repairAndRecordGrade(
