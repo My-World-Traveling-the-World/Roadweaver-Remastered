@@ -29,6 +29,46 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 final class ProfileDpSourceTest {
 
+    @Test
+    void boundsOnlyKeepsNegativePinsDeckFloorsAndCoveredWindowsWithoutCost() {
+        // 独立手算窗口，避免仅比较同一实现的两个包装入口而漏掉硬约束。
+        int[] terrain = {-5, -1, 3, 5, 10, 12, 14};
+        boolean[] crossing = {false, true, true, false, false, false, false};
+        int[] pins = {-7, 0, 0, 0, 0, 0, 0};
+        var constraints = new ProfileDpSource.Constraints(pins,
+                new boolean[]{false, false, false, false, true, false, true}, 8,
+                new int[]{Integer.MIN_VALUE, 5, 6, Integer.MIN_VALUE,
+                        Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE},
+                new boolean[]{true, false, false, false, false, false, false});
+        var bounds = ProfileDpSource.prepareBounds(terrain, crossing, 4, 3, 2, 3, constraints);
+        assertArrayEquals(new int[]{-7, 5, 6, 1, 2, 8, 6}, bounds.lo());
+        assertArrayEquals(new int[]{-7, 5, 6, 8, 2, 15, 6}, bounds.hi());
+        assertArrayEquals(new int[]{-7, 5, 6, -1, -1, -1, -1}, bounds.pin());
+        assertArrayEquals(new boolean[]{true, true, true, false, false, false, false}, bounds.pinnedStations());
+        org.junit.jupiter.api.Assertions.assertNull(bounds.cost(), "窗口检查不得分配被丢弃的代价矩阵");
+        var prepared = ProfileDpSource.prepare(terrain, crossing, 4, 3, 2, 3, constraints);
+        var full = prepared.problem();
+        assertArrayEquals(bounds.lo(), full.lo());
+        assertArrayEquals(bounds.hi(), full.hi());
+        assertArrayEquals(bounds.pin(), full.pin());
+        assertArrayEquals(bounds.pinnedStations(), full.pinnedStations());
+        assertEquals(2, full.maxStep());
+        assertEquals(3, full.maxStepPerTwo());
+        assertTrue(prepared.terrain() == terrain && prepared.crossing() == crossing);
+        double[][] expected = CostModel.fromTerrain(terrain, bounds.lo(), bounds.hi(), CostModel.Settings.defaults());
+        assertEquals(terrain.length, full.cost().length);
+        for (int i = 0; i < terrain.length; i++) assertArrayEquals(expected[i], full.cost()[i]);
+    }
+
+    @Test
+    void boundsOnlyStillRejectsCoveredPinContradiction() {
+        // 省去代价计算不能省去契约校验，否则修复会接纳封不住的洞身。
+        var constraints = new ProfileDpSource.Constraints(new int[]{0}, new boolean[]{true}, 8,
+                null, new boolean[]{true});
+        assertThrows(IllegalArgumentException.class, () ->
+                ProfileDpSource.prepareBounds(new int[]{4}, null, 4, 3, 1, 1, constraints));
+    }
+
     @AfterEach
     void clearProperty() {
         System.clearProperty("roadweaver.profileAb");

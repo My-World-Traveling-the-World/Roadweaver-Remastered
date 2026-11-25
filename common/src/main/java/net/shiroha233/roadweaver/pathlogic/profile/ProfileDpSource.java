@@ -156,6 +156,19 @@ public final class ProfileDpSource {
     public static Prepared prepare(int[] terrainY, boolean[] crossing,
                                    int maxCut, int maxFill, int maxStep,
                                    int maxStepPerTwo, Constraints constraints) {
+        var bounds = prepareBounds(terrainY, crossing, maxCut, maxFill, maxStep, maxStepPerTwo, constraints);
+        double[][] cost = CostModel.fromTerrain(terrainY, bounds.lo(), bounds.hi(), CostModel.Settings.defaults());
+        return new Prepared(new ProfileDpSolver.Problem(bounds.lo(), bounds.hi(), cost, maxStep,
+                bounds.pin(), maxStepPerTwo, bounds.pinnedStations()), terrainY, crossing);
+    }
+
+    /**
+     * 只翻译硬约束，不创建代价矩阵。修复阶段先传播窗口再决定是否求解，
+     * 提前分配每站每高度的代价只会被丢弃；正式优化仍通过prepare构造同一目标函数。
+     */
+    public static ProfileDpSolver.Problem prepareBounds(int[] terrainY, boolean[] crossing,
+                                   int maxCut, int maxFill, int maxStep,
+                                   int maxStepPerTwo, Constraints constraints) {
         int n = terrainY.length;
         if (n == 0) throw new IllegalArgumentException("至少一站");
         if (constraints == null) constraints = Constraints.none();
@@ -234,9 +247,7 @@ public final class ProfileDpSource {
                 hi[k] = chord;
             }
         }
-        double[][] cost = CostModel.fromTerrain(terrainY, lo, hi, CostModel.Settings.defaults());
-        return new Prepared(new ProfileDpSolver.Problem(lo, hi, cost, maxStep, pin, maxStepPerTwo, fixed),
-                terrainY, crossing);
+        return new ProfileDpSolver.Problem(lo, hi, null, maxStep, pin, maxStepPerTwo, fixed);
     }
 
     /**

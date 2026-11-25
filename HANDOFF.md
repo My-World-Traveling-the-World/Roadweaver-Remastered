@@ -1,5 +1,14 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-25 · 0.9.125 · 纵断面窗口不预建代价
+
+1. **改动**：拆出prepareBounds，沿用原锁高、桥面下界、覆土与坡限输入；修复的两次窗口检查不再各建一份随后丢弃的代价矩阵，实际DP仍用原CostModel。已有Prepared及prepare/solve签名保持不变。
+2. **验证**：PASS tests=1887 skipped=0 aborted=0 failed=0；新增独立手算窗口和覆土冲突测试。六条现场地形、负锁高、桥锁冲突和洞口回归继续通过；Fabric compileJava成功。最终成品构建结果另记部署记录。
+3. **未验证**：未测整合包帧率或预热耗时，不报加速倍率；三条LOCKED_HEIGHT仍缺本次失败的完整输入，不改变锁高或放宽坡限。新发现远桥分组累计甲板泄漏仅影响保留入口，默认DP成功路径不执行，不是三条失败的已证原因。
+4. **负控**：让prepareBounds重新构造代价矩阵→boundsOnlyKeepsNegativePinsDeckFloorsAndCoveredWindowsWithoutCost实际红；git checkout精确恢复暂存正确文件。日志build/profile-bounds-mutation.log，脚本build/check_bounds_mutation.py。
+5. **下一步**：修复独立桥组高度传播，并用三桥/乱序/混入非桥组合验证；三条现场锁高需新日志和约束录制后重放。crossing解耦和双平滑裁决仍保留原决定，不凭旧日志猜修。
+6. **历史与回退**：基线87b291f，行为等价与性能改动；少两次无用途代价矩阵构造，不等于实机加速倍率。存档格式、路面几何和世界隔离不变，部署前保留旧成品。
+
 ## 2026-11-25 · 0.9.124 · 支撑高度线性计算
 
 1. **改动**：道路宽度支撑从复制排序改为一次扫描最小/次小值，含重复值；TargetTerrainInputs复用同站结果，不再算第二次。施工高度、坡限、跨度和存档格式不变。

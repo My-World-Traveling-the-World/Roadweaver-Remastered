@@ -57,7 +57,8 @@ final class TargetProfileRepair {
             ProfileDpSource.Constraints constraints, Function<List<Integer>, boolean[]> tunnels,
             Consumer<ProfileConflict> rejected, LongConsumer dpTiming) {
         if (rejectCoveredPin(terrain, constraints, rejected)) return Optional.empty();
-        var initial = ProfileDpSource.prepare(terrain, crossing, cut, fill, step, two, constraints).problem();
+        // 两次窗口检查只读边界；通过可行性证明后才为实际DP分配一次代价矩阵。
+        var initial = ProfileDpSource.prepareBounds(terrain, crossing, cut, fill, step, two, constraints);
         // 最高合规包络只是用于找山体与洞口的预览，未通过下界证明前绝不作为成品返回。
         var preview = ProfileFeasibility.upperEnvelope(initial.hi(), step, two);
         for (int i = 0; i < terrain.length; i++) {
@@ -79,7 +80,7 @@ final class TargetProfileRepair {
         var adjusted = new ProfileDpSource.Constraints(constraints.pin(), covered, constraints.minCover(),
                 constraints.deckFloor(), constraints.pinnedStations());
         if (rejectCoveredPin(terrain, adjusted, rejected)) return Optional.empty();
-        var prepared = ProfileDpSource.prepare(terrain, crossing, cut, fill, step, two, adjusted).problem();
+        var prepared = ProfileDpSource.prepareBounds(terrain, crossing, cut, fill, step, two, adjusted);
         var lower = prepared.lo().clone();
         var upper = prepared.hi();
         int floor = Math.min(Arrays.stream(lower).min().orElseThrow(), Arrays.stream(preview).min().orElseThrow());
