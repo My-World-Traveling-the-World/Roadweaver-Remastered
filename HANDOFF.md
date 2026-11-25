@@ -1,5 +1,14 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-25 · 0.9.127 · 完整失败快照
+
+1. **改动**：TargetProfileSolver在实际repair抛已分类ProfileConflict.Rejected或返回empty时记录原输入；全长terrain、XZ、crossing、pin/fixed、覆土、deckFloor、cut/fill/step/perTwo和拒绝见证均保留。实际存档/roadweaver-diagnostics/profile-failures/维度内按内容摘要去重写入，不受AB配额和2048站截断影响；成功不创建快照、不写盘。损坏文件缺预算/约束时明确拒读，诊断异常不替换原施工拒绝。
+2. **验证**：新增9项测试登记进显式套件，恢复四组变异后全量PASS tests=1899 skipped=0 aborted=0 failed=0，Fabric正式build、API-SEPARATE及三个验包负面对照成功，日志build/profile-failure-release.log。真实生产入口构造负锁高与覆土冲突后，写盘→重开→相同repair重放得到同一见证；4097站末端负锁高和桥下界保留。世界目录来源另用编译器AST核实。部署结果另记。
+3. **未验证**：客户端最新日志仍为11月24日，现场三条LOCKED_HEIGHT尚无这版全约束快照，仍未修复或重新验收。CUT_BUDGET/SLOPE_WINDOW等还需实际物理隧道掩码，不能只拿初始约束冒充完全重放；一般运行时异常不在本快照范围。未测整合包帧率、耗时或联机地图。
+4. **负控**：丢弃拒绝快照、抹掉deckFloor、生产路径改全局logs、诊断异常替换原拒绝，四组均实际红；每轮git checkout精确恢复暂存正确源码。表build/profile-failure-mutations.json，日志profile-failure-mutation-*.log。未增加架构反向依赖预算。
+5. **下一步**：新普通世界复跑三条现场连接，按快照重放判定入口锁高、接坡长度、局部搜索或后续分类问题，不放宽坡限猜修。crossing解耦和双平滑裁决仍保留原决定；河流查询优化先采真实分布，避免早停查询被全量收集拖慢。
+6. **历史与回退**：基线a74c7b7，行为新增（失败诊断），版本0.9.127；道路几何、配置键和存档schema均不变。只写故障诊断，不操作既有玩家存档；回退恢复旧JAR即可。
+
 ## 2026-11-25 · 0.9.126 · 独立桥组甲板不串高
 
 **本批最终交付**：`2.3.1-1.21.1-plaincraft-direct-core.0.9.126` 已部署WAYFARING，代码提交 `317563b1`；恢复所有负控后的最终回归1890项、零跳过/失败/错误，正式构建成功。部署件与构建件SHA256一致：`e48c8dc7c745e2507e73e73469eb345ed2a3c5198d6d77120705e02216d7c5f2`。旧包备份 `D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-optimization-20261125-204514`，四包完整清单在SeedGen补丁的build/optimization-deployment-manifest.json。未启动完整整合包验收画面或帧率，未改玩家存档。

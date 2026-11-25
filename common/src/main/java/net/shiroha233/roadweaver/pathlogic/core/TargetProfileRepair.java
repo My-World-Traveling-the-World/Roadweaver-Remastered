@@ -12,12 +12,21 @@ import net.shiroha233.roadweaver.pathlogic.profile.CostModel;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSolver;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFeasibility;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileFailureSnapshot;
 import net.shiroha233.roadweaver.core.model.ProfileConflict;
 import static net.shiroha233.roadweaver.pathlogic.core.Road.LOGGER;
 
 /** 隧道分类仍由原物理判据提供；不启用联合模式回写，也不改变桥掩码来源。 */
 final class TargetProfileRepair {
     private TargetProfileRepair() {}
+
+    /** 拒绝类型由既有施工边界识别，诊断输入层只接收标量，避免增加反向层依赖。 */
+    static ProfileFailureSnapshot.Conflict failureWitness(RuntimeException failure) {
+        if(!(failure instanceof ProfileConflict.Rejected rejected))return null;
+        var value=rejected.conflict();
+        return new ProfileFailureSnapshot.Conflict(value.reason().name(),value.station(),value.limitingStation(),
+                value.requiredMinY(),value.reachableMaxY());
+    }
 
     /** 跨度两头是接地洞口；只有两侧仍属于隧道且已有足够埋深的站才锁为覆土洞身。 */
     static boolean[] coveredCore(int[] terrain, int[] reference, boolean[] excavation, int minCover) {

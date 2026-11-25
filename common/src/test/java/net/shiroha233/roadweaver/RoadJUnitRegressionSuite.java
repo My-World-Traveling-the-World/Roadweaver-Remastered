@@ -20,6 +20,7 @@ public final class RoadJUnitRegressionSuite {
         LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                 .selectors(
                         // 配置菜单与算法入口必须实际执行，不能只在编译时出现。
+                        DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.ProfileFailureSnapshotTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.config.ConfigMenuBindingTest"),
                         DiscoverySelectors.selectClass("net.shiroha233.roadweaver.bridge.ConfiguredRouteSolversTest"),
                         // 架构守卫（2026-11-12 重构起）：钉死层依赖单向、类规模、

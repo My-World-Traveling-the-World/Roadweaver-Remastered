@@ -12,6 +12,7 @@ import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
+import net.shiroha233.roadweaver.pathlogic.profile.ProfileFailureSnapshot;
 import java.util.List;
 import java.util.Optional;
 import static net.shiroha233.roadweaver.pathlogic.core.Road.LOGGER;
@@ -101,6 +102,17 @@ final class TargetProfileSolver {
             int[] smoothed, int[] terrainY, boolean[] isCrossing, boolean[] tunnelMask, boolean[] pinnedMask,
             int startBoundary, int endBoundary, RoadGenerationConfig cfg, SurfaceGradeLimits gradeLimits,
             StructureConnection connection, DeckFloorSampler deckSampler, Solver solver, Solver repair) {
+        return solve(level,centers,smoothed,terrainY,isCrossing,tunnelMask,pinnedMask,startBoundary,endBoundary,cfg,
+                gradeLimits,connection,deckSampler,solver,repair,
+                level==null?null:snapshot->ProfileFailureFiles.record(level,snapshot));
+    }
+
+    /** 诊断消费端可离线注入；成功路线不创建快照，不执行文件IO。 */
+    static Optional<int[]> solve(ServerLevel level,List<BlockPos> centers,
+            int[] smoothed,int[] terrainY,boolean[] isCrossing,boolean[] tunnelMask,boolean[] pinnedMask,
+            int startBoundary,int endBoundary,RoadGenerationConfig cfg,SurfaceGradeLimits gradeLimits,
+            StructureConnection connection,DeckFloorSampler deckSampler,Solver solver,Solver repair,
+            java.util.function.Consumer<ProfileFailureSnapshot> rejected) {
         if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
             return java.util.Optional.empty();
         }
@@ -185,10 +197,36 @@ final class TargetProfileSolver {
         LOGGER.warn("【纵断面地表窗口不可行，复核已选隧道与局部施工预算】 stations={} cut={} fill={} perTwo={} pins={} decks={} connection={}->{}",
                 n, maxCut, maxFill, perTwo, countPinned(fixed), countDeckFloors(deckFloor),
                 connection == null ? "?" : connection.from(), connection == null ? "?" : connection.to());
-        var repaired = repair.solve(terrainY, isCrossing, maxCut, maxFill, maxStep, perTwo, constraints);
+        Optional<int[]> repaired;
+        try {repaired=repair.solve(terrainY,isCrossing,maxCut,maxFill,maxStep,perTwo,constraints);}
+        catch(RuntimeException failure) {
+            var witness=TargetProfileRepair.failureWitness(failure);
+            if(witness!=null)recordFailure(level,connection,centers,terrainY,isCrossing,constraints,maxCut,maxFill,maxStep,perTwo,witness,rejected);
+            throw failure;
+        }
         if (repaired.isEmpty()) {
+            recordFailure(level,connection,centers,terrainY,isCrossing,constraints,maxCut,maxFill,maxStep,perTwo,
+                    new ProfileFailureSnapshot.Conflict("NO_FEASIBLE_PROFILE",-1,-1,0,0),rejected);
             throw new IllegalArgumentException("纵断面在桥面锁高、已选隧道和施工预算下仍无解，拒绝发布，stations=" + n);
         }
         return repaired;
+    }
+
+    private static void recordFailure(ServerLevel level,StructureConnection connection,List<BlockPos> centers,
+            int[] terrain,boolean[] crossing,ProfileDpSource.Constraints constraints,int cut,int fill,int step,int two,
+            ProfileFailureSnapshot.Conflict conflict,java.util.function.Consumer<ProfileFailureSnapshot> output) {
+        if(output==null)return;
+        try {
+            var coordinates=new long[centers.size()];
+            for(int i=0;i<coordinates.length;i++)coordinates[i]=(long)centers.get(i).getX()<<32|centers.get(i).getZ()&0xffffffffL;
+            output.accept(new ProfileFailureSnapshot(1,level==null?"offline":level.dimension().location().toString(),
+                    connection==null?"unidentified":connection.from()+"->"+connection.to(),coordinates,terrain,
+                    crossing==null?new boolean[terrain.length]:crossing,constraints.pin(),constraints.pinnedStations(),
+                    constraints.mustBeCovered()==null?new boolean[terrain.length]:constraints.mustBeCovered(),constraints.minCover(),
+                    constraints.deckFloor(),cut,fill,step,two,conflict));
+        } catch(RuntimeException diagnosticFailure) {
+            // 诊断是观察者；包括目录解析、序列化和测试端口在内，均不能替换真正的施工拒绝。
+            LOGGER.warn("【纵断面失败快照组装或交付失败】 conflict={} cause={}",conflict,diagnosticFailure.toString());
+        }
     }
 }
