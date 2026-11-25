@@ -2,6 +2,8 @@
 
 ## 2026-11-25 · 0.9.126 · 独立桥组甲板不串高
 
+**本批最终交付**：`2.3.1-1.21.1-plaincraft-direct-core.0.9.126` 已部署WAYFARING，代码提交 `317563b1`；恢复所有负控后的最终回归1890项、零跳过/失败/错误，正式构建成功。部署件与构建件SHA256一致：`e48c8dc7c745e2507e73e73469eb345ed2a3c5198d6d77120705e02216d7c5f2`。旧包备份 `D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-optimization-20261125-204514`，四包完整清单在SeedGen补丁的build/optimization-deployment-manifest.json。未启动完整整合包验收画面或帧率，未改玩家存档。
+
 1. **改动**：enforceAdjacentBridgeContinuity在远距离断组后只保留本组甲板高度。三桥100/70/60、站区间2..5/2000..2005/2010..2015从错误100/70/100改为100/70/70；24站内相邻桥仍不降低前桥基准，非桥跨度仍忽略。
 2. **验证**：新增三桥、乱序混入浅滩、24/25边界和本组新高桥测试；PASS tests=1890 skipped=0 aborted=0 failed=0。恢复变异后的完整构建结果另记部署记录，不拿负控前成品部署。
 3. **未验证**：此函数生产调用位于TargetYComputation的保留入口，默认DP成功路径不调用；没有把它宣称为三条LOCKED_HEIGHT的原因。未测真实桥组画面或整合包耗时。
