@@ -122,9 +122,13 @@ public final class RoadGradePlanner {
      */
     public static int robustFootprintSupport(int[] terrain) {
         if (terrain == null || terrain.length == 0) return 0;
-        int[] sorted = terrain.clone();
-        Arrays.sort(sorted);
-        return sorted[ignoredFootprintColumns(sorted.length)];
+        // 只需最小或次小值，线性扫描保留重复值语义，不为每站复制并排序整个宽度。
+        int lowest=Integer.MAX_VALUE,second=Integer.MAX_VALUE;
+        for(int value:terrain){
+            if(value<=lowest){second=lowest;lowest=value;}
+            else if(value<second)second=value;
+        }
+        return ignoredFootprintColumns(terrain.length)==0?lowest:second;
     }
 
     static int ignoredFootprintColumns(int width) {

@@ -11,6 +11,18 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TargetTerrainInputsTest {
+    @Test void linearFootprintSupportMatchesFrozenSortIncludingDuplicatesAndLimits(){
+        var random=new Random(20261125);
+        for(int width:new int[]{0,1,2,3,4,5,12,64,257})for(int iteration=0;iteration<100;iteration++){
+            var values=new int[width];for(int i=0;i<width;i++)values[i]=switch(random.nextInt(6)){
+                case 0->Integer.MIN_VALUE;case 1->Integer.MAX_VALUE;default->random.nextInt(17)-8;};
+            var saved=values.clone();var sorted=values.clone();Arrays.sort(sorted);
+            int expected=width==0?0:sorted[width>=4?1:0];
+            assertEquals(expected,net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner.robustFootprintSupport(values));
+            assertArrayEquals(saved,values,"求支撑高度不能改动调用方站列");
+        }
+        assertEquals(0,net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner.robustFootprintSupport(null));
+    }
     @Test
     void completeBatchIncludesCentersAndNeverReadsWorld() {
         var centers = List.of(p(-2), p(0), p(2));

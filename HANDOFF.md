@@ -1,5 +1,14 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-25 · 0.9.124 · 支撑高度线性计算
+
+1. **改动**：道路宽度支撑从复制排序改为一次扫描最小/次小值，含重复值；TargetTerrainInputs复用同站结果，不再算第二次。施工高度、坡限、跨度和存档格式不变。
+2. **验证**：恢复变异后全量PASS tests=1885 skipped=0 aborted=0 failed=0；Fabric build、独立API验包及3个拒绝夹具成功。新增900组冻结排序对拍，含0..257宽、重复、负数及int边界，输入数组不被修改。
+3. **未验证**：未测整合包实际耗时或帧率，不能报加速倍率。三条首次LOCKED_HEIGHT仍无真实约束录制；旧TSV267行对三个端点匹配均0，不能通过放宽坡限或锁高猜修。
+4. **负控**：返回最小值代替次小→linearFootprintSupportMatchesFrozenSortIncludingDuplicatesAndLimits实际红；git checkout精确恢复。变异表在相邻SeedGen补丁build/next-mutations.json。
+5. **下一步**：取得新版本失败前完整terrain/pin/fixed/deckFloor/坡限与覆土录制后再重放三条锁高。纵断面crossing解耦与第二次平滑仍等真机数据；地图联机同步与实际贴合未验收。
+6. **历史与回退**：基线48cbe7d，行为等价。正式0.9.124与同级前置1.3.0构建；本轮未改玩家存档，部署和推送以最终记录为准。
+
 ## 2026-11-25 · 三维地图只读接线（0.9.123）
 
 1. **改动**：注册RoadOverlayApi提供方，仅消费已加载的不可变RoadSnapshot；使用施工targetY和统一跨度掩码，保护缺口/共用段断开，桥/隧道/交叉分类。三维同向共线站精确压缩，保留坡折、回头和类型边界；视口顶点预算达到后不再转换剩余所有道路。观察不启动读盘、区块加载、精采、规划或施工。独立Diorama客户端适配包消费API，H/J原入口不变。

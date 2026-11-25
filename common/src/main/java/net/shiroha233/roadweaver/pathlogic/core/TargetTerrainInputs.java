@@ -58,8 +58,8 @@ final class TargetTerrainInputs {
             terrainY[i] = centerSample == null
                     ? widthSupport
                     : surfaceHeight.applyAsInt(centerSample);
-            footprintSupport[i] = stationTerrain.length == 0
-                    ? terrainY[i] : RoadGradePlanner.robustFootprintSupport(stationTerrain);
+            // 同一站的宽度样本未改变，复用已求出的支撑值；空占地仍以真实中心样本为准。
+            footprintSupport[i] = stationTerrain.length == 0 ? terrainY[i] : widthSupport;
         }
         for (int i = 0; i < n; i++) {
             throwIfInterrupted();
