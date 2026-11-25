@@ -70,6 +70,12 @@ public final class RoadWorldgenPlanCache {
         SESSIONS.clear();
     }
 
+    /** 远景只能读取当前版本缓存，不能因查询触发磁盘加载或区块计划编译。 */
+    public static RoadChunkPlan peek(ServerLevel level,ChunkPos pos,ModConfig config) {
+        var session=SESSIONS.get(level);
+        return session==null?null:session.peek(pos,PlanConfig.from(config));
+    }
+
     private static Session session(ServerLevel level) {
         return SESSIONS.computeIfAbsent(level, ignored -> new Session());
     }
@@ -261,6 +267,14 @@ public final class RoadWorldgenPlanCache {
                 CachedPlan plan = nonEmptyPlans.get(key);
                 if (plan == null) plan = emptyPlans.get(key);
                 return plan != null ? plan : failures.get(key);
+            }
+        }
+
+        RoadChunkPlan peek(ChunkPos pos,PlanConfig requested) {
+            synchronized(cacheLock) {
+                var cached=lookup(pos.toLong());
+                return cached!=null&&cached.plan().isAvailable()
+                        &&cached.matches(requested,versions.revision(pos.toLong()),System.nanoTime())?cached.plan():null;
             }
         }
 

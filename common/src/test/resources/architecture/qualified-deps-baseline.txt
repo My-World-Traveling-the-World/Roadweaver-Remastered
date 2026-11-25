@@ -1,4 +1,9 @@
 # 显式全限定名跨包引用；与 import 基线独立，只允许收紧。
+# 2026-11-25：真实完成事件及只读跨度掩码供远景使用，无反向依赖。
+pathlogic -> api                            1
+worldgen -> pathlogic                       1
+worldgen -> persistence                     2
+worldgen -> util                            4
 client -> map                                1
 client -> persistence                        1
 client -> route                              22

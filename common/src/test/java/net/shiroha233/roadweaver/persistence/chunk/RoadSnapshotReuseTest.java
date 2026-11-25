@@ -6,6 +6,12 @@ import net.shiroha233.roadweaver.core.model.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class RoadSnapshotReuseTest {
+    @Test void previewNeverOpensAnUnloadedStore(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        var path=root.resolve("roads");var store=new RoadChunkStore(path);
+        assertNull(store.peekSnapshot());assertFalse(java.nio.file.Files.exists(path));
+        store.preload();var snapshot=store.peekSnapshot();assertNotNull(snapshot);assertTrue(snapshot.isEmpty());
+        assertSame(snapshot,store.peekSnapshot());store.close();
+    }
     @Test void snapshotReusesFrozenStationsWithoutKeepingMutableInputAliases() {
         var cursor=new BlockPos.MutableBlockPos(2,64,3);
         var columns=new ArrayList<BlockPos>(List.of(cursor));

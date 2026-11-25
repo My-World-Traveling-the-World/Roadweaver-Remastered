@@ -1,5 +1,14 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-25 · 只读远景与Diorama调查（0.9.122）
+
+1. **改动**：注册roads，复用已有区块计划或已加载的不可变道路快照及空间索引，不为远景创建存储、读盘、加载区块或精采。保留保护缺口与复用站规则；targetY是可站立顶面，普通路面预览在y-1。真实切片全部完成才发完工通知。几何预览不冒充模板桥、半砖、隧道和装饰最终体素。
+2. **验证**：全量PASS tests=1878 skipped=0 aborted=0 failed=0，Fabric build、API-SEPARATE及三个负面对照通过，日志build/preview-release-final.log。新增两项预览和一项未加载存储观察测试。
+3. **未验证**：未新档复验八条现场失败；三条首次LOCKED_HEIGHT、crossing解耦、第二次平滑仍未修或未裁决。未实现Diorama叠线，未验收完整整合包画面/性能；源码peek不在旧部署0.9.121中。
+4. **负控**：预览y-1改y、未加载快照直接返回，两类实际回归红；git checkout精确恢复后1878项及构建通过。日志build/preview-mutation-height-and-unloaded.log。
+5. **下一步**：Diorama只读调查确认H地图自有路线绘制仅借Xaero底图。独立客户端适配应从peekSnapshot提供XYZ中心线与targetY/span；旧RoadMapGeometry归零Y不能直接用。在Diorama MapScreen的MapViewport.draw之后用Projection.u/v和View.screenX/screenY叠线，不写会持久化且假定Y=64的DrawingStore。先全屏只读，再补多人网络、洞穴及小地图；H/J编辑保留。内部接口需锁Diorama0.11.0。
+6. **历史与回退**：基线14e4d30，行为新增，API最低1.2.0。不改存档格式或施工几何。两个子智能体只读调查；部署和推送结果另记。
+
 ## 2026-11-25 · 旧版契约差异逐项审核
 
 1. **改动**：审核旧契约比对的五组差异，保留冻结旧摘要，单列允许的新摘要、新增网络接收器和退役配置语言键。两处长城接口仅新增isTerminalFailure及默认实现；MAP_WORLD_ID为8ed9d63的私人地图存档身份接线；缺失的配置语言键全部对应b218b6a和d4f954b的已批准配置清理。非配置语言键、原公开方法和原注册清单继续强制保留。新增零匹配拒绝与实际注册逐项删除回归，不改生产行为。

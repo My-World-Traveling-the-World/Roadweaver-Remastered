@@ -262,6 +262,9 @@ public class PathFeature extends Feature<PathFeatureConfig> {
                             slice.segmentCount(), outcome, gapRepairApplied));
                 }
             }
+            // 远景只在真实切片完成后刷新；台账中的终态放弃不能冒充完整落块。
+            if(!completedRoads.isEmpty()&&incompleteRoads.isEmpty())
+                net.shiroha233.roadweaver.api.outgoing.WorldgenPreviewApi.completed(server,currentChunk.x,currentChunk.z);
             // 终态放弃的 chunk 按"已处理"返回 true,调用方不再把它当待施工候选。
             return !completedRoads.isEmpty() || abandoned;
             }

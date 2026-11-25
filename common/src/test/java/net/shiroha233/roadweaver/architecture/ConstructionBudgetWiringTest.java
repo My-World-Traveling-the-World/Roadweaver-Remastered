@@ -112,7 +112,10 @@ class ConstructionBudgetWiringTest {
         same.accept("resetRefusals","{"+reset+"}");
         same.accept("decorate","{"+statements.get(14)+"}");
         same.accept("commitCompleted","{"+statements.get(15)+"}");
-        same.accept("finish","{"+join(statements.subList(16,statements.size()))+"}");
+        // 新增的可选完成通知保留全部旧结案正文，并严格要求只有真实全完成才发出。
+        String notify="if(!completedRoads.isEmpty()&&incompleteRoads.isEmpty())net.shiroha233.roadweaver.api.outgoing.WorldgenPreviewApi.completed(server,currentChunk.x,currentChunk.z);";
+        String originalFinish="{"+join(statements.subList(16,statements.size()-1))+notify+statements.getLast()+"}";
+        same.accept("finish",originalFinish);
         same.accept("release",original.getFinallyBlock().toString());
     }
     @Test void realChunkEntryUsesPhaseObservedTransaction() throws Exception {

@@ -87,6 +87,9 @@ public final class RoadChunkStore implements AutoCloseable {
         ensureLoaded();
     }
 
+    /** 已发布的不可变内存视图；远景只能观察，不能借查询触发恢复读盘。 */
+    public RoadSnapshot peekSnapshot() {return loaded&&!readOnlyDegraded?snapshot.get():null;}
+
     public List<RoadData> queryRect(int minBlockX, int minBlockZ, int maxBlockX, int maxBlockZ) {
         ensureLoaded();
         return snapshot.get().queryRect(minBlockX, minBlockZ, maxBlockX, maxBlockZ);

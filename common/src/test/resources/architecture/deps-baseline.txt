@@ -194,7 +194,9 @@ structures -> pathlogic                          2
 structures -> persistence                        4
 topology -> metric                             3
 util -> runtime                            1
-worldgen -> config                             1
+# 2026-11-25：远景适配器依赖独立前置和现有配置；不反向依赖客户端或新增规划入口。
+worldgen -> api                                1
+worldgen -> config                             2
 # 2026-11-20：首末站索引迁出，唯一新增引用为RoadSegmentPlacement；无新增层方向。
 worldgen -> core                               13
 worldgen -> persistence                        4

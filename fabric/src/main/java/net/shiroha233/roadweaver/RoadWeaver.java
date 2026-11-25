@@ -36,6 +36,7 @@ public class RoadWeaver implements ModInitializer {
         // 若本行晚于它们的注册时机，backend 仍是 null，注册会返回 false。
         // fabric.mod.json 的 depends 保证 roadweaver_api 先于本 mod 加载。
         RoadWeaverApi.installBackend(ApiBackendImpl.INSTANCE);
+        net.shiroha233.roadweaver.worldgen.road.RoadPreviewProvider.register();
         LOGGER.info("【道路公共接口状态】 " + "RoadWeaver api: {}", RoadWeaverApi.describe());
 
         // 跨 mod 信号注册表的解析结果：进入世界（集成/专用服务端启动完成）后再打一行。

@@ -47,6 +47,13 @@ public final class RoadFileStorage {
         if (isOverworld(level)) store(level).preload();
     }
 
+    /** 不创建存储实例；世界关闭后晚到的远景请求不得重新打开旧存档。 */
+    public static RoadSnapshot peekSnapshot(ServerLevel level) {
+        if(!isOverworld(level))return null;
+        var existing=STORES.get(storagePath(level));
+        return existing==null?null:existing.peekSnapshot();
+    }
+
     public static List<RoadData> queryRect(ServerLevel level,
                                            int minBlockX, int minBlockZ,
                                            int maxBlockX, int maxBlockZ) {
