@@ -14,7 +14,7 @@ def contractPrefix = 'net/shiroha233/roadweaver/api/'
 def checkRoad = { File file ->
     new ZipFile(file).withCloseable { jar ->
         def meta = new JsonSlurper().parse(jar.getInputStream(jar.getEntry('fabric.mod.json')), 'UTF-8')
-        if (meta.id != 'roadweaver' || meta.depends?.roadweaver_api != '>=1.2.0') {
+        if (meta.id != 'roadweaver' || meta.depends?.roadweaver_api != '>=1.3.0') {
             throw new GradleException('道路必须声明匹配版本的外置 roadweaver_api')
         }
         // 同时检查未声明、改名的嵌套件和直接混入的 class，防止开发包掩盖重复定义。

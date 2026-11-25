@@ -24,6 +24,7 @@
 - **StreamsReflowing** 提供规划水道，供道路选线和安排跨水路段。
 - **万里长城** 公布墙体保护范围，供道路规划和施工避让。[长城项目](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall)
 - **Tans Huge Trees** 的兼容版本可登记巨树占地，供道路避让。
-- **SeedGen 远景适配** 可读取已规划的道路几何，实际施工后由真实区块覆盖；需要世界生成API 1.2.0和对应补丁。Diorama路线叠图尚未接入，H地图保留自身路线显示。
+- **SeedGen 远景适配** 可读取已规划的道路几何，实际施工后由真实区块覆盖；需要对应补丁。
+- **Diorama 路线叠图** 可由独立客户端适配包，在本机单人世界的主世界全屏地图显示道路、桥梁和隧道。需要道路0.9.123、世界生成API 1.3.0及Diorama 0.11.0；H/J及手绘编辑仍由道路自己的地图提供。远端服务器叠图尚未实现。
 
 基于 [shiroha233 的 RoadWeaver](https://github.com/shiroha-233/RoadWeaver)。灵感也来自 [Countered’s Settlement Roads](https://modrinth.com/mod/countereds-settlement-roads) 和 [RoadArchitect](https://github.com/FranckRJ/RoadArchitect)。[MIT 许可](LICENSE) · [第三方声明](NOTICE)

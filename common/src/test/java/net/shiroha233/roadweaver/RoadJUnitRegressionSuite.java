@@ -556,6 +556,7 @@ public final class RoadJUnitRegressionSuite {
                 // 分页场必须同时证明近目标少分配、远端不断路和稠密访问数值不漂移。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.metric.FmmPagedWorkspaceTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.worldgen.road.RoadPreviewProviderTest"))
+                .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.map.RoadOverlayGeometryTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.core.model.RoadPublicationTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.util.WeakIdentityCacheTest"))
                 .selectors(DiscoverySelectors.selectClass("net.shiroha233.roadweaver.postprocess.RoadSnapCacheLifecycleTest"))

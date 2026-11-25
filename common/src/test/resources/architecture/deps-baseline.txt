@@ -70,13 +70,16 @@ generation -> runtime                            17
 generation -> structures                         15
 map -> client                             1
 map -> config                             4
-map -> core                               12
+map -> core                               14
 map -> network                            1
-map -> pathlogic                          1
-map -> persistence                        5
+map -> pathlogic                          2
+map -> persistence                        7
 map -> planning                           1
 map -> runtime                            2
 map -> worldgen                           1
+# 2026-11-25：倾斜地图通过独立契约观察已加载快照，复用施工掩码和弱身份缓存，无反向客户端依赖。
+map -> api                                2
+map -> util                               1
 network -> client                             9
 network -> core                               3
 network -> map                                3
