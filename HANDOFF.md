@@ -2,6 +2,8 @@
 
 ## 2026-11-25 · 0.9.127 · 完整失败快照
 
+**本轮最终交付**：实现66799ac已推GitHub main，正式0.9.127已部署WAYFARING；SHA256=`8981ae3427b6f78ca12ff7bc9031bede11a835eb29d3d3030e179057f3ea11c6`，与恢复全部负控后的1899项回归/正式构建件一致。与长城0.7.147同批备份在`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-profile-cap-20261125-233357`，完整清单build/profile-cap-deployment.json。部署前未检出javaw，未修改玩家存档；三条现场锁高失败仍待新快照，不因诊断已接线就宣称已修。
+
 1. **改动**：TargetProfileSolver在实际repair抛已分类ProfileConflict.Rejected或返回empty时记录原输入；全长terrain、XZ、crossing、pin/fixed、覆土、deckFloor、cut/fill/step/perTwo和拒绝见证均保留。实际存档/roadweaver-diagnostics/profile-failures/维度内按内容摘要去重写入，不受AB配额和2048站截断影响；成功不创建快照、不写盘。损坏文件缺预算/约束时明确拒读，诊断异常不替换原施工拒绝。
 2. **验证**：新增9项测试登记进显式套件，恢复四组变异后全量PASS tests=1899 skipped=0 aborted=0 failed=0，Fabric正式build、API-SEPARATE及三个验包负面对照成功，日志build/profile-failure-release.log。真实生产入口构造负锁高与覆土冲突后，写盘→重开→相同repair重放得到同一见证；4097站末端负锁高和桥下界保留。世界目录来源另用编译器AST核实。部署结果另记。
 3. **未验证**：客户端最新日志仍为11月24日，现场三条LOCKED_HEIGHT尚无这版全约束快照，仍未修复或重新验收。CUT_BUDGET/SLOPE_WINDOW等还需实际物理隧道掩码，不能只拿初始约束冒充完全重放；一般运行时异常不在本快照范围。未测整合包帧率、耗时或联机地图。
