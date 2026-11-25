@@ -215,7 +215,8 @@ public final class BridgeDeckProfile {
                     && deckByRange[i] < prevDeck) {
                 deckByRange[i] = prevDeck;
             }
-            prevDeck = Math.max(prevDeck, deckByRange[i]);
+            // 同组低桥已抬高，这里直接记本桥即可；远距离断组时必须忘掉旧水域的高甲板。
+            prevDeck = deckByRange[i];
             prevEnd = ends[i];
         }
     }
