@@ -7,7 +7,7 @@
 3. **未验证**：未新档复验八条现场失败；三条首次LOCKED_HEIGHT、crossing解耦、第二次平滑仍未修或未裁决。未实现Diorama叠线，未验收完整整合包画面/性能；源码peek不在旧部署0.9.121中。
 4. **负控**：预览y-1改y、未加载快照直接返回，两类实际回归红；git checkout精确恢复后1878项及构建通过。日志build/preview-mutation-height-and-unloaded.log。
 5. **下一步**：Diorama只读调查确认H地图自有路线绘制仅借Xaero底图。独立客户端适配应从peekSnapshot提供XYZ中心线与targetY/span；旧RoadMapGeometry归零Y不能直接用。在Diorama MapScreen的MapViewport.draw之后用Projection.u/v和View.screenX/screenY叠线，不写会持久化且假定Y=64的DrawingStore。先全屏只读，再补多人网络、洞穴及小地图；H/J编辑保留。内部接口需锁Diorama0.11.0。
-6. **历史与回退**：基线14e4d30，行为新增，API最低1.2.0。不改存档格式或施工几何。两个子智能体只读调查；部署和推送结果另记。
+6. **历史与回退**：基线14e4d30，行为新增，API最低1.2.0，不改存档或施工几何。5593fc9已推送GitHub main；0.9.122已部署WAYFARING，SHA256为f07e254d193bbc41790969e4562bd261cec1f0edd03f0b2066fec5f14ba4fe66。两个子智能体只读调查。旧包及配置备份在相邻plaincraft-voxyseedgen-l10n/build/deployment-backups/preview-1.2.0-20261125-162224，未修改玩家存档。
 
 ## 2026-11-25 · 旧版契约差异逐项审核
 
