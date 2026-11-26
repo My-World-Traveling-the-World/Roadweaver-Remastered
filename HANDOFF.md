@@ -2,6 +2,9 @@
 
 ## 2026-11-26 · 0.9.128 · 隧道路口先判中心距离
 
+**部署完成**：2.3.1-1.21.1-plaincraft-direct-core.0.9.128已安装WAYFARING，SHA256=`8fe9286416fe4cd5f8351b1c0fdb475787d9504b24b89f54acf46f0d61e488c1`，与构建件逐字一致。部署前未检出运行的Minecraft客户端；目录内此ID仅一个启用JAR，旧件改.disabled并完整备份至`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-seedgen-surface-20261126-093841`。四包清单见相邻SeedGen补丁build/decorator-deployment.json。未修改玩家存档或SeedGen/VSS配置，完整整合包画面与帧率待重启验收。
+
+
 1. **改动**：externalTunnelJunctionIndices先计算原L∞水平距离，含8格已满足连接条件就不创建精确占地集合；更远的宽路面仍沿原footprintsIntersect判定。保持高度无关、同owner排除、相邻±1隧道站标记及输出顺序。不引入缓存、常驻足迹或新防御分支。
 2. **验证**：恢复全部变异后PASS tests=1900 skipped=0 aborted=0 failed=0，Fabric build成功；API-SEPARATE及三项验包负面对照PASS。新增6组负坐标/8和9格边界/12格宽占地/14格高差，逐slice、站索引、路口掩码和density stamp与冻结编译器完整对拍；无外路标记正对照不产生路口。日志build/junction-distance-final.log。
 3. **未验证**：没有整合包新日志、帧率或实际路口编译占比；这里只证明近距离配对跳过集合构造，不给总体加速倍率。11月24日三条LOCKED_HEIGHT仍待0.9.127之后的新完整快照，未凭旧日志放宽坡限或改端点；crossing解耦/双平滑仍保留现状。
