@@ -21,7 +21,8 @@ dependencies {
     //   WallRoadAdapter.java:35: 错误: 程序包 local.plaincraft.greatwall.api 不存在
     // 根本看不出是依赖没准备，所以这里显式检查一次。
     def greatWallInterop = rootProject.file(
-            "../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar")
+            providers.gradleProperty('greatWallInteropJar')
+                .orElse('../plaincraft-great-wall/build/interop/plaincraft-great-wall-interop.jar').get())
     if (!greatWallInterop.exists()) {
         throw new GradleException(
                 "缺长城 interop jar：${greatWallInterop}\n" +
@@ -31,7 +32,8 @@ dependencies {
     }
     compileOnly(files(greatWallInterop))
     // 纯Java的河流提供方契约，不把可选河流实现或契约重复打入道路成品。
-    def streamsPlanApi = rootProject.file("../streams-reflowing-src/build/contract/streams-plan-api.jar")
+    def streamsPlanApi = rootProject.file(providers.gradleProperty('streamsPlanApiJar')
+            .orElse('../streams-reflowing-src/build/contract/streams-plan-api.jar').get())
     if (!streamsPlanApi.exists()) throw new GradleException("缺河流计划契约，请先在streams-reflowing-src执行planContractJar")
     compileOnly(files(streamsPlanApi))
     testImplementation(files(streamsPlanApi))

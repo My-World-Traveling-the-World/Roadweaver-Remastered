@@ -104,6 +104,10 @@
 
 [项目介绍](README.md) · [版本更新](CHANGELOG.md)
 
+## 2026-11-27 · 构建路径标准化
+
+长城和河流契约默认从同级源码构建。不同检出布局可传入 `-PgreatWallInteropJar` 和 `-PstreamsPlanApiJar`，地图开发包继续使用 `-PdioramaDevJar`。构建配置改动与算法行为无关。
+
 ## 构建和验证
 
 使用 JDK 21 与外置 Gradle 8.8。先在同级 `plaincraft-worldgen-api` 构建 named 契约、dev mod 和 intermediary 契约，再在 `streams-reflowing-src` 运行 `planContractJar`、在 `plaincraft-great-wall` 运行 `interopJar`。`-PworldgenApiProjectDir=<路径>` 可指定前置源码的位置。河流、长城的契约 JAR 是开发输入，玩家可单独安装道路和前置。
