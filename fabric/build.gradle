@@ -26,6 +26,10 @@ repositories {
 	}
 }
 
+def dioramaDev = files(providers.gradleProperty('dioramaDevJar').map { rootProject.file(it) }
+	.orElse(rootProject.file('../diorama/versions/1.21.1/build/devlibs/diorama-0.11.0+1.21-1.21.1-dev.jar')))
+def dioramaRelease = configurations.create('dioramaReleaseTest') { transitive = false }
+
 dependencies {
 	// 开发端也加载独立前置；命名空间取 Mojang named，正式道路包不包含接口。
 	// 开发启动使用 named 版可加载前置，生产成品只声明依赖。
@@ -51,6 +55,17 @@ dependencies {
 	modLocalRuntime("maven.modrinth:mOgUt4GM:${project.modmenu_version}")
 	modRuntimeOnly("maven.modrinth:mOgUt4GM:${project.modmenu_version}")
 
+	// Diorama 的发行包由新版 Loom 生成。这里用同版 Mojang named 开发件编译，
+	// 让道路现有 Loom 正常重映射调用点，同时不把地图模组打进道路成品。
+	compileOnly dioramaDev
+	testImplementation dioramaDev
+	testImplementation files(rootProject.worldgenApiArtifact('api/build/contract/roadweaver-api-contract-named.jar'))
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7'
+	testImplementation 'io.github.llamalad7:mixinextras-fabric:0.5.4'
+	dioramaReleaseTest 'maven.modrinth:kwpTgbCk:CSxsaqxz'
+
 	// Dedicated servers omit LWJGL. Bundle its Java API and core JNI; the system GPU driver still provides the OpenCL ICD.
 	compileOnly("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
 	include("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
@@ -65,6 +80,36 @@ dependencies {
 	shadowLwjglNatives("org.lwjgl:lwjgl:3.3.3:natives-macos-arm64") { transitive = false }
 
 }
+
+tasks.named('compileJava') {
+	doFirst {
+		if (!dioramaDev.singleFile.isFile()) {
+			throw new GradleException("缺少 Diorama 0.11.0 Mojang named 开发包：${dioramaDev.singleFile}。请按 HANDOFF.md 构建或传入 -PdioramaDevJar。")
+		}
+	}
+}
+
+tasks.named('test', Test) {
+	useJUnitPlatform()
+	include '**/*Test.class'
+	// 实测发行包注入，防止开发环境编译通过但发行命名空间找不到目标。
+	def roadJar = tasks.named('remapJar').flatMap { it.archiveFile }
+	def intermediary = providers.provider {
+		def jars = net.fabricmc.loom.LoomGradleExtension.get(project)
+			.getMinecraftJars(net.fabricmc.loom.api.mappings.layered.MappingsNamespace.INTERMEDIARY)
+		return files(jars).singleFile
+	}
+	dependsOn tasks.named('remapJar')
+	inputs.files(roadJar, dioramaRelease, intermediary)
+	forkEvery = 1
+	doFirst {
+		systemProperty 'roadJar', roadJar.get().asFile.absolutePath
+		systemProperty 'dioramaReleaseJar', dioramaRelease.singleFile.absolutePath
+		systemProperty 'intermediaryClientJar', intermediary.get().toString()
+	}
+}
+
+apply from: rootProject.file('gradle/windows-test-classpath.gradle')
 
 processResources {
 	inputs.property "version", project.version

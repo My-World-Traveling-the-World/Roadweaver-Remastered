@@ -1,5 +1,14 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-26 · 0.9.129 · 将 Diorama 叠图并入道路本体
+
+1. **改动**：移植独立桥接的视口反算、查询代次、服务端权限复核和 XYZ 叠图。仅客户端且安装 Diorama `0.11.0+1.21-1.21.1` 时登记注入。旧桥接仍在时让它负责绘制，防止双重叠图。使用新的类包名与 Mixin 配置。
+2. **验证**：1900 项道路回归、5 项 Fabric 回归均零跳过和失败。正式包的 Sponge 注入检查通过，独立前置验包及三项拒绝回归通过。真实隔离客户端分别验证内置四向各三类路线、共装旧桥接时仅旧桥绘制、无 Diorama 时可进入世界并读写道路。夹具使用生产存储提交道路。三个最终客户端结果均在 `build/diorama-client-check/` 的 `built-in-1795690835087533300`、`legacy-1795690835051460900` 和 `absent-1795690835051370800`。
+3. **未验证**：完整 WAYFARING 整合包启动、用户世界开局预热、多人叠图和大路网帧率。三组客户端使用提前完成预热的隔离存档。
+4. **负控**：目标改成不存在的 `missingDraw` 时真实发行包注入测试红。取消旧桥接判断时重复安装用例红。允许旧世界结果发布时快照代次测试红。恢复字节后全量回归通过，见 `build/diorama-merge-final.log` 和 `build/diorama-merge-mutation-*.xml`。
+5. **后续**：新版部署后可停用旧独立桥接包。新增 Diorama 版本时先核对 `MapScreen` 及 `MapViewport` 的实际渲染签名，再增加支持版本。
+6. **历史与回退**：基线 `fbed8d9`，开工已同步。行为等价迁移，配置和存档格式沿用原契约。回退时用道路 0.9.128 配合旧桥接 1.0.0。道路 0.9.129 成品 SHA-256 为 `63424500597123bc344ee0022c857b990613eae938c6b54f34a47d6178245d99`，与三组隔离运行一致。当前 WAYFARING 仍为 0.9.128 与旧桥接。
+
 ## 2026-11-26 · 0.9.128 · 隧道路口先判中心距离
 
 **部署完成**：2.3.1-1.21.1-plaincraft-direct-core.0.9.128已安装WAYFARING，SHA256=`8fe9286416fe4cd5f8351b1c0fdb475787d9504b24b89f54acf46f0d61e488c1`，与构建件逐字一致。部署前未检出运行的Minecraft客户端；目录内此ID仅一个启用JAR，旧件改.disabled并完整备份至`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-seedgen-surface-20261126-093841`。四包清单见相邻SeedGen补丁build/decorator-deployment.json。未修改玩家存档或SeedGen/VSS配置，完整整合包画面与帧率待重启验收。
@@ -96,6 +105,8 @@
 ## 构建和验证
 
 使用 JDK 21 与外置 Gradle 8.8。先在同级 `plaincraft-worldgen-api` 构建 named 契约、dev mod 和 intermediary 契约，再在 `streams-reflowing-src` 运行 `planContractJar`、在 `plaincraft-great-wall` 运行 `interopJar`。`-PworldgenApiProjectDir=<路径>` 可指定前置源码的位置。河流、长城的契约 JAR 是开发输入，玩家可单独安装道路和前置。
+
+Fabric 客户端编译使用同级 Diorama 工程的 Mojang named 开发包。先按该工程的开发文档执行 `:1.21.1:build`，默认读取 `../diorama/versions/1.21.1/build/devlibs/diorama-0.11.0+1.21-1.21.1-dev.jar`，也可用 `-PdioramaDevJar=<路径>` 指定。Diorama 的成品由新版 Loom 构建，不能作为旧版 Architectury Loom 的重映射输入。道路测试另取固定的 Modrinth 发行版检查最终注入，Diorama 运行库由玩家按需安装。
 
 ```powershell
 & $gradle :common:roadJUnitRegressionSuite :fabric:build --daemon --console=plain --dependency-verification=off

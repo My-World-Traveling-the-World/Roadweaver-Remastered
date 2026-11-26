@@ -1,0 +1,21 @@
+// JDK 21 在 Windows 按系统代码页读取参数文件，含中文的路径通过 URI 清单传递。
+if (System.getProperty('os.name').startsWith('Windows') &&
+        !projectDir.absolutePath.chars().allMatch { it < 128 }) {
+    def key = java.security.MessageDigest.getInstance('SHA-256')
+            .digest(projectDir.absolutePath.getBytes('UTF-8')).encodeHex().toString()
+    def bridge = tasks.register('testClasspathBridge', Jar) {
+        dependsOn tasks.named('testClasses')
+        archiveFileName = 'classpath.jar'
+        destinationDirectory = new File(gradle.gradleUserHomeDir, "caches/roadweaver/test-classpath/${key}")
+        inputs.files(sourceSets.test.runtimeClasspath)
+        doFirst {
+            manifest.attributes('Class-Path': sourceSets.test.runtimeClasspath.files
+                    .collect { it.toURI().toASCIIString() }.join(' '))
+        }
+    }
+    tasks.named('test', Test) {
+        dependsOn bridge
+        classpath = files(bridge.flatMap { it.archiveFile })
+        inputs.files(sourceSets.test.runtimeClasspath)
+    }
+}

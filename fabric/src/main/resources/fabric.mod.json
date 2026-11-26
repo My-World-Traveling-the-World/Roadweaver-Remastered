@@ -26,7 +26,8 @@
 		]
 	},
 	"mixins": [
-		"roadweaver.mixins.json"
+		"roadweaver.mixins.json",
+		{"config": "roadweaver.diorama.mixins.json", "environment": "client"}
 	],
 	"depends": {
 		"roadweaver_api": ">=1.3.0",
@@ -37,6 +38,7 @@
 		"cloth-config2": "*"
 	},
 	"suggests": {
+		"diorama": "0.11.0+1.21-1.21.1",
 		"another-mod": "*",
 		"sereneseasons": "*",
 		"glitchcore": "*"
