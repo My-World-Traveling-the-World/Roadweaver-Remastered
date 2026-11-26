@@ -1,5 +1,15 @@
 # RoadWeaver 开发指南与交接
 
+## 2026-11-26 · 0.9.128 · 隧道路口先判中心距离
+
+1. **改动**：externalTunnelJunctionIndices先计算原L∞水平距离，含8格已满足连接条件就不创建精确占地集合；更远的宽路面仍沿原footprintsIntersect判定。保持高度无关、同owner排除、相邻±1隧道站标记及输出顺序。不引入缓存、常驻足迹或新防御分支。
+2. **验证**：恢复全部变异后PASS tests=1900 skipped=0 aborted=0 failed=0，Fabric build成功；API-SEPARATE及三项验包负面对照PASS。新增6组负坐标/8和9格边界/12格宽占地/14格高差，逐slice、站索引、路口掩码和density stamp与冻结编译器完整对拍；无外路标记正对照不产生路口。日志build/junction-distance-final.log。
+3. **未验证**：没有整合包新日志、帧率或实际路口编译占比；这里只证明近距离配对跳过集合构造，不给总体加速倍率。11月24日三条LOCKED_HEIGHT仍待0.9.127之后的新完整快照，未凭旧日志放宽坡限或改端点；crossing解耦/双平滑仍保留现状。
+4. **负控**：距离>8改为>=8、删除远距离宽占地后备，两组均使CompilePreparationTest外路隧道路口完整计划对拍实际断言失败。均git checkout恢复，build/junction-mutations.json及对应日志。
+5. **下一步**：新档复核失败路完整约束与桥隧产物。只有远距离marker占比和分配数据确认有收益时，再考虑当前站惰性足迹复用，不把整条路所有足迹留在内存。
+6. **历史与回退**：开工基线1510872，pull已是最新；行为等价优化，版本0.9.128。只改比较顺序与测试，配置、采样阶段、桥弯、存档schema及世界隔离保持原契约。部署结果另补记。
+
+
 ## 2026-11-25 · 0.9.127 · 完整失败快照
 
 **本轮最终交付**：实现66799ac已推GitHub main，正式0.9.127已部署WAYFARING；SHA256=`8981ae3427b6f78ca12ff7bc9031bede11a835eb29d3d3030e179057f3ea11c6`，与恢复全部负控后的1899项回归/正式构建件一致。与长城0.7.147同批备份在`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-profile-cap-20261125-233357`，完整清单build/profile-cap-deployment.json。部署前未检出javaw，未修改玩家存档；三条现场锁高失败仍待新快照，不因诊断已接线就宣称已修。

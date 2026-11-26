@@ -7,6 +7,38 @@ import net.shiroha233.roadweaver.core.model.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class CompilePreparationTest {
+    /** 距离快路必须保留八格边界及远处宽占地后备，不能只把更多路口标成开口。 */
+    @Test void externalTunnelJunctionsKeepDistanceBoundaryWideFootprintsAndVerticalBranches() {
+        for(int offset:new int[]{8,9,12})for(boolean wide:new boolean[]{false,true}) {
+            var stations=new ArrayList<RoadSegmentPlacement>();
+            for(int x=-32;x<=-16;x++) {
+                var point=new BlockPos(x,64,-8);stations.add(new RoadSegmentPlacement(point,List.of(point)));
+            }
+            var trunk=new RoadData(1,0,List.of(),List.of(),stations,
+                    List.of(new RoadSpan(stations.getFirst().middlePos(),stations.getLast().middlePos(),SpanType.TUNNEL)),
+                    Collections.nCopies(stations.size(),64),301,401);
+            var markerStations=new ArrayList<RoadSegmentPlacement>();
+            for(int x=-26;x<=-22;x+=2) {
+                var point=new BlockPos(x,78,-8+offset);
+                var footprint=wide?List.of(point,new BlockPos(x,78,-8)):List.of(point);
+                markerStations.add(new RoadSegmentPlacement(point,footprint));
+            }
+            var junction=markerStations.get(1).middlePos();
+            var marker=new RoadData(1,0,List.of(),List.of(),markerStations,
+                    List.of(new RoadSpan(junction,junction,SpanType.TUNNEL_JUNCTION)),Collections.nCopies(3,78),302,402);
+            var roads=List.of(trunk,marker);var chunk=new ChunkPos(-2,-1);
+            var expected=FrozenRoadChunkPlanCompiler.compile(chunk,roads,false,7,199);
+            var actual=RoadChunkPlanCompiler.compile(chunk,roads,false,7,199);same(expected,actual);
+            var slice=actual.slices().stream().filter(v->v.road().roadSegmentList().getFirst().middlePos().getY()==64).findFirst().orElseThrow();
+            assertEquals(offset==8||wide,slice.isTunnelJunction(8),"offset="+offset+" wide="+wide);
+            if(offset==8||wide) {
+                assertTrue(slice.isTunnelJunction(7));assertTrue(slice.isTunnelJunction(9));
+            }
+            var own=RoadChunkPlanCompiler.compile(chunk,List.of(trunk),false,7,199);
+            assertFalse(own.slices().getFirst().isTunnelJunction(8),"没有外路标记不能凭隧道自身创建路口");
+        }
+    }
+
     static RoadData road(int x,int z,int y,int id) {
         var stations=new ArrayList<RoadSegmentPlacement>();var heights=new ArrayList<Integer>();
         for(int i=0;i<80;i++){var p=new BlockPos(x+i,y,z);stations.add(new RoadSegmentPlacement(p,List.of(p,p.offset(0,0,1))));heights.add(y);}

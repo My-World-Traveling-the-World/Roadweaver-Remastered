@@ -420,8 +420,9 @@ public final class RoadChunkPlanCompiler {
                 // below it. The junction section must still be opened so the
                 // two tunnel volumes connect instead of leaving a sealed wall.
                 if (marker.owner() == road) continue;
-                if (!RoadPhysicalReuseNormalizer.footprintsIntersect(placement, marker.placement())
-                        && horizontalDistance(placement.middlePos(), marker.placement().middlePos()) > 8) continue;
+                // 近距离已满足原路口判据，无需为精确占地比较临时构造集合；远处仍保留宽占地相交判断。
+                if (horizontalDistance(placement.middlePos(), marker.placement().middlePos()) > 8
+                        && !RoadPhysicalReuseNormalizer.footprintsIntersect(placement, marker.placement())) continue;
                 for (int delta = -1; delta <= 1; delta++) {
                     int candidate = i + delta;
                     if (candidate >= 0 && candidate < placements.size() && tunnelMask[candidate]) {
