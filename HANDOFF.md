@@ -108,6 +108,13 @@
 
 长城和河流契约默认从同级源码构建。不同检出布局可传入 `-PgreatWallInteropJar` 和 `-PstreamsPlanApiJar`，地图开发包继续使用 `-PdioramaDevJar`。构建配置改动与算法行为无关。
 
+1. **改动**：增加外部契约路径参数，支持独立检出。
+2. **验证**：隔离目录和本机统一构建均通过。PASS tests=1900 skipped=0 aborted=0 failed=0；Fabric 5 项及 API-SEPARATE、API-SEPARATE-REGRESSION（拒绝 3 项）通过。
+3. **未验证**：未在本轮启动正式整合包，未测开局性能。
+4. **负控**：仅构建路径变化，没有新增算法守卫。
+5. **下一步**：依照开发指南使用明确依赖输入构建。
+6. **历史与回退**：构建配置提交 fb84918；可独立回退。
+
 ## 构建和验证
 
 使用 JDK 21 与外置 Gradle 8.8。先在同级 `plaincraft-worldgen-api` 构建 named 契约、dev mod 和 intermediary 契约，再在 `streams-reflowing-src` 运行 `planContractJar`、在 `plaincraft-great-wall` 运行 `interopJar`。`-PworldgenApiProjectDir=<路径>` 可指定前置源码的位置。河流、长城的契约 JAR 是开发输入，玩家可单独安装道路和前置。
