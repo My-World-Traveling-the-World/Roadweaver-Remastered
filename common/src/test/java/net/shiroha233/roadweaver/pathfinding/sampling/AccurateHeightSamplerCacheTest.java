@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -153,5 +154,28 @@ final class AccurateHeightSamplerCacheTest {
         assertEquals(1, backend.chunkCalls.get(), "all chunks must be fetched in one batch call");
         assertEquals(0, backend.positionCalls.get(), "dense chunks must not use the sparse column path");
         assertEquals(12, sampler.cachedChunkCount(), "each chunk must stay cached");
+    }
+
+    @Test
+    void keepsBatchResultsEvenWhenSharedCacheHasNoSample() {
+        var hit = new AccurateHeightSample(77, 72, 75);
+        var sparse = new AccurateHeightSample(90, 89, 88);
+        var xz = new BlockPos(-1, 300, -17);
+        var sparsePos = new BlockPos(17, 0, 1);
+        var absent = new BlockPos(120, 0, -90);
+        int[] surface = new int[256], floor = new int[256], motion = new int[256];
+        // 负坐标的末列对应块内索引 255，必须保留三种不同高度而非只保留路面高度。
+        surface[255] = -10; floor[255] = -23; motion[255] = -13;
+        var chunk = new AccurateHeightChunk(-1, -2, surface, floor, motion);
+        long denseKey = AccurateHeightSample.key(-1, -17);
+        long sparseKey = AccurateHeightSample.key(17, 1);
+        var kept = AccurateHeightSampler.retainPrefetchedSamples(Map.of(0L, hit),
+                List.of(xz, sparsePos, absent), Map.of(chunk.chunkKey(), chunk),
+                Map.of(sparseKey, sparse));
+        assertEquals(3, kept.size());
+        assertSame(hit, kept.get(0L));
+        assertSame(sparse, kept.get(sparseKey));
+        assertEquals(new AccurateHeightSample(-10, -23, -13),
+                kept.get(denseKey));
     }
 }

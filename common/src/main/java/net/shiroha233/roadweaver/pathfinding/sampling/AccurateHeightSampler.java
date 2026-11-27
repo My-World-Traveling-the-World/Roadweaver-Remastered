@@ -2,6 +2,7 @@
 package net.shiroha233.roadweaver.pathfinding.sampling;
 
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -207,6 +208,33 @@ public final class AccurateHeightSampler {
     /** 整块调度独立维护认领，避免与逐列瓦片的锁序和生命周期混在一起。 */
     public Map<Long, AccurateHeightChunk> sampleChunks(Collection<Long> chunkKeys) {
         return chunkBatch.sample(chunkKeys);
+    }
+
+    /** 由调用方选择整块和逐列批次，采样器负责复用两种批次返回的精确高度。 */
+    public Map<Long, AccurateHeightSample> sampleSelectedColumns(Map<Long, AccurateHeightSample> cached,
+            List<BlockPos> missing, Collection<Long> wholeChunks, Collection<BlockPos> sparse) {
+        var chunks = wholeChunks.isEmpty() ? Map.<Long, AccurateHeightChunk>of() : sampleChunks(wholeChunks);
+        var columns = sparse.isEmpty() ? Map.<Long, AccurateHeightSample>of() : samplePositions(sparse);
+        return retainPrefetchedSamples(cached, missing, chunks, columns);
+    }
+
+    static Map<Long, AccurateHeightSample> retainPrefetchedSamples(Map<Long, AccurateHeightSample> cached,
+            List<BlockPos> missing, Map<Long, AccurateHeightChunk> chunks, Map<Long, AccurateHeightSample> columns) {
+        if (chunks.isEmpty() && columns.isEmpty()) return cached;
+        // 批采样返回的精确列只在本次校验持有，其他路线淘汰共享缓存也无需再查盘或读取实时区块。
+        var samples = new Long2ObjectOpenHashMap<AccurateHeightSample>(cached.size() + missing.size());
+        samples.putAll(cached);
+        for (BlockPos pos : missing) {
+            int x = pos.getX(), z = pos.getZ();
+            long key = AccurateHeightSample.key(x, z);
+            var sample = columns.get(key);
+            if (sample == null) {
+                var chunk = chunks.get(ChunkPos.asLong(x >> 4, z >> 4));
+                if (chunk != null) sample = sampleFromChunk(chunk, x, z);
+            }
+            if (sample != null) samples.put(key, sample);
+        }
+        return samples;
     }
 
     public List<BlockPos> samplePathHeights(List<BlockPos> path, int divisor) {

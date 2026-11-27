@@ -179,12 +179,7 @@ public final class FinalRoadStructureValidator {
                 sparse.addAll(entry.getValue());
             }
         }
-        if (!wholeChunks.isEmpty()) {
-            sampler.sampleChunks(wholeChunks);
-        }
-        if (!sparse.isEmpty()) {
-            sampler.samplePositions(sparse);
-        }
+        var samples = sampler.sampleSelectedColumns(cached, missing, wholeChunks, sparse);
         // 缺列来源：命中缓存（未进 missing）/ 整块预取（按 chunk 一次取整块）/ 逐列采样。
         if (DetailedRoadGenerationStats.routeTiming() != null) {
             DetailedRoadGenerationStats.routeTiming().addColumnSource(
@@ -196,8 +191,7 @@ public final class FinalRoadStructureValidator {
                     roadId, positions.size(), wholeChunks.size(), wholeChunkColumns, sparse.size(),
                     sampler.cachedChunkCount(), sampler.cachedColumnCount(), sampler.backendName());
         }
-        // 新取样仍由原精确缓存读回；只在本次读到时记住，不跨校验重试保存。
-        return cached;
+        return samples;
     }
 
     /** 分子和分母必须是同一组 X/Z 列；同一站的桥面、路幅和地形高度不各算一列。 */
