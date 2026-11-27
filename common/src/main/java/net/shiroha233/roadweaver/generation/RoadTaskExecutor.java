@@ -48,7 +48,6 @@ import net.shiroha233.roadweaver.runtime.RuntimeLoadPolicy;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -227,70 +226,6 @@ public final class RoadTaskExecutor {
                 updateConnectionStatus(level, task, ConnectionStatus.PLANNED);
                 throw submitFailure;
             }
-        }
-    }
-
-    public static RoadData applyPlayerRouteOverrides(ServerLevel level,
-                                                      StructureConnection conn,
-                                                      RoadData generated) {
-        try {
-            net.shiroha233.roadweaver.route.PlayerRoute route =
-                    net.shiroha233.roadweaver.route.RouteBuildRegistry.routeFor(level, conn);
-            if (route == null) {
-                return generated;
-            }
-            List<net.minecraft.core.BlockPos> centers = new ArrayList<>(
-                    generated.roadSegmentList().size());
-            for (var placement : generated.roadSegmentList()) {
-                centers.add(placement.middlePos());
-            }
-            RoadData patched =
-                    net.shiroha233.roadweaver.route.RouteRoadDataPatcher.patch(generated, route, centers);
-            if (patched == generated) {
-                return generated;
-            }
-
-            // ── 覆盖后补校验；不通过则**按段**回退（审计 P1-3）──
-            //
-            // ★ R3-P1-3：从「整条丢弃」改为「尽量保住玩家意图」。
-            //
-            // 原先只要校验失败就 return generated —— 一处局部错误
-            // （桥抬太高 → invalid-height-step）会连累整条路线，
-            // 玩家看到的是「一条桥都没建，全是贴地路」，日志里只有一行 warn。
-            //
-            // 现在三级策略：
-            //   ① 先看收敛后的 patched（RouteRoadDataPatcher 已做坡度收敛，通常直接过）
-            //   ② 不过 → 把**校验报出的那一小段**恢复成管线值，其余保留玩家意图
-            //   ③ 还不过 → 才退回整条管线结果
-            var validation =
-                    net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator
-                            .validateFinalRoad(patched);
-            if (!validation.valid()) {
-                RoadData partial =
-                        net.shiroha233.roadweaver.route.RouteRoadDataPatcher
-                                .revertRangeToPipeline(patched, generated, validation.index());
-                if (partial != null
-                        && net.shiroha233.roadweaver.pathlogic.validation.RoadDataValidator
-                                .validateFinalRoad(partial).valid()) {
-                    LOGGER.info("【手绘覆盖局部不合法，已撤销对应站点改写】 " + "RoadWeaver player-route override partially reverted at idx={} "
-                                    + "connection={}->{} route={} reason={}",
-                            validation.index(), conn.from(), conn.to(), route.id(), validation);
-                    return partial;
-                }
-                LOGGER.warn("【手绘覆盖产生无效道路，保留当前规划链结果】 " + "RoadWeaver player-route override produced invalid RoadData; "
-                                + "falling back to pipeline result connection={}->{} route={} reason={}",
-                        conn.from(), conn.to(), route.id(), validation);
-                return generated;
-            }
-
-            LOGGER.info("【手绘路线覆盖已应用】 " + "RoadWeaver applied player-route overrides connection={}->{} route={} segments={}",
-                    conn.from(), conn.to(), route.id(), centers.size());
-            return patched;
-        } catch (Throwable t) {
-            // 覆盖失败不能让整条路建不出来 —— 退回管线结果并记日志
-            LOGGER.warn("【手绘覆盖执行失败，保留当前规划链结果】 " + "RoadWeaver player-route override failed; keeping pipeline result connection={}->{}",
-                    conn.from(), conn.to(), t);
-            return generated;
         }
     }
 
@@ -565,17 +500,9 @@ public final class RoadTaskExecutor {
                 genCfg.pathfinding().setPathGridStep(precisionStep);
                 genCfg.pathfinding().sanitize();
             }
-            RoadData generated = new Road(level, conn, cfg, genCfg)
+            RoadData generated = new Road(level, conn, cfg, genCfg,
+                    net.shiroha233.roadweaver.route.PlayerRouteBuildIntent.forConnection(level, conn))
                     .generateRoad(persistImmediately);
-
-            // ── 玩家手绘路线：用玩家意图覆盖管线产出 ──
-            //
-            // 管线会把高度吸附回地面、并自己判定哪段是桥/隧道。
-            // 手绘路线必须反过来：高度与类型以玩家为准（「画什么生成什么」）。
-            // 几何（宽度/平滑/避结构）保持管线结果不动。
-            if (generated != null) {
-                generated = applyPlayerRouteOverrides(level, conn, generated);
-            }
 
             return generated == null ? GenerationOutcome.failed() : GenerationOutcome.completed(generated);
         } catch (Throwable t) {

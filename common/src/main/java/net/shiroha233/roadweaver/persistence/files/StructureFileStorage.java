@@ -13,9 +13,9 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceKey;
+
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.Level;
+
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.core.model.StructureInfo;
@@ -25,7 +25,7 @@ import net.shiroha233.roadweaver.runtime.RoadLifecycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -64,15 +64,16 @@ public final class StructureFileStorage {
     private static final String STATE_FILE = "state.json";
 
     /**
-     * 只读快照缓存：按维度（{@link ResourceKey}&lt;{@link Level}&gt;）隔离。
+     * 只读快照按存档与维度的 ServerLevel 实例隔离。
      * value 为不可变 {@link StructureSnapshot}，由 level 版本号做失效。
      * 所有访问都在 {@code VersionedSnapshotCache} 的实例锁内，无需额外
      * 并发容器；缓存语义集中在该类，便于无 ServerLevel 的确定性并发测试。
      */
-    private static final VersionedSnapshotCache<ResourceKey<Level>, StructureSnapshot> SNAPSHOT_CACHE =
+    private static final VersionedSnapshotCache<ServerLevel, StructureSnapshot> SNAPSHOT_CACHE =
             new VersionedSnapshotCache<>();
 
-    private static final class StateData {
+    static final class StateData {
+        transient boolean readFailed; // 本次读取的标志不得写入存档。
         StructureLocationData structureLocations = new StructureLocationData(new ArrayList<>(), new ArrayList<>());
         List<StructureConnection> connections = new ArrayList<>();
         Set<Long> plannedTileKeys = new HashSet<>();
@@ -152,6 +153,46 @@ public final class StructureFileStorage {
         state.connections = normalizeConnections(connections);
         state.connections.removeIf(connection -> isSuppressed(state, connection.from(), connection.to()));
         save(level, state);
+    }
+
+    /** 与连接一起原子写入接纳清单，避免重开后按草稿推断所有权，抢走已有连线。 */
+    public static synchronized List<StructureConnection> addPlayerConnections(ServerLevel level, java.util.UUID route,
+            List<StructureConnection> proposed) {
+        if (!RoadLifecycle.allowsWrites() || proposed.isEmpty()) return List.of();
+        var state = state(level);
+        var accepted = claimPlayerEdges(state, route, proposed);
+        if (!accepted.isEmpty()) save(level, state);
+        return accepted;
+    }
+
+    static List<StructureConnection> claimPlayerEdges(StateData state, java.util.UUID route, List<StructureConnection> proposed) {
+        var occupied = new HashSet<PlannedPathKey>();
+        for (var c : state.connections) occupied.add(PlannedPathKey.of(c));
+        var accepted = new ArrayList<StructureConnection>();
+        for (var c : proposed) {
+            if (!isSuppressed(state, c.from(), c.to()) && occupied.add(PlannedPathKey.of(c))) accepted.add(c);
+        }
+        if (accepted.isEmpty()) return List.of();
+        state.connections.addAll(accepted);
+        state.meta.put("player_route_edges:" + route, accepted.stream().map(StructureFileStorage::playerEdge)
+                .collect(java.util.stream.Collectors.joining(";")));
+        return accepted;
+    }
+
+    public static synchronized Set<String> acceptedPlayerEdges(ServerLevel level, java.util.UUID route) {
+        return acceptedPlayerEdges(state(level), route);
+    }
+
+    static Set<String> acceptedPlayerEdges(StateData state, java.util.UUID route) {
+        if (state.readFailed) return Set.of();
+        var encoded = state.meta.get("player_route_edges:" + route);
+        return encoded == null ? null : new HashSet<>(List.of(encoded.split(";")));
+    }
+
+    public static String playerEdge(StructureConnection c) {
+        // Minecraft 合法方块坐标可无损打包；端点包含 Y，同一层反向连线共用键。
+        long a = c.from().asLong(), b = c.to().asLong();
+        return Math.min(a,b) + ":" + Math.max(a,b);
     }
 
     public static synchronized void mergeStructureConnections(ServerLevel level, List<StructureConnection> connections) {
@@ -446,11 +487,9 @@ public final class StructureFileStorage {
 
     public static synchronized StructureSnapshot getStructureSnapshot(ServerLevel level) {
         if (level == null) return new StructureSnapshot(null, Map.of());
-        ResourceKey<Level> key = level.dimension();
-        return SNAPSHOT_CACHE.getOrLoad(key, () -> {
-            StateData state = state(level);
-            return new StructureSnapshot(state.structureLocations, state.structureSources);
-        });
+        var state = state(level);
+        if (state.readFailed) return new StructureSnapshot(null, Map.of());
+        return SNAPSHOT_CACHE.getOrLoad(level, () -> new StructureSnapshot(state.structureLocations, state.structureSources));
     }
 
     public static synchronized int sourceAt(ServerLevel level, BlockPos pos) {
@@ -623,83 +662,53 @@ public final class StructureFileStorage {
         return (((long) x) << 32) ^ (z & 0xffffffffL);
     }
 
-    /** 每维度状态由类锁保护并写透；生命周期清缓存，不应将内存更新等同于持久成功。 */
-    private static final Map<ResourceKey<Level>, StateData> STATE_CACHE = new HashMap<>();
+    // 存档之间隔离，短暂读失败的空表不能成为可写缓存。
+    private static final Map<ServerLevel, StateData> STATE_CACHE = new HashMap<>();
+    private static final Map<ServerLevel, Long> RETRY_AT = new HashMap<>();
 
     private static StateData state(ServerLevel level) {
-        ResourceKey<Level> key = level == null ? null : level.dimension();
-        if (key != null) {
-            StateData cached = STATE_CACHE.get(key);
-            if (cached != null) return cached;
+        var cached = STATE_CACHE.get(level);
+        if (cached != null) return cached;
+        long now = System.nanoTime();
+        Long retry = RETRY_AT.get(level);
+        if (retry != null && now - retry < 0) return failedRead();
+        var loaded = readFileState(statePath(level), retry != null);
+        if (loaded.readFailed) {
+            RETRY_AT.put(level, now + java.util.concurrent.TimeUnit.SECONDS.toNanos(5));
+        } else {
+            if (RETRY_AT.remove(level) != null) LOGGER.info("已重读结构状态，恢复此存档写入: {}", statePath(level));
+            STATE_CACHE.put(level, loaded);
         }
-        StateData fileState = readFileState(level);
-        StateData loaded = normalize(fileState != null ? fileState : new StateData());
-        if (key != null) STATE_CACHE.put(key, loaded);
         return loaded;
     }
 
-    private static StateData readFileState(ServerLevel level) {
-        Path path = statePath(level);
-        try {
-            if (!Files.exists(path)) return null;
-            try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-                StateData data = GSON.fromJson(reader, StateData.class);
-                // ★ 2026-09-26 修 W-8/I-5：**读成功 ⇒ 自动解除只读降级**。
-                //
-                // 原先降级标志只在 resetSnapshotCache()（服务端启停）才复位 ——
-                // 一次瞬时 IO 抖动（磁盘繁忙/杀软扫描）会让**整个会话**都写不进去，
-                // 玩家提交手绘路线时会吃 IllegalStateException，且只能重启服务端才恢复。
-                //
-                // 「能读就能写」—— 既然这次读成功了，说明 IO 已恢复，
-                // 没有理由继续拒绝写入。
-                if (degradedReadOnly) {
-                    degradedReadOnly = false;
-                    LOGGER.info("结构状态文件已可正常读取 —— 解除只读降级，恢复写入: {}", path);
-                }
-                return data != null ? data : null;
-            }
-        } catch (java.io.IOException e) {
-            // ★ 2026-09-26 修 WorkBuddy R-4（真实形态）：**IO 失败 ≠ 文件损坏**。
-            //
-            // 原先这里是 `catch (Exception e)` —— 任何异常（磁盘抖动 / 文件被占用 /
-            // 权限拒绝 / 瞬时 IO 错误）都被当成"结构状态文件损坏"，
-            // 直接 quarantineCorrupt 把**可能完好的** state.json
-            // 改名成 .corrupt.<ts> 并返回 null（空表）。
-            // 随后任何一次 save() 就把空表写回 ⇒ **结构与连接表全丢**
-            // （手绘路线的连接表也在这份 state 里 ⇒ READY 路线永不施工）。
-            //
-            // 这与 RoadChunkStore 的首载问题（R-5）是**同一类缺陷**：
-            // 把"读不出来"误判成"数据不存在"。IO 失败恰恰最不该按损坏处理。
-            //
-            // 修法（与 R-5 同构）：
-            //   · **不隔离、不改名** —— 保留磁盘原文件（数据可能完好）
-            //   · 置只读降级标志 ⇒ 本次会话**拒绝一切写入**，
-            //     绝不用空表覆盖真实 state.json
-            //   · 查询仍返回空（游戏不崩），生成任务失败可重试
-            // IO 恢复后（重进世界）自然复原。
-            LOGGER.error("读取结构状态文件失败（IO 异常，**不隔离、不改名**，"
-                    + "并进入只读降级以免空表覆盖真实数据）: {}", path, e);
-            degradedReadOnly = true;
-            return null;
-        } catch (RuntimeException e) {
-            // 只有**解析**失败（JSON 语法/结构不符）才是真正的损坏 ⇒ 才隔离
-            FileStorageIO.quarantineCorrupt(path, LOGGER, "结构状态文件损坏，已隔离");
-            return null;
-        }
+    private static StateData failedRead() {
+        var empty = new StateData();
+        empty.readFailed = true;
+        return empty;
     }
 
-    /**
-     * **只读降级标志**（★ 2026-09-26 修 WorkBuddy R-4）。
-     *
-     * <p>读 state.json 遇 {@code IOException}（磁盘抖动 / 被占用 / 权限）时置位 ——
-     * 此时内存拿到的是空表，但**磁盘上的真实数据可能完好**，
-     * 所以绝不能让它被覆盖。</p>
-     *
-     * <p>置位后：查询照常（返回空，游戏不崩）；**写路径一律拒绝**。
-     * 与 {@code RoadChunkStore.readOnlyDegraded}（R-5）同一套模式 ——
-     * 「宁可让生成任务失败重试，也不能把玩家的存档清空」。</p>
-     */
-    private static volatile boolean degradedReadOnly;
+    static StateData readFileState(Path path, boolean retrying) {
+        String json;
+        try {
+            // 分开读盘和解析：不得因为 Gson 包装了 IO 异常而隔离好文件。
+            json = Files.readString(path, StandardCharsets.UTF_8);
+        } catch (java.nio.file.NoSuchFileException absent) {
+            // 刚发生过读故障时，临时移走的文件不代表真正的新世界。
+            return retrying ? failedRead() : new StateData();
+        } catch (IOException e) {
+            LOGGER.error("无法读取结构文件，暂停此存档的结构写入并稍后重试: {}", path, e);
+            return failedRead();
+        }
+        try {
+            var data = GSON.fromJson(json, StateData.class);
+            if (data == null) throw new JsonParseException("结构状态必须是对象");
+            return normalize(data);
+        } catch (RuntimeException malformed) {
+            FileStorageIO.quarantineCorrupt(path, LOGGER, "结构状态文件损坏");
+            return Files.notExists(path) ? new StateData() : failedRead();
+        }
+    }
 
     private static StateData normalize(StateData state) {
         if (state.structureLocations == null) {
@@ -889,23 +898,20 @@ public final class StructureFileStorage {
 
     private static void save(ServerLevel level, StateData state) {
         if (!RoadLifecycle.allowsWrites()) return;
-        // ★ 2026-09-26 修 WorkBuddy R-4：只读降级期间**拒绝一切写入**。
-        //   否则会把"读失败得到的空表"写回 state.json，
-        //   覆盖磁盘上可能完好的真实数据（结构 + 连接表）⇒ 不可恢复。
-        //   抛异常而非静默 return：让调用方知道失败，而不是"看起来保存成功了"。
-        if (degradedReadOnly) {
-            throw new IllegalStateException(
-                    "structure state is in read-only degraded mode "
-                            + "(read failed; refusing to overwrite the real state file): "
-                            + statePath(level));
-        }
         try {
-            Path path = statePath(level);
-            FileStorageIO.writeStringAtomic(path, GSON.toJson(state));
+            writeFileState(statePath(level), state);
             bumpSnapshotVersion(level);
         } catch (IOException e) {
+            // 修改的是缓存中的可变对象，落盘失败后必须丢弃它，下次以磁盘为准。
+            STATE_CACHE.remove(level);
+            bumpSnapshotVersion(level);
             throw new IllegalStateException("failed to save structure state", e);
         }
+    }
+
+    static void writeFileState(Path path, StateData state) throws IOException {
+        if (state.readFailed) throw new IllegalStateException("结构状态尚未读全，拒绝覆盖原文件: " + path);
+        FileStorageIO.writeStringAtomic(path, GSON.toJson(state));
     }
 
     /**
@@ -916,7 +922,7 @@ public final class StructureFileStorage {
      */
     private static void bumpSnapshotVersion(ServerLevel level) {
         if (level == null) return;
-        SNAPSHOT_CACHE.bump(level.dimension());
+        SNAPSHOT_CACHE.bump(level);
     }
 
     /**
@@ -927,12 +933,7 @@ public final class StructureFileStorage {
     public static synchronized void resetSnapshotCache() {
         SNAPSHOT_CACHE.reset();
         STATE_CACHE.clear();
-        // ★ 2026-09-26：只读降级标志也必须复位。
-        //   它是"本次会话读失败"的临时状态，跨会话必须清零 ——
-        //   否则一次瞬时 IO 抖动会让该会话之后**再也无法保存**结构表。
-        //   resetSnapshotCache 由 CacheManager 在服务端启停时调用，
-        //   正是"新会话开始"的时刻。
-        degradedReadOnly = false;
+        RETRY_AT.clear();
     }
 
     private static Path statePath(ServerLevel level) {

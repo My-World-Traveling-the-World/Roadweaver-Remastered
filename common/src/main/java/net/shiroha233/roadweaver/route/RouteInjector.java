@@ -91,15 +91,13 @@ public final class RouteInjector {
                 continue;
             }
             // 取该区间对应的平滑点
-            List<BlockPos> segPath = subPathMonotonic(smoothed, from, to, searchFrom);
+            var slice = subPathMonotonic(smoothed, from, to, searchFrom);
+            List<BlockPos> segPath = slice.points();
             if (segPath.size() < 2) {
                 segPath = List.of(from, to);
             } else {
-                // 下一段从本段终点之后开始找
-                searchFrom = smoothed.indexOf(segPath.get(segPath.size() - 1));
-                if (searchFrom < 0) {
-                    searchFrom = 0;
-                }
+                // 重访同一格时必须保留本次实际命中的下标，按坐标回查会跳回第一次经过的位置。
+                searchFrom = slice.end();
             }
             StructureConnection conn = new StructureConnection(from, to);
             plan.segments.add(new InjectionSegment(conn, segPath, ctrl.get(i).kind(), i));
@@ -140,7 +138,7 @@ public final class RouteInjector {
      * 「从起点往前走遇到的最近点」，闭合回路因此能正确取到最后一段。</p>
      */
     private static List<BlockPos> subPath(List<BlockPos> smoothed, BlockPos from, BlockPos to) {
-        return subPathMonotonic(smoothed, from, to, 0);
+        return subPathMonotonic(smoothed, from, to, 0).points();
     }
 
     /**
@@ -150,22 +148,24 @@ public final class RouteInjector {
      * @param searchFrom 本段起点搜索的下界（上一段的结束下标）——
      *                   保证多段依次截取时不会回头命中前面的点
      */
-    private static List<BlockPos> subPathMonotonic(List<BlockPos> smoothed, BlockPos from,
+    private static Slice subPathMonotonic(List<BlockPos> smoothed, BlockPos from,
                                                   BlockPos to, int searchFrom) {
         if (smoothed == null || smoothed.isEmpty()) {
-            return List.of();
+            return new Slice(searchFrom, List.of());
         }
         int lo = Math.max(0, Math.min(searchFrom, smoothed.size() - 1));
         int startIdx = nearestXZ(smoothed, from, lo, smoothed.size());
         if (startIdx < 0) {
-            return List.of();
+            return new Slice(searchFrom, List.of());
         }
         int endIdx = nearestXZ(smoothed, to, startIdx, smoothed.size());
         if (endIdx < 0 || startIdx >= endIdx) {
-            return List.of();
+            return new Slice(searchFrom, List.of());
         }
-        return new ArrayList<>(smoothed.subList(startIdx, endIdx + 1));
+        return new Slice(endIdx, new ArrayList<>(smoothed.subList(startIdx, endIdx + 1)));
     }
+
+    private record Slice(int end, List<BlockPos> points) {}
 
     /** 在 {@code [from, to)} 区间内找 XZ 最近的下标。 */
     private static int nearestXZ(List<BlockPos> list, BlockPos at, int from, int to) {
@@ -181,6 +181,7 @@ public final class RouteInjector {
             if (d2 < bestD2) {
                 bestD2 = d2;
                 best = i;
+                if (d2 == 0) break; // 第一个精确命中就是原有择优规则的最优点。
             }
         }
         return best;

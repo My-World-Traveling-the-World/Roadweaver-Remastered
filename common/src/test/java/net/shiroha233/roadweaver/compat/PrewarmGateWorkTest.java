@@ -198,12 +198,24 @@ class PrewarmGateWorkTest {
         f.assertResolved(gate, PrewarmGateWork.Resolution.ABSOLUTE_CAP);
     }
 
-    @Test void movingProgressCannotBypassDefaultThirtyMinuteCap() {
+    @Test void disabledStallWindowStillEndsADeadProvider() {
+        var f = new Fixture();
+        var gate = PrewarmGateWork.await(f, f, () -> TimeUnit.MILLISECONDS.toNanos(f.millis), f.resolutions::add,
+                new PrewarmGateWork.Limits(250, 0, 0, 1000), 0);
+        f.pollAt(0);
+        f.pollAt(1000);
+        f.assertResolved(gate, PrewarmGateWork.Resolution.ABSOLUTE_CAP);
+    }
+
+    @Test void progressingWallCanFinishAfterThirtyMinutes() {
         Fixture f = new Fixture();
         var gate = f.start(0);
         f.pollAt(0);
         f.signature = "new-progress";
         f.pollAt(1800000);
-        f.assertResolved(gate, PrewarmGateWork.Resolution.ABSOLUTE_CAP);
+        assertFalse(gate.isDone());
+        f.ready = true;
+        f.pollAt(1800250);
+        f.assertResolved(gate, PrewarmGateWork.Resolution.READY);
     }
 }

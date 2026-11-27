@@ -8,7 +8,7 @@ import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.server.MinecraftServer;
 import net.shiroha233.roadweaver.compat.GreatWallPrewarmCompat;
 import net.shiroha233.roadweaver.compat.RoadStartupGate;
-import net.shiroha233.roadweaver.apiimpl.LoadSignalBridge;
+import net.shiroha233.roadweaver.compat.RoadRiverStartupProbe;
 import net.shiroha233.roadweaver.generation.InitialGenManager;
 import net.shiroha233.roadweaver.persistence.RoadConstructionLedger;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
@@ -38,7 +38,7 @@ public abstract class MinecraftServerMixin {
             boolean riversInstalled = net.fabricmc.loader.api.FabricLoader.getInstance()
                     .isModLoaded("streamsreflowing");
             var prerequisites = RoadStartupGate.await(
-                    () -> LoadSignalBridge.initialRiversReady(riversInstalled),
+                    RoadRiverStartupProbe.forWorld(level, riversInstalled),
                     GreatWallPrewarmCompat::isPrewarmComplete,
                     () -> GreatWallPrewarmCompat.awaitPrewarmForInitialGeneration(level));
             if (prerequisites.isDone() && !prerequisites.isCompletedExceptionally()) {

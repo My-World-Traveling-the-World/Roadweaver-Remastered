@@ -431,6 +431,7 @@ public final class RouteRoadDataPatcher {
                                                    RoadData road) {
         List<RoadSpan> out = new ArrayList<>();
 
+        List<int[]> ranges = new ArrayList<>();
         int i = 0;
         while (i < mapped.size()) {
             RouteKind kind = mapped.get(i).kind();
@@ -448,85 +449,47 @@ public final class RouteRoadDataPatcher {
             // ★ end >= start：单点也要出 span，否则 targetY 抬高却没有对应跨度
             if (type != null) {
                 out.add(new RoadSpan(centers.get(start), centers.get(end), type));
+                ranges.add(new int[]{start, end});
             }
             i++;
         }
 
-        // ── 保留管线 span（玩家未覆盖的）──
-        //
-        // 不再按类型白名单筛选：targetY 是这些 span 算出来的，
-        // 丢掉任何一个都会让高度与几何不自洽（审计 P1-1）。
-        // 唯一的例外是「已被玩家 span 覆盖」的区间 —— 那种重复保留会触发
-        // RoadDataValidator 的 overlapping-physical-spans。
-        if (road.spans() != null) {
-            // 建索引：管线 span 的端点也是 segment 中心，用下标比较最精确。
-            // 不能用坐标算术当序数（路径反向/斜向时不单调，会误判重叠）。
-            Map<BlockPos, Integer> indexOf = new HashMap<>();
-            for (int k = 0; k < centers.size(); k++) {
-                indexOf.putIfAbsent(centers.get(k), k);
+        // 玩家只覆盖桥隧类型。保护缺口、路口和既有路网的复用证据必须完整传给施工。
+        Map<BlockPos, Integer> indexOf = new HashMap<>();
+        for (int k = 0; k < centers.size(); k++) indexOf.putIfAbsent(centers.get(k), k);
+        for (RoadSpan span : road.spans()) {
+            if (span.type() != SpanType.BRIDGE && span.type() != SpanType.TUNNEL) {
+                out.add(span);
+                continue;
             }
-            List<int[]> playerRanges = playerSpanRanges(out, indexOf);
-
-            for (RoadSpan s : road.spans()) {
-                if (s == null || s.type() == null) {
-                    continue;
-                }
-                if (coveredByPlayerSpan(s, indexOf, playerRanges)) {
-                    continue;
-                }
-                out.add(s);
-            }
+            appendUncovered(out, span, centers, indexOf, ranges);
         }
         return out;
     }
 
-    /** 把玩家 span 转成 {startIndex, endIndex} 区间列表（端点不在表里的跳过）。 */
-    private static List<int[]> playerSpanRanges(List<RoadSpan> playerSpans,
-                                                Map<BlockPos, Integer> indexOf) {
-        List<int[]> out = new ArrayList<>();
-        for (RoadSpan s : playerSpans) {
-            if (s.type() != SpanType.BRIDGE && s.type() != SpanType.TUNNEL) {
-                continue;
-            }
-            Integer a = indexOf.get(s.start());
-            Integer b = indexOf.get(s.end());
-            if (a == null || b == null) {
-                continue;
-            }
-            out.add(new int[]{Math.min(a, b), Math.max(a, b)});
+    private static void appendUncovered(List<RoadSpan> out, RoadSpan span, List<BlockPos> centers,
+                                        Map<BlockPos, Integer> indexOf, List<int[]> ranges) {
+        Integer a = indexOf.get(span.start()), b = indexOf.get(span.end());
+        if (a == null || b == null || ranges.isEmpty()) {
+            out.add(span);
+            return;
         }
-        return out;
+        // 按站序取闭区间差集。边缘相交只能改动相交站，其余部分保持原有方向。
+        int first = Math.min(a, b), last = Math.max(a, b), cursor = first;
+        for (int[] range : ranges) {
+            if (range[1] < cursor) continue;
+            if (range[0] > last) break;
+            if (cursor < range[0]) addSlice(out, centers, cursor, range[0] - 1, span.type(), a > b);
+            cursor = Math.max(cursor, range[1] + 1);
+            if (cursor > last) return;
+        }
+        if (cursor == first) out.add(span);
+        else addSlice(out, centers, cursor, last, span.type(), a > b);
     }
 
-    /**
-     * 该管线 span 是否已被某个玩家 span 覆盖。
-     *
-     * <p>用**下标区间重叠**判断，而不是坐标比较 —— 两者都源自同一份 segment
-     * 中心列表，下标是唯一的精确顺序。端点查不到时退回起终点全等判断
-     * （保守：宁可保留也不误删）。</p>
-     */
-    private static boolean coveredByPlayerSpan(RoadSpan candidate,
-                                               Map<BlockPos, Integer> indexOf,
-                                               List<int[]> playerRanges) {
-        Integer a = indexOf.get(candidate.start());
-        Integer b = indexOf.get(candidate.end());
-        if (a == null || b == null) {
-            for (int[] r : playerRanges) {
-                // 无法定位就只认「覆盖了整条路径」这种极端情况，避免误删
-                if (r[0] == 0 && r[1] == Integer.MAX_VALUE) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        int c0 = Math.min(a, b);
-        int c1 = Math.max(a, b);
-        for (int[] r : playerRanges) {
-            // 闭区间有重叠即算覆盖
-            if (r[0] <= c1 && c0 <= r[1]) {
-                return true;
-            }
-        }
-        return false;
+    private static void addSlice(List<RoadSpan> out, List<BlockPos> centers, int first, int last,
+                                 SpanType type, boolean reverse) {
+        // 单站残段交给通用校验决定能否施工，不能因长度不足就悄悄删除跨度。
+        out.add(new RoadSpan(centers.get(reverse ? last : first), centers.get(reverse ? first : last), type));
     }
 }

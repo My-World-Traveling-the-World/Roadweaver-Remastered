@@ -81,10 +81,13 @@ public final class RoadStartupGate {
             }
             wallWait.whenComplete((ignored, failure) -> {
                 try {
-                    if (failure == null && wallReady.getAsBoolean()) result.complete(null);
-                    // 旧长城门超时会正常返回；这只是放弃等待，不能当成确实就绪。
-                    else result.completeExceptionally(failure != null ? failure
-                            : new IllegalStateException("Great Wall gate released before readiness"));
+                    if (result.isDone()) return;
+                    if (failure != null) result.completeExceptionally(failure);
+                    // 等长城期间河流或本世界可能已经停止；旧的 ready 不得启动新一轮道路。
+                    else if (!riversReady.getAsBoolean())
+                        result.completeExceptionally(new IllegalStateException("河流在等待长城期间失去就绪状态"));
+                    else if (wallReady.getAsBoolean()) result.complete(null);
+                    else result.completeExceptionally(new IllegalStateException("Great Wall gate released before readiness"));
                 } catch (RuntimeException | LinkageError probeFailure) {
                     // 完成回调内抛错也必须传给道路，不能只让 whenComplete 的衍生 Future 失败。
                     result.completeExceptionally(probeFailure);

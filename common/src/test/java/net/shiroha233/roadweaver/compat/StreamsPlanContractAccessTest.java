@@ -30,13 +30,36 @@ class StreamsPlanContractAccessTest {
             }
             public RiverPlanApi.Startup startup() { return new RiverPlanApi.Startup(11, RiverPlanApi.Phase.COMPLETE, ""); }
         };
+        var status = new java.util.concurrent.atomic.AtomicReference<>(session.startup());
         RiverPlanApi.register(new RiverPlanApi.Provider() {
             public RiverPlanApi.Session open(Object world) {
                 if (world != identity) throw new IllegalStateException("错误世界");
                 return session;
             }
-            public RiverPlanApi.Startup startup(Object world) { return session.startup(); }
+            public RiverPlanApi.Startup startup(Object world) {
+                assertSame(identity, world, "启动查询必须使用与采样相同的世界句柄");
+                return status.get();
+            }
         });
+        // 通过生产 API 测六种状态，不能用广播代替失败并留下永久轮询。
+        var river = RoadRiverStartupProbe.forWorld(identity, true);
+        for (var phase : RiverPlanApi.Phase.values()) {
+            status.set(new RiverPlanApi.Startup(11, phase, "本世界探针"));
+            switch (phase) {
+                case NOT_STARTED, BUILDING -> assertFalse(river.getAsBoolean());
+                case COMPLETE, DISABLED -> assertTrue(river.getAsBoolean());
+                case FAILED, STOPPED -> {
+                    var gate = RoadStartupGate.await(river, () -> fail("不能咨询长城"),
+                            () -> fail("不能等长城"), (task, delay) -> fail("不能永久排队"));
+                    var cause = assertThrows(java.util.concurrent.CompletionException.class, gate::join).getCause();
+                    assertTrue(cause.getMessage().contains(phase.name()));
+                    assertTrue(cause.getMessage().contains("本世界探针"));
+                }
+            }
+        }
+        status.set(new RiverPlanApi.Startup(12, RiverPlanApi.Phase.COMPLETE, ""));
+        assertThrows(IllegalStateException.class, river::getAsBoolean);
+        assertTrue(RoadRiverStartupProbe.forWorld(identity, true).getAsBoolean(), "新会话只能由新门消费");
         assertSame(session, StreamsPlanContractAccess.openHandle(identity));
         assertThrows(IllegalStateException.class, () -> StreamsPlanContractAccess.openHandle(null));
         var access = new StreamsPlanContractAccess();
@@ -68,7 +91,8 @@ class StreamsPlanContractAccessTest {
         try (var loader = new URLClassLoader(new java.net.URL[]{location}, getClass().getClassLoader()) {
             @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                 if (name.startsWith("dev.streamsreflowing.")) throw new ClassNotFoundException(name);
-                if (name.startsWith("net.shiroha233.roadweaver.compat.Streams")) {
+                if (name.startsWith("net.shiroha233.roadweaver.compat.Streams")
+                        || name.startsWith(RoadRiverStartupProbe.class.getName())) {
                     synchronized (getClassLoadingLock(name)) {
                         Class<?> type = findLoadedClass(name);
                         if (type == null) type = findClass(name);
@@ -81,6 +105,10 @@ class StreamsPlanContractAccessTest {
         }) {
             Class<?> type = loader.loadClass(StreamsReflowingCompat.class.getName());
             assertEquals(false, type.getMethod("isAvailable").invoke(null));
+            var probe = loader.loadClass(RoadRiverStartupProbe.class.getName());
+            var absent = (java.util.function.BooleanSupplier) probe.getMethod("forWorld", Object.class, boolean.class)
+                    .invoke(null, new Object(), false);
+            assertTrue(absent.getAsBoolean(), "不装河流时道路独立启动");
         }
     }
 

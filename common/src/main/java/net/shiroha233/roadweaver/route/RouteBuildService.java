@@ -11,8 +11,10 @@ import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.persistence.WorldDataProvider;
+import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
+import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 import net.shiroha233.roadweaver.route.RouteInjector.InjectionPlan;
-import net.shiroha233.roadweaver.route.RouteInjector.InjectionSegment;
+
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,32 +89,23 @@ public final class RouteBuildService {
             return 0;
         }
 
-        // ── ② 登记：让施工时知道这些连接来自手绘（patcher 据此覆盖高度/类型）──
+        // 只登记本次获准的新连接，零新增的草稿不能改写他人的桥高或预置路径。
+        var saved = StructureFileStorage.addPlayerConnections(level, route.id(), plan.connections());
+        var keys = saved.stream().map(PlannedPathKey::of)
+                .collect(java.util.stream.Collectors.toSet());
+        var accepted = new InjectionPlan();
+        for (var segment : plan.segments()) {
+            if (keys.remove(PlannedPathKey.of(segment.connection())))
+                accepted.segments().add(segment);
+        }
+        if (accepted.isEmpty()) return 0;
+        // 持久化已接纳的连接后才向工作线程发布玩家意图。
         RouteBuildRegistry.putRoute(level, route);
-        RouteBuildRegistry.registerPlan(level, route.id(), plan);
+        RouteBuildRegistry.registerPlan(level, route.id(), accepted);
+        primePlannedPaths(level, accepted);
+        int added = accepted.size();
 
-        // ── ③ 预置路径：让管线走「不搜索」分支 ──
-        primePlannedPaths(level, plan);
-
-        // ── ④ 把连接写进 WorldDataProvider，交给现有调度 ──
-        WorldDataProvider provider = WorldDataProvider.getInstance();
-        List<StructureConnection> existing = provider.getStructureConnections(level);
-        List<StructureConnection> merged = new ArrayList<>(existing == null ? List.of() : existing);
-
-        int added = 0;
-        for (InjectionSegment seg : plan.segments()) {
-            if (!containsConnection(merged, seg.connection())) {
-                merged.add(new StructureConnection(seg.connection().from(),
-                        seg.connection().to(), ConnectionStatus.PLANNED));
-                added++;
-            }
-        }
-        if (added > 0) {
-            provider.setStructureConnections(level, merged);
-        }
-
-        LOGGER.info("手绘路线已提交施工 route={} 分段={} 新增连接={} 总连接={}",
-                route.id(), plan.size(), added, merged.size());
+        LOGGER.info("手绘路线已提交施工 route={} 分段={} 新增连接={}", route.id(), plan.size(), added);
 
         // ★ 2026-09-25 修 R-2：**每次提交都重新武装预加载**。
         //
@@ -226,43 +219,7 @@ public final class RouteBuildService {
         }
     }
 
-    /**
-     * 按连接起终点去重时用的判据。
-     *
-     * <h2>★ 审计 R3-P2-13：必须**方向无关**，与缓存键同一套语义</h2>
-     * 原实现用 {@code from/to} **顺序比较**，而 {@code PlannedPathCache} 的
-     * {@link net.shiroha233.roadweaver.planning.path.PlannedPathKey} 构造时会
-     * 按坐标排序（**方向无关**）。两者不一致会造成「键空间分叉」：
-     * <pre>
-     *   玩家画 A→B→A（原路返回 / U 形掉头）
-     *     → 连接 (A,B) 与 (B,A) 都通过去重（顺序不同 ⇒ 都算"新"）
-     *     → 但两条连接在缓存里是**同一个 PlannedPathKey**
-     *     → 后提交的覆盖先提交的，其中一条被倒序使用
-     * </pre>
-     * 现在改用 {@code PlannedPathKey} 比较，与缓存、与登记表全部统一 ——
-     * 一条路径对应一条连接，不会出现"两条连接共用一个缓存条目"。
-     *
-     * <p>注意：{@code StructureConnection} 是含 {@code status} 的 record、
-     * 没有任何方向归一化（已核对 {@code StructureConnection.java:12}），
-     * 所以这个判据必须在这里做，不能指望上游。</p>
-     */
-    private static boolean containsConnection(List<StructureConnection> list, StructureConnection target) {
-        if (target == null) {
-            return false;
-        }
-        var targetKey = net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(target);
-        for (StructureConnection c : list) {
-            if (c == null) {
-                continue;
-            }
-            // 方向无关：PlannedPathKey 构造时对端点排序
-            if (targetKey != null && targetKey.equals(
-                    net.shiroha233.roadweaver.planning.path.PlannedPathKey.of(c))) {
-                return true;
-            }
-        }
-        return false;
-    }
+
 
     /**
      * 提供「(x,z) → 地面高度」的回调，供 {@link RouteSmoother} 让路段贴地。
@@ -353,8 +310,7 @@ public final class RouteBuildService {
      * 这样消除了「两份数据必须手动保持同步」这个根本问题 ——
      * 无论何时重进世界，索引都能从权威副本重新长出来。
      *
-     * <p>对未提交（DRAFT）的路线也一并登记：它随时可能被提交，
-     * 提前登记无副作用（登记表按连接键索引，不影响渲染与调度）。</p>
+     * <p>只恢复已提交的路线，编辑中的草稿不能占用同端点的生成任务。</p>
      *
      * @return 重建的连接条数
      */
@@ -367,16 +323,22 @@ public final class RouteBuildService {
         TerrainSamplingCache cache = new TerrainSamplingCache();
         RouteSmoother.HeightProvider heightProvider = groundProvider(level, cache);
         for (PlayerRoute route : routes) {
-            if (route == null || !route.isDrawable()) {
+            if (route == null || !route.isDrawable()
+                    || route.status() != RouteStatus.READY && route.status() != RouteStatus.BUILDING) {
                 continue;
             }
             try {
                 // 路线本体也放回登记表 —— RouteRoadDataPatcher 需要完整 PlayerRoute
                 RouteBuildRegistry.putRoute(level, route);
                 InjectionPlan plan = RouteInjector.plan(level, route, heightProvider);
-                if (plan.isEmpty()) {
-                    continue;
+                var admitted = StructureFileStorage.acceptedPlayerEdges(level, route.id());
+                if (admitted != null) {
+                    // 老档缺少接纳清单；有清单的新提交只恢复成功分段，每个键仅消费一次。
+                    var remaining = new java.util.HashSet<>(admitted);
+                    plan.segments().removeIf(seg -> !remaining.remove(
+                            StructureFileStorage.playerEdge(seg.connection())));
                 }
+                if (plan.isEmpty()) continue;
                 int n = RouteBuildRegistry.registerPlan(level, route.id(), plan);
                 total += n;
                 // 顺带把路径预置回缓存：重进世界后 PlannedPathCache 可能已被清空

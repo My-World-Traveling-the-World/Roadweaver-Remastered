@@ -123,7 +123,8 @@ public final class RoadGenerationService {
             PathFeatureConfig featureConfig = (feature != null && feature.config() instanceof PathFeatureConfig rfc)
                     ? rfc : new PathFeatureConfig();
             RoadGenerationConfig genConfig = RoadGenerationConfig.from(ConfigService.get());
-            return new Road(level, conn, featureConfig, genConfig)
+            return new Road(level, conn, featureConfig, genConfig,
+                    net.shiroha233.roadweaver.route.PlayerRouteBuildIntent.forConnection(level, conn))
                     .generateRoad(false);
         } catch (RuntimeException failure) {
             LOGGER.warn("【并行道路改线无法重建，保留原路线】 " + "RoadWeaver braid reroute could not regenerate {}->{}; keeping the original route",

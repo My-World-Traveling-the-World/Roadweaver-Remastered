@@ -33,7 +33,7 @@ public final class RouteCodecTest {
         System.out.println("  ok  " + what);
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
 
@@ -42,6 +42,23 @@ public final class RouteCodecTest {
         testKindSurvivesRoundTrip();
         testStatusSurvivesRoundTrip();
         testNegativeHeight();
+        // 用目录冒充文件触发真正的读故障；重读原始字节成功前不得清掉此存档的保护。
+        var root = java.nio.file.Files.createTempDirectory("rw-route-read");
+        var file = root.resolve("routes.json");
+        try {
+            var access = new RouteStorage.FileAccess();
+            java.nio.file.Files.createDirectory(file);
+            RouteStorage.loadFromFile(file, access);
+            require(access.readFailed, "手绘路线读失败必须阻止写回");
+            java.nio.file.Files.delete(file);
+            var saved = PlayerRoute.create("恢复的路线");
+            java.nio.file.Files.writeString(file, "{\"routes\":[" + encode(saved) + "]}");
+            var loaded = RouteStorage.loadFromFile(file, access);
+            require(!access.readFailed && saved.equals(loaded.get(saved.id())), "重读成功才恢复本周目的原路线");
+        } finally {
+            java.nio.file.Files.deleteIfExists(file);
+            java.nio.file.Files.deleteIfExists(root);
+        }
 
         System.out.println("\n全部通过（" + checks + " 项）");
     }

@@ -90,8 +90,17 @@ public final class Road {
     final PathFeatureConfig featureConfig;
     final RoadGenerationConfig genConfig;
 
+    private final java.util.function.UnaryOperator<RoadData> buildIntent;
+
     public Road(ServerLevel level, StructureConnection connection, 
                 PathFeatureConfig featureConfig, RoadGenerationConfig genConfig) {
+        this(level, connection, featureConfig, genConfig, java.util.function.UnaryOperator.identity());
+    }
+
+    /** 施工入口交付玩家意图；几何层不依赖编辑器，自动道路使用原结果。 */
+    public Road(ServerLevel level, StructureConnection connection, PathFeatureConfig featureConfig,
+                RoadGenerationConfig genConfig, java.util.function.UnaryOperator<RoadData> buildIntent) {
+        this.buildIntent = buildIntent;
         this.level = level;
         this.connection = connection;
         this.featureConfig = featureConfig;
@@ -324,6 +333,11 @@ public final class Road {
             // Close them one final time so validation observes the same
             // walkable grade the paver will build.
             rd = RoadDataValidator.repairFinalHeightSteps(rd);
+            // 水域、结构、路边建筑和存档都必须看到同一条最终道路，包括玩家指定的桥高与隧道。
+            rd = buildIntent.apply(rd);
+            segments = rd.roadSegmentList();
+            spans = rd.spans();
+            targetY = rd.targetY();
             RoadDataValidator.ValidationResult validation = RoadDataValidator.validateFinalRoad(rd);
             if (!validation.valid()) {
                 LOGGER.error("【最终道路数据无效，拒绝路线】 " + "RoadWeaver rejected invalid finalized road {} -> {} reason={} index={} pos={} detail={}",
@@ -367,7 +381,8 @@ public final class Road {
                 if ("ordinary_construction_in_water".equals(waterValidation.reason())) {
                     RoadData rerouted = tryRiverRepair(rd, cache, terrain, streams);
                     if (rerouted != rd) {
-                        rd = rerouted;
+                        // 绕河重新求解了高度和跨度，须对新中心线重新施加此分段的手绘意图。
+                        rd = buildIntent.apply(rerouted);
                         segments = rd.roadSegmentList();
                         spans = rd.spans();
                         targetY = rd.targetY();
@@ -530,6 +545,8 @@ public final class Road {
                                     + "attempt={} connection={}->{}", structureAttempt + 1, rawStart, rawEnd);
                     break;
                 }
+                // 结构绕行也重建了全线剖面，水域和保护判定必须使用将被写盘的那一份。
+                rebuilt = buildIntent.apply(rebuilt);
                 FinalRoadWaterValidator.ValidationResult rebuiltWater =
                         FinalRoadWaterValidator.validate(level, rebuilt, cache, streams);
                 if (!rebuiltWater.safe()) {

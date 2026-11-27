@@ -70,24 +70,36 @@ public final class RouteStorage {
      *       不隔离的话，下一次编辑就会把空表写回，玩家路线**永久丢失**
      *       （审计 R3-P3-4 修的就是这个）。</li>
      *   <li><b>单条路线解析失败</b> → 跳过该条、其余保留（{@code resultOrPartial}）。</li>
-     *   <li><b>读文件 IOException</b> / 列表结构异常 → 返回空表并记日志。</li>
+     *   <li>读失败或列表不完整：可显示已读内容，重新完整载入前禁止全量覆盖。</li>
      * </ul>
      * 无论哪条路径都**不抛异常**，绝不因为存档坏了把游戏搞崩。
      */
     public static Map<UUID, PlayerRoute> loadAll(ServerLevel level) {
-        Map<UUID, PlayerRoute> out = new LinkedHashMap<>();
         if (level == null) {
-            return out;
+            return Map.of();
         }
         Path path = fileFor(level);
-        if (!Files.exists(path)) {
-            return out;
+        var access = writeLock(level);
+        synchronized (access) {
+            return loadFromFile(path, access);
         }
+    }
+
+    static final class FileAccess {
+        boolean readFailed;
+    }
+
+    static Map<UUID, PlayerRoute> loadFromFile(Path path, FileAccess access) {
+        Map<UUID, PlayerRoute> out = new LinkedHashMap<>();
         String text;
         try {
             text = Files.readString(path, StandardCharsets.UTF_8);
+        } catch (java.nio.file.NoSuchFileException absent) {
+            // 首次新建可写；已读失败的文件须看到完整内容才能解除只读。
+            return out;
         } catch (IOException e) {
-            LOGGER.warn("读取手绘路线失败，按空处理: {}", path, e);
+            access.readFailed = true;
+            LOGGER.warn("读取手绘路线失败，重新载入成功前暂停覆盖此存档的路线: {}", path, e);
             return out;
         }
         // 顶层解析单独 catch：只有「整个文件坏了」才需要隔离
@@ -96,19 +108,20 @@ public final class RouteStorage {
             root = JsonParser.parseString(text);
         } catch (RuntimeException e) {
             LOGGER.error("手绘路线文件损坏，已隔离原文件以避免被空表覆盖: {}", path, e);
-            quarantineCorrupt(path);
+            access.readFailed = !quarantineCorrupt(path);
             return out;
         }
         try {
-            List<PlayerRoute> routes = decodeList(root);
+            access.readFailed = false;
+            List<PlayerRoute> routes = decodeList(root, access);
             for (PlayerRoute r : routes) {
                 if (r != null && r.id() != null) {
                     out.put(r.id(), r);
                 }
             }
         } catch (RuntimeException e) {
-            // 单条解析失败已在 decodeList 内跳过；到这里说明是结构性问题
-            LOGGER.warn("解析手绘路线列表失败，按空处理: {}", path, e);
+            access.readFailed = true;
+            LOGGER.warn("无法完整读取手绘路线列表，暂停覆盖原文件: {}", path, e);
         }
         return out;
     }
@@ -119,7 +132,7 @@ public final class RouteStorage {
      * <p>改名失败只记日志 —— 隔离是「尽力而为」的抢救手段，
      * 不能因为它失败而让读流程抛出去。</p>
      */
-    private static void quarantineCorrupt(Path path) {
+    private static boolean quarantineCorrupt(Path path) {
         try {
             Path quarantine = path.resolveSibling(path.getFileName()
                     + ".corrupt-" + System.currentTimeMillis());
@@ -127,8 +140,10 @@ public final class RouteStorage {
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             LOGGER.error("已把损坏的手绘路线文件保留为 {}（原文件内容未丢失，可人工抢救）",
                     quarantine);
+            return true;
         } catch (IOException e) {
             LOGGER.warn("隔离损坏的手绘路线文件失败（将保持原样）: {}", path, e);
+            return false;
         }
     }
 
@@ -141,23 +156,27 @@ public final class RouteStorage {
      */
     private static final int MAX_POINTS_PER_ROUTE = 4096;
 
-    private static List<PlayerRoute> decodeList(JsonElement root) {
+    private static List<PlayerRoute> decodeList(JsonElement root, FileAccess access) {
         // 期望格式：{"routes":[...]}；也兼容「直接就是数组」
         JsonElement array = root;
         if (root != null && root.isJsonObject() && root.getAsJsonObject().has("routes")) {
             array = root.getAsJsonObject().get("routes");
         }
         if (array == null || !array.isJsonArray()) {
-            return List.of();
+            throw new IllegalArgumentException("手绘路线缺少 routes 数组");
         }
         List<PlayerRoute> result = new ArrayList<>();
         Codec<PlayerRoute> codec = PlayerRoute.CODEC;
         for (JsonElement e : array.getAsJsonArray()) {
             codec.parse(JsonOps.INSTANCE, e)
-                    .resultOrPartial(err -> LOGGER.warn("跳过一条解析失败的路线: {}", err))
+                    .resultOrPartial(err -> {
+                        access.readFailed = true;
+                        LOGGER.warn("手绘路线解析不完整，保留原存档: {}", err);
+                    })
                     .ifPresent(r -> {
                         // ★ 审计 R3-P3-4：点数上限校验，防手工编辑的存档卡死服务端
                         if (r != null && r.pointCount() > MAX_POINTS_PER_ROUTE) {
+                            access.readFailed = true;
                             LOGGER.warn("跳过一条点数异常巨大的路线 id={} points={}（上限 {}）",
                                     r.id(), r.pointCount(), MAX_POINTS_PER_ROUTE);
                             return;
@@ -208,16 +227,17 @@ public final class RouteStorage {
         }
 
         // 串行化：与同维度的其他写入互斥（见方法注释 P2-1）
-        synchronized (writeLock(level)) {
+        var access = writeLock(level);
+        synchronized (access) {
+            if (access.readFailed) return false;
             try {
                 Files.createDirectories(path.getParent());
 
                 var arr = new com.google.gson.JsonArray();
                 Codec<PlayerRoute> codec = PlayerRoute.CODEC;
                 for (PlayerRoute r : snapshot) {
-                    codec.encodeStart(JsonOps.INSTANCE, r)
-                            .resultOrPartial(err -> LOGGER.warn("序列化路线失败，跳过: {}", err))
-                            .ifPresent(arr::add);
+                    // 全量替换只有在每条都成功编码后才安全，跳过一条会永久丢失它。
+                    arr.add(codec.encodeStart(JsonOps.INSTANCE, r).getOrThrow(IllegalArgumentException::new));
                 }
                 var root = new com.google.gson.JsonObject();
                 root.add("routes", arr);
@@ -241,11 +261,11 @@ public final class RouteStorage {
      * <p>用 {@code WeakHashMap} 而不是全局锁：不同维度的写互不影响，
      * 而且 ServerLevel 回收后锁对象也跟着回收，不泄漏。</p>
      */
-    private static final Map<ServerLevel, Object> WRITE_LOCKS =
+    private static final Map<ServerLevel, FileAccess> WRITE_LOCKS =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
-    private static Object writeLock(ServerLevel level) {
-        return WRITE_LOCKS.computeIfAbsent(level, k -> new Object());
+    private static FileAccess writeLock(ServerLevel level) {
+        return WRITE_LOCKS.computeIfAbsent(level, k -> new FileAccess());
     }
 
     // ★ 审计 R3-P3-2：`put(level, route)` / `remove(level, id)` 已删除。

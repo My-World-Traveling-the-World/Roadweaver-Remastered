@@ -4,7 +4,6 @@ package net.shiroha233.roadweaver.compat;
 import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
 import net.shiroha233.roadweaver.api.incoming.RiverReadinessApi;
-import net.shiroha233.roadweaver.apiimpl.LoadSignalBridge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -111,15 +110,17 @@ class RoadStartupGateTest {
         assertTrue(gate.isCompletedExceptionally());
     }
 
-    @Test void roadAdapterReadsTheSharedRiverApiAndOnlyBypassesAbsentMod() {
-        RiverReadinessApi.reset();
-        assertFalse(LoadSignalBridge.initialRiversReady(true));
-        assertTrue(LoadSignalBridge.initialRiversReady(false));
-        // 这里仅用契约模拟提供方，断言的是道路读取；并不代替河流发布正确性的测试。
+    @Test void riverFailureAfterWallWaitCannotUseObsoleteReadyBroadcast() {
+        Fixture f = new Fixture();
+        f.rivers = true;
+        var gate = f.start();
+        assertEquals(1, f.wallWaits);
+        f.rivers = false;
+        f.wall = true;
         RiverReadinessApi.markReady("streams");
-        assertTrue(LoadSignalBridge.initialRiversReady(true));
-        RiverReadinessApi.reset();
-        assertFalse(LoadSignalBridge.initialRiversReady(true), "重开前重置必须重新等待");
+        f.wallFuture.complete(null);
+        assertTrue(gate.isCompletedExceptionally());
+        assertEquals(1, f.wallQueries, "河流失效后不能再读取长城成功状态");
     }
 
     @Test void wallProbeFailureAfterCompletionSettlesRoadFailure() {
@@ -142,7 +143,7 @@ class RoadStartupGateTest {
         String stop = java.nio.file.Files.readString(root.resolve(
                 "fabric/src/main/java/net/shiroha233/roadweaver/planning/fabric/ServerPlanningHooks.java"));
         assertTrue(entry.contains("var prerequisites = RoadStartupGate.await("));
-        assertTrue(entry.contains("() -> LoadSignalBridge.initialRiversReady(riversInstalled)"));
+        assertTrue(entry.contains("RoadRiverStartupProbe.forWorld(level, riversInstalled)"));
         assertTrue(entry.contains("prerequisites.isDone() && !prerequisites.isCompletedExceptionally()"));
         assertTrue(entry.contains("if (failure != null)"));
         assertTrue(entry.contains("RoadLifecycle.isStopping()"));

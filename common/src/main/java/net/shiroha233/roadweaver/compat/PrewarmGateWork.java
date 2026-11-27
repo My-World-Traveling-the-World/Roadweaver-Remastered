@@ -87,8 +87,9 @@ final class PrewarmGateWork {
             }
         }
         // 无签名只表示无法观测，不能把旧版提供方或故障探针误判成停滞。
-        if (timeoutMillis <= 0L && limits.absoluteMillis() > 0L
-                && elapsed >= nanos(limits.absoluteMillis())) {
+        // 没有可观测的进展才使用兜底期限。健康长墙可超过半小时；失去信号后从最后一次进展计时。
+        if ((signature == null || limits.stallMillis() <= 0L) && timeoutMillis <= 0L && limits.absoluteMillis() > 0L
+                && now - lastProgressAt >= nanos(limits.absoluteMillis())) {
             finish(Resolution.ABSOLUTE_CAP);
             return;
         }

@@ -88,6 +88,27 @@ class RoadChunkStoreReadFaultTest {
         }
     }
 
+    @Test void indexedRoadCanReturnAfterTemporarilyDisappearing(@TempDir Path root) throws Exception {
+        try (var writer = new RoadChunkStore(root)) {
+            writer.addRoads(List.of(road(0, 1), road(40, 3)));
+        }
+        Path target;
+        try (var files = Files.list(root.resolve("roads"))) { target = files.findFirst().orElseThrow(); }
+        Path index = root.resolve("index.json");
+        byte[] before = Files.readAllBytes(index);
+        Path parked = Files.move(target, root.resolve("parked.nbt"));
+        try (var reader = new RoadChunkStore(root)) {
+            assertEquals(1, reader.loadAll().size());
+            assertFalse(reader.readyForRecovery(System.nanoTime()));
+            org.junit.jupiter.api.Assertions.assertArrayEquals(before, Files.readAllBytes(index));
+            // 在同一世界会话恢复文件后，原有索引应当能再次找到这条路。
+            Files.move(parked, target);
+            assertTrue(reader.readyForRecovery(System.nanoTime() + 6_000_000_000L));
+            assertEquals(2, reader.loadAll().size());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(before, Files.readAllBytes(index));
+        }
+    }
+
     @Test
     void 单条道路读失败时索引必须原样不动_解锁后必须重新看到两条(@TempDir Path root) throws Exception {
         RoadData first = road(0, 1L);

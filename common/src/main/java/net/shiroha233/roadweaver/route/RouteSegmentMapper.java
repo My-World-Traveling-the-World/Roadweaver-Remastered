@@ -81,24 +81,15 @@ public final class RouteSegmentMapper {
 
         // 逐段找最近的玩家路径点（只比较 XZ，因为高度本来就要覆盖）
         for (BlockPos center : segmentCenters) {
-            int bestIdx = nearestIndexXZ(smoothedPath, center);
-            RouteKind kind = RouteKind.ROAD;
-            int height = center.getY();
-            boolean fromPlayer = false;
-
-            if (bestIdx >= 0 && smoothedPath != null && bestIdx < smoothedPath.size()) {
-                height = smoothedPath.get(bestIdx).getY();
-            }
-            // ★ 规则 A：中心点落在哪一段，就用那一段起点的 kind
-            kind = cursor.advance(route, center);
-
-            // 桥/隧道：高度以玩家为准（不从地形重算）
-            fromPlayer = (kind == RouteKind.BRIDGE || kind == RouteKind.TUNNEL);
-
-            // 桥/隧道的高度必须来自玩家控制点（平滑点的高度已经是插值结果，
-            // 但端点处应以控制点为锚，避免累积误差）
-            if (fromPlayer && route != null) {
-                height = interpolatePlayerHeight(route, cursor.segmentIndex(), smoothedPath, center);
+            RouteKind kind = cursor.advance(route, center);
+            boolean fromPlayer = kind == RouteKind.BRIDGE || kind == RouteKind.TUNNEL;
+            int height;
+            // 桥隧使用控制点插值，无需先扫描所有平滑点再覆盖算出的高度。
+            if (fromPlayer) {
+                height = interpolatePlayerHeight(route, cursor.segmentIndex(), center);
+            } else {
+                int nearest = nearestIndexXZ(smoothedPath, center);
+                height = nearest >= 0 ? smoothedPath.get(nearest).getY() : center.getY();
             }
 
             out.add(new MappedSegment(kind, height, fromPlayer));
@@ -127,7 +118,7 @@ public final class RouteSegmentMapper {
      * @param segmentIdx 该中心所在的段下标（来自游标；越界时退回全局查找）
      */
     private static int interpolatePlayerHeight(PlayerRoute route, int segmentIdx,
-                                               List<BlockPos> smoothed, BlockPos at) {
+                                               BlockPos at) {
         List<RoutePoint> pts = route.points();
         if (pts.isEmpty()) {
             return at.getY();

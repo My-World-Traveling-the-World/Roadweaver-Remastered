@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class GreatWallPrewarmCompat {
     private static final Logger LOGGER = LoggerFactory.getLogger("RoadWeaver/GreatWallGate");
-    /** 非正值不设调用方期限，仍沿用停滞与绝对期限，避免无限卡住加载。 */
+    /** 默认等待有进展的长城完成；停滞或长期没有状态信号时才结束等待。 */
     public static final long DEFAULT_TIMEOUT_MILLIS = 0L;
     private static final long POLL_MILLIS = 250L;
     // 长城在 request 之前可能短暂返回 ready，已安装时仍保留五秒宽限。

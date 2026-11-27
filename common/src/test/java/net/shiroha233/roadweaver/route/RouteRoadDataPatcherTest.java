@@ -42,10 +42,19 @@ public final class RouteRoadDataPatcherTest {
         testRoadKeepsPipelineHeight();
         testBridgeSpanCreated();
         testProtectedGapPreserved();
+        testPlayerBridgePreservesGapAndUncoveredTunnel();
         testWaterCrossingPreserved();
         testShortBridgeNotFlattenedByConvergence();
         testRoadOnlyProfileUnchanged();
         testNullSafety();
+        var crossing = PlayerRoute.create("同一格先过桥再钻隧道")
+                .append(new BlockPos(0, 80, 0), RouteKind.BRIDGE)
+                .append(new BlockPos(16, 80, 0), RouteKind.ROAD)
+                .append(new BlockPos(0, 60, 0), RouteKind.TUNNEL)
+                .append(new BlockPos(16, 60, 0), RouteKind.ROAD);
+        var intended = PlayerRouteBuildIntent.forSegment(crossing, 2);
+        require(intended.kindOfSegment(0) == RouteKind.TUNNEL && intended.start().getY() == 60
+                && intended.pointCount() == 2, "重访坐标的施工连接只读取自己这一段的高度与类型");
 
         System.out.println("\n全部通过（" + checks + " 项）");
     }
@@ -148,6 +157,22 @@ public final class RouteRoadDataPatcherTest {
 
         RoadData patched = RouteRoadDataPatcher.patch(road, r, centers);
         require(patched.hasProtectedGap(), "PROTECTED_GAP 被保留");
+    }
+
+    private static void testPlayerBridgePreservesGapAndUncoveredTunnel() {
+        // 站距一格，玩家桥与原隧道、保护缺口只在第八站相交。
+        List<BlockPos> centers = java.util.stream.IntStream.rangeClosed(0, 16)
+                .mapToObj(x -> new BlockPos(x, 64, 0)).toList();
+        var gap = new RoadSpan(centers.get(8), centers.get(16), SpanType.PROTECTED_GAP);
+        var tunnel = new RoadSpan(centers.get(16), centers.get(8), SpanType.TUNNEL);
+        var route = PlayerRoute.create("保护区边缘")
+                .append(centers.get(0), RouteKind.BRIDGE)
+                .append(centers.get(8), RouteKind.ROAD)
+                .append(centers.get(16), RouteKind.ROAD);
+        var patched = RouteRoadDataPatcher.patch(makeRoad(centers, 64, List.of(gap, tunnel)), route, centers);
+        require(patched.spans().contains(new RoadSpan(centers.get(0), centers.get(8), SpanType.BRIDGE)), "玩家桥确实生成");
+        require(patched.spans().contains(gap), "保留下游全部保护缺口");
+        require(patched.spans().contains(new RoadSpan(centers.get(16), centers.get(9), SpanType.TUNNEL)), "保留未覆盖的反向隧道");
     }
 
     /** 管线的过水短桥（ROAD_CROSSING）在玩家没标桥时也要保留（安全优先）。 */

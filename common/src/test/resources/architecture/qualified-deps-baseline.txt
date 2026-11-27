@@ -13,9 +13,9 @@ decoration -> compat                         18
 decoration -> core                           2
 generation -> apiimpl                        3
 generation -> pathfinding                    4
-generation -> pathlogic                      5
+generation -> pathlogic                      3
 generation -> planning                       2
-generation -> route                          21
+generation -> route                          19
 generation -> search                         1
 generation -> structures                     1
 pathfinding -> config                        3
@@ -40,6 +40,6 @@ postprocess -> config                        1
 postprocess -> core                          3
 postprocess -> pathlogic                     8
 route -> config                              7
-route -> planning                            3
+route -> planning                            1
 runtime -> apiimpl                           5
 runtime -> compat                            1

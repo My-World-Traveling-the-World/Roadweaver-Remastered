@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -409,10 +410,14 @@ public final class RoadChunkStore implements AutoCloseable {
 
     private LoadedSnapshot readSnapshot() throws IOException {
         Path indexPath = root.resolve(INDEX_FILE);
-        if (!Files.isRegularFile(indexPath)) return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
-
         // 文件读取在JSON解析之外：Gson会把Reader的IOException包装成RuntimeException，不能因此误隔离。
-        String indexContents = Files.readString(indexPath, StandardCharsets.UTF_8);
+        String indexContents;
+        try {
+            indexContents = Files.readString(indexPath, StandardCharsets.UTF_8);
+        } catch (NoSuchFileException newWorld) {
+            // 新存档尚无索引。权限错误、目录占位等故障必须走上层的只读降级。
+            return new LoadedSnapshot(RoadSnapshot.empty(), 0L, false, false, null);
+        }
         IndexDocument document;
         try {
             document = GSON.fromJson(indexContents, IndexDocument.class);
@@ -664,7 +669,7 @@ public final class RoadChunkStore implements AutoCloseable {
     }
 
     private static RoadData readRoadFile(Path file) throws IOException {
-        if (!Files.isRegularFile(file)) return null;
+        // 索引已经引用这个文件。暂时缺失也必须保留索引，恢复后才能找回原路。
         byte[] bytes = Files.readAllBytes(file);
         if (bytes.length == 0) {
             FileStorageIO.quarantineCorrupt(file, LOGGER, "道路 NBT 文件为空，已隔离");

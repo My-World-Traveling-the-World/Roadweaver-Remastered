@@ -167,12 +167,12 @@ postprocess -> pathlogic                          11
 postprocess -> persistence                        11
 postprocess -> runtime                            10
 route -> client                             2
-route -> core                               10
+route -> core                               13
 route -> generation                         1
 route -> pathfinding                        2
-route -> pathlogic                          5
-route -> persistence                        3
-route -> planning                           2
+route -> pathlogic                          6
+route -> persistence                        4
+route -> planning                           3
 runtime -> compat                             1
 runtime -> config                             3
 runtime -> core                               1
