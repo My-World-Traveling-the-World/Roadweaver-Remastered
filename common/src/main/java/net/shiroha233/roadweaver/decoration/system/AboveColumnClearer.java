@@ -363,7 +363,7 @@ public final class AboveColumnClearer {
     }
 
     /**
-     * 0.9.005：模板桥的桥面列净空。只清 [deckY+1, deckY+1+净空) —— 向下不动，所以不会挖成峡谷。
+     * 模板桥的净空从脚底高度开始；下一层是实体甲板，不能挖掉。
      * 只清桥面列、**不做侧向**：模板的桥面/栏杆是按段贴上去的，侧向强清会削掉相邻段已经贴好的
      * 模板 voxel（procedural 桥那边才做侧向 ±bridge.sideClear）。
      */
@@ -374,7 +374,7 @@ public final class AboveColumnClearer {
         int headroom = bridgeHeadroom(cfg);
         for (BlockPos widthPos : segment.positions()) {
             if (widthPos == null) continue;
-            clearForcedHeadroom(world, new BlockPos(widthPos.getX(), deckY + 1, widthPos.getZ()),
+            clearForcedHeadroom(world, new BlockPos(widthPos.getX(), deckY, widthPos.getZ()),
                     road, headroom, true, "template-bridge-deck");
         }
     }

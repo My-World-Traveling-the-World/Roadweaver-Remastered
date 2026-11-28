@@ -23,6 +23,7 @@ class BridgeTemplatePlacementTest {
     private static final int DECK = 64;
     private static final Line LINE = new Line(new Vec3(15, DECK, 8), new Vec3(39, DECK, 8));
     private static final BlockPos MOUTH = new BlockPos(15, DECK, 8);
+    private static final BlockPos FLOOR = MOUTH.below();
     private static final BlockPos PREVIOUS = new BlockPos(14, DECK, 8);
     private static final ChunkPos CHUNK = new ChunkPos(0, 0);
     private static final RoadSegmentPlacement SEGMENT = new RoadSegmentPlacement(MOUTH, List.of(MOUTH));
@@ -49,9 +50,9 @@ class BridgeTemplatePlacementTest {
                 var lights = site.written.entrySet().stream().filter(e -> e.getValue().is(Blocks.SEA_LANTERN))
                         .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
                 // 原模板按当前区块收集整列；跨度16的灯可落在相邻的最后一列15，保留既有贴边规则。
-                var expected = interval == 4 ? Set.of(new BlockPos(0, DECK, 8), new BlockPos(4, DECK, 8),
-                        new BlockPos(8, DECK, 8), new BlockPos(12, DECK, 8), new BlockPos(15, DECK, 8))
-                        : interval == 16 ? Set.of(new BlockPos(0, DECK, 8), new BlockPos(15, DECK, 8)) : Set.<BlockPos>of();
+                var expected = interval == 4 ? Set.of(new BlockPos(0, DECK - 1, 8), new BlockPos(4, DECK - 1, 8),
+                        new BlockPos(8, DECK - 1, 8), new BlockPos(12, DECK - 1, 8), new BlockPos(15, DECK - 1, 8))
+                        : interval == 16 ? Set.of(new BlockPos(0, DECK - 1, 8), new BlockPos(15, DECK - 1, 8)) : Set.<BlockPos>of();
                 assertEquals(expected, lights, "必须按跨度格距而不是陆路站号放灯");
             }
         } finally {
@@ -60,17 +61,19 @@ class BridgeTemplatePlacementTest {
     }
 
     @Test
-    void 陆侧桥头补出甲板且只写本区块() {
-        Site site = new Site(MOUTH.below());
+    void landingReplacesLowAbutmentWithWalkableDeckOnlyInCurrentChunk() {
+        Site site = new Site(null);
+        site.lowAbutment = true;
         var plan = BridgeSegmentPlannerNew.plannedBridgeWithAccess(site, LINE, SEGMENT, MOUTH, PREVIOUS, DECK, true);
         assertTrue(plan.centerChunkHandles());
-        assertTrue(plan.blocks().contains(MOUTH));
-        assertTrue(plan.blocks().contains(MOUTH.east()), "跨区块列应存在于规划，否则施工边界断言会空转");
+        assertTrue(plan.blocks().contains(FLOOR));
+        assertTrue(plan.blocks().contains(FLOOR.east()), "跨区块列应存在于规划，否则施工边界断言会空转");
         assertTrue(build(site));
-        assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), site.written.get(MOUTH),
+        assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), site.written.get(FLOOR),
                 "M2：桥返回已处理时，桥口中心实际必须有模板甲板");
-        assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), site.written.get(MOUTH.north()));
-        assertFalse(site.written.containsKey(MOUTH.east()));
+        assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), site.written.get(FLOOR.north()));
+        assertFalse(site.written.containsKey(FLOOR.below()), "低半砖不能当作接岸甲板");
+        assertFalse(site.written.containsKey(FLOOR.east()));
         assertFalse(site.written.isEmpty());
         assertTrue(site.written.keySet().stream().allMatch(pos -> BridgeSegmentPlannerNew.ownsTarget(CHUNK, pos)));
     }
@@ -78,7 +81,7 @@ class BridgeTemplatePlacementTest {
     @Test
     void 模板甲板撞保护块时拒绝且不落块() {
         // 水上桥口直接用桥身列；确保保护 veto 落在实际访问的体素上。
-        Site site = new Site(MOUTH);
+        Site site = new Site(FLOOR);
         site.water = true;
         assertFalse(build(site));
         assertTrue(site.protectedHits > 0);
@@ -130,7 +133,7 @@ class BridgeTemplatePlacementTest {
         // 弯顶真实中心在 x=-5 附近；逐列检查不是用总写块数代替桥面的连续性。
         assertEquals(-5.0D, line.pointAt(0.5D).x, 1.0E-9D);
         for (int z = 656; z < 752; z++) {
-            assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), access.written.get(new BlockPos(-5, DECK, z)),
+            assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), access.written.get(new BlockPos(-5, DECK - 1, z)),
                     "断桥列 z=" + z);
         }
     }
@@ -179,7 +182,7 @@ class BridgeTemplatePlacementTest {
     }
 
     private static final class Site implements BridgeSegmentPlannerNew.PlacementAccess {
-        // 桥台没有甲板，才能区分直接放置和生产代码的桥头重试。
+        // 低桥台保留模板体素，但不能冒充和普通道路齐平的桥面。
         private final BridgeTemplate template = new BridgeTemplate(
                 ResourceLocation.parse("roadweaver:test_bridge"), null, null, null) {
             @Override public int getStartLength() { return 4; }
@@ -188,7 +191,9 @@ class BridgeTemplatePlacementTest {
             @Override public int getTotalLength() { return 12; }
             @Override public boolean isInVoxelGrid(double x, double y, double z) { return Math.abs(z) <= 1; }
             @Override public BlockState getBlock(double x, double y, double z) {
-                if (!(x >= 4 && x < 8 && Math.abs(y) < 0.1 && Math.abs(z) <= 1)) return null;
+                if (Math.abs(z) > 1) return null;
+                if (lowAbutment && x < 4 && Math.abs(y + 2) < 0.15) return Blocks.OAK_SLAB.defaultBlockState();
+                if (!(x >= 4 && x < 8 && Math.abs(y + 1) < 0.1)) return null;
                 return asymmetric && z < -0.3 ? Blocks.BIRCH_PLANKS.defaultBlockState()
                         : Blocks.OAK_PLANKS.defaultBlockState();
             }
@@ -197,6 +202,7 @@ class BridgeTemplatePlacementTest {
         private final BlockPos protectedBlock;
         private boolean water;
         private boolean fullBlocks;
+        private boolean lowAbutment;
         // 横向坐标反号时不能靠同一材质把错误藏过去。
         private boolean asymmetric;
         private int protectedHits;

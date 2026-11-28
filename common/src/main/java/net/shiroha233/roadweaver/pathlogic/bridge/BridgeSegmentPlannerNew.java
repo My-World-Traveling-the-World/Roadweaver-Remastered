@@ -446,42 +446,41 @@ public final class BridgeSegmentPlannerNew {
         int minZ = Math.min(previous.getZ(), middle.getZ()) - 10;
         int maxZ = Math.max(previous.getZ(), middle.getZ()) + 10;
         List<BlockPos> blocks = new ArrayList<>();
+        Set<Long> roadDeckColumns = landingStation ? new java.util.HashSet<>() : Set.of();
+        ColumnProjection projection = projectColumns(bridge, line, segment, deckY, minX, maxX, minZ, maxZ);
         TemplateBlockConsumer collectAll = (pos, state) -> {
             blocks.add(pos);
+            if (landingStation && isLandingDeck(pos.getY(), deckY, state)) {
+                long key = columnKey(pos.getX(), pos.getZ());
+                if (projection.roadColumns().contains(key)) roadDeckColumns.add(key);
+            }
             return true;
         };
         boolean clampToBody = access.isOpenWater(middle);
-        ColumnProjection projection = projectColumns(bridge, line, segment, deckY, minX, maxX, minZ, maxZ);
         TemplateVisit visit = visitTemplateBlocks(bridge, projection, deckY, clampToBody, collectAll);
         // 0.9.033：与 processSegment 保持**逐条一致**的重试，否则存档期校验算出的
         // centerChunkHandles 会和真正生成的体素对不上（退回程序化桥面会双铺）。
         if (landingStation && !clampToBody && !visit.handles(landingStation)) {
-            List<BlockPos> firstAttempt = List.copyOf(blocks);
             blocks.clear();
+            roadDeckColumns.clear();
             TemplateVisit forced = visitTemplateBlocks(
                     bridge, projection, deckY, true, collectAll);
             if (forced.handles(landingStation)) {
                 visit = forced;
             } else {
-                blocks.clear();
-                blocks.addAll(firstAttempt);
+                return PlannedBridge.none();
             }
         }
         if (!visit.handles(landingStation)) return PlannedBridge.none();
 
         ChunkPos centerChunk = new ChunkPos(middle);
-        Set<Long> roadColumns = projection.roadColumns();
         int centerBlocks = 0;
-        int centerRoadColumns = 0;
         for (BlockPos block : blocks) {
             if (!ownsTarget(centerChunk, block)) continue;
             centerBlocks++;
-            if (block.getY() >= deckY - 4 && block.getY() <= deckY + 3
-                    && roadColumns.contains(columnKey(block.getX(), block.getZ()))) {
-                centerRoadColumns++;
-            }
         }
-        boolean centerChunkHandles = centerBlocks > 0 && (!landingStation || centerRoadColumns > 0);
+        boolean centerChunkHandles = centerBlocks > 0 && (!landingStation || segment.positions().stream()
+                .anyMatch(pos -> ownsTarget(centerChunk, pos) && roadDeckColumns.contains(columnKey(pos.getX(), pos.getZ()))));
         return new PlannedBridge(List.copyOf(blocks), centerChunkHandles);
     }
 
@@ -512,10 +511,16 @@ public final class BridgeSegmentPlannerNew {
                 if (state == null || state.is(Blocks.AIR)) continue;
                 if (!consumer.accept(new BlockPos(column.x(), y, column.z()), state)) continue;
                 placedBlocks++;
-                if (column.onRoad() && y >= deckY - 4 && y <= deckY + 3) coveredRoadColumns++;
+                // 低桥台半砖或高栏杆都不算已接岸；桥面顶必须接到道路脚底位置。
+                if (column.onRoad() && isLandingDeck(y, deckY, state)) coveredRoadColumns++;
             }
         }
         return new TemplateVisit(placedBlocks, coveredRoadColumns);
+    }
+
+    private static boolean isLandingDeck(int y, int surfaceY, BlockState state) {
+        return y == surfaceY - 1 && state.isFaceSturdy(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,
+                BlockPos.ZERO, net.minecraft.core.Direction.UP);
     }
 
     /** 只投影静态坐标；碰撞、实际水位、支撑和写方块仍由各自的入口负责。 */

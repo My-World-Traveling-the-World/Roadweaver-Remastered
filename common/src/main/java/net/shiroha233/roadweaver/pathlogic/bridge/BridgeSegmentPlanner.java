@@ -70,14 +70,8 @@ public final class BridgeSegmentPlanner {
         // chunk used to make decks, ramps, shoulders, and normal pavement
         // disagree at chunk borders.
         //
-        // The deck block goes one below this, so +1 puts it exactly on the profile Y - the same layer the
-        // road paver puts the road surface on. It used to be +2 on the curve path and +0 on the straight
-        // one, which is a two-block disagreement between two bridges in the same road, and either way it
-        // was one block above or below the road: every bridge started and ended with a step.
-        //
-        // The template path is moved with it: BridgeTemplateStructureRegistry maps a voxel with
-        // heightOffset + 2 now, so a template deck lands on the profile Y too, and the fallback seam closes.
-        int segDeckY = baseYForThis + 1;
+        // 纵断面是脚底高度；桥梁与普通整砖路都把实体块铺在它的下一层。
+        int segDeckY = baseYForThis;
         boolean placePier = true;
         boolean placeRail = true;
         int rangeStart = i;
