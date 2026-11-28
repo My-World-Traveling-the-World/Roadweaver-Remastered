@@ -54,6 +54,21 @@ final class RoadChunkDensityRasterTest {
     }
 
     @Test
+    void culvertKeepsItsConstructionSliceWithoutFillingTheChannel() {
+        RoadData ground = road(10, 4, -18, -8, 2, 0, 11, 64, 0, null);
+        RoadData culvert = road(20, 4, -8, -10, 0, 2, 3, 72, 0, SpanType.CULVERT);
+        // 正控：普通路在同一列确实有填方，涵洞的掩码也必须能挡住另一条路。
+        assertTrue(stamp(ground).density(-8, 62, -8) > 0);
+        RoadChunkPlan plan = RoadChunkPlanCompiler.compile(CHUNK, List.of(ground, culvert), false, 6, 1L);
+        assertTrue(plan.slices().stream().anyMatch(slice -> slice.road().spans().stream()
+                .anyMatch(span -> span.type() == SpanType.CULVERT)));
+        assertTrue(plan.densityStamp().isOccupied(8, 8));
+        assertEquals(0.0D, plan.densityStamp().density(-8, 62, -8));
+        assertEquals(0.0D, plan.densityStamp().density(-8, 70, -8));
+        assertTrue(plan.densityStamp().density(-15, 62, -8) > 0, "保护范围外的道路仍有填方");
+    }
+
+    @Test
     void equalWeightsKeepTheFirstCanonicalRoadEvenWhenInputOrderIsReversed() {
         RoadData low = road(30, 4, -18, -8, 2, 0, 11, 64, 0, null);
         RoadData high = road(40, 4, -18, -8, 2, 0, 11, 77, 0, null);

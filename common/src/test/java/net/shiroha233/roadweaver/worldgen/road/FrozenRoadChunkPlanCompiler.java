@@ -77,6 +77,8 @@ final class FrozenRoadChunkPlanCompiler {
             boolean[] bridgeMask = buildSpanMask(placements, road.spans(), SpanType.BRIDGE);
             boolean[] directCrossingMask = buildSpanMask(
                     placements, road.spans(), SpanType.ROAD_CROSSING);
+            // 参考光栅仍用原扫描算法，只更新涵洞禁止切填的产品契约。
+            boolean[] culvertMask = buildSpanMask(placements, road.spans(), SpanType.CULVERT);
             boolean[] networkReuseMask = buildSpanMask(
                     placements, road.spans(), SpanType.NETWORK_REUSE);
             boolean[] protectedGapMask = buildSpanMask(
@@ -206,7 +208,8 @@ final class FrozenRoadChunkPlanCompiler {
                         || Math.min(a.getZ(), b.getZ()) - radius > chunkMaxZ) continue;
                 var segment = new RasterSegment(a.getX(), a.getZ(), y0,
                         b.getX(), b.getZ(), y1, halfWidth);
-                (isDirectCrossing ? terrainStampExclusions : rasterSegments).add(segment);
+                (isDirectCrossing || (culvertMask != null && (culvertMask[i] || culvertMask[i + 1]))
+                        ? terrainStampExclusions : rasterSegments).add(segment);
             }
         }
 

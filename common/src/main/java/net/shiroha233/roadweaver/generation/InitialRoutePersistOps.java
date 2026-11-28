@@ -301,25 +301,39 @@ public final class InitialRoutePersistOps {
                                                    StreamsReflowingCompat.SamplingSession streams,
                                                    Set<Long> refinedRoadFingerprints) {
         TerrainSamplingCache roadsideCache = new TerrainSamplingCache();
+        return processFinalRoad(level, connectedRoad, originalsByEdge, streams, refinedRoadFingerprints, roadsideCache,
+                new FinalChecks(
+                        road -> RoadPathCalculator.repairAfterNetworkMerge(road, level, roadsideCache,
+                                new StructureConnection(PlanningUtils.posFrom2dKey(road.ownerA2dKey()),
+                                        PlanningUtils.posFrom2dKey(road.ownerB2dKey()), ConnectionStatus.GENERATING)),
+                        road -> RoadPlanConsistencyService.reconcile(level, road, roadsideCache, null, streams,
+                                ConfigService.get().bridgeMinWaterDepth()),
+                        road -> timedFinalWaterValidation(level, road, roadsideCache, streams),
+                        road -> timedFinalStructureValidation(level, road, roadsideCache, streams)));
+    }
+
+    // 四项终态复验由正式路径统一编排，允许离线用确定的水域和保护盒结果核验顺序。
+    record FinalChecks(java.util.function.UnaryOperator<RoadData> repair,
+                       java.util.function.UnaryOperator<RoadData> reconcile,
+                       java.util.function.Function<RoadData, FinalRoadWaterValidator.ValidationResult> water,
+                       java.util.function.Function<RoadData, FinalRoadStructureValidator.ValidationResult> structure) {}
+
+    static FinalRoadWork processFinalRoad(ServerLevel level,
+                                          RoadData connectedRoad,
+                                          Map<PlannedPathKey, RoadData> originalsByEdge,
+                                          StreamsReflowingCompat.SamplingSession streams,
+                                          Set<Long> refinedRoadFingerprints,
+                                          TerrainSamplingCache roadsideCache,
+                                          FinalChecks checks) {
         DetailedRoadGenerationStats.beginRouteTiming(connectedRoad.ownerA2dKey() + "->" + connectedRoad.ownerB2dKey());
         try {
             RoadData road = RoadDataValidator.normalizeDuplicateJunctions(connectedRoad);
-                // T-19 一致性边界:junction 合并/normalize 未改变道路时,Road.generateRoad
-                // 产出的最终快照(已经过 continuity 修复、validateFinalRoad、水/结构校验)
-                // 就是施工与最终校验的唯一输入。阶段二不得用相同阈值重测重改——
-                // 旧的 postJunctionRepair 无条件重跑 continuity 扫描,对已被规划接受
-                // 的中心切/填(maxCutDepth/maxFillDepth ≤ buildable 上限)反复触发
-                // "final validation filling missing terrain columns" 与高度二次修改。
-                // 只有合并/normalize 真正改变了道路时才允许阶段二修复。
-                boolean alreadyRefined = refinedRoadFingerprints.contains(
+                // 原路已经通过正式验收。合并结果与自身相同只证明去重没有修改，不能免掉复验。
+                RoadData original = originalsByEdge.get(ownerKey(connectedRoad));
+                boolean alreadyRefined = road == connectedRoad && refinedRoadFingerprints.contains(
                         RoadShardStorage.computeFingerprint(connectedRoad));
-                if (road != null && road.hasOwnerPair() && road != connectedRoad && !alreadyRefined) {
-                    RoadData postJunctionRepair = RoadPathCalculator.repairAfterNetworkMerge(
-                            road, level, roadsideCache,
-                            new StructureConnection(
-                                    PlanningUtils.posFrom2dKey(road.ownerA2dKey()),
-                                    PlanningUtils.posFrom2dKey(road.ownerB2dKey()),
-                                    ConnectionStatus.GENERATING));
+                if (road != null && road.hasOwnerPair() && road != original && !alreadyRefined) {
+                    RoadData postJunctionRepair = checks.repair().apply(road);
                     if (postJunctionRepair == null) {
                         LOGGER.error("【合并后施工连续性无法修复，拒绝该路线】 " + "RoadWeaver rejected initial merged road because construction continuity repair failed owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
@@ -332,10 +346,8 @@ public final class InitialRoutePersistOps {
                 // Junction merging and height repair can change the physical
                 // water/tunnel/bridge spans. Reconcile spans once more before
                 // the final validators inspect or persist the merged road.
-                if (road != null && road != connectedRoad) {
-                    RoadData reconciled = RoadPlanConsistencyService.reconcile(
-                            level, road, roadsideCache, null, streams,
-                            ConfigService.get().bridgeMinWaterDepth());
+                if (road != null && road != original) {
+                    RoadData reconciled = checks.reconcile().apply(road);
                     if (reconciled == null) {
                         LOGGER.error("【最终跨度协调失败，拒绝初始路线】 " + "RoadWeaver rejected initial merged road during final span reconciliation owners={} -> {}",
                                 road.ownerA2dKey(), road.ownerB2dKey());
@@ -369,13 +381,11 @@ public final class InitialRoutePersistOps {
                     return new FinalRoadWork(ownerKey(connectedRoad), null);
                 }
                 FinalRoadWaterValidator.ValidationResult waterValidation =
-                        road == connectedRoad ? FinalRoadWaterValidator.ValidationResult.success()
-                                : timedFinalWaterValidation(level, road, roadsideCache, streams);
+                        road == original ? FinalRoadWaterValidator.ValidationResult.success()
+                                : checks.water().apply(road);
                 if (!waterValidation.safe()) {
-                    PlannedPathKey edge = ownerKey(road);
-                    RoadData original = originalsByEdge.get(edge);
                     FinalRoadWaterValidator.ValidationResult originalWater = original != null && original != road
-                            ? FinalRoadWaterValidator.validate(level, original, roadsideCache, streams)
+                            ? checks.water().apply(original)
                             : null;
                     if (originalWater != null && originalWater.safe()) {
                         LOGGER.warn("【路口改写导致入水，保留已通过校验的原路】 " + "RoadWeaver discarded underwater initial junction rewrite and retained the "
@@ -389,8 +399,7 @@ public final class InitialRoutePersistOps {
                                 && "ordinary_construction_in_water".equals(waterValidation.reason())
                                 ? FinalRoadWaterValidator.retainProtectedGaps(
                                         road, FinalRoadWaterValidator.MAX_PROTECTED_GAP_FALLBACK,
-                                        candidate -> FinalRoadWaterValidator.validate(
-                                                level, candidate, roadsideCache, streams))
+                                        checks.water()::apply)
                                 : null;
                         if (gapped != null) {
                             road = gapped;
@@ -418,8 +427,8 @@ public final class InitialRoutePersistOps {
                     }
                 }
                 FinalRoadStructureValidator.ValidationResult structureValidation =
-                        road == connectedRoad ? FinalRoadStructureValidator.ValidationResult.success()
-                                : timedFinalStructureValidation(level, road, roadsideCache, streams);
+                        road == original ? FinalRoadStructureValidator.ValidationResult.success()
+                                : checks.structure().apply(road);
                 if (!structureValidation.safe()) {
                     RoadData gapped = FinalRoadStructureValidator.retainVerifiedBuildingGaps(
                             level, new StructureConnection(
@@ -428,9 +437,9 @@ public final class InitialRoutePersistOps {
                                     ConnectionStatus.GENERATING),
                             road, roadsideCache, streams);
                     if (gapped != null) {
-                        FinalRoadStructureValidator.ValidationResult gapValidation =
-                                FinalRoadStructureValidator.validate(level, gapped, roadsideCache, streams);
-                        if (gapValidation.safe()) {
+                        FinalRoadStructureValidator.ValidationResult gapValidation = checks.structure().apply(gapped);
+                        // 留缺口会降低接坡；结构安全不能代替水域安全。
+                        if (gapValidation.safe() && checks.water().apply(gapped).safe()) {
                             LOGGER.warn("【初始路网校验后保留已确认建筑的保护缺口】 " + "RoadWeaver retained verified-building protection gaps after initial network junction validation owners={} -> {}",
                                     road.ownerA2dKey(), road.ownerB2dKey());
                             road = gapped;
@@ -439,11 +448,8 @@ public final class InitialRoutePersistOps {
                     }
                 }
                 if (!structureValidation.safe()) {
-                    PlannedPathKey edge = ownerKey(road);
-                    RoadData original = originalsByEdge.get(edge);
                     if (original != null && original != road) {
-                        FinalRoadStructureValidator.ValidationResult originalValidation =
-                                FinalRoadStructureValidator.validate(level, original, roadsideCache, streams);
+                        FinalRoadStructureValidator.ValidationResult originalValidation = checks.structure().apply(original);
                         if (originalValidation.safe()) {
                             LOGGER.warn("【路口改写不安全，保留已通过校验的原路】 " + "RoadWeaver discarded unsafe initial junction rewrite and retained the "
                                             + "validated original road owners={} -> {} collision={}",

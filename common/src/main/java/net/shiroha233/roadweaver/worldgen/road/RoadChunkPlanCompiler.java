@@ -92,6 +92,7 @@ public final class RoadChunkPlanCompiler {
             ExactSpans spans = spanInputs.get(road);
             boolean[] bridgeMask = spans.mask(SpanType.BRIDGE);
             boolean[] directCrossingMask = spans.mask(SpanType.ROAD_CROSSING);
+            boolean[] culvertMask = spans.mask(SpanType.CULVERT);
             boolean[] networkReuseMask = spans.mask(SpanType.NETWORK_REUSE);
             boolean[] protectedGapMask = spans.mask(SpanType.PROTECTED_GAP);
             boolean[] tunnelJunctionMask = spans.mask(SpanType.TUNNEL_JUNCTION);
@@ -210,6 +211,8 @@ public final class RoadChunkPlanCompiler {
                     if (isTunnel) continue;
                     boolean isDirectCrossing = directCrossingMask != null
                             && (directCrossingMask[i] || directCrossingMask[i + 1]);
+                    // 涵洞由铺路器保留通水空间；噪声填方先把洞口堵住，后续铺面无法补救。
+                    boolean isCulvert = culvertMask != null && (culvertMask[i] || culvertMask[i + 1]);
 
                     BlockPos a = placements.get(i).middlePos();
                     BlockPos b = placements.get(i + 1).middlePos();
@@ -223,7 +226,7 @@ public final class RoadChunkPlanCompiler {
                             || Math.min(a.getZ(), b.getZ()) - radius > chunkMaxZ) continue;
                     var segment = new RasterSegment(a.getX(), a.getZ(), y0,
                             b.getX(), b.getZ(), y1, halfWidth);
-                    (isDirectCrossing ? terrainStampExclusions : rasterSegments).add(segment);
+                    (isDirectCrossing || isCulvert ? terrainStampExclusions : rasterSegments).add(segment);
                 }
             }
         }

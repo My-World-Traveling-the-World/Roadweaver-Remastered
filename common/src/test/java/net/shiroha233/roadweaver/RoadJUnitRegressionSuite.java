@@ -405,6 +405,8 @@ public final class RoadJUnitRegressionSuite {
                                 "net.shiroha233.roadweaver.pathfinding.sampling.opencl.GpuMemoryProbeTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadChunkPlanCompilerReuseOwnershipTest"),
+                        org.junit.platform.engine.discovery.DiscoverySelectors.selectClass(
+                                "net.shiroha233.roadweaver.generation.InitialMergedRoadValidationTest"),
                         DiscoverySelectors.selectClass(
                                 "net.shiroha233.roadweaver.worldgen.road.RoadReuseCandidatesTest"),
                         DiscoverySelectors.selectClass(
