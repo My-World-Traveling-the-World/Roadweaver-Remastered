@@ -223,8 +223,8 @@ public final class PathSpanExtractor {
         return highest;
     }
 
-    /** 已有精采样本包含路宽列；直接复用同一物理水掩码来确定短跨净空。 */
-    public static int shortCrossingWaterY(RoadSegmentPlacement station, ServerLevel level,
+    /** 已有精采样本包含路宽列；复用同一水掩码来确定长桥与短跨的净空。 */
+    public static int footprintWaterSurfaceY(RoadSegmentPlacement station, ServerLevel level,
             TerrainSamplingCache cache, PathTerrainField terrain, AccurateHeightSampler accurate,
             Map<Long, AccurateHeightSample> samples, StreamsReflowingCompat.SamplingSession streams) {
         return segmentWaterSample(level, cache, terrain, accurate, samples, streams, station, 1, null).waterSurfaceY();

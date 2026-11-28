@@ -25,11 +25,27 @@ class RouteEvidenceWiringTest {
         var solve = (MethodInvocationTree)only(calls(target, "TargetProfileSolver.applyProfileSolver")).getLeaf();
         assertEquals("shortDeckFloors", solve.getArguments().getLast().toString(),
                 "必须把短跨的甲板高度窗口交给正式求解器");
-        var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().get(solve.getArguments().size() - 2));
+        var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().get(solve.getArguments().size() - 3));
         var call = assertInstanceOf(MethodInvocationTree.class, repair.getBody());
         // 正式入口除了物理隧道选择还必须保留拒绝见证。
         assertEquals("TargetProfileRepair.solveForRoad", call.getMethodSelect().toString());
         assertEquals("tunnelSelector", call.getArguments().getLast().toString());
+    }
+
+    @Test
+    void bridgeAndCulvertPlanningUseOfflineWaterSamples() throws Exception {
+        var target = parse("pathlogic/core/TargetYComputation.java");
+        var solve = (MethodInvocationTree)only(calls(target, "TargetProfileSolver.applyProfileSolver")).getLeaf();
+        var deck = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().get(solve.getArguments().size() - 2));
+        var floor = assertInstanceOf(MethodInvocationTree.class, deck.getBody());
+        assertEquals("TargetProfileSolver.deckFloorFromWater", floor.getMethodSelect().toString());
+        assertEquals("footprintWater.applyAsInt(station)", floor.getArguments().getFirst().toString(),
+                "桥面必须使用与短跨相同的精采水位");
+        only(calls(target, "PathSpanExtractor.footprintWaterSurfaceY"));
+        var water = parse("pathlogic/validation/FinalRoadWaterValidator.java");
+        assertTrue(calls(water, "level.getHeight").isEmpty(), "后台涵洞规划不能拉起实地区块");
+        assertTrue(calls(water, "level.getBlockState").isEmpty(), "水域终验不能直接读取实地方块");
+        only(calls(water, "accurate.cachedSample"));
     }
 
     @Test

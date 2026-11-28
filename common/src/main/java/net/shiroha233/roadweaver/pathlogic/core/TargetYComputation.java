@@ -101,9 +101,10 @@ public final class TargetYComputation {
                         : RoadConstructionSafety.terrainHeight(level, center.getX(), center.getZ()));
         int[] terrainY = inputs.terrainY(), footprintSupport = inputs.footprintSupport(), base = inputs.base();
         Map<Long, AccurateHeightSample> footprintSamples = inputs.footprintSamples();
-        int[] shortDeckFloors = ShortCrossingFloors.calculate(crossingRanges, terrainY, isBridge,
-                i -> PathSpanExtractor.shortCrossingWaterY(segments.get(i), level, cache, terrain,
-                        accurate, footprintSamples, streams));
+        // 以路宽内同一批精确水样为准，桥面不等待未加载区块提供实地方块。
+        java.util.function.IntUnaryOperator footprintWater = i -> PathSpanExtractor.footprintWaterSurfaceY(
+                segments.get(i), level, cache, terrain, accurate, footprintSamples, streams);
+        int[] shortDeckFloors = ShortCrossingFloors.calculate(crossingRanges, terrainY, isBridge, footprintWater);
 
         int[] smoothed = RoadGradePlanner.stabilizeSurfaceProfile(
                 base, terrainY, footprintSupport, isCrossing,
@@ -228,6 +229,8 @@ public final class TargetYComputation {
                 // 留下实机重放需要的失败站与限制站，外层生成负责按连接汇总。
                 (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solveForRoad(
                         heights, crossing, cut, fill, step, two, constraints, windowTiming, dpTiming, tunnelSelector),
+                        (station, clearance) -> TargetProfileSolver.deckFloorFromWater(
+                                footprintWater.applyAsInt(station), clearance),
                         shortDeckFloors);
         } catch (IllegalArgumentException failure) {
             // 高程数组来自本次精采；不能拿中心点携带的旧规划Y代替地形来判断锁高是否正确。

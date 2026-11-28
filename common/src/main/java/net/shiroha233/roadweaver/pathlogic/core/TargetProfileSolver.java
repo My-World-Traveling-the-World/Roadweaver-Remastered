@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadConstructionSafety;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileDpSource;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileFallback;
 import net.shiroha233.roadweaver.pathlogic.profile.ProfileSolverMode;
@@ -52,18 +51,24 @@ final class TargetProfileSolver {
             int startBoundary, int endBoundary, RoadGenerationConfig cfg,
             SurfaceGradeLimits gradeLimits, StructureConnection connection, Solver repair) {
         return applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
-                startBoundary, endBoundary, cfg, gradeLimits, connection, repair, null);
+                startBoundary, endBoundary, cfg, gradeLimits, connection, repair,
+                (station, clearance) -> Integer.MIN_VALUE, null);
     }
 
     /** 短跨给下界，长桥沿用固定桥面；二者共同参加同一次接坡。 */
     static Optional<int[]> applyProfileSolver(ServerLevel level, List<BlockPos> centers, int[] smoothed,
             int[] terrainY, boolean[] isBridge, boolean[] tunnelMask, boolean[] pinnedMask,
             int startBoundary, int endBoundary, RoadGenerationConfig cfg, SurfaceGradeLimits gradeLimits,
-            StructureConnection connection, Solver repair, int[] shortDeckFloors) {
+            StructureConnection connection, Solver repair, DeckFloorSampler deckSampler, int[] shortDeckFloors) {
+        // 长桥与短跨一样由本轮地形数据提供水位；求解阶段不能要求区块先生成。
         return solve(level, centers, smoothed, terrainY, isBridge, tunnelMask, pinnedMask, startBoundary,
-                endBoundary, cfg, gradeLimits, connection, (station, clearance) -> RoadConstructionSafety.bridgeDeckSurfaceY(
-                        level, centers, station, clearance, Integer.MIN_VALUE), ProfileDpSource::solve, repair,
+                endBoundary, cfg, gradeLimits, connection, deckSampler, ProfileDpSource::solve, repair,
                 level == null ? null : snapshot -> ProfileFailureFiles.record(level, snapshot), shortDeckFloors);
+    }
+
+    static int deckFloorFromWater(int waterY, int clearance) {
+        // 无水的桥台不加水位下界，避免对哨兵做加法后误当成有效约束。
+        return waterY == Integer.MIN_VALUE ? waterY : waterY + Math.max(1, clearance);
     }
 
     /**
@@ -172,14 +177,11 @@ final class TargetProfileSolver {
         //       前提下自己找最优过渡 —— 桥面该平的段落自然平（同一水位下界相同），
         //       过渡段由 DP 统一安排，不需要事后贴坡。
         //
-        // 下界来源是旧版的权威算法 RoadConstructionSafety.bridgeDeckSurfaceY：
-        // 逐站查最高水位，并向两侧 WATERCOURSE_HALF_WIDTH(=3) 取样取最高，
-        // 再加 clearance。水位不可用时它返回 fallback，这里传 Integer.MIN_VALUE
-        // 表示「无下界」。
+        // 长桥取其铺装范围内的最高采样水位，再加净空；无水用最小整数表示没有水位下界。
         int[] deckFloor = new int[n];
         java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
         if (shortDeckFloors != null) System.arraycopy(shortDeckFloors, 0, deckFloor, 0, n);
-        // deckFloor 要读世界水位，这一步本身可能抛；单独兜一层 ——
+        // 精确水位采样仍可能失败；单独处理 ——
         // 采样失败时退化成「无下界」，而不是让整条 DP 路径失败。
         try {
             if (isCrossing != null && centers != null && centers.size() == n) {

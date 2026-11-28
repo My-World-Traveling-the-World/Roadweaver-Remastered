@@ -124,28 +124,21 @@ public final class FinalRoadWaterValidator {
             }
             AccurateHeightSample sample = samples.get(AccurateHeightSample.key(x, z));
             if (sample == null) return WaterColumn.unavailable();
-            boolean waterBiome = cache.isWaterLike(level, x, z);
-            boolean water = SurfaceWaterClassifier.isWaterColumn(
-                    sample.worldSurfaceWg(), sample.oceanFloorWg(), waterBiome, seaLevel);
-            if (!water) return WaterColumn.dry();
-            return WaterColumn.wet(
-                    SurfaceWaterClassifier.waterSurfaceY(
-                            sample.worldSurfaceWg(), sample.oceanFloorWg(),
-                            waterBiome, seaLevel, true),
-                    sample.oceanFloorWg(), "terrain_heightmap");
+            return terrainWater(sample, cache.isWaterLike(level, x, z), seaLevel);
         }));
     }
 
-    /** 涵洞查询仅读取水面和海床高度图，避免为轻量水深判断触发精确采样。 */
+    /** 涵洞与终验用同一采样口径，不能让后台规划请求实地区块。 */
     public static CulvertPlanner.Probe probe(ServerLevel level, TerrainSamplingCache cache,
                                              StreamsReflowingCompat.SamplingSession streams) {
-        if (level == null) {
+        if (level == null || cache == null) {
             return (x, z) -> CulvertPlanner.Water.unavailable();
         }
         StreamsReflowingCompat.SamplingSession session = streams == null
                 ? StreamsReflowingCompat.openSession(level) : streams;
         boolean streamsUsable = session != null && session.isAvailable();
         int seaLevel = level.getSeaLevel();
+        AccurateHeightSampler accurate = cache.getAccurateSampler(level);
         return (x, z) -> {
             if (streamsUsable) {
                 StreamsReflowingCompat.LakeColumn lake = session.sampleLake(x, z);
@@ -153,15 +146,23 @@ public final class FinalRoadWaterValidator {
                 StreamsReflowingCompat.RiverColumn river = session.sample(x, z);
                 if (river.inChannel()) return CulvertPlanner.Water.wet(river.waterSurfaceY(), river.bedY());
             }
-            int surface = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
-            int floor = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG, x, z);
-            boolean waterBiome = cache != null && cache.isWaterLike(level, x, z);
-            if (!SurfaceWaterClassifier.isWaterColumn(surface, floor, waterBiome, seaLevel)) {
-                return CulvertPlanner.Water.dry();
+            AccurateHeightSample sample = accurate.cachedSample(x, z);
+            if (sample == null) {
+                // 终验通常已经填好路宽缓存；缺列只补这个位置，仍然使用生成器采样。
+                sample = accurate.samplePositions(List.of(new BlockPos(x, 0, z))).get(AccurateHeightSample.key(x, z));
             }
-            return CulvertPlanner.Water.wet(
-                    SurfaceWaterClassifier.waterSurfaceY(surface, floor, waterBiome, seaLevel, true), floor);
+            if (sample == null) return CulvertPlanner.Water.unavailable();
+            WaterColumn column = terrainWater(sample, cache.isWaterLike(level, x, z), seaLevel);
+            return column.water() ? CulvertPlanner.Water.wet(column.waterSurfaceY(), column.bedY())
+                    : CulvertPlanner.Water.dry();
         };
+    }
+
+    private static WaterColumn terrainWater(AccurateHeightSample sample, boolean waterBiome, int seaLevel) {
+        int surface = sample.worldSurfaceWg(), bed = sample.oceanFloorWg();
+        if (!SurfaceWaterClassifier.isWaterColumn(surface, bed, waterBiome, seaLevel)) return WaterColumn.dry();
+        return WaterColumn.wet(SurfaceWaterClassifier.waterSurfaceY(surface, bed, waterBiome, seaLevel, true),
+                bed, "terrain_heightmap");
     }
 
     static ValidationResult validate(RoadData road, int tunnelClearHeight, ColumnSource columns) {

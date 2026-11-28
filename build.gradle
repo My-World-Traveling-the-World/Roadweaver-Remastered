@@ -34,8 +34,8 @@ allprojects {
 	apply plugin: 'architectury-plugin'
 	
 	group = 'net.shiroha233.roadweaver'
-	// 版本区分粗规划草图及湿、干短跨，便于同种子核对。
-	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.133'
+	// 桥台高度、涵洞施工与盘山入口已变化，需要独立版本用于同种子验证。
+	version = '2.3.1-1.21.1-plaincraft-direct-core.0.9.134'
 	repositories {
 		maven { url = 'https://maven.architectury.dev/' }
 		maven { url = 'https://maven.fabricmc.net/' }

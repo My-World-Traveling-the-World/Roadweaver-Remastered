@@ -211,6 +211,27 @@ class TargetProfileSolverTest {
     }
 
     @Test
+    void sampledWaterRaisesTheDeckAndKeepsDryBridgeLandingsUnconstrained() {
+        int[] ground = new int[TERRAIN.length];
+        Arrays.fill(ground, 70);
+        boolean[] bridge = new boolean[ground.length];
+        bridge[3] = bridge[4] = bridge[5] = true;
+        var cfg = config(true);
+        int[] profile = TargetProfileSolver.applyProfileSolver(null, centers(), ground, ground,
+                bridge, null, PINNED, 70, 70, cfg, LIMITS, null,
+                (t, c, cut, fill, step, two, constraints) -> fail("采样桥面应由正常 DP 求出"),
+                // 水只占桥身中间站；桥台根据引坡求解，不凭空增加水位约束。
+                (i, clearance) -> TargetProfileSolver.deckFloorFromWater(
+                        i == 4 ? 72 - cfg.bridgeDeckClearance() : Integer.MIN_VALUE, clearance),
+                null).orElseThrow();
+        assertEquals(70, profile[0]);
+        assertEquals(70, profile[8]);
+        assertEquals(72, profile[4], "已采样水面和净空必须约束实际纵断面");
+        assertTrue(profile[3] < profile[4] && profile[5] < profile[4], "干岸接坡不强行平抬");
+        assertEquals(0, ProfileFallback.violations(profile, 2, 4));
+    }
+
+    @Test
     void productionAdapterUsesActualDpRatherThanUnconditionallyFallingBack() {
         int[] ignoredOld = new int[TERRAIN.length];
         Arrays.fill(ignoredOld, 99);
