@@ -415,7 +415,8 @@ final class RoadPhysicalReuseNormalizer {
         for (RoadSpan span : road.spans()) {
             if (span == null || span.start() == null || span.end() == null) continue;
             boolean blocksReuse = switch (span.type()) {
-                case BRIDGE, ROAD_CROSSING, PROTECTED_GAP -> true;
+                // 涵洞不是普通路面，不能交给另一条道路的切填或铺装。
+                case BRIDGE, ROAD_CROSSING, CULVERT, PROTECTED_GAP -> true;
                 case NETWORK_REUSE -> blockNetworkReuse;
                 // Tunnel spans can be physical owners. They are filtered by
                 // physicalSpanKindCompatible before a secondary is claimed.
@@ -462,6 +463,8 @@ final class RoadPhysicalReuseNormalizer {
         markSpanKind(kinds, road, SpanType.TUNNEL_JUNCTION, SpanKind.TUNNEL, index);
         markSpanKind(kinds, road, SpanType.BRIDGE, SpanKind.OTHER, index);
         markSpanKind(kinds, road, SpanType.ROAD_CROSSING, SpanKind.OTHER, index);
+        // 验证已经让出去的施工段时，也不能用涵洞承接普通铺装。
+        markSpanKind(kinds, road, SpanType.CULVERT, SpanKind.OTHER, index);
         markSpanKind(kinds, road, SpanType.PROTECTED_GAP, SpanKind.OTHER, index);
         if (networkReuseIsOther) {
             markSpanKind(kinds, road, SpanType.NETWORK_REUSE, SpanKind.OTHER, index);

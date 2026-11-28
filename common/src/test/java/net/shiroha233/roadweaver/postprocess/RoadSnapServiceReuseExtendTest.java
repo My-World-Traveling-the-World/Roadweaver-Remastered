@@ -55,6 +55,20 @@ final class RoadSnapServiceReuseExtendTest {
         return road(stations, null);
     }
 
+    @Test
+    void culvertCannotHostAJunctionOrBeTrimmedAsOrdinaryRoad() {
+        var stations = java.util.stream.IntStream.rangeClosed(0, 10)
+                .mapToObj(x -> new int[]{x, 64, 0}).toList();
+        var culvert = road(stations, List.of(new RoadSpan(
+                new BlockPos(4, 64, 0), new BlockPos(6, 64, 0), SpanType.CULVERT)));
+        assertTrue(RoadSnapService.isSafeJunctionIndex(culvert, 3), "涵洞外的地表站仍然允许接路");
+        assertFalse(RoadSnapService.isSafeJunctionIndex(culvert, 4), "岸端也属于涵洞");
+        assertFalse(RoadSnapService.isSafeJunctionIndex(culvert, 5), "不能在水道正上方合并");
+        assertTrue(RoadSnapService.specialSpanMask(culvert)[5], "普通铺面修剪不得吞掉涵洞");
+        assertTrue(RoadSnapService.junctionBlockedSpanMask(culvert)[5], "共用走廊不得接管涵洞");
+        assertFalse(RoadSnapService.junctionBlockedSpanMask(culvert)[7], "越过岸端后恢复普通合并");
+    }
+
     /**
      * secondary：idx 0..7 落在 primary 上（复用段），idx 8 是交汇锚点另一端，
      * idx 9..17 在 primary 东侧 2 格、同高（应当被扩展成复用），idx 18..27 远去。

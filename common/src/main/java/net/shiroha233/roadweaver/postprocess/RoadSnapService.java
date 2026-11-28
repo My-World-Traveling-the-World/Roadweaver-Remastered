@@ -636,6 +636,7 @@ public final class RoadSnapService {
             if (span == null || span.start() == null || span.end() == null) continue;
             if (span.type() != SpanType.BRIDGE
                     && span.type() != SpanType.ROAD_CROSSING
+                    && span.type() != SpanType.CULVERT
                     && span.type() != SpanType.JUNCTION_ANCHOR
                     && span.type() != SpanType.TUNNEL_JUNCTION
                     && span.type() != SpanType.NETWORK_REUSE
@@ -655,12 +656,13 @@ public final class RoadSnapService {
      * {@link #isSafeJunctionIndex(RoadData, int)}. */
     static boolean[] junctionBlockedSpanMask(RoadData road) {
         if (road == null) return new boolean[0];
-        // P0-1: reuse the per-road derived masks instead of rebuilding the
-        // xz->index map and rescanning every span on each call.
-        boolean[] bridge = roadIndex(road).spanMask(SpanType.BRIDGE);
-        boolean[] crossing = roadIndex(road).spanMask(SpanType.ROAD_CROSSING);
+        // 涵洞也有必须保留的水道与两岸接坡，不能在共线区间被普通路合并掉。
+        var index = roadIndex(road);
+        boolean[] bridge = index.spanMask(SpanType.BRIDGE);
+        boolean[] crossing = index.spanMask(SpanType.ROAD_CROSSING);
+        boolean[] culvert = index.spanMask(SpanType.CULVERT);
         boolean[] blocked = new boolean[bridge.length];
-        for (int i = 0; i < blocked.length; i++) blocked[i] = bridge[i] || crossing[i];
+        for (int i = 0; i < blocked.length; i++) blocked[i] = bridge[i] || crossing[i] || culvert[i];
         return blocked;
     }
 
@@ -782,6 +784,7 @@ public final class RoadSnapService {
         if (road == null || index < 0 || index >= road.roadSegmentList().size()) return false;
         if (isIndexInSpan(road, index, SpanType.BRIDGE)
                 || isIndexInSpan(road, index, SpanType.ROAD_CROSSING)
+                || isIndexInSpan(road, index, SpanType.CULVERT)
                 || isIndexInSpan(road, index, SpanType.NETWORK_REUSE)
                 || isIndexInSpan(road, index, SpanType.PROTECTED_GAP)) return false;
         if (!isIndexInSpan(road, index, SpanType.TUNNEL)) return true;

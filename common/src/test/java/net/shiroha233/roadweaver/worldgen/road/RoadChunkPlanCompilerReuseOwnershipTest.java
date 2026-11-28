@@ -126,6 +126,25 @@ final class RoadChunkPlanCompilerReuseOwnershipTest {
     }
 
     @Test
+    void overlappingOrdinaryRoadCannotOwnACulvert() {
+        var ordinary = line(0, 64, 0, 11L, 12L, null);
+        var culvert = line(0, 64, 0, 13L, 14L, List.of(new RoadSpan(
+                new BlockPos(16, 64, 0), new BlockPos(32, 64, 0), SpanType.CULVERT)));
+        var normalized = RoadChunkPlanCompiler.normalizeForPhysicalOwnership(List.of(ordinary, culvert));
+        var result = byOwner(normalized, 13L, 14L);
+        var ordinaryResult = byOwner(normalized, 11L, 12L);
+        assertNotNull(result);
+        assertNotNull(ordinaryResult);
+        // 所有者按稳定指纹排序，不能把实物优先级写死成输入的先后顺序。
+        assertTrue(normalized.stream().anyMatch(r -> covers(r, 4)), "同线的普通区间仍然参与复用");
+        for (int i = 8; i <= 16; i++) {
+            assertFalse(covers(result, i), "岸端和水道必须由涵洞自己施工，站号 " + i);
+        }
+        assertFalse(covers(ordinaryResult, 12), "水道中心距普通岸站超过匹配半径，不能由涵洞替铺");
+        assertTrue(result.spans().stream().anyMatch(span -> span.type() == SpanType.CULVERT));
+    }
+
+    @Test
     void anOwnerThatStopsShortDoesNotSaveTheSurrender() {
         RoadData marker = surrendered(line(0, 64, 0, 11L, 12L, null), 4, 27);
         RoadData shortOwner = line(0, 64, 0, 13L, 14L, null);
