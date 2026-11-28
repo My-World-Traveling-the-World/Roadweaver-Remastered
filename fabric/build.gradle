@@ -62,8 +62,6 @@ dependencies {
 	testImplementation files(rootProject.worldgenApiArtifact('api/build/contract/roadweaver-api-contract-named.jar'))
 	testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	testImplementation 'net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7'
-	testImplementation 'io.github.llamalad7:mixinextras-fabric:0.5.4'
 	dioramaReleaseTest 'maven.modrinth:kwpTgbCk:CSxsaqxz'
 
 	// Dedicated servers omit LWJGL. Bundle its Java API and core JNI; the system GPU driver still provides the OpenCL ICD.
@@ -92,20 +90,13 @@ tasks.named('compileJava') {
 tasks.named('test', Test) {
 	useJUnitPlatform()
 	include '**/*Test.class'
-	// 实测发行包注入，防止开发环境编译通过但发行命名空间找不到目标。
+	// 对照两个真实发行包，防止开发环境编译通过但游戏里找不到底图快照入口。
 	def roadJar = tasks.named('remapJar').flatMap { it.archiveFile }
-	def intermediary = providers.provider {
-		def jars = net.fabricmc.loom.LoomGradleExtension.get(project)
-			.getMinecraftJars(net.fabricmc.loom.api.mappings.layered.MappingsNamespace.INTERMEDIARY)
-		return files(jars).singleFile
-	}
 	dependsOn tasks.named('remapJar')
-	inputs.files(roadJar, dioramaRelease, intermediary)
-	forkEvery = 1
+	inputs.files(roadJar, dioramaRelease)
 	doFirst {
 		systemProperty 'roadJar', roadJar.get().asFile.absolutePath
 		systemProperty 'dioramaReleaseJar', dioramaRelease.singleFile.absolutePath
-		systemProperty 'intermediaryClientJar', intermediary.get().toString()
 	}
 }
 

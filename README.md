@@ -25,6 +25,6 @@
 - **万里长城** 公布墙体保护范围，供道路规划和施工避让。[长城项目](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall)
 - **Tans Huge Trees** 的兼容版本可登记巨树占地，供道路避让。
 - **SeedGen 远景适配** 可读取已规划的道路几何，实际施工后由真实区块覆盖；需要对应补丁。
-- **Diorama 路线叠图** 从道路 0.9.129 起内置。安装 Diorama `0.11.0+1.21-1.21.1` 后，本机单人主世界的全屏地图会显示道路、桥梁和隧道。升级时可以移除旧独立叠图包。H/J 和手绘编辑仍由道路自己的地图提供。
+- **Diorama 底图**：安装 Diorama `0.11.0+1.21-1.21.1` 后，H 道路地图可用 Diorama 内存中的地表快照绘制俯视底图，叠上自己的路线、桥隧和手绘内容。Diorama 的原生地图独立运行，道路不修改它的标记或存档。底图随探索范围变化；没有可用快照时仍可使用原地图。
 
 基于 [shiroha233 的 RoadWeaver](https://github.com/shiroha-233/RoadWeaver)。灵感也来自 [Countered’s Settlement Roads](https://modrinth.com/mod/countereds-settlement-roads) 和 [RoadArchitect](https://github.com/FranckRJ/RoadArchitect)。[MIT 许可](LICENSE) · [第三方声明](NOTICE)

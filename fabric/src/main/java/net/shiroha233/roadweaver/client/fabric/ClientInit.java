@@ -178,7 +178,8 @@ public class ClientInit implements ClientModInitializer {
                 if (!ClientMapAccessGuard.canOpen(client)) {
                     continue;
                 }
-                client.setScreen(new RoadMapScreen());
+                client.setScreen(new RoadMapScreen(
+                        net.shiroha233.roadweaver.client.fabric.diorama.DioramaBackgroundCompat.create()));
             }
         });
     }

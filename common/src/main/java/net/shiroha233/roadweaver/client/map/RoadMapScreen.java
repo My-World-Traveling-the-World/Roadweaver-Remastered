@@ -65,6 +65,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
     private final MapWorkspacePanel workspacePanel = new MapWorkspacePanel();
     private final MapFilterState filterState = new MapFilterState();
     private final XaeroMapBackgroundRenderer xaeroBackground = new XaeroMapBackgroundRenderer();
+    private final MapTerrainBackground terrainBackground;
 
     /**
      * 玩家手绘路线编辑器。
@@ -98,7 +99,12 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
     private int mapX, mapY, mapW, mapH;
 
     public RoadMapScreen() {
+        this(MapTerrainBackground.NONE);
+    }
+
+    public RoadMapScreen(MapTerrainBackground terrainBackground) {
         super(Component.translatable("gui.roadweaver.map.title"));
+        this.terrainBackground = terrainBackground;
         this.inputHandler = new MapInputHandler(state, view, this);
     }
 
@@ -151,6 +157,7 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         // 必须与 init() 成对，否则采样会被永久挂起。
         net.shiroha233.roadweaver.runtime.RuntimeLoadPolicy.setMapScreenOpen(false);
         xaeroBackground.reset();
+        terrainBackground.reset();
         loadSession = null;
         MapSnapshotCache.putStoreSnapshot(currentDimensionId, snapshotStore);
     }
@@ -172,19 +179,21 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         int right = this.width;
         int bottom = this.height;
         Minecraft mc = this.minecraft;
-        TerrainSamplingSessionSnapshot samplingSession = terrainSamplingSession(mc);
+        TerrainSamplingSessionSnapshot samplingSession = MapScreenQueries.terrainSamplingSession(mc);
         ServerLevel samplingLevel = MapViewportController.resolveSingleplayerLevel(mc);
         List<AutomaticPlanningSamplingBounds> automaticPlanningSamplingBounds =
-                activeAutomaticPlanningSamplingBounds(samplingLevel);
+                MapScreenQueries.automaticPlanningBounds(samplingLevel, currentDimensionId);
         search.tick(System.currentTimeMillis(), currentDimensionId);
         MapSnapshot visibleSnapshot = visibleSnapshot();
         dockLayout = MapDockRenderer.layout(this.width, this.height);
         int workspaceBottom = workspaceBottomLimit(dockLayout);
         workspacePanel.setMousePosition(mouseX, mouseY);
         g.fill(0, 0, this.width, this.height, MapTheme.COLOR_BACKGROUND);
-        g.enableScissor(left, top, right, bottom);
-        xaeroBackground.render(g, this.minecraft, this, view,
-                contentW, contentH, mouseX, mouseY, partialTick);
+        // 底图先画，随后道路图层独立管理裁切，避免每次渲染多压一层裁切。
+        if (!terrainBackground.render(g, view, contentW, contentH)) {
+            xaeroBackground.render(g, this.minecraft, this, view,
+                    contentW, contentH, mouseX, mouseY, partialTick);
+        }
         g.enableScissor(left, top, right, bottom);
         MapRenderers.renderGrid(g, this.font, 0, 0, mapW, mapH, 0,
                 view.getMinX(), view.getMaxX(), view.getMinZ(), view.getMaxZ(),
@@ -642,10 +651,10 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
                 if (hit.value() instanceof BlockPos pos) onTeleportTo(pos);
             }
             case DETAIL_ALIAS -> {
-                if (hit.value() instanceof BlockPos pos) openAliasDialog(pos);
+                if (hit.value() instanceof BlockPos pos) MapScreenDialogs.openAliasEditor(this.minecraft, this, pos, DIALOG_ALIAS_TITLE);
             }
             case DETAIL_NOTE -> {
-                if (hit.value() instanceof BlockPos pos) openNoteEditor(pos);
+                if (hit.value() instanceof BlockPos pos) MapScreenDialogs.openNoteEditor(this.minecraft, this, pos);
             }
             case NONE -> {
             }
@@ -967,30 +976,13 @@ public class RoadMapScreen extends Screen implements MapInputHandler.Callbacks {
         MapScreenDialogs.openContextMenu(contextMenu, x, y,
                 MENU_TELEPORT, MENU_SET_ALIAS, MENU_EDIT_NOTE,
                 () -> onTeleportTo(target),
-                () -> openAliasDialog(target),
-                () -> openNoteEditor(target));
-    }
-
-    private void openAliasDialog(BlockPos target) {
-        MapScreenDialogs.openAliasEditor(this.minecraft, this, target, DIALOG_ALIAS_TITLE);
-    }
-
-    private void openNoteEditor(BlockPos target) {
-        MapScreenDialogs.openNoteEditor(this.minecraft, this, target);
+                () -> MapScreenDialogs.openAliasEditor(this.minecraft, this, target, DIALOG_ALIAS_TITLE),
+                () -> MapScreenDialogs.openNoteEditor(this.minecraft, this, target));
     }
 
     private boolean hasMapOpenPermission() {
         return MapOpenPermission.allows(this.minecraft);
     }
-
-    private TerrainSamplingSessionSnapshot terrainSamplingSession(Minecraft minecraft) {
-        return MapScreenQueries.terrainSamplingSession(minecraft);
-    }
-
-    private List<AutomaticPlanningSamplingBounds> activeAutomaticPlanningSamplingBounds(ServerLevel level) {
-        return MapScreenQueries.automaticPlanningBounds(level, currentDimensionId);
-    }
-
 
     private void denyMapAccessAndClose() {
         MapOpenPermission.denyAndClose(this.minecraft, this::onClose);

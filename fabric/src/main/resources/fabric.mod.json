@@ -26,8 +26,7 @@
 		]
 	},
 	"mixins": [
-		"roadweaver.mixins.json",
-		{"config": "roadweaver.diorama.mixins.json", "environment": "client"}
+		"roadweaver.mixins.json"
 	],
 	"depends": {
 		"roadweaver_api": ">=1.3.0",
