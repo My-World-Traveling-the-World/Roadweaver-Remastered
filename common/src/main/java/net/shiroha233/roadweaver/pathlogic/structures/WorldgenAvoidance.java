@@ -156,9 +156,10 @@ public final class WorldgenAvoidance {
         Set<StructureOwnerKey> endpointOwners = endpointOwnersForRoad(level, road);
         for (OwnedStructureBox owned : entry.boxes) {
             if (endpointOwners.contains(owned.owner())) continue;
-            if (isVerifiedBuilding(owned)
-                    && intersectsConstructionBand(owned, pos.getX(), pos.getZ(),
-                    pos.getY() - CONSTRUCTION_BELOW, pos.getY() + CONSTRUCTION_ABOVE)) return true;
+            // 先按施工体积排除无关包围盒，避免仅为分类就解码整个模板。
+            if (intersectsConstructionBand(owned, pos.getX(), pos.getZ(),
+                    pos.getY() - CONSTRUCTION_BELOW, pos.getY() + CONSTRUCTION_ABOVE)
+                    && isVerifiedBuilding(owned)) return true;
         }
         return false;
     }
@@ -185,8 +186,8 @@ public final class WorldgenAvoidance {
         Set<StructureOwnerKey> endpointOwners = endpointOwnersForRoad(world.getLevel(), road);
         for (OwnedStructureBox owned : entry.boxes) {
             if (endpointOwners.contains(owned.owner())) continue;
-            if (isVerifiedBuilding(owned)
-                    && owned.intersects(pos.getX(), pos.getZ(), pos.getY(), pos.getY(), 0)) return true;
+            if (owned.intersects(pos.getX(), pos.getZ(), pos.getY(), pos.getY(), 0)
+                    && isVerifiedBuilding(owned)) return true;
         }
         return false;
     }

@@ -175,10 +175,11 @@ public final class ObstacleJudge {
         for (List<OwnedStructureBox> list : snapshot.boxesByChunk().values()) {
             if (list == null) continue;
             for (OwnedStructureBox owned : list) {
-                if (owned == null || !isVerifiedBuilding(owned)) continue;
+                if (owned == null || owned.box() == null) continue;
                 StructureOwnerKey owner = owned.owner();
                 if (owner == null || snapshot.ownsEndpoint(owner)) continue;
-                if (owned.box() == null) continue;
+                // 被端点豁免的建筑不参与绕行簇，没必要解析真实占用。
+                if (!isVerifiedBuilding(owned)) continue;
                 pieces.computeIfAbsent(owner, ignored -> new LinkedHashSet<>()).add(owned);
             }
         }

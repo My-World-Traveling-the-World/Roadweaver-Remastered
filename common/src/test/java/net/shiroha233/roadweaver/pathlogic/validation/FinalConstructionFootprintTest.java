@@ -59,6 +59,25 @@ final class FinalConstructionFootprintTest {
     }
 
     @Test
+    void verifiedBuildingsLeaveAllInternalCollisionStationsAndKeepTheRest() {
+        var road = footprint(null);
+        var second = road.roadSegmentList().get(3).middlePos();
+        var snapshot = FootprintStructureFixture.buildings(List.of(OUTER_COLUMN, second));
+        var witnessed = new java.util.TreeSet<Integer>();
+        var candidate = FinalRoadStructureValidator.retainVerifiedBuildingGaps(snapshot, road, FLAT, hit -> {
+            witnessed.add(hit.segmentIndex());
+            return true;
+        });
+        assertNotNull(candidate);
+        assertEquals(java.util.Set.of(2, 3), witnessed);
+        var first = road.roadSegmentList().get(2).middlePos();
+        assertEquals(List.of(new RoadSpan(first, second, SpanType.PROTECTED_GAP)), candidate.spans());
+        assertTrue(FinalRoadStructureValidator.validate(snapshot, candidate, FLAT).safe());
+        assertNull(FinalRoadStructureValidator.retainVerifiedBuildingGaps(snapshot, road, FLAT,
+                hit -> hit.segmentIndex() == 2), "只确认一处真实碰撞时不能忽略剩下的一处");
+    }
+
+    @Test
     void observesTreeReservationAtFinalOuterColumnWithoutChangingTheRoadDecision() {
         var snapshot = FootprintStructureFixture.snapshot(null);
         var lookup = (FinalRoadStructureValidator.ReservationLookup)

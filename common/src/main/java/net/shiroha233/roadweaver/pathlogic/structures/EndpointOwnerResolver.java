@@ -361,8 +361,10 @@ public final class EndpointOwnerResolver {
         if (endpoint == null || boxes == null || boxes.isEmpty()) return null;
         Map<StructureOwnerKey, BoundingBox> merged = new HashMap<>();
         for (OwnedStructureBox owned : boxes) {
-            if (!isVerifiedBuilding(owned) || owned.owner() == null || owned.box() == null) continue;
+            if (owned == null || owned.owner() == null || owned.box() == null) continue;
             if (!isVillageStructure(owned.owner().structureId())) continue;
+            // 距离要在合并同一村庄的盒子后判断；只把非村庄的类型筛选前移。
+            if (!isVerifiedBuilding(owned)) continue;
             merged.merge(owned.owner(), owned.box(), StructureAvoidanceService::encapsulate);
         }
         long maximumDistanceSquared = (long) ENDPOINT_OWNER_INFERENCE_MATCH_BLOCKS

@@ -386,15 +386,17 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
         if (candidates == null || candidates.isEmpty()) return null;
         for (OwnedStructureBox owned : candidates) {
-            if (!isVerifiedBuilding(owned) || ownsEndpoint(owned.owner())) continue;
+            if (ownsEndpoint(owned.owner())) continue;
             if (forcedVerticalOwners.contains(owned.owner())) {
                 // Same underground-pass rule as findCollision: a band lying
                 // entirely below the structure floor is judged by the
                 // ordinary band overlap, not by the full footprint.
                 BoundingBox box = owned.box();
                 if (box != null && maxY >= box.minY()
-                        && owned.intersects(x, z, box.minY(), box.maxY(), horizontalRadius)) return owned;
-            } else if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)) {
+                        && owned.intersects(x, z, box.minY(), box.maxY(), horizontalRadius)
+                        && isVerifiedBuilding(owned)) return owned;
+            } else if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)
+                    && isVerifiedBuilding(owned)) {
                 return owned;
             }
         }
@@ -407,8 +409,10 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
         List<OwnedStructureBox> candidates = boxesByChunk.get(ChunkPos.asLong(x >> 4, z >> 4));
         if (candidates == null || candidates.isEmpty()) return null;
         for (OwnedStructureBox owned : candidates) {
-            if (!isVerifiedBuilding(owned) || !ownsEndpoint(owned.owner())) continue;
-            if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)) return owned;
+            // 包围盒不相交时，没必要触发真实模板占用的惰性解码。
+            if (!ownsEndpoint(owned.owner())) continue;
+            if (intersectsPlanningBand(owned, x, z, minY, maxY, horizontalRadius)
+                    && isVerifiedBuilding(owned)) return owned;
         }
         return null;
     }
@@ -778,7 +782,6 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
                 * ENDPOINT_VILLAGE_GROUP_RADIUS_BLOCKS;
         for (OwnedStructureBox owned : boxes) {
             if (owned == null || owned.owner() == null || owned.box() == null
-                    || !isVerifiedBuilding(owned)
                     || !isVillageStructure(owned.owner().structureId())) continue;
             // 只聚合与端点村庄同 family 的建筑片,相邻独立村庄保持为过路障碍。
             if (!endpointVillageFamilies.contains(
@@ -787,7 +790,8 @@ public record PlanningSnapshot(Set<OwnedStructureBox> boxes,
                     owned.box(), connection.from());
             long toDistance = StructureAvoidanceService.horizontalDistanceSquared(
                     owned.box(), connection.to());
-            if (Math.min(fromDistance, toDistance) <= radiusSquared) {
+            // 路线边上的其他村庄不影响端点归属，无需解码其模板。
+            if (Math.min(fromDistance, toDistance) <= radiusSquared && isVerifiedBuilding(owned)) {
                 expanded.add(owned.owner());
             }
         }

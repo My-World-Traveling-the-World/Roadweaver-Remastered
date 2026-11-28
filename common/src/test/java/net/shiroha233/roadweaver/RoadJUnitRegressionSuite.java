@@ -541,6 +541,7 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.LegacyTargetProfileTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.LegacyTargetProfileWiringTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.PlanningSnapshotActivationTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.EndpointVillageLazyVerificationTest"),
                 // 村庄端点过滤必须保留外来道路、阈值边界及整轮撤销原因。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.VillageEndpointFilterTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.structures.StructureBoxIndexTest"),

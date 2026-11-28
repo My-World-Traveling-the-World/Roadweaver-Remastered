@@ -508,7 +508,8 @@ public final class PreparedStartResolver {
 
     public static boolean probeEnabled() {
         String flag = System.getProperty(BIOME_PROBE_PROPERTY);
-        return flag == null || !"false".equalsIgnoreCase(flag.trim());
+        // 实机探针误拒过有效结构；保留主动诊断入口，默认不花计算重复估算。
+        return flag != null && Boolean.parseBoolean(flag.trim());
     }
 
     public static List<OwnedStructureBox> cachedPreparedStart(PreparedStartKey start) {

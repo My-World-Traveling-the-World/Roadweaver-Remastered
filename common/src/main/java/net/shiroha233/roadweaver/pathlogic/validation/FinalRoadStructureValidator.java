@@ -334,28 +334,40 @@ public final class FinalRoadStructureValidator {
                                                       RoadData road,
                                                       TerrainSamplingCache cache,
                                                       StreamsReflowingCompat.SamplingSession streams) {
-        if (road == null || road.roadSegmentList() == null || road.roadSegmentList().size() < 3) {
-            return null;
-        }
+        if (level == null || road == null || road.roadSegmentList().size() < 3) return null;
+        if (!ConfigService.get().structureAvoidanceEnabled()) return road;
+        var snapshot = StructureAvoidanceService.requirePlanningSnapshot(level, connection);
+        var sampler = cache.getAccurateSampler(level);
+        var context = RoadConstructionVolumePlanner.Context.forWorld(level, sampler, streams,
+                prefetchMissingValidationColumns(road, sampler));
+        return retainVerifiedBuildingGaps(snapshot, road, context,
+                collision -> StructureAvoidanceService.isVerifiedBuildingCollision(
+                        level, connection, collision.owner(), collision.position(), collision.minY(), collision.maxY()));
+    }
+
+    static RoadData retainVerifiedBuildingGaps(PlanningSnapshot snapshot, RoadData road,
+            RoadConstructionVolumePlanner.Context context, java.util.function.Predicate<Collision> verified) {
         RoadData current = road;
-        Set<Integer> marked = new HashSet<>();
-        for (int attempt = 0; attempt < current.roadSegmentList().size(); attempt++) {
-            ValidationResult validation = validate(level, connection, current, cache, streams);
-            if (validation.safe()) return current;
-            Collision collision = validation.collision();
-            int index = collision == null ? -1 : collision.segmentIndex();
-            if (index <= 0 || index >= current.roadSegmentList().size() - 1
-                    || collision == null
-                    || !StructureAvoidanceService.isVerifiedBuildingCollision(
-                    level, connection, collision.owner(), collision.position(),
-                    collision.minY(), collision.maxY())
-                    || !marked.add(index)) {
-                return null;
-            }
-            current = smoothProtectedGapApproaches(withProtectedGapAt(current, index));
+        int count = road.roadSegmentList().size();
+        var marked = new java.util.BitSet(count);
+        while (true) {
+            // 施工体积先全扫一次，坡道真的改变并产生新碰撞时才需要新一轮。
+            var additions = new java.util.BitSet(count);
+            boolean complete = RoadConstructionVolumePlanner.visit(current, context, volume -> {
+                if (!isRoadBodyVolume(volume.kind())) return true;
+                Collision hit = findCollision(snapshot, volume);
+                if (hit == null || additions.get(hit.segmentIndex())) return true;
+                int index = hit.segmentIndex();
+                if (index <= 0 || index >= count - 1 || marked.get(index) || !verified.test(hit)) return false;
+                additions.set(index);
+                return true;
+            });
+            if (!complete) return null;
+            if (additions.isEmpty()) return current;
+            marked.or(additions);
+            current = smoothProtectedGapApproaches(withProtectedGaps(current, additions));
             if (!RoadDataValidator.validateFinalRoad(current).valid()) return null;
         }
-        return null;
     }
 
     /** 接受保护缺口前只降高侧接坡；物理跨度固定，窗口容纳不了的冲突保留失败原因交给上层策略。 */
@@ -509,16 +521,15 @@ public final class FinalRoadStructureValidator {
         return ((long) pos.getX() << 32) ^ (pos.getZ() & 0xffffffffL);
     }
 
-    private static RoadData withProtectedGapAt(RoadData road, int index) {
-        if (road == null || road.roadSegmentList() == null
-                || index < 0 || index >= road.roadSegmentList().size()) return road;
-        BlockPos point = road.roadSegmentList().get(index).middlePos();
-        if (point == null) return road;
+    private static RoadData withProtectedGaps(RoadData road, java.util.BitSet additions) {
         List<RoadSpan> spans = new ArrayList<>(road.spans() == null ? List.of() : road.spans());
-        boolean exists = spans.stream().anyMatch(span -> span != null
-                && span.type() == SpanType.PROTECTED_GAP
-                && point.equals(span.start()) && point.equals(span.end()));
-        if (!exists) spans.add(new RoadSpan(point, point, SpanType.PROTECTED_GAP));
+        // 连续命中的站合为一个缺口，接坡只处理真正保留的两端。
+        for (int start = additions.nextSetBit(0); start >= 0; ) {
+            int end = additions.nextClearBit(start);
+            spans.add(new RoadSpan(road.roadSegmentList().get(start).middlePos(),
+                    road.roadSegmentList().get(end - 1).middlePos(), SpanType.PROTECTED_GAP));
+            start = additions.nextSetBit(end);
+        }
         return new RoadData(road.width(), road.roadType(), road.materials(), road.slabMaterials(),
                 road.roadSegmentList(), List.copyOf(spans), road.targetY(),
                 road.ownerA2dKey(), road.ownerB2dKey());
