@@ -17,7 +17,7 @@ final class RoadProfileRecovery {
 
     @FunctionalInterface
     interface Search {
-        void tryAround(List<BlockPos> line, int station, Predicate<List<BlockPos>> test);
+        void tryAround(List<BlockPos> line, int station, ProfileConflict conflict, Predicate<List<BlockPos>> test);
     }
 
     private RoadProfileRecovery() {}
@@ -35,7 +35,7 @@ final class RoadProfileRecovery {
                     line.get(conflict.station()), line.get(conflict.limitingStation()), line.get(station),
                     conflict.requiredMinY(), conflict.reachableMaxY(), conflict.reason());
             var accepted = new AtomicReference<Profile>();
-            search.tryAround(line, station, candidate -> {
+            search.tryAround(line, station, conflict, candidate -> {
                 // 两端接入位置固定；沿用正式栅格化规则，让坡度 DP 按实际施工站距重新求解。
                 if (!sameColumn(line.getFirst(), candidate.getFirst()) || !sameColumn(line.getLast(), candidate.getLast())) return false;
                 var rebuilt = PathMetricsOps.rasterizeLocalRepair(candidate, width);
@@ -49,7 +49,8 @@ final class RoadProfileRecovery {
                 }
             });
             if (accepted.get() != null) return accepted.get();
-            throw failure;
+            // 留下能在原粗线路上重定位的坐标，下一轮只精采确知失败的局部。
+            throw new ProfileConflict.Rejected(conflict.atRepairCenter(line.get(station)));
         }
     }
 

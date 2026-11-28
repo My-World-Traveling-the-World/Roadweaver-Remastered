@@ -69,6 +69,12 @@ import static net.shiroha233.roadweaver.pathlogic.structures.ObstacleJudge.plann
 final class RepairAcceptance {
     static boolean isAccepted(List<BlockPos> original, List<BlockPos> candidate) {
         if (candidate == null || candidate.size() < 2 || findFirstViolation(candidate) != null) return false;
+        return withinDetourLength(original, candidate);
+    }
+
+    /** 纵断面候选先约束长度；实采地形坡度不能替代经挖填后的正式道路坡度。 */
+    static boolean withinDetourLength(List<BlockPos> original, List<BlockPos> candidate) {
+        if (candidate == null || candidate.size() < 2) return false;
         double originalLength = routeLength(original);
         return routeLength(candidate) <= Math.max(originalLength + 32.0D,
                 originalLength * MAX_ROUTE_LENGTH_MULTIPLIER);

@@ -175,7 +175,7 @@ public final class InitialPlanWaiter {
                 List<StructureConnection> remaining = new ArrayList<>(roadTasks);
                 var pathfinding = ConfigService.get().pathfindingCost();
                 int configuredStep = pathfinding.effectivePathGridStep();
-                // 绑定、探测、预取、拼接、重新提交使用同一局部档位，否则旧走廊会因缓存键失配而漏读。
+                // 原走廊按来源档位读取；局部预取、拼接、重新提交共用精修档位。
                 int localRepairStep = pathfinding.localRepairGridStep();
                 int[] startupBounds = ConflictWindowOps.initialSamplingBounds(level, roadTasks);
                 List<Integer> tiers = RoutePrecisionRetryPolicy.initialBatchSteps(configuredStep);
@@ -369,7 +369,7 @@ public final class InitialPlanWaiter {
                     // 剩余约 190s 都在按 step=2 重生成被交接的路。纯观测。
                     long splicePhaseStartedAt = System.nanoTime();
                     await(level, RouteRefinementOps.refineInitialRoutesAsync(
-                            level, remaining, localRepairStep));
+                            level, remaining, configuredStep, localRepairStep, profileFailures));
                     long splicePhaseMs = elapsedMs(splicePhaseStartedAt);
                     InitialGenerationProgressTracker.setRoutePhaseOperation(
                             InitialGenerationProgressTracker.RoutePhase.LOCAL_REPAIR, "planning");

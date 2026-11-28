@@ -24,9 +24,10 @@ final class RoadProfileRecoveryTest {
         assertEquals(ProfileConflict.Reason.LOCKED_HEIGHT, original.conflict().reason());
         int expectedLimiter = original.conflict().limitingStation();
         assertEquals(6, expectedLimiter);
-        var chosen = RoadProfileRecovery.solve(line, 5, RoadProfileRecoveryTest::profile, (seen, station, perform) -> {
+        var chosen = RoadProfileRecovery.solve(line, 5, RoadProfileRecoveryTest::profile, (seen, station, witness, perform) -> {
             assertEquals(STRAIGHT, seen);
             assertEquals(expectedLimiter, station);
+            assertEquals(original.conflict(), witness, "地表搜索必须收到锁高端和限制端的同一份见证");
             assertFalse(perform.test(STRAIGHT), "原线不能假装是替代线");
             assertTrue(perform.test(AROUND), "相同端点有可施工的地表旁路");
         });
@@ -42,17 +43,19 @@ final class RoadProfileRecoveryTest {
     @Test void validRoutesDoNotSearchAndAnInvalidCandidateDoesNotPublish() {
         var valid = PathPostProcessor.rasterizeStations(PathPostProcessor.densifyStationGaps(AROUND, 2), 5);
         var untouched = RoadProfileRecovery.solve(valid, 5, RoadProfileRecoveryTest::profile,
-                (line, station, accept) -> fail("有效线路不应再次预采样或搜索"));
+                (line, station, witness, accept) -> fail("有效线路不应再次预采样或搜索"));
         assertSame(valid, untouched.segments());
         var input = PathPostProcessor.rasterizeStations(STRAIGHT, 5);
         var calls = new AtomicInteger();
         var failure = assertThrows(ProfileConflict.Rejected.class, () -> RoadProfileRecovery.solve(input, 5,
-                RoadProfileRecoveryTest::profile, (line, station, accept) -> {
+                RoadProfileRecoveryTest::profile, (line, station, witness, accept) -> {
                     calls.incrementAndGet();
                     assertFalse(accept.test(List.of(STRAIGHT.getFirst(), new BlockPos(11, 64, 3))));
                 }));
         assertEquals(1, calls.get());
         assertEquals(ProfileConflict.Reason.LOCKED_HEIGHT, failure.conflict().reason());
+        assertEquals(STRAIGHT.get(6), failure.conflict().repairCenter(),
+                "下一轮必须用精采坐标选窗，正式站号不能作为粗线路下标");
     }
 
     private static RoadProfileRecovery.Profile profile(List<RoadSegmentPlacement> segments) {

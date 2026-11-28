@@ -4,8 +4,6 @@ package net.shiroha233.roadweaver.planning;
 // 日志保留原诊断标记与字段以兼容分析工具；中文主说明使用编译期常量，避免热路径翻译开销。
 
 import static net.shiroha233.roadweaver.pathlogic.structures.SnapshotOrchestrator.*;
-import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
-import net.shiroha233.roadweaver.pathlogic.structures.PrepareTiming;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -13,9 +11,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.ModConfig;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
-import net.shiroha233.roadweaver.core.model.ConnectionStatus;
-import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
@@ -29,15 +24,12 @@ import net.shiroha233.roadweaver.persistence.WorldDataProvider;
 import net.shiroha233.roadweaver.persistence.files.StructureFileStorage;
 import net.shiroha233.roadweaver.persistence.sharded.RoadShardStorage;
 import net.shiroha233.roadweaver.config.sub.TerrainSamplingMode;
-import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.planning.path.PlannedPathCache;
 import net.shiroha233.roadweaver.planning.path.PlannedPathKey;
 import net.shiroha233.roadweaver.planning.path.SharedEndpointPathReuse;
 import net.shiroha233.roadweaver.planning.terrain.RoadTerrainPlanningPipeline;
 import net.shiroha233.roadweaver.planning.terrain.RoadTerrainPlanningPort;
 import net.shiroha233.roadweaver.planning.terrain.AutomaticPlanningSamplingActivities;
 import net.shiroha233.roadweaver.planning.terrain.AutomaticPlanningSamplingBounds;
-import net.shiroha233.roadweaver.planning.terrain.TerrainSamplingSessions;
 import net.shiroha233.roadweaver.network.ServerMapPlanningActivityBridge;
 import net.shiroha233.roadweaver.runtime.ThreadPoolManager;
 import net.shiroha233.roadweaver.search.StructureIndexService;
@@ -80,11 +72,8 @@ import static net.shiroha233.roadweaver.planning.PlanningBoundsOps.*;
  * 阈值一字未改（含缩进）。</p>
  */
 public final class ConflictWindowOps {
-    public static List<LocalSamplingWindow> conflictSamplingWindows(ServerLevel level,
-                                                                      StructureConnection connection,
-                                                                      int padding,
-                                                                      PathfindingCostConfig pathConfig) {
-        if (level == null || connection == null) return List.of();
+    static List<LocalSamplingWindow> conflictSamplingWindows(ServerLevel level, StructureConnection connection,
+            int padding, List<BlockPos> path, BlockPos profileCenter) {
         List<LocalSamplingWindow> windows = new ArrayList<>();
         for (BlockPos hintedCenter : consumeProtectedGapHints(connection)) {
             windows.add(windowForConflictCenter(hintedCenter, padding));
@@ -95,11 +84,11 @@ public final class ConflictWindowOps {
                     windows.size(), padding, connection.from(), connection.to());
         }
 
-        ModConfig config = ConfigService.get();
-        List<BlockPos> path = PlannedPathCache.find(
-                level, connection,
-                TerrainSamplingSessions.forLevel(level).effectiveMode(),
-                pathConfig == null ? config.pathfindingCost() : pathConfig).orElse(List.of());
+        // 精确纵断面已定位失败时，保留已有保护缺口，但不因粗采 Y 的假跳变扩大精采范围。
+        if (profileCenter != null) {
+            windows.add(windowForConflictCenter(profileCenter, padding));
+            return mergeNearbyWindows(windows, padding);
+        }
         if (path.size() < 2) {
             return mergeNearbyWindows(windows, padding);
         }

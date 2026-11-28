@@ -11,10 +11,9 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
 import net.shiroha233.roadweaver.core.model.StructureConnection;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.generation.progress.InitialGenerationProgressTracker;
 import net.shiroha233.roadweaver.runtime.RuntimeLoadPolicy;
@@ -489,68 +488,10 @@ public final class StructureRepair {
         return Math.max(0, (int) Math.ceil(width / 2.0D));
     }
 
-    /** 纵坡判定失败后，沿用与建筑绕行相同的冻结保护范围，只尝试地表。 */
-    public static boolean trySurface(List<BlockPos> path, int station, int width, ServerLevel level,
-            StructureConnection connection, AccurateHeightSampler sampler, PathfindingCostConfig config,
-            Predicate<List<BlockPos>> accept) {
-        int limit = clampCircleProbeRadius(AccurateGradeRepairPlanner.heightAnomalyDetourMaxBlocks());
-        var center = path.get(station);
-        int step = config.localRepairGridStep();
-        // 窗口半径与采样精度各自受界；端点留一个网格的余量，避免吸附后刚好跑出圆窗。
-        for (int radius = Math.min(48, limit); ; radius = limit) {
-            int inside = radius - 3 * step;
-            if (inside > 0) {
-                int from = ConflictDetector.walkContextStart(path, station, inside);
-                int to = ConflictDetector.walkContextEnd(path, station, inside);
-                if (to > from + 1) {
-                    var original = path.subList(from, to + 1);
-                    AccurateGradeRepairPlanner.awaitLocalStructureCircle(level, connection, center, radius);
-                    List<BlockPos> replacement;
-                    try (var ignored = StructureAvoidanceService.activatePlanningSnapshot(level, connection, width / 2)) {
-                        // 地表先尝试绕开真正限制坡度的内部列；固定入口在窗口端点时仍可正常接入。
-                        var exclude = from < station && station < to
-                                ? avoidLimitingColumn(center, width) : AccurateGradeRepairPlanner.EdgeObstacle.NONE;
-                        replacement = LocalRouteSearch.findLocalRoute(original, sampler, config.withPathGridStep(step),
-                                radius, exclude, step, false, 0, null, Integer.MIN_VALUE, center);
-                    }
-                    // 每个半径保留搜索出口，预算耗尽与真正无路不能再混成一个false。
-                    String searchDiag = consumeLocalSearchDiag();
-                    String verdict = "no_candidate";
-                    if (replacement != null) verdict = "grade_or_length_rejected";
-                    if (RepairAcceptance.isAccepted(original, replacement)) {
-                        var candidate = new ArrayList<BlockPos>(path.size() - original.size() + replacement.size());
-                        candidate.addAll(path.subList(0, from));
-                        candidate.addAll(replacement);
-                        candidate.addAll(path.subList(to + 1, path.size()));
-                        // 局部纵坡修复不能解除上游对禁止走廊的约束。
-                        if (RawPathSearch.keepAllowedReplacement(config, path, candidate) != candidate) {
-                            verdict = "corridor_rejected";
-                        } else if (accept.test(List.copyOf(candidate))) {
-                            LOGGER.info("【纵断面局部绕行接受】 center={} radius={} window={}..{} {}",
-                                    center, radius, from, to, searchDiag);
-                            return true;
-                        } else {
-                            verdict = "profile_or_geometry_rejected";
-                        }
-                    }
-                    LOGGER.info("【纵断面局部绕行未接受】 center={} radius={} step={} window={}..{} reason={} {}",
-                            center, radius, step, from, to, verdict, searchDiag);
-                }
-            }
-            if (radius == limit) return false;
-        }
-    }
-
-    /** 粗网格边可能从低柱上方跳过去，故按整条边到该柱的水平距离判定。 */
-    private static AccurateGradeRepairPlanner.EdgeObstacle avoidLimitingColumn(BlockPos center, int width) {
-        double clearance = Math.max(1, width / 2);
-        return (from, to) -> {
-            double dx = to.getX() - from.getX(), dz = to.getZ() - from.getZ();
-            double x = center.getX() - from.getX(), z = center.getZ() - from.getZ();
-            double lengthSquared = dx * dx + dz * dz;
-            double t = lengthSquared == 0 ? 0 : Math.clamp((x * dx + z * dz) / lengthSquared, 0.0D, 1.0D);
-            double ex = x - t * dx, ez = z - t * dz;
-            return ex * ex + ez * ez < clearance * clearance;
-        };
+    /** 保持调用方共用局部避让入口；接坡策略与建筑冲突策略各自演进。 */
+    public static boolean tryProfileSurface(List<BlockPos> path, int station, ProfileConflict conflict, int width,
+            ServerLevel level, StructureConnection connection, AccurateHeightSampler sampler,
+            PathfindingCostConfig config, Predicate<List<BlockPos>> accept) {
+        return ProfileSurfaceRepair.trySurface(path, station, conflict, width, level, connection, sampler, config, accept);
     }
 }

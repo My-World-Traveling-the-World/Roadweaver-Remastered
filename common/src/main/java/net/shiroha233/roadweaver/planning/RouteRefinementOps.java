@@ -30,6 +30,8 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
 
 import net.shiroha233.roadweaver.core.model.ConnectionStatus;
 
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
+
 import net.shiroha233.roadweaver.core.model.RoadData;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
@@ -179,6 +181,12 @@ public final class RouteRefinementOps {
             List<StructureConnection> connections,
 
             int step) {
+        return refineInitialRoutesAsync(level, connections, step, step, Map.of());
+    }
+
+    public static CompletableFuture<Void> refineInitialRoutesAsync(ServerLevel level,
+            List<StructureConnection> connections, int sourceStep, int step,
+            Map<PlannedPathKey, ProfileConflict> profileFailures) {
 
         if (level == null || connections == null || connections.isEmpty()) {
 
@@ -188,7 +196,11 @@ public final class RouteRefinementOps {
 
         // 圆窗半径独立于网格间距；精度改变只增加或减少窗内采点，不扩大精采范围。
 
-        int padding = ConfigService.get().planning().localConflictRadiusBlocks();
+        ModConfig config = ConfigService.get();
+        int padding = config.planning().localConflictRadiusBlocks();
+        var mode = TerrainSamplingSessions.forLevel(level).effectiveMode();
+        var repairConfig = config.pathfindingCost().withPathGridStep(step);
+        var sourceConfig = sourceStep == step ? repairConfig : config.pathfindingCost().withPathGridStep(sourceStep);
 
         List<CompletableFuture<Void>> refinements = new java.util.ArrayList<>();
 
@@ -200,15 +212,8 @@ public final class RouteRefinementOps {
 
             if (connection == null) continue;
 
-            ModConfig config = ConfigService.get();
-
-            TerrainSamplingMode mode = TerrainSamplingSessions.forLevel(level).effectiveMode();
-
-            PathfindingCostConfig retryPathConfig = config.pathfindingCost().withPathGridStep(step);
-
-            List<BlockPos> originalPath = PlannedPathCache.find(
-
-                    level, connection, mode, retryPathConfig).orElse(List.of());
+            List<BlockPos> originalPath = repairSourcePath(sourceConfig, repairConfig,
+                    fingerprintConfig -> PlannedPathCache.find(level, connection, mode, fingerprintConfig));
 
             if (originalPath.size() < 3) {
 
@@ -220,9 +225,9 @@ public final class RouteRefinementOps {
 
             }
 
-            List<LocalSamplingWindow> localWindows = conflictSamplingWindows(
-
-                    level, connection, padding, retryPathConfig);
+            var failure = profileFailures.get(PlannedPathKey.of(connection));
+            List<LocalSamplingWindow> localWindows = conflictSamplingWindows(level, connection, padding,
+                    originalPath, failure == null ? null : failure.repairCenter());
 
             if (localWindows.isEmpty()) {
 
@@ -349,6 +354,16 @@ public final class RouteRefinementOps {
     }
 
 
+
+    /** 优先沿用已拼接的路线；原档位只用于取底稿，不能充作精修后的产物。 */
+    static List<BlockPos> repairSourcePath(PathfindingCostConfig source, PathfindingCostConfig repair,
+            java.util.function.Function<PathfindingCostConfig, Optional<List<BlockPos>>> lookup) {
+        var rebound = lookup.apply(repair);
+        if (source.effectivePathGridStep() == repair.effectivePathGridStep()) {
+            return rebound.orElseGet(List::of);
+        }
+        return rebound.or(() -> lookup.apply(source)).orElseGet(List::of);
+    }
 
     public static CompletableFuture<Void> refineLocalRouteWindowAsync(
 

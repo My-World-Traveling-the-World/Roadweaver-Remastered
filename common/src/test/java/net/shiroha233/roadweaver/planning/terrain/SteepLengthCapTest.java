@@ -5,6 +5,9 @@ import net.shiroha233.roadweaver.core.constants.RoadConstants;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.IntStream;
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,6 +29,32 @@ import static net.shiroha233.roadweaver.planning.terrain.SearchBudgetPolicy.*;
  * ④判据不成立/采样不足/开关关掉时，必须原样回到 1.6。</p>
  */
 final class SteepLengthCapTest {
+
+    @Test
+    void profileRecoveryUsesTheLockedEndToGiveTheApproachMoreRoom() {
+        var line = IntStream.rangeClosed(0, 400).mapToObj(x -> new BlockPos(x, 64, 0)).toList();
+        var west = new ProfileConflict(ProfileConflict.Reason.LOCKED_HEIGHT, 0, 200, 100, 80);
+        var east = new ProfileConflict(ProfileConflict.Reason.LOCKED_HEIGHT, 400, 200, 100, 80);
+        assertEquals(List.of(new ProfileSurfaceRepair.Window(200, 48, 2),
+                new ProfileSurfaceRepair.Window(176, 96, 20)), ProfileSurfaceRepair.windows(line, 200, west, 5, 96));
+        assertEquals(new ProfileSurfaceRepair.Window(224, 96, 20),
+                ProfileSurfaceRepair.windows(line, 200, east, 5, 96).getLast());
+    }
+
+    @Test
+    void rawSteepColumnGoesToProfileSolverButUnboundedDetourDoesNot() {
+        var start = new BlockPos(0, 64, 0);
+        var end = new BlockPos(20, 64, 0);
+        var original = List.of(start, end);
+        int spike = 64 + AccurateGradeRepairPlanner.localWindowRise() + 1;
+        var steep = List.of(start, new BlockPos(9, 64, 1), new BlockPos(10, spike, 1),
+                new BlockPos(11, 64, 1), end);
+        // 这里守的是判据交接：粗坡度拒绝不能代替正式挖填求解的结果。
+        assertFalse(RepairAcceptance.isAccepted(original, steep));
+        assertTrue(ProfileSurfaceRepair.candidateLengthAllowed(original, steep));
+        assertFalse(ProfileSurfaceRepair.candidateLengthAllowed(original,
+                List.of(start, new BlockPos(10, 64, 300), end)));
+    }
 
     /** 一条 300 格的直连弦。 */
     private static final double CHORD = 300.0D;

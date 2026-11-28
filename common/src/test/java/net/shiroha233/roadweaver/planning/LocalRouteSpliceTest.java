@@ -5,7 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.IntStream;
+import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
+import net.shiroha233.roadweaver.core.model.ConnectionStatus;
+import net.shiroha233.roadweaver.core.model.StructureConnection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,5 +49,36 @@ final class LocalRouteSpliceTest {
 
     private static BlockPos point(int x, int z) {
         return new BlockPos(x, 64, z);
+    }
+
+    @Test
+    void readsOriginalGridOnlyWhenTheRepairedGridHasNoPath() {
+        var source = new PathfindingCostConfig().withPathGridStep(4);
+        var repair = source.withPathGridStep(2);
+        var original = List.of(point(0, 0), point(4, 0), point(8, 0));
+        var patched = List.of(point(0, 0), point(4, 2), point(8, 0));
+        var lookups = new ArrayList<Integer>();
+        assertEquals(original, RouteRefinementOps.repairSourcePath(source, repair, config -> {
+            int step = config.effectivePathGridStep();
+            lookups.add(step);
+            return step == 4 ? Optional.of(original) : Optional.empty();
+        }));
+        assertEquals(List.of(2, 4), lookups, "查不到此档时只读原档，不按新档假造底稿");
+        assertEquals(patched, RouteRefinementOps.repairSourcePath(source, repair, config -> {
+            assertEquals(2, config.effectivePathGridStep(), "不能用原路线覆盖已修好的走廊");
+            return Optional.of(patched);
+        }));
+    }
+
+    @Test
+    void exactProfileConflictDoesNotTriggerRoughSlopeScansElsewhere() {
+        var path = List.of(point(0, 0), new BlockPos(16, 120, 0), point(320, 0), point(360, 0));
+        var route = new StructureConnection(path.getFirst(), path.getLast(), ConnectionStatus.PLANNED);
+        var center = point(300, 2);
+        // 有精确见证时不需要查询世界，也不该把远方粗网格的假陡点变成精采任务。
+        var windows = ConflictWindowOps.conflictSamplingWindows(null, route, 40, path, center);
+        assertEquals(1, windows.size());
+        assertEquals(center, windows.getFirst().center());
+        assertEquals(40, windows.getFirst().radius());
     }
 }

@@ -193,7 +193,7 @@ public final class Road {
             var routeTerrain = terrain;
             var preparation = RoadProfileRecovery.solve(segments, width,
                     candidate -> solveInitialProfile(candidate, level, cache, routeTerrain, streams),
-                    (line, station, accept) -> StructureRepair.trySurface(line, station, width, level,
+                    (line, station, conflict, accept) -> StructureRepair.tryProfileSurface(line, station, conflict, width, level,
                             connection, cache.getAccurateSampler(level), genConfig.pathfinding(), accept));
             if (preparation.segments() != segments) {
                 segments = preparation.segments();
