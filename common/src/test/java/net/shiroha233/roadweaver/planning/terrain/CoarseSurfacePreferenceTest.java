@@ -69,6 +69,22 @@ final class CoarseSurfacePreferenceTest {
                 wet, config(), 5_000, crossing, 1.25D));
     }
 
+    @Test void mountainContourReachesTheRealEndpointOutsideTheCoarseLattice() {
+        // 只有山口方向是缓地；终点在 8 格网格外，仍要原坐标进站。
+        var terrain = new Field((x, z) -> x >= 24 && x <= 56 && z < 8 ? 92 : 64, false);
+        var start = new BlockPos(0, 64, 0);
+        for (var goal : List.of(new BlockPos(80, 64, 0), new BlockPos(83, 64, -3))) {
+            var result = MountainSwitchbackPlanner.findContourRoute(start, goal, terrain, config(),
+                    4_000, 10_000_000_000L);
+            assertNotNull(result.path(), result.reason());
+            assertEquals(start, result.path().getFirst());
+            assertEquals(goal, result.path().getLast(), "不能以网格站替代真实端点");
+            assertTrue(result.path().stream().anyMatch(p -> p.getX() == 40 && p.getZ() >= 8), "必须穿过山口");
+            assertTrue(result.path().stream().allMatch(p -> p.getY() == 64), "不能借陡坡通过山脊");
+            assertTrue(result.expanded() < 4_000, "有路时不应耗尽状态预算");
+        }
+    }
+
     @Test void sketchPrefersTheReachableSideOfAMountainPass() {
         var terrain = new Field((x, z) -> x <= 8 ? 110 : z > 0 ? Math.max(68, 110 - (x - 8) / 2) : 68, false);
         var shortLine = stations(13, terrain);

@@ -187,11 +187,11 @@ final class MountainSwitchbackPlanner {
                 MAX_EXPANDED_STATES, MAX_SEARCH_NANOS);
     }
 
-    private static SearchResult findContourRoute(BlockPos start, BlockPos goal,
-                                                  PathTerrainField terrain,
-                                                  PathfindingCostConfig config,
-                                                  int maxExpandedStates,
-                                                  long maxSearchNanos) {
+    static SearchResult findContourRoute(BlockPos start, BlockPos goal,
+                                         PathTerrainField terrain,
+                                         PathfindingCostConfig config,
+                                         int maxExpandedStates,
+                                         long maxSearchNanos) {
         int step = Math.max(1, config.effectivePathGridStep());
         double direct = horizontalDistance(start.getX(), start.getZ(), goal.getX(), goal.getZ());
         if (direct < step * 8.0D || !terrain.contains(start.getX(), start.getZ())
@@ -205,6 +205,8 @@ final class MountainSwitchbackPlanner {
                 heuristic(start.getX(), start.getZ(), goal.getX(), goal.getZ(), config), null);
         open.add(first);
         best.put(first.key(), 0.0D);
+        boolean goalOffGrid = Math.floorMod(goal.getX() - start.getX(), step) != 0
+                || Math.floorMod(goal.getZ() - start.getZ(), step) != 0;
         long started = System.nanoTime();
         int expanded = 0;
         while (!open.isEmpty() && expanded < maxExpandedStates) {
@@ -220,9 +222,16 @@ final class MountainSwitchbackPlanner {
             }
             expanded++;
             int currentHeight = terrain.height(current.x(), current.z());
-            for (int direction = 0; direction < DIRECTIONS.length; direction++) {
-                int nextX = current.x() + DIRECTIONS[direction][0] * step;
-                int nextZ = current.z() + DIRECTIONS[direction][1] * step;
+            // 非对齐目标只增加一条末段；正常网格与避障检查原样保留，不在终点附近细化整个搜索网格。
+            boolean attachGoal = goalOffGrid
+                    && Math.abs(goal.getX() - current.x()) <= step
+                    && Math.abs(goal.getZ() - current.z()) <= step;
+            int neighbors = DIRECTIONS.length + (attachGoal ? 1 : 0);
+            for (int neighbor = 0; neighbor < neighbors; neighbor++) {
+                boolean terminal = neighbor == DIRECTIONS.length;
+                int direction = terminal ? directionToGoal(current, goal) : neighbor;
+                int nextX = terminal ? goal.getX() : current.x() + DIRECTIONS[direction][0] * step;
+                int nextZ = terminal ? goal.getZ() : current.z() + DIRECTIONS[direction][1] * step;
                 if (!corridor.contains(nextX, nextZ) || !terrain.contains(nextX, nextZ)) continue;
                 int nextHeight = terrain.height(nextX, nextZ);
                 BlockPos nextPos = new BlockPos(nextX, nextHeight, nextZ);
@@ -244,17 +253,30 @@ final class MountainSwitchbackPlanner {
         return SearchResult.empty(expanded >= maxExpandedStates ? "state limit" : "no route");
     }
 
+    /** 末段仍沿八邻域的航向计价，具体距离用真实的坐标差。 */
+    private static int directionToGoal(Node current, BlockPos goal) {
+        int dx = Integer.compare(goal.getX(), current.x());
+        int dz = Integer.compare(goal.getZ(), current.z());
+        int direction = 0;
+        while (DIRECTIONS[direction][0] != dx || DIRECTIONS[direction][1] != dz) direction++;
+        return direction;
+    }
+
     private static double movementCost(Node current, int nextX, int nextZ,
                                        int currentHeight, int nextHeight, int direction,
                                        BlockPos start, BlockPos goal, PathTerrainField terrain,
                                        PathfindingCostConfig config, int step) {
-        int dx = DIRECTIONS[direction][0] * step;
-        int dz = DIRECTIONS[direction][1] * step;
+        int dx = nextX - current.x(), dz = nextZ - current.z();
         double horizontal = Math.max(1.0D, Math.hypot(dx, dz));
         int vertical = Math.abs(nextHeight - currentHeight);
         double grade = vertical / horizontal;
-        double movement = Math.abs(dx) + Math.abs(dz) == step * 2
-                ? config.diagStepCost() : config.orthoStepCost();
+        boolean diagonal = dx != 0 && dz != 0;
+        double movement = diagonal ? config.diagStepCost() : config.orthoStepCost();
+        if (Math.max(Math.abs(dx), Math.abs(dz)) != step
+                || (diagonal && Math.min(Math.abs(dx), Math.abs(dz)) != step)) {
+            // 不用一个完整网格步的价格惩罚较短的合法进站边。
+            movement *= horizontal / (diagonal ? Math.hypot(step, step) : step);
+        }
         double stability = PathfindingHelper.calculateTerrainStability(
                 terrain, new BlockPos(current.x(), currentHeight, current.z()), currentHeight, step)
                 * (double) config.stabilityWeight();
@@ -409,7 +431,7 @@ final class MountainSwitchbackPlanner {
     private record Node(int x, int z, int direction, double cost, double score, Node parent) {
         StateKey key() { return new StateKey(x, z, direction); }
     }
-    private record SearchResult(List<BlockPos> path, int expanded, String reason) {
+    record SearchResult(List<BlockPos> path, int expanded, String reason) {
         static SearchResult empty(String reason) { return new SearchResult(null, 0, reason); }
     }
     private record SteepWindow(int start, int end, int rise, double length) {}
