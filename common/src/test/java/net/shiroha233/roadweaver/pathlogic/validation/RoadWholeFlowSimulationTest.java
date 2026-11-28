@@ -169,6 +169,9 @@ public final class RoadWholeFlowSimulationTest {
     private static void testWaterModesAndGapFallback() {
         RoadData crossing = road(line(6), List.of(
                 new RoadSpan(p(1, 0), p(4, 0), SpanType.ROAD_CROSSING)));
+        // 短跨类型不能单独放行已入水路面，夹具要有真正的高架甲板。
+        crossing = new RoadData(crossing.width(), crossing.roadType(), crossing.materials(), crossing.slabMaterials(),
+                crossing.roadSegmentList(), crossing.spans(), List.of(66, 67, 67, 67, 67, 66), 1L, 2L);
         require(FinalRoadWaterValidator.validate(crossing, 2,
                         RoadWholeFlowSimulationTest::waterAtX2).safe(),
                 "short crossing water validation failed");

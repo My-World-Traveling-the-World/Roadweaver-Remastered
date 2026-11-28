@@ -102,6 +102,21 @@ final class FinalBridgeClassificationTest {
         assertEquals(conflict, failure.conflict());
     }
 
+    @Test void preciseShortDeckStaysAboveADeepBedWithUnequalBanks() {
+        int[] terrain = {80,80,80,80,80,80,10,10,10,83,83,83,83,83,83};
+        var span = new Road.SpanRange(4, 10, SpanType.ROAD_CROSSING);
+        int[] floors = ShortCrossingFloors.calculate(List.of(span), terrain, new boolean[terrain.length],
+                i -> i >= 6 && i <= 8 ? 56 : Integer.MIN_VALUE);
+        var cfg = new ProfileDpSource.Constraints(null, null, 0, floors);
+        var solved = TargetProfileRepair.solveForRoad(terrain, null, 5, 4, 1, 1, cfg,
+                ignored -> new boolean[terrain.length]).orElseThrow();
+        assertEquals(Integer.MIN_VALUE, floors[5], "低岸不钉成水面高程");
+        assertArrayEquals(new int[]{81,82,82}, Arrays.copyOfRange(floors, 6, 9));
+        assertTrue(solved[6] >= 81 && solved[8] >= 82);
+        assertEquals(0, ProfileFallback.violations(solved, 1, 1));
+        assertTrue(solved[0] <= 80 && solved[14] >= 83);
+    }
+
     private static List<RoadSegmentPlacement> line(int[] terrain) {
         return IntStream.range(0, terrain.length).mapToObj(i -> new BlockPos(i, terrain[i], 0))
                 .map(p -> new RoadSegmentPlacement(p, List.of(p))).toList();

@@ -43,6 +43,11 @@ public final class RoadTopologyWaterSimulationTest {
     private static void testShortCrossing() {
         RoadData crossing = road(line(5), List.of(new RoadSpan(p(1, 0), p(3, 0),
                 SpanType.ROAD_CROSSING)));
+        require(!FinalRoadWaterValidator.validate(crossing, 2,
+                        RoadTopologyWaterSimulationTest::riverAtX2).safe(),
+                "short crossing label alone must not waive a submerged deck");
+        crossing = new RoadData(crossing.width(), crossing.roadType(), crossing.materials(), crossing.slabMaterials(),
+                crossing.roadSegmentList(), crossing.spans(), List.of(66, 67, 67, 67, 66), 1L, 2L);
         require(FinalRoadWaterValidator.validate(crossing, 2,
                         RoadTopologyWaterSimulationTest::riverAtX2).safe(),
                 "short direct crossing was rejected");

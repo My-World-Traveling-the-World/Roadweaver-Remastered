@@ -33,12 +33,13 @@ public final class ConstructionSpanMasks {
         int ramps=Math.max(0,rampSegments);
         for(var span:road.spans()) {
             if(span==null)continue;
-            if(span.type()==SpanType.BRIDGE || span.type()==SpanType.ROAD_CROSSING) {
+            // 涵洞与短跨都按规划路面落块，防止实时高度复算重新跟随水底。
+            if(span.type()==SpanType.BRIDGE || span.type()==SpanType.ROAD_CROSSING || span.type()==SpanType.CULVERT) {
                 Integer first=indices.get(xzKey(span.start())),second=indices.get(xzKey(span.end()));
                 if(first!=null && second!=null)mark(flags,Math.max(0,Math.min(first,second)-ramps),
                         Math.min(flags.length-1,Math.max(first,second)+ramps),PRESERVE);
             }
-            int bit=span.type()==SpanType.ROAD_CROSSING?DIRECT:span.type()==SpanType.NETWORK_REUSE?REUSE:
+            int bit=(span.type()==SpanType.ROAD_CROSSING || span.type()==SpanType.CULVERT)?DIRECT:span.type()==SpanType.NETWORK_REUSE?REUSE:
                     span.type()==SpanType.PROTECTED_GAP?GAP:span.type()==SpanType.TUNNEL?TUNNEL:0;
             if(bit==0)continue;
             Integer first=resolveStationIndex(indices,centers,span.start()),second=resolveStationIndex(indices,centers,span.end());

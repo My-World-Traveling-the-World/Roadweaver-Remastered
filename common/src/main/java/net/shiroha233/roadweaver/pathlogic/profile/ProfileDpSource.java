@@ -181,6 +181,12 @@ public final class ProfileDpSource {
             pin[i] = -1;
             lo[i] = terrainY[i] - maxCut;
             hi[i] = terrainY[i] + maxFill;
+            int[] deck = constraints.deckFloor();
+            if ((crossing == null || !crossing[i]) && deck != null && deck[i] != Integer.MIN_VALUE) {
+                // 短跨是承空结构，不受沟底填方厚度限制；只给足通水和接坡的可行高度窗口。
+                lo[i] = Math.max(lo[i], deck[i]);
+                hi[i] = Math.max(hi[i], deck[i] + maxFill);
+            }
         }
         // ── 契约 ③：隧道覆土 ──
         // 覆土是硬要求，所以当它与「最大挖方」冲突时，让步的是挖方：
@@ -204,6 +210,9 @@ public final class ProfileDpSource {
             fixed[i] = true;
             lo[i] = v;
             hi[i] = v;
+            if ((crossing == null || !crossing[i]) && constraints.deckFloor() != null) {
+                lo[i] = Math.max(v, constraints.deckFloor()[i]);
+            }
         }
         // 桥段钉成两端地形直线内插
         int i = 0;

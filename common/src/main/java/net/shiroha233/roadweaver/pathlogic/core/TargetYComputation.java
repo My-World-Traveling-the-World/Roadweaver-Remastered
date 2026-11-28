@@ -6,6 +6,7 @@ package net.shiroha233.roadweaver.pathlogic.core;
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import static net.shiroha233.roadweaver.pathlogic.structures.WorldgenAvoidance.*;
 import net.shiroha233.roadweaver.pathfinding.UnderseaTunnelPlanner;
+import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
 import static net.shiroha233.roadweaver.pathlogic.structures.ProtectedGapEvaluator.*;
 import static net.shiroha233.roadweaver.pathlogic.structures.EndpointOwnerResolver.*;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
@@ -67,6 +68,7 @@ public final class TargetYComputation {
         }
 
         boolean[] isCrossing = new boolean[n];
+        boolean[] isBridge = new boolean[n];
         List<SpanRange> crossingRanges = new ArrayList<>();
         if (spans != null && !spans.isEmpty()) {
             Map<Long, Integer> indexMap = new HashMap<>();
@@ -76,13 +78,17 @@ public final class TargetYComputation {
             }
             for (RoadSpan sp : spans) {
                 throwIfInterrupted();
-                if (sp.type() != SpanType.BRIDGE && sp.type() != SpanType.ROAD_CROSSING) continue;
+                if (sp.type() != SpanType.BRIDGE && sp.type() != SpanType.ROAD_CROSSING
+                        && sp.type() != SpanType.CULVERT) continue;
                 Integer si = indexMap.get(sp.start().asLong());
                 Integer ei = indexMap.get(sp.end().asLong());
                 if (si == null || ei == null) continue;
                 int a = Math.max(0, Math.min(si, ei));
                 int b = Math.min(n - 1, Math.max(si, ei));
-                for (int k = a; k <= b; k++) isCrossing[k] = true;
+                for (int k = a; k <= b; k++) {
+                    isCrossing[k] = true;
+                    isBridge[k] |= sp.type() == SpanType.BRIDGE;
+                }
                 crossingRanges.add(new SpanRange(a, b, sp.type()));
             }
         }
@@ -95,6 +101,9 @@ public final class TargetYComputation {
                         : RoadConstructionSafety.terrainHeight(level, center.getX(), center.getZ()));
         int[] terrainY = inputs.terrainY(), footprintSupport = inputs.footprintSupport(), base = inputs.base();
         Map<Long, AccurateHeightSample> footprintSamples = inputs.footprintSamples();
+        int[] shortDeckFloors = ShortCrossingFloors.calculate(crossingRanges, terrainY, isBridge,
+                i -> PathSpanExtractor.shortCrossingWaterY(segments.get(i), level, cache, terrain,
+                        accurate, footprintSamples, streams));
 
         int[] smoothed = RoadGradePlanner.stabilizeSurfaceProfile(
                 base, terrainY, footprintSupport, isCrossing,
@@ -210,15 +219,16 @@ public final class TargetYComputation {
         // 只有显式保留模式或关闭坡限才返回 empty，不能把 DP 无解转交旧 pass。
         // 求解拒绝也必须留下地形；原来在成功出口录制，现场失败路线恰好全部漏录。
         ProfileTerrainRecorder.record(
-                connection == null ? "?" : connection.from() + "->" + connection.to(), terrainY, isCrossing);
+                connection == null ? "?" : connection.from() + "->" + connection.to(), terrainY, isBridge);
         java.util.Optional<int[]> dpProfile;
         try {
             dpProfile = TargetProfileSolver.applyProfileSolver(level, centers, smoothed,
-                terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary, endBoundary,
+                terrainY, isBridge, tunnelMask, pinnedMask, startBoundary, endBoundary,
                 cfg, gradeLimits, connection,
                 // 留下实机重放需要的失败站与限制站，外层生成负责按连接汇总。
                 (heights, crossing, cut, fill, step, two, constraints) -> TargetProfileRepair.solveForRoad(
-                        heights, crossing, cut, fill, step, two, constraints, windowTiming, dpTiming, tunnelSelector));
+                        heights, crossing, cut, fill, step, two, constraints, windowTiming, dpTiming, tunnelSelector),
+                        shortDeckFloors);
         } catch (IllegalArgumentException failure) {
             // 高程数组来自本次精采；不能拿中心点携带的旧规划Y代替地形来判断锁高是否正确。
             LOGGER.warn("【纵断面拒绝输入】 connection={}->{} cause={} startXZ={} startTerrain={} startLocked={} "

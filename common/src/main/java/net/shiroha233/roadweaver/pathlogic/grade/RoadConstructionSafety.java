@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.construction.HugeTreeReservation;
+import net.shiroha233.roadweaver.pathlogic.construction.ConstructionSpanMasks;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 
 /** 最终世界施工只读当前生成区域，禁止为保护或地形检查请求新块。 */
@@ -389,6 +390,7 @@ public final class RoadConstructionSafety {
         boolean[] bridge = copyMask(original.isBridge(), centers.size());
         boolean[] skip = copyMask(original.skipSegments(), centers.size());
         List<int[]> ranges = copyRanges(original.mergedRanges());
+        var planned = ConstructionSpanMasks.of(road, 0);
         RuntimeBridgeKey key = runtimeBridgeKey(world, road, centers);
         List<RuntimeRange> detectedNow = new ArrayList<>();
         for (int i = 0; i < centers.size(); ) {
@@ -396,7 +398,7 @@ public final class RoadConstructionSafety {
             // whichever chunk generates first: that made its range (and the template seed derived
             // from its length) depend on chunk generation order, so the same bridge could pick
             // different templates in different chunks. Keep the planned bridge as-is.
-            if (original.isBridge()[i]) {
+            if (original.isBridge()[i] || planned.directCrossingAt(i)) {
                 i++;
                 continue;
             }
@@ -406,6 +408,7 @@ public final class RoadConstructionSafety {
             }
             int start = i;
             while (i + 1 < centers.size() && inWindow(processingChunk, centers.get(i + 1))
+                    && !planned.directCrossingAt(i + 1) && !original.isBridge()[i + 1]
                     && hasWatercourseAcrossRoad(world, centers, i + 1)) i++;
             int end = i;
             if (isShallowCulvertCrossing(world, centers, start, end)) {
@@ -416,7 +419,11 @@ public final class RoadConstructionSafety {
             }
             int waterY = waterSurfaceY(world, centers.get((start + end) / 2));
             RuntimeRange stable = expandRuntimeBridgeRange(centers, start, end, waterY);
-            detectedNow.add(stable);
+            // 没有 Streams 时仅允许把漏判的水段补成桥。落脚点扩张不能覆盖已有短跨。
+            int lo = stable.start(), hi = stable.end();
+            for (int index = lo; index < start; index++) if (planned.directCrossingAt(index)) lo = index + 1;
+            for (int index = end + 1; index <= hi; index++) if (planned.directCrossingAt(index)) { hi = index - 1; break; }
+            detectedNow.add(new RuntimeRange(lo, hi));
             i++;
         }
         List<RuntimeRange> stableRanges = RUNTIME_BRIDGES.compute(key, (ignored, existing) -> {

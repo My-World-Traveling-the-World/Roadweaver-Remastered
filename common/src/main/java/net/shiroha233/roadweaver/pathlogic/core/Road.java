@@ -18,6 +18,7 @@ import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.PlanningConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.core.model.RoadData;
+import net.shiroha233.roadweaver.core.model.ProfileConflict;
 import net.shiroha233.roadweaver.spec.RoadSpec;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
@@ -29,7 +30,6 @@ import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator.PathCalcu
 import net.shiroha233.roadweaver.pathfinding.PathSpanExtractor;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.terrain.PathTerrainField;
 import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
 
@@ -360,6 +360,19 @@ public final class Road {
                         && waterCollision.source() != null
                         && waterCollision.source().startsWith("streams_channel")) {
                     RoadData crossed = forceCrossingAtWaterCollision(rd, waterCollision.segmentIndex());
+                    if (crossed != rd) {
+                        try {
+                            var settled = settleProfile(crossed.roadSegmentList(), crossed.spans(), level, cache,
+                                    terrain, genConfig, streams);
+                            // 最后发现入水时也要重新求坡，标签不能代替甲板；手绘高度意图仍由终验核实。
+                            crossed = buildIntent.apply(new RoadData(rd.width(), rd.roadType(), rd.materials(),
+                                    rd.slabMaterials(), crossed.roadSegmentList(), settled.spans(), settled.targetY(),
+                                    rd.ownerA2dKey(), rd.ownerB2dKey()));
+                        } catch (ProfileConflict.Rejected rejected) {
+                            LOGGER.debug("【临时过水方案不可接坡】 {}", rejected.conflict());
+                            crossed = rd;
+                        }
+                    }
                     if (crossed != rd) {
                         FinalRoadWaterValidator.ValidationResult crossedValidation =
                                 FinalRoadWaterValidator.validate(level, crossed, cache, streams);
@@ -773,11 +786,20 @@ public final class Road {
         if (timing != null) timing.addSpanExtraction(elapsed);
         LOGGER.info("【路线跨度提取阶段结果】 RoadWeaver route stage=span_extraction connection={}->{} spans={} {}",
                 connection.from(), connection.to(), spans.size(), summarizeSpans(spans));
-        if (containsPhysicalCrossing(spans)) {
-            var preview = computeTargetY(level, segments, List.of(), cache, terrain, genConfig, streams);
-            var tunnels = PathSpanExtractor.refineTunnelSpans(List.of(), segments, preview, level, cache);
-            spans = SpanConflictResolver.retainVerticallyRelevantCrossings(spans, tunnels, segments, preview,
-                    level, cache, terrain, streams, genConfig.tunnelClearHeight(), routeBridgeMinWaterDepth());
+        if (spans.stream().anyMatch(span -> span.type() == SpanType.BRIDGE)) {
+            // 只为可走水底的长桥预览地下候选；不能用未建甲板的预览无解否决已选跨越。
+            try {
+                var shortSpans = spans.stream().filter(span -> span.type() != SpanType.BRIDGE).toList();
+                var preview = computeTargetY(level, segments, new ArrayList<>(shortSpans), cache, terrain, genConfig, streams);
+                var tunnels = PathSpanExtractor.refineTunnelSpans(shortSpans, segments, preview, level, cache);
+                var longBridges = spans.stream().filter(span -> span.type() == SpanType.BRIDGE).toList();
+                var retained = new ArrayList<>(shortSpans);
+                retained.addAll(SpanConflictResolver.retainVerticallyRelevantCrossings(longBridges, tunnels, segments, preview,
+                        level, cache, terrain, streams, genConfig.tunnelClearHeight(), routeBridgeMinWaterDepth()));
+                spans = retained;
+            } catch (ProfileConflict.Rejected unusableTunnel) {
+                LOGGER.debug("【水底方案不可行，继续求解已选跨越】 {}", unusableTunnel.conflict());
+            }
         }
         spans = new ArrayList<>(spans);
         var heights = computeTargetY(level, segments, spans, cache, terrain, genConfig, streams);

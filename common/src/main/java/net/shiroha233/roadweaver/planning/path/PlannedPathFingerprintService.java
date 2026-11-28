@@ -17,8 +17,8 @@ import java.util.Objects;
  * 待生成路径的配置身份计算服务。
  */
 public final class PlannedPathFingerprintService {
-    // 仅更新候选路径的缓存身份；清除无效配置后载荷变化，不能把旧身份当作本版候选复用。道路存档不变。
-    private static final String DOMAIN = "roadweaver:planned_path:v6";
+    // 粗线已携带短跨高程并使用新坡度筛选，旧粗线不能冒充新版草图；磁盘格式不变。
+    private static final String DOMAIN = "roadweaver:planned_path:v7";
 
     private PlannedPathFingerprintService() {}
 

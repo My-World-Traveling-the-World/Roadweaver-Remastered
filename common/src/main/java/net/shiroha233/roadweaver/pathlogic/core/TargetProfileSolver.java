@@ -51,10 +51,19 @@ final class TargetProfileSolver {
             boolean[] tunnelMask, boolean[] pinnedMask,
             int startBoundary, int endBoundary, RoadGenerationConfig cfg,
             SurfaceGradeLimits gradeLimits, StructureConnection connection, Solver repair) {
-        return solve(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
-                startBoundary, endBoundary, cfg, gradeLimits, connection,
-                (station, clearance) -> RoadConstructionSafety.bridgeDeckSurfaceY(
-                        level, centers, station, clearance, Integer.MIN_VALUE), ProfileDpSource::solve, repair);
+        return applyProfileSolver(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask,
+                startBoundary, endBoundary, cfg, gradeLimits, connection, repair, null);
+    }
+
+    /** 短跨给下界，长桥沿用固定桥面；二者共同参加同一次接坡。 */
+    static Optional<int[]> applyProfileSolver(ServerLevel level, List<BlockPos> centers, int[] smoothed,
+            int[] terrainY, boolean[] isBridge, boolean[] tunnelMask, boolean[] pinnedMask,
+            int startBoundary, int endBoundary, RoadGenerationConfig cfg, SurfaceGradeLimits gradeLimits,
+            StructureConnection connection, Solver repair, int[] shortDeckFloors) {
+        return solve(level, centers, smoothed, terrainY, isBridge, tunnelMask, pinnedMask, startBoundary,
+                endBoundary, cfg, gradeLimits, connection, (station, clearance) -> RoadConstructionSafety.bridgeDeckSurfaceY(
+                        level, centers, station, clearance, Integer.MIN_VALUE), ProfileDpSource::solve, repair,
+                level == null ? null : snapshot -> ProfileFailureFiles.record(level, snapshot), shortDeckFloors);
     }
 
     /**
@@ -113,6 +122,15 @@ final class TargetProfileSolver {
             int startBoundary,int endBoundary,RoadGenerationConfig cfg,SurfaceGradeLimits gradeLimits,
             StructureConnection connection,DeckFloorSampler deckSampler,Solver solver,Solver repair,
             java.util.function.Consumer<ProfileFailureSnapshot> rejected) {
+        return solve(level, centers, smoothed, terrainY, isCrossing, tunnelMask, pinnedMask, startBoundary,
+                endBoundary, cfg, gradeLimits, connection, deckSampler, solver, repair, rejected, null);
+    }
+
+    private static Optional<int[]> solve(ServerLevel level, List<BlockPos> centers,
+            int[] smoothed, int[] terrainY, boolean[] isCrossing, boolean[] tunnelMask, boolean[] pinnedMask,
+            int startBoundary, int endBoundary, RoadGenerationConfig cfg, SurfaceGradeLimits gradeLimits,
+            StructureConnection connection, DeckFloorSampler deckSampler, Solver solver, Solver repair,
+            java.util.function.Consumer<ProfileFailureSnapshot> rejected, int[] shortDeckFloors) {
         if (ProfileSolverMode.fromProperty() != ProfileSolverMode.DP) {
             return java.util.Optional.empty();
         }
@@ -160,6 +178,7 @@ final class TargetProfileSolver {
         // 表示「无下界」。
         int[] deckFloor = new int[n];
         java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
+        if (shortDeckFloors != null) System.arraycopy(shortDeckFloors, 0, deckFloor, 0, n);
         // deckFloor 要读世界水位，这一步本身可能抛；单独兜一层 ——
         // 采样失败时退化成「无下界」，而不是让整条 DP 路径失败。
         try {
@@ -171,7 +190,7 @@ final class TargetProfileSolver {
                 }
             }
         } catch (Throwable deckFailure) {
-            java.util.Arrays.fill(deckFloor, Integer.MIN_VALUE);
+            for (int i = 0; i < n; i++) if (isCrossing[i]) deckFloor[i] = Integer.MIN_VALUE;
             LOGGER.warn("【桥面下界采样失败，本次不施加该下界】 " + "RoadWeaver profile deckFloor sampling failed, using no lower bound: {}",
                     deckFailure.toString());
         }

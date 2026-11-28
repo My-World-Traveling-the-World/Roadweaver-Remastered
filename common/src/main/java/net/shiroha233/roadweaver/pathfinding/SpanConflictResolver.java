@@ -5,7 +5,6 @@ package net.shiroha233.roadweaver.pathfinding;
 
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
-import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.config.ConfigService;
 import net.shiroha233.roadweaver.core.model.SpanType;

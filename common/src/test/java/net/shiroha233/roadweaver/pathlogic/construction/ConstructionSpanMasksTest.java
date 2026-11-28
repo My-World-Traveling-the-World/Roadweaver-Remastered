@@ -20,7 +20,8 @@ class ConstructionSpanMasksTest {
             var centers=new ArrayList<BlockPos>();int x=-80,z=-80;
             for(int i=0;i<80;i++){x+=random.nextInt(5)-2;z+=random.nextInt(5)-2;centers.add(new BlockPos(x,40+i%20,z));}
             var spans=new ArrayList<RoadSpan>();
-            for(var type:SpanType.values())for(int j=0;j<3;j++) {
+            // 涵洞开始保留正式坡度；旧类型按原算法逐位对拍，涵洞另有行为验收。
+            for(var type:SpanType.values())if(type!=SpanType.CULVERT)for(int j=0;j<3;j++) {
                 var a=centers.get(random.nextInt(80));var b=centers.get(random.nextInt(80));
                 if(j==1)a=a.offset(1,12,1);if(j==2)b=b.offset(9,0,9);
                 spans.add(new RoadSpan(a,b,type));
@@ -54,6 +55,16 @@ class ConstructionSpanMasksTest {
         // Chebyshev距离下偏一列会与前一站并列，旧近站规则选最早站6。
         assertTrue(shifted.directCrossing()[4]);assertTrue(shifted.directCrossing()[6]);assertFalse(shifted.directCrossing()[7]);
     }
+
+    @Test void culvertDeckProtectsThePlannedGradeAndItsApproaches() {
+        var c=centers(10);
+        var span=new RoadSpan(c.get(4),c.get(6),SpanType.CULVERT);
+        var masks=ConstructionSpanMasks.build(c,road(c,List.of(span)),1);
+        for(int i=0;i<c.size();i++) {
+            assertEquals(i>=3 && i<=7,masks.preserveGradeAt(i));
+            assertEquals(i>=4 && i<=6,masks.directCrossingAt(i));
+        }
+    }
     @Test void emptyNullEndpointsAndExtremeCoordinatesKeepLegacyResults() {
         var c=List.of(new BlockPos(Integer.MIN_VALUE,64,0),new BlockPos(Integer.MAX_VALUE,64,0),new BlockPos(0,64,0));
         var road=road(c,List.of(new RoadSpan(null,c.get(2),SpanType.TUNNEL),
@@ -84,7 +95,7 @@ class ConstructionSpanMasksTest {
     }
     @Test void coldComputationBuildsOneIndexRatherThanFive() {
         var c=centers(1024);var spans=new ArrayList<RoadSpan>();
-        for(var type:SpanType.values())spans.add(new RoadSpan(c.get(5),c.get(10),type));
+        for(var type:SpanType.values())if(type!=SpanType.CULVERT)spans.add(new RoadSpan(c.get(5),c.get(10),type));
         var road=road(c,spans);int[] gets={0};
         List<BlockPos> counted=new AbstractList<>() {
             public int size(){return c.size();}

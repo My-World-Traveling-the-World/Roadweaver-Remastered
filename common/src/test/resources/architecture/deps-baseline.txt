@@ -90,7 +90,7 @@ pathfinding -> config                             20
 pathfinding -> core                               34
 pathfinding -> generation                         13
 pathfinding -> map                                4
-pathfinding -> pathlogic                          24
+pathfinding -> pathlogic                          21
 pathfinding -> persistence                        3
 pathfinding -> pipeline                           1
 pathfinding -> runtime                            8

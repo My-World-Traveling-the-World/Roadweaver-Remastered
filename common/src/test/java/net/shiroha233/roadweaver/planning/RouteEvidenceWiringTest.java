@@ -23,7 +23,9 @@ class RouteEvidenceWiringTest {
                 extraction.getArguments().stream().map(Object::toString).toList());
         var target = parse("pathlogic/core/TargetYComputation.java");
         var solve = (MethodInvocationTree)only(calls(target, "TargetProfileSolver.applyProfileSolver")).getLeaf();
-        var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().getLast());
+        assertEquals("shortDeckFloors", solve.getArguments().getLast().toString(),
+                "必须把短跨的甲板高度窗口交给正式求解器");
+        var repair = assertInstanceOf(LambdaExpressionTree.class, solve.getArguments().get(solve.getArguments().size() - 2));
         var call = assertInstanceOf(MethodInvocationTree.class, repair.getBody());
         // 正式入口除了物理隧道选择还必须保留拒绝见证。
         assertEquals("TargetProfileRepair.solveForRoad", call.getMethodSelect().toString());

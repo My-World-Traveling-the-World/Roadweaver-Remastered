@@ -7,6 +7,10 @@ import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.core.model.SpanType;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 干洼地的跨越策略：窄的用法（ROAD_CROSSING，过水路面），宽的架桥；
@@ -37,6 +41,38 @@ public final class WaterOnlyBridgePolicyTest {
 
     /** 表面高度（centers 与 targetY 的基准）。 */
     private static final int SURFACE = 64;
+
+    @Test void rejectsIsolatedPeakAndOneSidedCliffButCrossesADeepNotch() {
+        // 落差形状相同，但孤峰在岸外立即下降，不能冒充连续的岸。
+        int[] peak = {70,70,70,70,97,70,70,70,70,70,70};
+        int[] fakeBanks = {70,70,97,97,70,70,70,97,97,70,70};
+        int[] cliff = {95,95,95,95,10,10,10,10,10,10,10};
+        int[] notch = {95,95,95,95,-32,-32,-32,99,99,99,99};
+        var path = IntStream.range(0, notch.length).mapToObj(i -> new BlockPos(i, 0, 0)).toList();
+        var clear = new boolean[notch.length];
+        assertTrue(ShortCrossingGeometry.dryNotches(path, peak, 6, clear).isEmpty());
+        assertTrue(ShortCrossingGeometry.dryNotches(path, fakeBanks, 6, clear).isEmpty());
+        assertTrue(ShortCrossingGeometry.dryNotches(path, cliff, 6, clear).isEmpty());
+        assertEquals(List.of(new ShortCrossingGeometry.Notch(3, 7)),
+                ShortCrossingGeometry.dryNotches(path, notch, 6, clear));
+    }
+
+    @Test void fullWetWidthDecidesShortSpanEvenWithDeepMiddle() {
+        int[] ground = new int[32];
+        java.util.Arrays.fill(ground, 84);
+        var path = IntStream.range(0, ground.length).mapToObj(i -> new BlockPos(i, ground[i], 0)).toList();
+        var selected = new ArrayList<RoadSpan>();
+        ShortCrossingGeometry.appendPlannedWetSpan(selected, path, ground, 7, 10, 60, 2, 6, 2, 4);
+        assertEquals(List.of(new RoadSpan(path.get(7), path.get(10), SpanType.CULVERT)), selected);
+        selected.clear();
+        ShortCrossingGeometry.appendPlannedWetSpan(selected, path, ground, 7, 10, 60, 42, 6, 2, 4);
+        assertEquals(1, selected.size());
+        assertEquals(SpanType.ROAD_CROSSING, selected.getFirst().type());
+        selected.clear();
+        ShortCrossingGeometry.appendPlannedWetSpan(selected, path, ground, 7, 23, 60, 42, 6, 2, 4);
+        assertEquals(1, selected.size());
+        assertEquals(SpanType.BRIDGE, selected.getFirst().type());
+    }
 
     /** 实际生效的干洼地架桥门槛（默认 6，玩家可在配置里改到 2..16）。 */
     private static int depthThreshold() {

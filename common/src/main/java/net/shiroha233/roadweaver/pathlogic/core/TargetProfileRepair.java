@@ -66,6 +66,17 @@ final class TargetProfileRepair {
             ProfileDpSource.Constraints constraints, Function<List<Integer>, boolean[]> tunnels,
             Consumer<ProfileConflict> rejected, LongConsumer dpTiming) {
         if (rejectCoveredPin(terrain, constraints, rejected)) return Optional.empty();
+        if (constraints.deckFloor() != null) {
+            for (int i = 0; i < terrain.length; i++) {
+                if ((crossing == null || !crossing[i]) && constraints.pinned(i)
+                        && constraints.pin()[i] < constraints.deckFloor()[i]) {
+                    // 固定入口低于通水净空时必须改线，不能把固定入口抬高或让甲板沉下去。
+                    rejected.accept(new ProfileConflict(ProfileConflict.Reason.LOCKED_HEIGHT, i, i,
+                            constraints.deckFloor()[i], constraints.pin()[i]));
+                    return Optional.empty();
+                }
+            }
+        }
         // 两次窗口检查只读边界；通过可行性证明后才为实际DP分配一次代价矩阵。
         var initial = ProfileDpSource.prepareBounds(terrain, crossing, cut, fill, step, two, constraints);
         // 最高合规包络只是用于找山体与洞口的预览，未通过下界证明前绝不作为成品返回。
@@ -83,6 +94,9 @@ final class TargetProfileRepair {
         var covered = new boolean[terrain.length];
         for (int i = 0; i < terrain.length; i++) {
             // 跨度包含地表洞口；只有真正埋入山体的洞身要求覆土，不能把洞口也压低八格。
+            // 候选已标为短跨的站不能再用临时隧道放宽下界。
+            boolean deck = constraints.deckFloor() != null && constraints.deckFloor()[i] != Integer.MIN_VALUE;
+            if (deck) excavation[i] = false;
             covered[i] = constraints.covered(i)
                     || excavation[i] && terrain[i] - preview[i] >= constraints.minCover();
         }
@@ -100,7 +114,8 @@ final class TargetProfileRepair {
                 // 已选隧道的挖深不属于地表路预算；有限高度域仍由本路已采地形限定。
                 lower[i] = floor;
                 tunnelStations++;
-            } else if (preview[i] < lower[i]) {
+            } else if (preview[i] < lower[i]
+                    && (constraints.deckFloor() == null || constraints.deckFloor()[i] == Integer.MIN_VALUE)) {
                 // 施工端本来接纳有界局部路堑；只补到可行包络所必需的高度，不整体放大玩家设置。
                 if (cut == 0 || (long) terrain[i] - preview[i] > RoadConstructionSafety.MAX_LOCAL_CENTER_CUT_DEPTH) {
                     LOGGER.warn("【纵断面复核仍超出地表施工预算】 station={} terrain={} requiredY={} cutLimit={}",

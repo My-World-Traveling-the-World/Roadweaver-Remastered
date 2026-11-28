@@ -519,6 +519,8 @@ public final class RoadJUnitRegressionSuite {
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.TargetProfileSolverTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.RoadProfileRecoveryTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.FinalBridgeClassificationTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathfinding.WaterOnlyBridgePolicyTest"),
+                DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.validation.ShortCrossingWaterValidationTest"),
                 // 现场失败重放与独立可行性对拍，防止全绿却整批道路被拒。
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.core.ClientProfileRepairTest"),
                 DiscoverySelectors.selectClass("net.shiroha233.roadweaver.pathlogic.profile.ProfileFeasibilityTest"),

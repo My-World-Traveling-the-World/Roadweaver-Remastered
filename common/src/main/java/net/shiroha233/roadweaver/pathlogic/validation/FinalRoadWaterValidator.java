@@ -198,15 +198,19 @@ public final class FinalRoadWaterValidator {
                             new Collision(index, position, targetY, Integer.MIN_VALUE,
                                     Integer.MIN_VALUE, null, "sample_unavailable"));
                 }
-                if (column.water() && targetY < column.waterSurfaceY()) wetColumns++;
-                if (!column.water() || targetY >= column.waterSurfaceY()) continue;
-                if (bridge[index] || crossing[index] || culvert[index]) continue;
+                if (!column.water()) continue;
+                if (bridge[index]) continue;
+                // 短跨用目标路面直接铺；只有跨度标签而甲板仍贴水，会在施工时盖住过水口。
+                int requiredY = (crossing[index] || culvert[index]) ? column.waterSurfaceY() + 2 : column.waterSurfaceY();
+                if (targetY >= requiredY) continue;
+                wetColumns++;
                 // A tunnel whose roof exactly meets the sampled riverbed is
                 // still below the water column.  Treat equality as safe so
                 // a one-block quantization difference cannot reject an
                 // otherwise valid underwater crossing.
                 if (tunnel[index] && targetY + Math.max(1, tunnelClearHeight) <= column.bedY()) continue;
-                SpanType active = tunnel[index] ? SpanType.TUNNEL : null;
+                SpanType active = tunnel[index] ? SpanType.TUNNEL
+                        : culvert[index] ? SpanType.CULVERT : crossing[index] ? SpanType.ROAD_CROSSING : null;
                 String spanAt = bridge[index] ? "BRIDGE"
                         : crossing[index] ? "ROAD_CROSSING"
                         : tunnel[index] ? "TUNNEL"
@@ -224,8 +228,8 @@ public final class FinalRoadWaterValidator {
             }
         }
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("【水域校验通过，桥梁与涵洞按既有规则豁免】 " + "RoadWeaver water validation passed road={}->{} stations={} checkedColumns={} "
-                            + "wetColumns={} (bridgeAndCulvertExempt=true)",
+            LOGGER.debug("【水域校验通过，短跨与涵洞净空已核实】 " + "RoadWeaver water validation passed road={}->{} stations={} checkedColumns={} "
+                            + "wetColumns={} (templateBridgeExempt=true)",
                     road.ownerA2dKey(), road.ownerB2dKey(), size, checkedColumns, wetColumns);
         }
         return ValidationResult.success();

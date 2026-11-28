@@ -14,7 +14,7 @@ import static net.shiroha233.roadweaver.pathlogic.structures.PreparedStartResolv
 import net.shiroha233.roadweaver.config.sub.PathfindingCostConfig;
 import net.shiroha233.roadweaver.config.sub.RoadGenerationConfig;
 import net.shiroha233.roadweaver.config.ConfigService;
-import net.shiroha233.roadweaver.core.constants.RoadConstants;
+import net.shiroha233.roadweaver.core.model.SpanType;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccuratePathHeightResolver;
@@ -761,6 +761,8 @@ public final class RoadPathCalculator {
         for (RoadSpan span : road.spans()) {
             if (span == null || (span.type() != net.shiroha233.roadweaver.core.model.SpanType.BRIDGE
                     && span.type() != net.shiroha233.roadweaver.core.model.SpanType.ROAD_CROSSING
+                    // 涵洞有承空路面，不能再以沟底普通填方预算要求重平整。
+                    && span.type() != SpanType.CULVERT
                     && span.type() != net.shiroha233.roadweaver.core.model.SpanType.TUNNEL
                     && span.type() != net.shiroha233.roadweaver.core.model.SpanType.TUNNEL_JUNCTION
                     && span.type() != net.shiroha233.roadweaver.core.model.SpanType.NETWORK_REUSE

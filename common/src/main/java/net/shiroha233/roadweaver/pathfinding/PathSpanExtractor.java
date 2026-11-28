@@ -5,7 +5,6 @@ package net.shiroha233.roadweaver.pathfinding;
 
 import net.shiroha233.roadweaver.pathlogic.grade.SurfaceGradeLimits;
 import net.shiroha233.roadweaver.core.model.RoadSegmentPlacement;
-import net.shiroha233.roadweaver.pathlogic.core.RoadSpanProfileOps;
 import net.shiroha233.roadweaver.core.model.RoadData;
 import net.shiroha233.roadweaver.core.model.RoadSpan;
 import net.shiroha233.roadweaver.config.ConfigService;
@@ -14,9 +13,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.shiroha233.roadweaver.compat.StreamsReflowingCompat;
-import net.shiroha233.roadweaver.pathlogic.bridge.BridgeDeckProfile;
-import net.shiroha233.roadweaver.pathlogic.grade.RoadGradePlanner;
-import net.shiroha233.roadweaver.pathlogic.tunnel.RoadTunnelBuilder;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSample;
 import net.shiroha233.roadweaver.pathfinding.sampling.TerrainSamplingCache;
@@ -225,6 +221,13 @@ public final class PathSpanExtractor {
             highest = Math.max(highest, sample.waterSurfaceY());
         }
         return highest;
+    }
+
+    /** 已有精采样本包含路宽列；直接复用同一物理水掩码来确定短跨净空。 */
+    public static int shortCrossingWaterY(RoadSegmentPlacement station, ServerLevel level,
+            TerrainSamplingCache cache, PathTerrainField terrain, AccurateHeightSampler accurate,
+            Map<Long, AccurateHeightSample> samples, StreamsReflowingCompat.SamplingSession streams) {
+        return segmentWaterSample(level, cache, terrain, accurate, samples, streams, station, 1, null).waterSurfaceY();
     }
 
     /** 从最终目标剖面识别隧道，不能只用原始节点的Y跳变代替覆土。
@@ -617,17 +620,19 @@ public final class PathSpanExtractor {
                                            Map<Long, AccurateHeightSample> samples,
                                            StreamsReflowingCompat.SamplingSession streams,
                                            int bridgeMinWaterDepth) {
-        int minWaterDepth = bridgeMinWaterDepth;
+        var appearance = ConfigService.get().roadAppearance();
+        int maxCulvert = appearance.culvertEnabled() ? appearance.culvertMaxStations() : 0;
+        int maxCulvertDepth = appearance.culvertMaxWaterDepth();
+        // 即使水浅于桥梁阈值，也要看完整湿段，避免浅岸掩盖深水或遗漏涵洞。
+        int minWaterDepth = 1;
         boolean[] waterMask = new boolean[centers.size()];
         int[] surfaceY = new int[centers.size()];
         boolean inWater = false;
         int waterStart = -1;
         int highestWaterSurface = Integer.MIN_VALUE;
-        // 0.9.034（R-04 诊断）：一段水域里「整站有水」与「只有部分列有水」的站数。
-        // 现有 bridgeWaterSample 已经是**逐 footprint 列**采样后取 OR（segmentWaterSample），
-        // 所以剩下唯一没量过的就是：这个 OR 到底有多宽松 —— 如果大量站是「5 列里只有 1 列湿」，
-        // 那改成逐列掩码就能把桥明显缩短；如果绝大多数站是「整站都湿」，逐列改造就没有收益。
-        // 纯计数，不改变 waterMask，也不改变任何 span。
+        int deepest = 0;
+        boolean authoritative = false;
+        // 只统计每个水段的湿列密度，不改变按实际路宽判断跨越的口径。
         int[] wetColumns = new int[2];
         int runStations = 0;
         int runFullWet = 0;
@@ -643,6 +648,10 @@ public final class PathSpanExtractor {
             surfaceY[i] = terrainSurfaceY(terrain, accurate, samples, centers.get(i));
 
             if (water) {
+                int depth = waterSample.bedY() == Integer.MIN_VALUE ? Integer.MAX_VALUE
+                        : Math.max(1, waterSample.waterSurfaceY() - waterSample.bedY() + 1);
+                deepest = Math.max(deepest, depth);
+                authoritative |= waterSample.authoritative();
                 runStations++;
                 if (wetColumns[0] > 0) {
                     runFootprint = Math.max(runFootprint, wetColumns[0]);
@@ -661,7 +670,10 @@ public final class PathSpanExtractor {
             } else if (water) {
                 highestWaterSurface = Math.max(highestWaterSurface, waterSample.waterSurfaceY());
             } else if (!water && inWater) {
-                appendWaterCrossingSpan(spans, centers, waterStart, i - 1, highestWaterSurface);
+                ShortCrossingGeometry.appendPlannedWetSpan(spans, centers, surfaceY, waterStart, i - 1, highestWaterSurface,
+                        deepest, maxCulvert, maxCulvertDepth, authoritative ? 0 : bridgeMinWaterDepth);
+                deepest = 0;
+                authoritative = false;
                 logWaterMaskDiag(waterStart, i - 1, runStations, runFootprint,
                         runFullWet, runPartlyWet, runSingleColumnWet);
                 inWater = false;
@@ -672,12 +684,19 @@ public final class PathSpanExtractor {
         }
 
         if (inWater && waterStart >= 0) {
-            appendWaterCrossingSpan(spans, centers, waterStart, centers.size() - 1, highestWaterSurface);
+            ShortCrossingGeometry.appendPlannedWetSpan(spans, centers, surfaceY, waterStart, centers.size() - 1, highestWaterSurface,
+                    deepest, maxCulvert, maxCulvertDepth, authoritative ? 0 : bridgeMinWaterDepth);
             logWaterMaskDiag(waterStart, centers.size() - 1, runStations, runFootprint,
                     runFullWet, runPartlyWet, runSingleColumnWet);
         }
-        // A canyon is not a river. Only the actual water mask above may create
-        // BRIDGE or ROAD_CROSSING spans.
+        // 用同一批精采识别有两岸的短干沟，不能等路面已沉到谷底后才看填方差值。
+        if (!spans.isEmpty()) {
+            boolean[] physical = FillBridgeExtender.specialSpanMask(spans, centers);
+            for (int i = 0; i < waterMask.length; i++) waterMask[i] |= physical[i];
+        }
+        for (var notch : ShortCrossingGeometry.dryNotches(centers, surfaceY, dryDepressionBridgeDepth(), waterMask)) {
+            spans.add(new RoadSpan(centers.get(notch.left()), centers.get(notch.right()), SpanType.ROAD_CROSSING));
+        }
     }
 
     /** 0.9.034（R-04 诊断）：一段水域的「湿列密度」只读摘要，每段水一行。 */
@@ -707,6 +726,7 @@ public final class PathSpanExtractor {
         int bed = Integer.MAX_VALUE;
         int columns = 0;
         int wetColumns = 0;
+        boolean authoritative = false;
         for (BlockPos position : footprint) {
             if (position == null) continue;
             columns++;
@@ -715,6 +735,7 @@ public final class PathSpanExtractor {
             if (!sample.water()) continue;
             wetColumns++;
             found = true;
+            authoritative |= sample.authoritative();
             surface = Math.max(surface, sample.waterSurfaceY());
             bed = Math.min(bed, sample.bedY());
         }
@@ -723,7 +744,7 @@ public final class PathSpanExtractor {
             wetColumnsOut[1] = wetColumns;
         }
         return found
-                ? new BridgeWaterSample(true, surface, bed == Integer.MAX_VALUE ? Integer.MIN_VALUE : bed)
+                ? new BridgeWaterSample(true, surface, bed == Integer.MAX_VALUE ? Integer.MIN_VALUE : bed, authoritative)
                 : new BridgeWaterSample(false, Integer.MIN_VALUE, Integer.MIN_VALUE);
     }
 
@@ -760,7 +781,7 @@ public final class PathSpanExtractor {
             // bridge sample; the final validator can still reject it if the
             // resulting span cannot be made safe.
             int surface = level == null ? 63 : level.getSeaLevel();
-            return new BridgeWaterSample(true, surface, surface - 1);
+            return new BridgeWaterSample(true, surface, Integer.MIN_VALUE, true);
         }
         // Streams' channel marker is authoritative for rivers. A shallow,
         // short channel must still become ROAD_CROSSING; applying the bridge
@@ -768,11 +789,11 @@ public final class PathSpanExtractor {
         // final water validator reject it as ordinary construction. The
         // threshold remains applicable to generic terrain water below.
         if (stream.inChannel()) {
-            return new BridgeWaterSample(true, stream.waterSurfaceY(), stream.bedY());
+            return new BridgeWaterSample(true, stream.waterSurfaceY(), stream.bedY(), true);
         }
         if (streams != null && streams.sampleLake(pos.getX(), pos.getZ()).present()) {
             StreamsReflowingCompat.LakeColumn lake = streams.sampleLake(pos.getX(), pos.getZ());
-            return new BridgeWaterSample(true, lake.surfaceY(), lake.bedY());
+            return new BridgeWaterSample(true, lake.surfaceY(), lake.bedY(), true);
         }
         if (terrain != null && terrain.hasAccurateSample(pos.getX(), pos.getZ())) {
             PathTerrainField.SampleBundle sample = terrain.sampleBundle(pos.getX(), pos.getZ());
@@ -798,22 +819,6 @@ public final class PathSpanExtractor {
                 : Integer.MIN_VALUE;
         return new BridgeWaterSample(bridgeWater, waterSurface,
                 bridgeWater ? oceanFloor : Integer.MIN_VALUE);
-    }
-
-    static void appendWaterCrossingSpan(List<RoadSpan> spans,
-                                                List<BlockPos> centers,
-                                                int waterStart,
-                                                int waterEnd,
-                                                int waterSurfaceY) {
-        int[] terrain = centers.stream().mapToInt(BlockPos::getY).toArray();
-        int minimumBankY = waterSurfaceY == Integer.MIN_VALUE ? Integer.MIN_VALUE : waterSurfaceY + 1;
-        int[] stable = BridgeDeckProfile.findStableBankRange(terrain, waterStart, waterEnd, minimumBankY);
-        int widthBlocks = crossingWidthBlocks(centers, waterStart, waterEnd);
-        SpanType type = crossingTypeForWidth(widthBlocks);
-        appendNormalizedWaterSpan(spans, centers, stable[0], stable[1], type);
-        LOGGER.info("【过水跨度规划结果】 " + "RoadWeaver crossing plan type={} widthBlocks={} waterRange={}..{} stableRange={}..{} "
-                        + "waterSurfaceY={}",
-                type, widthBlocks, waterStart, waterEnd, stable[0], stable[1], waterSurfaceY);
     }
 
     static SpanType crossingTypeForWidth(int widthBlocks) {
@@ -930,7 +935,9 @@ public final class PathSpanExtractor {
     static boolean[] crossingMask(List<RoadSpan> spans, List<BlockPos> centers) {
         boolean[] result = new boolean[centers.size()];
         for (RoadSpan span : spans) {
-            if (span.type() != SpanType.BRIDGE && span.type() != SpanType.ROAD_CROSSING) continue;
+            // 涵洞下方留空通水，该站不能又被识别成地表下的隧道。
+            if (span.type() != SpanType.BRIDGE && span.type() != SpanType.ROAD_CROSSING
+                    && span.type() != SpanType.CULVERT) continue;
             int start = indexOfXz(centers, span.start());
             int end = indexOfXz(centers, span.end());
             if (start < 0 || end < 0) continue;
@@ -939,7 +946,10 @@ public final class PathSpanExtractor {
         return result;
     }
 
-    record BridgeWaterSample(boolean water, int waterSurfaceY, int bedY) {
+    record BridgeWaterSample(boolean water, int waterSurfaceY, int bedY, boolean authoritative) {
+        BridgeWaterSample(boolean water, int waterSurfaceY, int bedY) {
+            this(water, waterSurfaceY, bedY, false);
+        }
     }
 
     static int indexOfXz(List<BlockPos> centers, BlockPos target) {

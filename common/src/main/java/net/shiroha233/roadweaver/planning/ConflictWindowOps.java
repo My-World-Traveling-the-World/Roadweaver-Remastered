@@ -37,7 +37,6 @@ import net.shiroha233.roadweaver.pathlogic.structures.StructureAvoidanceService;
 import net.shiroha233.roadweaver.pathlogic.core.Road;
 import net.shiroha233.roadweaver.pathlogic.grade.UnknownEndpointHeightRegistry;
 import net.shiroha233.roadweaver.pathlogic.pathcalc.RoadPathCalculator;
-import net.shiroha233.roadweaver.pathfinding.sampling.AccurateHeightSampler;
 import net.shiroha233.roadweaver.util.ComputeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -396,6 +396,7 @@ public final class FinalRoadStructureValidator {
             if (span == null || span.type() == null) continue;
             if (span.type() != SpanType.BRIDGE
                     && span.type() != SpanType.ROAD_CROSSING
+                    && span.type() != SpanType.CULVERT
                     && span.type() != SpanType.TUNNEL
                     && span.type() != SpanType.TUNNEL_JUNCTION) continue;
             Integer start = indices.get(xzKey(span.start()));
@@ -412,7 +413,8 @@ public final class FinalRoadStructureValidator {
             int gapEnd = range[1];
             int left = gapStart - 1;
             int right = gapEnd + 1;
-            if (left < 0 || right >= n || gapMask[left] || gapMask[right]) continue;
+            // 缺口不得把紧邻的已定短跨（或其他已定结构）的路面压回低洼地。
+            if (left < 0 || right >= n || frozen[left] || frozen[right]) continue;
             int leftY = profile[left];
             int rightY = profile[right];
             int seat = Math.min(leftY, rightY);
